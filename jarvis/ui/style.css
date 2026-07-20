@@ -3,24 +3,29 @@
    Style: HUD / Sci-Fi FUI. Fonts: Orbitron (display) + Share Tech Mono (data). */
 
 :root {
-  --bg: #0a0503;
-  --bg2: #120705;
-  --panel: rgba(28, 12, 6, 0.5);
-  --line: rgba(240, 181, 62, 0.30);
-  --gold: #f5bb47;
-  --gold-bright: #ffd257;
-  --gold-dim: #7a521a;
-  --red: #ff2f2f;
-  --red-bright: #ff5347;
-  --red-dim: #5c0f12;
-  --red-line: rgba(255, 47, 47, 0.45);
-  --cyan: #4fd8ff;
+  /* Electric blue + luminous gold, matching the blueprint reference. */
+  --bg: #010409;
+  --bg2: #041018;
+  --panel: rgba(5, 18, 30, 0.55);
+  --line: rgba(25, 181, 255, 0.30);
+  --blue: #19b5ff;
+  --blue-bright: #6fd2ff;
+  --blue-dim: #0d5e86;
+  --gold: #ffd54a;
+  --gold-bright: #ffe38a;
+  --gold-dim: #8a6c1c;
+  --red: #ff3b4e;
+  --red-bright: #ff5b6b;
+  --red-dim: #5c0f14;
+  --red-line: rgba(255, 59, 78, 0.45);
+  --cyan: #19b5ff;
   --green: #4dffa6;
   --amber: #ffb340;
-  --text: #f2dcae;
-  --text-dim: #a8823f;
-  --glow: 0 0 12px rgba(245, 187, 71, 0.5);
-  --red-glow: 0 0 12px rgba(255, 47, 47, 0.55);
+  --text: #c8e8fb;
+  --text-dim: #5f8ba3;
+  --glow: 0 0 12px rgba(25, 181, 255, 0.55);
+  --gold-glow: 0 0 12px rgba(255, 213, 74, 0.55);
+  --red-glow: 0 0 12px rgba(255, 59, 78, 0.55);
   --font: "Rajdhani", "Bahnschrift", "Segoe UI", system-ui, sans-serif;
   --font-display: "Orbitron", "Bahnschrift", sans-serif;
   --font-mono: "Share Tech Mono", "Consolas", monospace;
@@ -93,15 +98,15 @@ html, body {
 .panel::before, .panel::after { content: ""; position: absolute; width: 11px; height: 11px; border: 1px solid var(--gold); opacity: 0.75; }
 .panel::before { top: -1px; left: -1px; border-right: 0; border-bottom: 0; }
 .panel::after { bottom: -1px; right: -1px; border-left: 0; border-top: 0; }
-.panel.red-frame { border-color: var(--red-line); }
-.panel.red-frame::before, .panel.red-frame::after { border-color: var(--red); }
+.panel.red-frame { border-color: rgba(255,213,74,0.35); }
+.panel.red-frame::before, .panel.red-frame::after { border-color: var(--gold); }
 .panel.grow { flex: 1; min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
 .panel h2 {
   font-family: var(--font-display); font-size: 10px; font-weight: 700; color: var(--gold); letter-spacing: 0.2em;
   padding-bottom: 6px; margin-bottom: 8px; border-bottom: 1px solid var(--line);
   display: flex; align-items: center; gap: 8px;
 }
-.panel h2.red-h { color: var(--red); border-bottom-color: var(--red-line); text-shadow: 0 0 8px rgba(255,47,47,0.5); }
+.panel h2.red-h { color: var(--gold); border-bottom-color: rgba(255,213,74,0.4); text-shadow: 0 0 8px rgba(255,213,74,0.5); }
 .hint { font-size: 9px; color: var(--text-dim); letter-spacing: 0.1em; font-weight: 400; font-family: var(--font); }
 
 /* --------------------------------------------------------------- vitals */
@@ -151,9 +156,9 @@ html, body {
 
 /* ------------------------------------------------------- reactor / core */
 #reactor-wrap { position: relative; flex: 1.9; min-height: 0; display: grid; place-items: center; overflow: hidden; }
-#reactor-stage { position: relative; aspect-ratio: 970 / 720; height: 100%; max-height: 520px; max-width: 100%; margin: auto; }
+#reactor-stage { position: relative; aspect-ratio: 1280 / 720; height: auto; width: 100%; max-height: 100%; margin: auto; }
 #core-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; border-radius: 4px;
-  box-shadow: 0 0 44px rgba(224,30,43,0.28) inset, 0 0 30px rgba(0,0,0,0.6); }
+  box-shadow: 0 0 44px rgba(25,181,255,0.25) inset, 0 0 30px rgba(0,0,0,0.6); }
 /* the living rig: screen-blended so its light adds onto the premium image */
 #reactor { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 1; mix-blend-mode: screen; pointer-events: none; }
 #reactor-label { position: absolute; bottom: -2px; left: 50%; transform: translateX(-50%); font-family: var(--font-display);
@@ -171,7 +176,7 @@ html, body {
 #power-strip b { color: var(--red); text-shadow: 0 0 8px rgba(255,47,47,0.5); }
 .ps-corner { color: var(--gold); }
 .ps-bar { width: 120px; height: 5px; border: 1px solid var(--red-line); border-radius: 3px; overflow: hidden; }
-.ps-fill { height: 100%; width: 100%; background: linear-gradient(90deg, var(--red-dim), var(--red), var(--gold)); box-shadow: 0 0 8px var(--red); animation: pulse 3s infinite; }
+.ps-fill { height: 100%; width: 100%; background: linear-gradient(90deg, var(--blue-dim), var(--blue), var(--gold)); box-shadow: 0 0 8px var(--blue); animation: pulse 3s infinite; }
 
 /* -------------------------------------------------------------- console */
 /* Kept compact so the Iron Man core is the hero; the console is a status feed. */

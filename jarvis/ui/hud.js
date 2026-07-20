@@ -14,16 +14,17 @@
   const ctx = canvas.getContext("2d");
   const W = canvas.width, H = canvas.height;
 
-  // image-fraction anchors (core.jpg is 970x720)
-  const EYE_L = [0.455 * W, 0.246 * H];
-  const EYE_R = [0.543 * W, 0.246 * H];
-  const MOUTH = [0.50 * W, 0.376 * H];
-  const RX = 0.505 * W, RY = 0.685 * H;
+  // image-fraction anchors (core.jpg is the 1280x720 blue/gold blueprint)
+  const EYE_L = [0.422 * W, 0.465 * H];
+  const EYE_R = [0.570 * W, 0.465 * H];
+  const MOUTH = [0.50 * W, 0.595 * H];
+  // energy focal point = the concentric HUD rings behind the head
+  const RX = 0.50 * W, RY = 0.335 * H;
 
   const state = { level: 0, target: 0, mode: "idle", t: 0 };
   window.reactorState = state;
 
-  const GOLD = [255, 205, 80], CYAN = [130, 224, 255], RED = [255, 70, 70];
+  const GOLD = [255, 213, 74], CYAN = [25, 181, 255], RED = [255, 70, 70];
   const MODE_LABEL = { idle: "ONLINE", listening: "LISTENING", thinking: "PROCESSING", speaking: "SPEAKING" };
 
   const lerp = (a, b, k) => a + (b - a) * k;
@@ -70,28 +71,28 @@
       ctx.beginPath(); ctx.arc(s.x, s.y, 1.2, 0, 6.2832); ctx.fill();
     }
 
-    // --- audio-ripple rings from the reactor ---
+    // --- audio-ripple rings: a pulsing halo behind the head ---
     rippleTimer -= 1;
     if (rippleTimer <= 0) {
       const active = L > 0.05 || state.mode !== "idle";
-      ripples.push({ r: 30, life: active ? 1 : 0.45 });
-      rippleTimer = active ? Math.max(7, 24 - L * 16) : 70;
+      ripples.push({ r: 108, life: active ? 1 : 0.45 });
+      rippleTimer = active ? Math.max(8, 26 - L * 16) : 74;
     }
     for (let i = ripples.length - 1; i >= 0; i--) {
-      const rp = ripples[i]; rp.r += 2 + L * 3.2; rp.life -= 0.012;
+      const rp = ripples[i]; rp.r += 1.6 + L * 3; rp.life -= 0.011;
       if (rp.life <= 0) { ripples.splice(i, 1); continue; }
-      ctx.strokeStyle = rgba(GOLD, rp.life * 0.32); ctx.lineWidth = 2;
+      ctx.strokeStyle = rgba(CYAN, rp.life * 0.3); ctx.lineWidth = 2;
       ctx.beginPath(); ctx.arc(RX, RY, rp.r, 0, 6.2832); ctx.stroke();
     }
 
-    // --- reactor bloom + spectrum halo ---
-    glow(RX, RY, 70 + L * 55, 0.5 + L * 0.4, 0.14 + L * 0.2, CYAN, GOLD);
+    // --- soft blue aura + an audio-reactive ring AROUND the head ---
+    glow(RX, RY, 190 + L * 80, 0.13 + L * 0.14, 0.04, CYAN, CYAN);
     if (spec) {
       ctx.save(); ctx.translate(RX, RY);
-      for (let i = 0; i < 56; i++) {
-        const mag = spec[Math.floor((i / 56) * spec.length)] / 255;
-        const a = (i / 56) * 6.2832, inn = 34, out = inn + mag * 30 + 2;
-        ctx.strokeStyle = rgba(i % 5 ? GOLD : CYAN, 0.3 + mag * 0.6); ctx.lineWidth = 2;
+      for (let i = 0; i < 64; i++) {
+        const mag = spec[Math.floor((i / 64) * spec.length)] / 255;
+        const a = (i / 64) * 6.2832, inn = 150, out = inn + mag * 44 + 2;
+        ctx.strokeStyle = rgba(i % 6 ? CYAN : GOLD, 0.22 + mag * 0.55); ctx.lineWidth = 2;
         ctx.beginPath();
         ctx.moveTo(Math.cos(a) * inn, Math.sin(a) * inn);
         ctx.lineTo(Math.cos(a) * out, Math.sin(a) * out);
@@ -153,7 +154,7 @@
     state.mode = mode;
     const label = document.getElementById("reactor-label");
     if (label) label.textContent = MODE_LABEL[mode] || mode.toUpperCase();
-    if (mode === "speaking") for (let k = 0; k < 3; k++) ripples.push({ r: 30 + k * 18, life: 1 });
+    if (mode === "speaking") for (let k = 0; k < 3; k++) ripples.push({ r: 108 + k * 16, life: 1 });
   };
   window.setReactorLevel = function (v) { state.target = Math.max(0, Math.min(1, v)); };
 })();
