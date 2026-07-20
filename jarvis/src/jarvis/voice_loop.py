@@ -22,7 +22,7 @@ from .tools.registry import Tool
 
 log = logging.getLogger(__name__)
 
-ACKNOWLEDGEMENTS = "Yes? I'm listening."
+ACKNOWLEDGEMENTS = "Yuvraj, at your service."
 IDLE_TIMEOUT_SECONDS = 30
 AFFIRMATIVES = {"yes", "yeah", "yep", "sure", "do it", "go ahead", "confirm", "okay", "ok"}
 

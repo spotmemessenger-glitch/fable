@@ -17,7 +17,13 @@ log = logging.getLogger(__name__)
 class Ears:
     """Listens on the microphone and returns transcribed text."""
 
-    def __init__(self, language: str = "auto", *, phrase_time_limit: int = 20) -> None:
+    def __init__(
+        self,
+        language: str = "auto",
+        *,
+        phrase_time_limit: int = 30,
+        pause_threshold: float = 1.5,
+    ) -> None:
         self.language = language
         self.phrase_time_limit = phrase_time_limit
         self._recognizer = None
@@ -33,7 +39,13 @@ class Ears:
             # refines this against the actual room noise.
             self._recognizer.energy_threshold = 300
             self._recognizer.dynamic_energy_threshold = True
-            self._recognizer.pause_threshold = 0.8
+            # How long a silence must last before we decide the utterance is
+            # over. Too low and natural mid-sentence pauses cut the owner off;
+            # 1.5s tolerates thinking pauses without feeling sluggish.
+            self._recognizer.pause_threshold = pause_threshold
+            # Padding of quiet audio kept around the speech so words at the
+            # edges aren't clipped. Must be <= pause_threshold.
+            self._recognizer.non_speaking_duration = min(0.7, pause_threshold)
             self._mic = sr.Microphone()
             self.available = True
         except Exception:  # noqa: BLE001

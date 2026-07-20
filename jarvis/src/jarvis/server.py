@@ -24,7 +24,18 @@ import websockets
 
 from .app import Session, _setup_logging
 from .config import settings
-from .tools.registry import Tool, registry
+from .tools.registry import Risk, Tool, registry
+
+# JARVIS-the-assistant must not be able to rewrite its own code or run shell
+# commands — that self-modification is what made it "disoriented", trying to
+# fix its own mic by editing ears.py mid-conversation. Block those tools so it
+# can't even see them. It keeps memory, recall, search, files-read, and time;
+# real capabilities (web research, etc.) arrive later as purpose-built,
+# individually-gated sub-agent tools, never raw shell/file-write on its repo.
+for _blocked in ("run_command", "write_file", "read_file", "list_directory"):
+    _tool = registry.get(_blocked)
+    if _tool is not None:
+        _tool.risk = Risk.BLOCKED
 
 log = logging.getLogger(__name__)
 
