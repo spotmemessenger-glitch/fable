@@ -8,12 +8,18 @@
 </head>
 <body>
 <div id="scanlines"></div>
+<div id="vignette"></div>
 
 <header id="topbar">
   <div class="tb-left">
     <div class="reactor-mini"><div class="rm-core"></div></div>
     <span class="brand">J.A.R.V.I.S.</span>
     <span class="sub" id="status-line">INITIALISING…</span>
+  </div>
+  <div class="tb-center">
+    <button class="sys-btn red">SHUTDOWN</button>
+    <button class="sys-btn">RESTART</button>
+    <button class="sys-btn">LOG OFF</button>
   </div>
   <div class="tb-right">
     <span id="clock">--:--:--</span>
@@ -36,8 +42,8 @@
       <div class="kv"><span>UPTIME</span><b id="v-uptime">—</b><span>FREE C:</span><b id="v-free">—</b></div>
     </div>
 
-    <div class="panel grow" id="panel-agents">
-      <h2>AGENTS</h2>
+    <div class="panel red-frame grow" id="panel-agents">
+      <h2 class="red-h">AGENTS <span class="hint" id="agent-count"></span></h2>
       <div id="agent-list"></div>
     </div>
 
@@ -48,15 +54,87 @@
     </div>
   </section>
 
-  <!-- ============ CENTER: reactor + conversation ============ -->
+  <!-- ============ CENTER: iron man face + console ============ -->
   <section class="col" id="col-center">
+    <div id="led-strip">
+      <span class="led-chip cyan">CORE</span>
+      <span class="led-chip red">SEC</span>
+      <span class="led-chip cyan">NET</span>
+      <span class="led-chip cyan">MEM</span>
+      <span class="led-chip red">GPU</span>
+      <span class="led-chip cyan">SYNC</span>
+      <span class="led-chip red">PWR</span>
+    </div>
+
     <div id="reactor-wrap">
-      <canvas id="reactor" width="560" height="560"></canvas>
-      <div id="reactor-label">STANDBY</div>
+      <div id="reactor-stage">
+        <canvas id="reactor" width="620" height="620"></canvas>
+
+        <!-- Iron Man faceplate: cyan structure, red accents, glowing eyes -->
+        <svg id="ironface" viewBox="0 0 300 316" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+          <defs>
+            <linearGradient id="shellgrad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stop-color="#0b2a3d" stop-opacity="0.9"/>
+              <stop offset="0.5" stop-color="#06151f" stop-opacity="0.95"/>
+              <stop offset="1" stop-color="#020a10" stop-opacity="0.98"/>
+            </linearGradient>
+            <radialGradient id="eyeglow" cx="0.5" cy="0.5" r="0.62">
+              <stop offset="0" stop-color="#ffffff"/>
+              <stop offset="0.5" stop-color="#bff3ff"/>
+              <stop offset="1" stop-color="#37d0ff"/>
+            </radialGradient>
+          </defs>
+
+          <!-- shell: wide angular crown tapering to a defined jaw -->
+          <path class="shell" d="M150,18 L112,26 L88,44 L78,84 L74,132 L82,178 L96,214
+                                 L118,252 L150,300 L182,252 L204,214 L218,178 L226,132
+                                 L222,84 L212,44 L188,26 Z"/>
+
+          <!-- crown seam + forehead panels -->
+          <path class="plate" d="M150,18 L150,146"/>
+          <path class="plate" d="M104,44 L122,120 M196,44 L178,120"/>
+          <path class="plate" d="M84,80 L92,126 M216,80 L208,126"/>
+
+          <!-- temple vents (red) -->
+          <path class="red thin" d="M80,116 L98,124 M220,116 L202,124"/>
+
+          <!-- angry angular brow (RED, the signature) -->
+          <path class="red" d="M90,134 L132,120 L140,140 L150,131 L160,140 L168,120 L210,134"/>
+
+          <!-- iconic slanted eyes -->
+          <polygon id="eye-l" class="eye" points="92,150 134,137 140,160 98,171"/>
+          <polygon id="eye-r" class="eye" points="208,150 166,137 160,160 202,171"/>
+
+          <!-- central faceplate + nose ridge -->
+          <path class="plate" d="M144,150 L140,238 M156,150 L160,238"/>
+          <path class="red thin glowline" d="M150,152 L150,236"/>
+
+          <!-- cheek plates -->
+          <path class="plate" d="M98,172 L112,230 M202,172 L188,230"/>
+          <path class="red thin" d="M132,166 L122,212 M168,166 L178,212"/>
+
+          <!-- mouth grille -->
+          <path class="plate" d="M116,242 L184,242 L172,282 L128,282 Z"/>
+          <path class="vent" d="M132,245 L130,279 M143,245 L142,280 M150,245 L150,280 M157,245 L158,280 M168,245 L170,279"/>
+          <path class="red thin" d="M126,286 L174,286"/>
+
+          <!-- jaw to chin -->
+          <path class="plate" d="M128,282 L150,300 L172,282"/>
+        </svg>
+
+        <div id="reactor-label">STANDBY</div>
+      </div>
+    </div>
+
+    <div id="power-strip">
+      <span class="ps-corner">◤</span>
+      <span>POWER LEVEL</span><b id="power-pct">100%</b><span>— HOLDING STEADY</span>
+      <div class="ps-bar"><div class="ps-fill"></div></div>
+      <span class="ps-corner">◢</span>
     </div>
 
     <div class="panel grow" id="panel-console">
-      <h2>CONSOLE</h2>
+      <h2>CONSOLE <span class="live-dot"></span></h2>
       <div id="transcript"></div>
     </div>
 
@@ -81,8 +159,8 @@
       <div id="forex-rows"></div>
     </div>
 
-    <div class="panel grow" id="panel-news">
-      <h2>WIRE <span class="hint">market-moving flagged</span></h2>
+    <div class="panel red-frame grow" id="panel-news">
+      <h2 class="red-h">WIRE <span class="hint">market-moving flagged</span></h2>
       <div id="news-list"></div>
     </div>
   </section>
@@ -91,7 +169,7 @@
 <!-- approval modal -->
 <div id="approval" class="hidden">
   <div class="ap-box">
-    <h3>AUTHORISATION REQUIRED</h3>
+    <h3>⚠ AUTHORISATION REQUIRED</h3>
     <p id="ap-desc">—</p>
     <div class="ap-actions">
       <button id="ap-deny">DENY</button>

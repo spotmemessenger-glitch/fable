@@ -1,152 +1,186 @@
-/* The arc reactor: concentric rings, rotating ticks, and an audio-reactive
-   core that swells with whoever is speaking. Pure canvas, no dependencies. */
+/* The reactor rig around the Iron Man face: framing rings, rotating ticks,
+   red arc segments, corner dials, orbiting nodes, a red radar sweep, and an
+   audio-reactive spectrum halo. Also drives the glow of the helmet's eyes.
+   Pure canvas + a little DOM. No dependencies. */
 
 (function () {
   "use strict";
 
   const canvas = document.getElementById("reactor");
   const ctx = canvas.getContext("2d");
-  const CX = canvas.width / 2;
-  const CY = canvas.height / 2;
+  const W = canvas.width, H = canvas.height;
+  const CX = W / 2, CY = H / 2;
 
-  // Drive level (0..1) and hue come from the audio layer in app.js.
-  const state = {
-    level: 0, // current audio amplitude
-    target: 0, // smoothed toward this
-    mode: "idle", // idle | listening | thinking | speaking
-    t: 0,
-  };
+  const state = { level: 0, target: 0, mode: "idle", t: 0 };
   window.reactorState = state;
 
+  const CYAN = [55, 208, 255];
+  const RED = [255, 47, 67];
   const MODE_COLOR = {
-    idle: [55, 208, 255],
+    idle: CYAN,
     listening: [77, 255, 166],
     thinking: [255, 179, 64],
-    speaking: [55, 208, 255],
+    speaking: CYAN,
   };
 
-  function lerp(a, b, k) { return a + (b - a) * k; }
-
-  function ring(radius, width, alpha, color) {
-    ctx.beginPath();
-    ctx.arc(CX, CY, radius, 0, Math.PI * 2);
-    ctx.lineWidth = width;
-    ctx.strokeStyle = `rgba(${color[0]},${color[1]},${color[2]},${alpha})`;
-    ctx.stroke();
+  let eyeL = null, eyeR = null;
+  function grabEyes() {
+    eyeL = document.getElementById("eye-l");
+    eyeR = document.getElementById("eye-r");
   }
+  grabEyes();
 
-  function ticks(radius, count, len, rot, alpha, color) {
-    ctx.save();
-    ctx.translate(CX, CY);
-    ctx.rotate(rot);
-    ctx.strokeStyle = `rgba(${color[0]},${color[1]},${color[2]},${alpha})`;
-    ctx.lineWidth = 2;
+  const lerp = (a, b, k) => a + (b - a) * k;
+  const rgba = (c, a) => `rgba(${c[0]},${c[1]},${c[2]},${a})`;
+
+  function ring(cx, cy, r, w, a, c) {
+    ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.lineWidth = w; ctx.strokeStyle = rgba(c, a); ctx.stroke();
+  }
+  function arc(cx, cy, r, w, start, sweep, a, c) {
+    ctx.beginPath(); ctx.arc(cx, cy, r, start, start + sweep);
+    ctx.lineWidth = w; ctx.strokeStyle = rgba(c, a); ctx.stroke();
+  }
+  function ticks(cx, cy, r, count, len, rot, a, c, wide) {
+    ctx.save(); ctx.translate(cx, cy); ctx.rotate(rot);
+    ctx.strokeStyle = rgba(c, a); ctx.lineWidth = wide || 2;
     for (let i = 0; i < count; i++) {
-      const a = (i / count) * Math.PI * 2;
-      const x1 = Math.cos(a) * radius;
-      const y1 = Math.sin(a) * radius;
-      const x2 = Math.cos(a) * (radius + len);
-      const y2 = Math.sin(a) * (radius + len);
+      const ang = (i / count) * Math.PI * 2;
       ctx.beginPath();
-      ctx.moveTo(x1, y1);
-      ctx.lineTo(x2, y2);
+      ctx.moveTo(Math.cos(ang) * r, Math.sin(ang) * r);
+      ctx.lineTo(Math.cos(ang) * (r + len), Math.sin(ang) * (r + len));
       ctx.stroke();
     }
     ctx.restore();
   }
 
-  function arcSegment(radius, width, start, sweep, alpha, color) {
-    ctx.beginPath();
-    ctx.arc(CX, CY, radius, start, start + sweep);
-    ctx.lineWidth = width;
-    ctx.strokeStyle = `rgba(${color[0]},${color[1]},${color[2]},${alpha})`;
-    ctx.stroke();
+  // a small decorative dial for the corners
+  function dial(cx, cy, r, spin, c) {
+    ring(cx, cy, r, 1.5, 0.5, c);
+    ring(cx, cy, r * 0.6, 1, 0.4, c);
+    ticks(cx, cy, r * 0.62, 12, r * 0.32, spin, 0.55, c, 1.5);
+    arc(cx, cy, r, 2, spin * 2, Math.PI * 0.55, 0.8, c);
+    arc(cx, cy, r * 0.6, 2, -spin * 2.4, Math.PI * 0.7, 0.7, c);
+    // hub
+    ctx.beginPath(); ctx.arc(cx, cy, r * 0.14, 0, Math.PI * 2);
+    ctx.fillStyle = rgba(c, 0.7 + 0.3 * Math.sin(spin * 3)); ctx.fill();
   }
 
   function draw() {
     state.t += 0.016;
     state.level = lerp(state.level, state.target, 0.25);
     const L = state.level;
-    const color = MODE_COLOR[state.mode] || MODE_COLOR.idle;
+    const c = MODE_COLOR[state.mode] || CYAN;
+    const t = state.t;
 
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.clearRect(0, 0, W, H);
 
-    // outer faint frame + rotating ticks
-    ring(255, 1, 0.25, color);
-    ticks(232, 60, 10, state.t * 0.15, 0.35, color);
-    ticks(232, 12, 18, -state.t * 0.15, 0.5, color);
+    // ---- soft core halo behind the face ----
+    const halo = ctx.createRadialGradient(CX, CY, 8, CX, CY, 210);
+    halo.addColorStop(0, rgba(c, 0.16 + L * 0.22));
+    halo.addColorStop(0.55, rgba(c, 0.05));
+    halo.addColorStop(1, rgba(c, 0));
+    ctx.fillStyle = halo;
+    ctx.fillRect(0, 0, W, H);
 
-    // decorative rotating arc segments (like the reference's HUD rings)
-    arcSegment(210, 3, state.t * 0.6, Math.PI * 0.5, 0.55, color);
-    arcSegment(210, 3, state.t * 0.6 + Math.PI, Math.PI * 0.35, 0.55, color);
-    arcSegment(190, 2, -state.t * 0.9, Math.PI * 0.7, 0.4, color);
-    arcSegment(190, 2, -state.t * 0.9 + Math.PI, Math.PI * 0.5, 0.4, color);
+    // ---- outermost RED framing ring + segments ----
+    ring(CX, CY, 300, 1, 0.35, RED);
+    arc(CX, CY, 300, 3, t * 0.5, Math.PI * 0.4, 0.7, RED);
+    arc(CX, CY, 300, 3, t * 0.5 + Math.PI, Math.PI * 0.3, 0.7, RED);
+    ticks(CX, CY, 285, 90, 8, t * 0.1, 0.3, RED, 1);
 
-    // audio-reactive frequency petals
+    // ---- cyan structure rings ----
+    ring(CX, CY, 272, 1, 0.4, c);
+    ticks(CX, CY, 250, 60, 12, -t * 0.14, 0.4, c, 1.5);
+    ticks(CX, CY, 250, 12, 20, t * 0.14, 0.6, c, 2);
+    arc(CX, CY, 236, 3, -t * 0.7, Math.PI * 0.6, 0.6, c);
+    arc(CX, CY, 236, 3, -t * 0.7 + Math.PI, Math.PI * 0.45, 0.6, c);
+    ring(CX, CY, 220, 2, 0.5, c);
+
+    // ---- red inner accent ring with counter-rotating segment ----
+    arc(CX, CY, 205, 2.5, t * 0.9, Math.PI * 0.5, 0.7, RED);
+    arc(CX, CY, 205, 2.5, t * 0.9 + Math.PI * 0.9, Math.PI * 0.25, 0.6, RED);
+
+    // ---- radar sweep (red) ----
+    ctx.save();
+    ctx.translate(CX, CY);
+    ctx.rotate(t * 0.8);
+    const sweep = ctx.createLinearGradient(0, 0, 200, 0);
+    sweep.addColorStop(0, rgba(RED, 0.35));
+    sweep.addColorStop(1, rgba(RED, 0));
+    ctx.strokeStyle = sweep; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(198, 0); ctx.stroke();
+    ctx.restore();
+
+    // ---- audio spectrum halo around the face ----
     const spectrum = window.audioSpectrum || null;
     if (spectrum && spectrum.length) {
-      const n = 72;
-      ctx.save();
-      ctx.translate(CX, CY);
+      const n = 90;
+      ctx.save(); ctx.translate(CX, CY);
       for (let i = 0; i < n; i++) {
         const idx = Math.floor((i / n) * spectrum.length);
         const mag = spectrum[idx] / 255;
-        const a = (i / n) * Math.PI * 2 - Math.PI / 2;
-        const inner = 150;
-        const outer = inner + mag * 55 + 4;
+        const ang = (i / n) * Math.PI * 2 - Math.PI / 2;
+        const inner = 214;
+        const outer = inner + mag * 44 + 3;
+        const col = (i % 6 === 0) ? RED : c;
         ctx.beginPath();
-        ctx.moveTo(Math.cos(a) * inner, Math.sin(a) * inner);
-        ctx.lineTo(Math.cos(a) * outer, Math.sin(a) * outer);
+        ctx.moveTo(Math.cos(ang) * inner, Math.sin(ang) * inner);
+        ctx.lineTo(Math.cos(ang) * outer, Math.sin(ang) * outer);
         ctx.lineWidth = 3;
-        ctx.strokeStyle = `rgba(${color[0]},${color[1]},${color[2]},${0.35 + mag * 0.6})`;
+        ctx.strokeStyle = rgba(col, 0.35 + mag * 0.6);
         ctx.stroke();
       }
       ctx.restore();
     }
 
-    // inner triple ring
-    ring(150, 2, 0.6, color);
-    ring(120, 6, 0.5 + L * 0.5, color);
-    ticks(96, 36, 8, -state.t * 0.4, 0.4, color);
-
-    // glowing core
-    const coreR = 62 + L * 26 + Math.sin(state.t * 2) * 2;
-    const grad = ctx.createRadialGradient(CX, CY, 4, CX, CY, coreR);
-    grad.addColorStop(0, `rgba(240,252,255,${0.9})`);
-    grad.addColorStop(0.35, `rgba(${color[0]},${color[1]},${color[2]},${0.85})`);
-    grad.addColorStop(1, `rgba(${color[0]},${color[1]},${color[2]},0)`);
-    ctx.beginPath();
-    ctx.arc(CX, CY, coreR, 0, Math.PI * 2);
-    ctx.fillStyle = grad;
-    ctx.fill();
-
-    // core inner triangle (reactor motif)
-    ctx.save();
-    ctx.translate(CX, CY);
-    ctx.rotate(state.t * 0.2);
-    ctx.beginPath();
-    for (let i = 0; i < 3; i++) {
-      const a = (i / 3) * Math.PI * 2 - Math.PI / 2;
-      const r = 34;
-      const x = Math.cos(a) * r, y = Math.sin(a) * r;
-      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    // ---- orbiting nodes (mix of cyan + red); glow via layered alpha, not
+    //      shadowBlur, which is far too slow to run every frame ----
+    const nodes = 5;
+    for (let i = 0; i < nodes; i++) {
+      const ang = t * 0.6 + (i / nodes) * Math.PI * 2;
+      const r = 220;
+      const x = CX + Math.cos(ang) * r, y = CY + Math.sin(ang) * r;
+      const col = i % 2 ? RED : c;
+      ctx.beginPath(); ctx.arc(x, y, 8, 0, Math.PI * 2);
+      ctx.fillStyle = rgba(col, 0.18); ctx.fill();
+      ctx.beginPath(); ctx.arc(x, y, 3.5, 0, Math.PI * 2);
+      ctx.fillStyle = rgba(col, 0.95); ctx.fill();
     }
-    ctx.closePath();
-    ctx.lineWidth = 2;
-    ctx.strokeStyle = `rgba(240,252,255,${0.7 + L * 0.3})`;
-    ctx.stroke();
-    ctx.restore();
+
+    // ---- four corner dials ----
+    const d = 66, off = 92;
+    dial(off, off, d, t, c);
+    dial(W - off, off, d, -t * 1.2, RED);
+    dial(off, H - off, d, -t * 0.9, RED);
+    dial(W - off, H - off, d, t * 1.1, c);
+
+    // ---- drive the helmet eyes with audio + mode ----
+    // Only the (cheap) opacity is animated per-frame. The drop-shadow filter is
+    // static in CSS — rewriting an SVG filter every frame pegs the compositor.
+    if (!eyeL) grabEyes();
+    if (eyeL && eyeR) {
+      const g = 0.6 + (0.3 + L * 0.7) * 0.4 + Math.sin(t * 3) * 0.05;
+      eyeL.style.opacity = g; eyeR.style.opacity = g;
+    }
 
     requestAnimationFrame(draw);
   }
-
   draw();
 
-  // Public API for app.js
   window.setReactorMode = function (mode) {
     state.mode = mode;
     const label = document.getElementById("reactor-label");
     if (label) label.textContent = mode.toUpperCase();
+    const c = MODE_COLOR[mode] || CYAN;
+    // Update eye glow colour + gradient ONCE per mode change (never per frame).
+    const stop = document.querySelector("#eyeglow stop:last-child");
+    if (stop) stop.setAttribute("stop-color", `rgb(${c[0]},${c[1]},${c[2]})`);
+    if (!eyeL) grabEyes();
+    if (eyeL && eyeR) {
+      const f = `drop-shadow(0 0 12px rgb(${c[0]},${c[1]},${c[2]})) drop-shadow(0 0 4px #fff)`;
+      eyeL.style.filter = f; eyeR.style.filter = f;
+    }
   };
   window.setReactorLevel = function (v) {
     state.target = Math.max(0, Math.min(1, v));

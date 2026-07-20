@@ -15,7 +15,10 @@
   let micAnalyser = null;
   let wantAudio = true;
   let speaking = false;
+  let listeningMode = false;   // continuous "always-on" voice listening
+  let suppressUntil = 0;       // ignore mic input until this timestamp (echo guard)
   const audioQueue = [];
+  const now = () => (window.performance ? performance.now() : Date.now());
 
   // ------------------------------------------------------------ connection
 
@@ -180,6 +183,13 @@
   }
 
   function handleState(s) {
+    if (s === "idle" && listeningMode) {
+      // Turn finished but we're still always-on listening.
+      setReactorMode("listening");
+      setReactorLevel(0);
+      status("LISTENING · say a command any time");
+      return;
+    }
     setReactorMode(s);
     if (s === "thinking") status("PROCESSING…");
     else if (s === "speaking") status("RESPONDING");
@@ -208,11 +218,23 @@
 
   function queueAudio(b64) {
     audioQueue.push(b64);
-    if (!speaking) playNext();
+    if (!speaking) {
+      // Pause the mic before we start speaking so recognition never hears
+      // JARVIS's own voice and feeds it back as a command.
+      pauseRecogForSpeech();
+      playNext();
+    }
   }
 
   function playNext() {
-    if (!audioQueue.length) { speaking = false; window.audioSpectrum = null; return; }
+    if (!audioQueue.length) {
+      speaking = false;
+      window.audioSpectrum = null;
+      // Ignore any trailing echo, then resume continuous listening.
+      suppressUntil = now() + 900;
+      resumeRecogAfterSpeech();
+      return;
+    }
     speaking = true;
     ensureAudio();
     const b64 = audioQueue.shift();
@@ -230,6 +252,9 @@
   function browserSpeak(text) {
     const u = new SpeechSynthesisUtterance(text);
     u.rate = 1.05; u.pitch = 0.9;
+    // Pause the mic during synthesized speech too, so it doesn't self-trigger.
+    u.onstart = () => { speaking = true; pauseRecogForSpeech(); };
+    u.onend = () => { speaking = false; suppressUntil = now() + 700; resumeRecogAfterSpeech(); };
     speechSynthesis.speak(u);
   }
 
@@ -241,37 +266,90 @@
       let sum = 0;
       for (let i = 0; i < data.length; i++) sum += data[i];
       setReactorLevel((sum / data.length) / 140);
-      if (speaking || (micAnalyser && listening)) requestAnimationFrame(tick);
+      if (speaking || (micAnalyser && listeningMode)) requestAnimationFrame(tick);
       else { setReactorLevel(0); window.audioSpectrum = null; }
     }
     tick();
   }
 
   // ---------------------------------------------------------- voice input
+  // Continuous ("always-on") listening. Once enabled it stays on: recognition
+  // auto-restarts between utterances, survives the harmless no-speech/aborted
+  // errors, and is paused only while JARVIS is speaking so it never hears
+  // itself. The preference is remembered across reloads.
 
-  let recog = null, listening = false, micStream = null;
+  let recog = null, micStream = null;
+  let recogRunning = false;      // recognition object is actively running
+  let pausedForSpeech = false;   // temporarily stopped because TTS is playing
+  let lastSubmitted = "";        // dedupe identical back-to-back transcripts
+  let lastSubmittedAt = 0;
 
   function initSpeech() {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SR) return null;
     const r = new SR();
-    r.continuous = false;
+    r.continuous = true;
     r.interimResults = true;
     r.lang = navigator.language || "en-US";
+
+    r.onstart = () => { recogRunning = true; };
+
     r.onresult = (e) => {
+      // Drop anything captured while speaking or in the post-speech echo window.
+      if (speaking || now() < suppressUntil) return;
       let txt = "";
       for (let i = e.resultIndex; i < e.results.length; i++) txt += e.results[i][0].transcript;
       $("cmd").value = txt;
-      if (e.results[e.results.length - 1].isFinal) {
-        submit(txt);
+      const last = e.results[e.results.length - 1];
+      if (last.isFinal) {
+        const t = txt.trim();
+        $("cmd").value = "";
+        if (!t) return;
+        if (t === lastSubmitted && now() - lastSubmittedAt < 4000) return; // echo/dupe
+        lastSubmitted = t; lastSubmittedAt = now();
+        submit(t);
       }
     };
-    r.onend = () => { listening = false; $("mic-btn").classList.remove("listening"); };
-    r.onerror = () => { listening = false; $("mic-btn").classList.remove("listening"); };
+
+    r.onend = () => {
+      recogRunning = false;
+      // Stay alive: restart unless the user turned listening off or we paused
+      // for JARVIS's own speech (speech-end handler restarts in that case).
+      if (listeningMode && !speaking && !pausedForSpeech) startRecog();
+      else if (!listeningMode) $("mic-btn").classList.remove("listening");
+    };
+
+    r.onerror = (ev) => {
+      recogRunning = false;
+      if (ev.error === "not-allowed" || ev.error === "service-not-allowed") {
+        listeningMode = false;
+        $("mic-btn").classList.remove("listening");
+        status("MIC BLOCKED · click the mic to grant access");
+      }
+      // no-speech / aborted / network are transient; onend will restart us.
+    };
     return r;
   }
 
+  function startRecog() {
+    if (!recog) recog = initSpeech();
+    if (!recog || recogRunning || speaking) return;
+    try { recog.start(); } catch (e) { /* already starting */ }
+  }
+
+  function pauseRecogForSpeech() {
+    if (!recog || !recogRunning) return;
+    pausedForSpeech = true;
+    try { recog.stop(); } catch (e) { /* ignore */ }
+  }
+
+  function resumeRecogAfterSpeech() {
+    pausedForSpeech = false;
+    if (listeningMode) startRecog();
+  }
+
   async function startMicViz() {
+    if (micAnalyser) return;
     try {
       ensureAudio();
       micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -283,16 +361,29 @@
     } catch (e) { /* mic denied — visualizer just stays flat */ }
   }
 
-  function toggleMic() {
-    if (!recog) recog = initSpeech();
-    if (!recog) { status("VOICE INPUT UNSUPPORTED IN THIS BROWSER"); return; }
-    if (listening) { recog.stop(); return; }
-    listening = true;
+  function enableListening() {
+    if (!("SpeechRecognition" in window || "webkitSpeechRecognition" in window)) {
+      status("VOICE INPUT UNSUPPORTED IN THIS BROWSER");
+      return;
+    }
+    listeningMode = true;
+    localStorage.setItem("jarvis_listen", "1");
     $("mic-btn").classList.add("listening");
     setReactorMode("listening");
     startMicViz();
-    try { recog.start(); } catch (e) { /* already started */ }
+    startRecog();
+    status("LISTENING · say a command any time");
   }
+
+  function disableListening() {
+    listeningMode = false;
+    localStorage.setItem("jarvis_listen", "0");
+    $("mic-btn").classList.remove("listening");
+    if (recog) { try { recog.stop(); } catch (e) { /* ignore */ } }
+    status("MIC OFF");
+  }
+
+  function toggleMic() { listeningMode ? disableListening() : enableListening(); }
 
   // ----------------------------------------------------------- commands
 
@@ -349,4 +440,19 @@
   tickClock();
   setInterval(tickClock, 1000);
   connect();
+
+  // If the user enabled always-on listening before, try to resume it on load.
+  // Browsers may require a gesture to start recognition; if the auto-start is
+  // refused, the mic button (already primed) enables it on the first click.
+  if (localStorage.getItem("jarvis_listen") === "1") {
+    window.addEventListener("load", () => { try { enableListening(); } catch (e) {} });
+    // A gesture-gated fallback: the first click/keypress anywhere re-arms it.
+    const rearm = () => {
+      if (localStorage.getItem("jarvis_listen") === "1" && !listeningMode) enableListening();
+      window.removeEventListener("pointerdown", rearm);
+      window.removeEventListener("keydown", rearm);
+    };
+    window.addEventListener("pointerdown", rearm);
+    window.addEventListener("keydown", rearm);
+  }
 })();

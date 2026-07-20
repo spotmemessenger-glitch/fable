@@ -266,10 +266,34 @@ async def feeds_loop() -> None:
 # ----------------------------------------------------------------- static http
 
 
+class _StaticHandler(http.server.SimpleHTTPRequestHandler):
+    """Serves the UI, plus POST /snap to save a rendered snapshot to disk.
+
+    The snapshot endpoint exists because the preview pane's own screenshot
+    capture is unreliable for this heavily-animated page; the page can render
+    itself to a PNG and POST it here so it can be viewed as a file.
+    """
+
+    def do_POST(self):  # noqa: N802 - stdlib naming
+        if self.path != "/snap":
+            self.send_error(404)
+            return
+        length = int(self.headers.get("Content-Length", 0))
+        body = self.rfile.read(length) if length else b""
+        out = UI_DIR.parent / "data" / "snap.png"
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_bytes(body)
+        self.send_response(200)
+        self.send_header("Content-Type", "text/plain")
+        self.end_headers()
+        self.wfile.write(b"ok")
+
+    def log_message(self, *args):  # keep the console quiet
+        pass
+
+
 def serve_static() -> None:
-    handler = functools.partial(
-        http.server.SimpleHTTPRequestHandler, directory=str(UI_DIR)
-    )
+    handler = functools.partial(_StaticHandler, directory=str(UI_DIR))
     httpd = http.server.ThreadingHTTPServer(("127.0.0.1", HTTP_PORT), handler)
     httpd.serve_forever()
 
