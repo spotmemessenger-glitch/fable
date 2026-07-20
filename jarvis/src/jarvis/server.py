@@ -69,6 +69,7 @@ class Hub:
         self.clients: set = set()
         self.loop: asyncio.AbstractEventLoop | None = None
         self.busy = False
+        self.last_feeds: dict[str, dict | None] = {}
         self._pending_approvals: dict[str, dict] = {}
         self.session.brain.approver = self._approve_via_hud
         self.session.brain.on_tool = self._on_tool
@@ -251,6 +252,11 @@ async def client_handler(ws) -> None:
     hub.clients.add(ws)
     await ws.send(json.dumps({"type": "hello", "agents": AGENTS, "name": settings.assistant_name}))
     await ws.send(json.dumps(hub.memory_summary()))
+    # Push the most recent feed data immediately so a fresh page isn't blank
+    # until the next poll cycle.
+    for snap in hub.last_feeds.values():
+        if snap:
+            await ws.send(json.dumps(snap, ensure_ascii=False))
 
     try:
         async for raw in ws:
@@ -290,6 +296,7 @@ async def feeds_loop() -> None:
         snap = await asyncio.to_thread(feeds.snapshot)
         for key in ("crypto", "forex", "news"):
             if snap.get(key):
+                hub.last_feeds[key] = snap[key]
                 hub.cast(snap[key])
         await asyncio.sleep(45)
 
