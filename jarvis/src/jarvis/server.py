@@ -164,7 +164,14 @@ class Hub:
             return None
         import io
 
-        ext = "webm" if "webm" in mime else ("ogg" if "ogg" in mime else "mp3")
+        if "wav" in mime:
+            ext = "wav"
+        elif "webm" in mime:
+            ext = "webm"
+        elif "ogg" in mime:
+            ext = "ogg"
+        else:
+            ext = "mp3"
         try:
             result = self._eleven.speech_to_text.convert(
                 file=(f"command.{ext}", io.BytesIO(audio), mime),
@@ -172,6 +179,7 @@ class Hub:
                 tag_audio_events=False,
             )
             text = (getattr(result, "text", None) or "").strip()
+            log.info("Scribe (%s, %d bytes) -> %r", ext, len(audio), text[:100])
             return text or None
         except TypeError:
             # older/newer SDK signature: positional file object

@@ -15,7 +15,7 @@ and the audio-reactive core light up in sync with the spoken conversation.
 
 from __future__ import annotations
 
-import io
+import audioop
 import logging
 import re
 import threading
@@ -23,8 +23,14 @@ import time
 
 log = logging.getLogger(__name__)
 
+# Wake word — deliberately generous, because speech-to-text mangles "Jarvis"
+# badly across accents: Jahavah, Jehovah, Java's, Javis, Jervis, Driver's, etc.
+# Better to wake on a near-miss than to ignore the owner. Matches an optional
+# lead-in (hey/hi/ok/a) then almost any j-word that sounds like Jarvis.
 WAKE_RE = re.compile(
-    r"\b(?:hey|hi|ok|okay)?\s*(?:jarvis|jervis|travis|charvis|jarvi|service)\b",
+    r"\b(?:hey|hi|ok|okay|a|jai)?\s*"
+    r"(?:j[aeu][hr]?[aveiw]+[sz]?h?|jerv\w*|jarv\w*|jahav\w*|jehov\w*|jav[aei]?s?|"
+    r"charvis|harvis|travis|driver'?s|service|jaan|john)\b",
     re.IGNORECASE,
 )
 COMMAND_WINDOW_S = 12.0
@@ -50,13 +56,28 @@ class NativeListener:
 
             self._sr = sr
             r = sr.Recognizer()
-            r.energy_threshold = 300
+            # This machine's mic input level runs very low (measured peak
+            # ~100-300 out of 32767) — a threshold tuned for a normal mic
+            # would never trigger. Start low and let dynamic adjustment tune
+            # up from there rather than down from an unreachable value.
+            r.energy_threshold = 50
             r.dynamic_energy_threshold = True
+            r.dynamic_energy_ratio = 1.3
             r.pause_threshold = 1.3
             r.non_speaking_duration = 0.6
             self._recognizer = r
             self._mic = sr.Microphone()
             self.available = True
+            try:
+                names = sr.Microphone.list_microphone_names()
+                idx = self._mic.device_index
+                log.info(
+                    "using mic device #%s: %r  (all inputs: %s)",
+                    idx, names[idx] if idx is not None and idx < len(names) else "default",
+                    ", ".join(f"{i}:{n}" for i, n in enumerate(names)),
+                )
+            except Exception:  # noqa: BLE001
+                pass
         except Exception:  # noqa: BLE001
             log.warning("Native mic unavailable; browser voice remains the input")
 
@@ -82,15 +103,64 @@ class NativeListener:
         log.info("Native listener online; waiting for the wake word")
 
         while not self._stop.is_set():
+            # Never START listening while JARVIS is talking — recognizer.listen()
+            # blocks until speech-like audio arrives, so if we call it while
+            # speech is about to start, it captures JARVIS's own voice off the
+            # speakers as if it were the owner's command. Wait it out first.
+            while self.hub.speaking and not self._stop.is_set():
+                time.sleep(0.1)
             audio = self._capture()
             if audio is None:
                 continue
-            # Don't transcribe our own voice: skip while JARVIS is speaking.
+            # Also drop anything that finished capturing while JARVIS started
+            # speaking mid-utterance (rare, but the check above alone can't
+            # catch a race that begins after listen() is already blocking).
             if self.hub.speaking:
                 continue
+            audio = self._boost(audio)
             text = self._transcribe(audio)
             if text:
                 self._handle(text)
+            else:
+                log.info("captured audio but no transcript came back")
+
+    # Target peak amplitude (of int16 range 32767) after boosting. This
+    # machine's mic runs unusually quiet at the hardware/driver level even
+    # with Windows' own volume at 100% (measured peak ~100-300 raw) — likely
+    # "Microphone Boost" disabled in the driver, which isn't reachable from
+    # here. A high software gain cap compensates fully in code instead.
+    _TARGET_PEAK = 19000
+    _MAX_GAIN = 250.0
+    _NOISE_FLOOR = 12  # below this raw peak, treat as silence — don't amplify hiss
+
+    def _boost(self, audio):
+        """Digitally amplify quiet audio before it reaches the transcriber.
+
+        This machine's microphone input runs very quiet at the OS level
+        (peak ~100-300/32767 measured directly). Rather than depend on the
+        user finding and raising a Windows mixer slider, boost the signal in
+        software so a normal speaking voice reaches a level Scribe can
+        actually parse. Silence stays silence — gain is clamped, so this
+        does not manufacture speech from noise.
+        """
+        try:
+            raw = audio.get_raw_data()
+            peak = audioop.max(raw, audio.sample_width) or 1
+            rms = audioop.rms(raw, audio.sample_width)
+            dur = len(raw) / (audio.sample_rate * audio.sample_width)
+            if peak < self._NOISE_FLOOR:
+                log.info("captured %.1fs, peak=%d — below noise floor, skipping", dur, peak)
+                return audio
+            gain = min(self._MAX_GAIN, max(1.0, self._TARGET_PEAK / peak))
+            boosted = audioop.mul(raw, audio.sample_width, gain)
+            log.info(
+                "captured %.1fs, peak=%d rms=%d -> gain x%.1f (boosted peak=%d)",
+                dur, peak, rms, gain, min(32767, peak * gain),
+            )
+            return self._sr.AudioData(boosted, audio.sample_rate, audio.sample_width)
+        except Exception:  # noqa: BLE001
+            log.exception("gain boost failed; using raw audio")
+            return audio
 
     def _capture(self):
         try:
@@ -121,10 +191,12 @@ class NativeListener:
 
     def _handle(self, text: str) -> None:
         now = time.monotonic()
-        if text == self._last_cmd and now - self._last_cmd_at < 4:
-            return
         has_wake = bool(WAKE_RE.search(text))
         in_window = now < self._await_until
+        # Log everything heard so mis-transcriptions of "Jarvis" are visible.
+        log.info("heard %r  (wake=%s, window=%s)", text, has_wake, in_window)
+        if text == self._last_cmd and now - self._last_cmd_at < 4:
+            return
 
         if has_wake:
             command = WAKE_RE.sub(" ", text)
@@ -136,6 +208,10 @@ class NativeListener:
                 # bare wake word: acknowledge, open a command window
                 self._await_until = now + COMMAND_WINDOW_S
                 self.hub.wake()
+                # hub.wake() replies on a background thread; give it a moment
+                # to actually start speaking before we loop back to listening,
+                # or we'll capture the start of our own acknowledgement.
+                time.sleep(0.5)
             return
         if in_window:
             self._await_until = now + COMMAND_WINDOW_S
