@@ -65,7 +65,17 @@
 
   function route(m) {
     switch (m.type) {
-      case "hello": agents = m.agents; renderAgents(); break;
+      case "hello":
+        agents = m.agents; renderAgents();
+        if (m.native) {
+          // The PC is listening natively; the browser must NOT also listen or
+          // every command runs twice. Stand down and go visual-only.
+          window.__native = true;
+          if (listeningMode) disableListening();
+          setReactorMode("idle");
+          status("VOICE: NATIVE · just say “Hey Jarvis”");
+        }
+        break;
       case "vitals": updateVitals(m); break;
       case "crypto": renderCrypto(m.items); break;
       case "forex": renderForex(m.items); break;
@@ -687,9 +697,11 @@
   // keypress anywhere re-arms it automatically.
   if (localStorage.getItem("jarvis_listen") !== "0") {
     localStorage.setItem("jarvis_listen", "1");
-    const boot = () => { try { if (!listeningMode) enableListening(); } catch (e) {} };
-    if (document.readyState === "complete") setTimeout(boot, 300);
-    else window.addEventListener("load", () => setTimeout(boot, 300));
+    // Don't start browser listening if the PC is listening natively (set by the
+    // server 'hello'). Delay gives that message time to arrive first.
+    const boot = () => { if (window.__native) return; try { if (!listeningMode) enableListening(); } catch (e) {} };
+    if (document.readyState === "complete") setTimeout(boot, 1000);
+    else window.addEventListener("load", () => setTimeout(boot, 1000));
     const rearm = () => {
       if (localStorage.getItem("jarvis_listen") === "1" && !listeningMode) boot();
       window.removeEventListener("pointerdown", rearm);

@@ -80,6 +80,8 @@ class Hub:
         self.clients: set = set()
         self.loop: asyncio.AbstractEventLoop | None = None
         self.busy = False
+        self.speaking = False          # JARVIS is playing audio on local speakers
+        self.local_mouth = None        # native speaker output (set in native mode)
         self.last_feeds: dict[str, dict | None] = {}
         self._pending_approvals: dict[str, dict] = {}
         self.session.brain.approver = self._approve_via_hud
@@ -203,6 +205,24 @@ class Hub:
 
         threading.Thread(target=work, daemon=True).start()
 
+    def speak_local(self, text: str) -> None:
+        """Speak on the machine's own speakers (native, browser-free mode).
+
+        Sets the speaking flag so the native mic listener ignores JARVIS's own
+        voice. No-op if local speaker output isn't configured.
+        """
+        if self.local_mouth is None or not text.strip():
+            return
+        self.speaking = True
+        try:
+            self.local_mouth.say(text)
+        except Exception:  # noqa: BLE001
+            log.exception("Local speech failed")
+        finally:
+            # small tail so the mic doesn't catch the last word as a command
+            time.sleep(0.35)
+            self.speaking = False
+
     def tts(self, text: str) -> str | None:
         """Synthesize speech, returning base64 MP3, or None to let the browser
         fall back to its own voice."""
@@ -244,10 +264,12 @@ class Hub:
             text = self.WAKE_LINES[idx]
             self.cast({"type": "state", "state": "speaking"})
             payload: dict = {"type": "say", "text": text}
-            audio = self.tts(text)
-            if audio:
-                payload["audio"] = audio
+            if self.local_mouth is None:
+                audio = self.tts(text)
+                if audio:
+                    payload["audio"] = audio
             self.cast(payload)
+            self.speak_local(text)
             self.cast({"type": "state", "state": "idle"})
 
         threading.Thread(target=work, daemon=True).start()
@@ -264,12 +286,14 @@ class Hub:
             try:
                 for sentence in self.session.brain.respond(text):
                     payload: dict = {"type": "say", "text": sentence}
-                    if want_audio:
+                    if want_audio and self.local_mouth is None:
+                        # browser plays the audio (native mode speaks locally instead)
                         audio = self.tts(sentence)
                         if audio:
                             payload["audio"] = audio
                     self.cast({"type": "state", "state": "speaking"})
                     self.cast(payload)
+                    self.speak_local(sentence)
             except Exception:  # noqa: BLE001
                 log.exception("brain turn failed")
                 self.cast({"type": "say", "text": "Something broke mid-thought. Check the log."})
@@ -308,13 +332,49 @@ class Hub:
 
 hub = Hub()
 
+# Fully-autonomous native voice: listen on the machine's own microphone, no
+# browser and no clicking. On by default; set JARVIS_NATIVE_VOICE=0 to disable
+# (e.g. if the mic is better handled by the browser tab).
+_native_listener = None
+
+
+def _start_native_voice() -> None:
+    global _native_listener
+    import os
+
+    if os.environ.get("JARVIS_NATIVE_VOICE", "1").strip() in {"0", "false", "no"}:
+        log.info("Native voice disabled by JARVIS_NATIVE_VOICE")
+        return
+    try:
+        from .voice.native_listener import NativeListener
+        from .voice.mouth import Mouth
+
+        # local speaker output so JARVIS answers out loud without a browser
+        if settings.has_voice_output and hub.local_mouth is None:
+            hub.local_mouth = Mouth(
+                settings.elevenlabs_api_key, settings.voice_id,
+                settings.tts_model, enabled=True,
+            )
+
+        listener = NativeListener(hub, language=settings.stt_language)
+        if listener.start():
+            _native_listener = listener
+            print("  Native voice: ONLINE — listening on the microphone, say 'Hey Jarvis'.")
+        else:
+            print("  Native voice: no microphone found; use the browser tab for voice.")
+    except Exception:  # noqa: BLE001
+        log.exception("Native voice failed to start")
+
 
 # ------------------------------------------------------------------ websocket
 
 
 async def client_handler(ws) -> None:
     hub.clients.add(ws)
-    await ws.send(json.dumps({"type": "hello", "agents": AGENTS, "name": settings.assistant_name}))
+    await ws.send(json.dumps({
+        "type": "hello", "agents": AGENTS, "name": settings.assistant_name,
+        "native": _native_listener is not None,
+    }))
     await ws.send(json.dumps(hub.memory_summary()))
     # Push the most recent feed data immediately so a fresh page isn't blank
     # until the next poll cycle.
@@ -392,6 +452,13 @@ class _StaticHandler(http.server.SimpleHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(b"ok")
 
+    def end_headers(self):
+        # Never cache: this is a fast-moving local app and stale JS/CSS has
+        # repeatedly caused "I changed it but it didn't update" confusion.
+        self.send_header("Cache-Control", "no-store, must-revalidate")
+        self.send_header("Pragma", "no-cache")
+        super().end_headers()
+
     def log_message(self, *args):  # keep the console quiet
         pass
 
@@ -409,6 +476,7 @@ async def amain() -> None:
     hub.loop = asyncio.get_running_loop()
     threading.Thread(target=serve_static, daemon=True).start()
     psutil.cpu_percent(interval=None)  # prime the counter so the first read is real
+    _start_native_voice()
 
     async with websockets.serve(client_handler, "127.0.0.1", WS_PORT):
         print(f"\n  {settings.assistant_name} HUD:  http://localhost:{HTTP_PORT}")
