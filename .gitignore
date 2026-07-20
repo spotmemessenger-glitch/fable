@@ -79,6 +79,8 @@ recordings/
 transcripts/
 screenshots/
 renders/
+jarvis/data/
+snap.png
 cache/
 .cache/
 

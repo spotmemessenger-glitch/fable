@@ -57,7 +57,7 @@
     </div>
   </section>
 
-  <!-- ============ CENTER: iron man face + console ============ -->
+  <!-- ============ CENTER: Iron Man core + console ============ -->
   <section class="col" id="col-center">
     <div id="led-strip">
       <span class="led-chip cyan">CORE</span>
@@ -71,108 +71,13 @@
 
     <div id="reactor-wrap">
       <div id="reactor-stage">
-        <canvas id="reactor" width="620" height="620"></canvas>
-
-        <!-- Iron Man bust: metallic gold faceplate, red armour, cyan arc reactor -->
-        <svg id="ironface" viewBox="0 0 340 360" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
-          <defs>
-            <linearGradient id="goldFace" x1="0.2" y1="0" x2="0.55" y2="1">
-              <stop offset="0" stop-color="#ffe9a8"/>
-              <stop offset="0.4" stop-color="#f0b53e"/>
-              <stop offset="0.8" stop-color="#ac7826"/>
-              <stop offset="1" stop-color="#6e4a16"/>
-            </linearGradient>
-            <linearGradient id="redGrad" x1="0" y1="0" x2="0.2" y2="1">
-              <stop offset="0" stop-color="#ff5347"/>
-              <stop offset="0.45" stop-color="#d21620"/>
-              <stop offset="1" stop-color="#6d0d12"/>
-            </linearGradient>
-            <linearGradient id="redDark" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0" stop-color="#9c1119"/>
-              <stop offset="1" stop-color="#3c080b"/>
-            </linearGradient>
-            <radialGradient id="reactorGrad" cx="0.5" cy="0.5" r="0.5">
-              <stop offset="0" stop-color="#ffffff"/>
-              <stop offset="0.4" stop-color="#bdf3ff"/>
-              <stop offset="0.8" stop-color="#37c8ff"/>
-              <stop offset="1" stop-color="#0a3b52" stop-opacity="0"/>
-            </radialGradient>
-            <radialGradient id="eyeglow" cx="0.5" cy="0.5" r="0.6">
-              <stop offset="0" stop-color="#ffffff"/>
-              <stop offset="0.55" stop-color="#d6f2ff"/>
-              <stop offset="1" stop-color="#7fd0ff"/>
-            </radialGradient>
-          </defs>
-
-          <!-- shoulders / pauldrons -->
-          <path fill="url(#redDark)" stroke="#e0202b" stroke-width="1.6"
-                d="M96,300 Q52,304 44,340 L44,360 L128,360 L128,306 Q112,298 96,300 Z"/>
-          <path fill="url(#redDark)" stroke="#e0202b" stroke-width="1.6"
-                d="M244,300 Q288,304 296,340 L296,360 L212,360 L212,306 Q228,298 244,300 Z"/>
-
-          <!-- chest -->
-          <path fill="url(#redGrad)" stroke="#e0202b" stroke-width="2"
-                d="M120,262 L220,262 L238,360 L102,360 Z"/>
-          <path fill="none" stroke="#7a0f14" stroke-width="1.2" opacity="0.8"
-                d="M150,268 L150,360 M190,268 L190,360 M120,300 L220,300"/>
-
-          <!-- neck -->
-          <path fill="#241608" stroke="#9c6a1e" stroke-width="1.4"
-                d="M148,236 L192,236 L198,262 L142,262 Z"/>
-
-          <!-- arc reactor (chest) -->
-          <circle cx="170" cy="288" r="30" fill="#160a0c" stroke="#e6b24a" stroke-width="3"/>
-          <circle cx="170" cy="288" r="30" fill="none" stroke="#e0202b" stroke-width="1" opacity="0.6"/>
-          <circle cx="170" cy="288" r="23" fill="url(#reactorGrad)"/>
-          <circle id="reactor-core" cx="170" cy="288" r="11" fill="#eafcff"/>
-
-          <!-- helmet red shell (angular; shows as a thin rim + top crown) -->
-          <path fill="url(#redGrad)" stroke="#e0202b" stroke-width="2"
-                d="M170,26 L140,30 L112,46 L96,78 L90,124 L96,166 L112,204 L138,232 L170,254
-                   L202,232 L228,204 L244,166 L250,124 L244,78 L228,46 L200,30 Z"/>
-
-          <!-- gold faceplate (dominant — fills almost the whole front) -->
-          <path fill="url(#goldFace)" stroke="#5c3d12" stroke-width="1.6"
-                d="M170,44 L146,48 L122,62 L108,92 L102,130 L108,170 L124,206 L146,230 L170,250
-                   L194,230 L216,206 L232,170 L238,130 L232,92 L218,62 L194,48 Z"/>
-
-          <!-- faceplate facets + centre seam -->
-          <path fill="none" stroke="#5c3d12" stroke-width="1.3" opacity="0.85"
-                d="M170,44 L138,94 M170,44 L202,94 M138,94 L126,150 M202,94 L214,150 M170,44 L170,122"/>
-
-          <!-- brow: dark gold ridge + red accent (the signature look) -->
-          <path fill="none" stroke="#3f2a0c" stroke-width="3" stroke-linejoin="round"
-                d="M122,142 L152,126 L170,136 L188,126 L218,142"/>
-          <path fill="none" stroke="#ff2f43" stroke-width="2.2" stroke-linejoin="round" opacity="0.95"
-                d="M126,148 L152,133 L170,142 L188,133 L214,148"/>
-
-          <!-- eyes -->
-          <polygon id="eye-l" class="eye" fill="url(#eyeglow)" points="128,152 158,138 162,160 132,168"/>
-          <polygon id="eye-r" class="eye" fill="url(#eyeglow)" points="212,152 182,138 178,160 208,168"/>
-
-          <!-- nose ridge + cheeks -->
-          <path fill="none" stroke="#5c3d12" stroke-width="1.3" opacity="0.85"
-                d="M170,158 L164,206 M170,158 L176,206 M138,170 L130,206 M202,170 L210,206"/>
-          <path fill="none" stroke="#ff2f43" stroke-width="1.4" opacity="0.65"
-                d="M152,164 L146,200 M188,164 L194,200"/>
-
-          <!-- mouth grille + lip-sync glow -->
-          <path fill="#241608" stroke="#9c6a1e" stroke-width="1.4"
-                d="M142,200 L198,200 L188,228 L152,228 Z"/>
-          <rect id="mouth-glow" x="152" y="212" width="36" height="3" rx="2" fill="url(#reactorGrad)"/>
-          <g stroke="#ffcf5a" stroke-width="2.2" stroke-linecap="round" opacity="0.9">
-            <line x1="156" y1="203" x2="154" y2="225"/>
-            <line x1="164" y1="203" x2="163" y2="226"/>
-            <line x1="170" y1="203" x2="170" y2="226"/>
-            <line x1="176" y1="203" x2="177" y2="226"/>
-            <line x1="184" y1="203" x2="186" y2="225"/>
-          </g>
-
-          <!-- jaw -->
-          <path fill="none" stroke="#5c3d12" stroke-width="1.4" opacity="0.8"
-                d="M150,226 L170,250 L190,226"/>
-        </svg>
-
+        <img id="core-img" src="assets/core.jpg" alt="">
+        <canvas id="reactor" width="776" height="576"></canvas>
+        <!-- audio-reactive light overlays, positioned over the image -->
+        <div class="glow glow-eye" id="eye-l"></div>
+        <div class="glow glow-eye" id="eye-r"></div>
+        <div class="glow glow-mouth" id="mouth-glow"></div>
+        <div class="glow glow-reactor" id="reactor-core"></div>
         <div id="reactor-label">STANDBY</div>
       </div>
     </div>
@@ -190,10 +95,10 @@
     </div>
 
     <div id="command-bar">
-      <button id="mic-btn" title="voice command (or say 'Jarvis')">
+      <button id="mic-btn" title="voice command (or say 'Hey Jarvis')">
         <svg viewBox="0 0 24 24" width="22" height="22"><path fill="currentColor" d="M12 14a3 3 0 0 0 3-3V6a3 3 0 1 0-6 0v5a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11h-2z"/></svg>
       </button>
-      <input id="cmd" type="text" placeholder="Type a command, or press the mic and speak…" autocomplete="off">
+      <input id="cmd" type="text" placeholder="Type a command, or say 'Hey Jarvis'…" autocomplete="off">
       <button id="send-btn">EXECUTE</button>
     </div>
   </section>
