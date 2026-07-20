@@ -345,9 +345,17 @@
       if (ev.error === "not-allowed" || ev.error === "service-not-allowed") {
         listeningMode = false;
         $("mic-btn").classList.remove("listening");
-        status("MIC BLOCKED · click the mic to grant access");
+        status("MIC BLOCKED · allow microphone access for this site, then click the mic");
+        addMsg("system", "Microphone permission is blocked. Click the lock/mic icon in the address bar, allow the mic, then press the mic button again.");
+      } else if (ev.error === "network") {
+        // Web Speech needs the browser's cloud recognizer (Chrome/Edge).
+        status("VOICE ERROR · speech service unreachable");
+        addMsg("system", "Speech recognition service unreachable. Use Chrome or Edge, and check the internet connection.");
+      } else if (ev.error === "audio-capture") {
+        status("VOICE ERROR · no microphone found");
+        addMsg("system", "No microphone detected. Plug one in or select the right input device in Windows sound settings.");
       }
-      // no-speech / aborted / network are transient; onend will restart us.
+      // no-speech / aborted are normal between phrases; onend restarts us.
     };
     return r;
   }
@@ -407,6 +415,7 @@
   function toggleMic() { listeningMode ? disableListening() : enableListening(); }
 
   // Decide what to do with a heard phrase, applying the wake-word gate.
+  let lastGateHintAt = 0;
   function handleHeard(t) {
     const hasWake = WAKE_RE.test(t);
     const inWindow = now() < awaitUntil;
@@ -430,7 +439,12 @@
       dispatch(t);
       return;
     }
-    // No wake word and not in a command window — ignore ambient chatter.
+    // No wake word and not in a command window — ignored, but say so
+    // occasionally, otherwise the gate feels like a broken mic.
+    if (now() - lastGateHintAt > 20000) {
+      lastGateHintAt = now();
+      status(`heard “${t.slice(0, 40)}” · say “Hey Jarvis” first`);
+    }
   }
 
   function dispatch(text) {
