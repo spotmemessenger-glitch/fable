@@ -234,7 +234,12 @@
     addMsg("jarvis", m.text);
     if (m.audio && wantAudio) {
       queueAudio(m.audio);
-    } else if (wantAudio && "speechSynthesis" in window) {
+    } else if (wantAudio && !window.__native && "speechSynthesis" in window) {
+      // Only use the browser's own (generic, wrong-voice) speech synthesis as
+      // a fallback when nothing else is speaking. In native mode the PC is
+      // already speaking every reply out loud in JARVIS's real cloned voice —
+      // falling back here played BOTH at once (JARVIS + Windows' default
+      // system voice, e.g. Zira), which is the "two voices" bug.
       browserSpeak(m.text);
     }
   }
