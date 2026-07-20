@@ -199,6 +199,12 @@
   }
 
   function handleState(s) {
+    if (s === "idle" && pendingRecord) {
+      // The wake ack has finished playing — now capture the command for Scribe.
+      pendingRecord = false;
+      startCommandRecording();
+      return;
+    }
     if (s === "idle" && listeningMode) {
       // Turn finished but we're still always-on listening.
       setReactorMode("listening");
@@ -304,6 +310,8 @@
   let lastSubmitted = "";        // dedupe identical back-to-back transcripts
   let lastSubmittedAt = 0;
   let awaitUntil = 0;            // after "Hey Jarvis", accept a command until this time
+  let pendingRecord = false;     // start the Scribe recorder once the ack finishes
+  let recordingCommand = false;  // MediaRecorder is capturing the command
 
   // Wake word. Lenient on common mis-hears of "Jarvis". In always-on mode a
   // phrase is only acted on if it contains the wake word, OR it arrives inside
@@ -424,17 +432,22 @@
     const hasWake = WAKE_RE.test(t);
     const inWindow = now() < awaitUntil;
 
+    if (recordingCommand) return; // Scribe recorder owns this utterance
+
     if (hasWake) {
       const cmd = t.replace(WAKE_RE, " ").replace(/\s+/g, " ").trim().replace(/^[,.\-\s]+/, "");
       if (cmd) {
         awaitUntil = 0;
         dispatch(cmd);
       } else {
-        // Bare "Hey Jarvis" — acknowledge and open a command window.
+        // Bare "Hey Jarvis" — acknowledge, then record the command and send it
+        // to Scribe for accurate transcription (the browser recognizer only
+        // spots the wake word; it is not trusted with the command itself).
         awaitUntil = now() + WAKE_WINDOW_MS;
+        pendingRecord = true;
         send({ type: "wake" });
         setReactorMode("listening");
-        status("YES, YUVRAJ? · listening for your command");
+        status("YES, BOSS? · listening for your command");
       }
       return;
     }
@@ -454,6 +467,80 @@
   function dispatch(text) {
     lastSubmitted = text; lastSubmittedAt = now();
     submit(text);
+  }
+
+  // ------------------------------------------- Scribe command recorder
+  // After the wake ack, record the owner's command from the mic and send the
+  // AUDIO to the server, where ElevenLabs Scribe transcribes it accurately.
+  // Ends on ~1.3s of silence after speech, or a 12s cap.
+
+  async function startCommandRecording() {
+    if (recordingCommand) return;
+    try {
+      ensureAudio();
+      if (!micStream) {
+        micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      }
+      if (!micAnalyser) {
+        const src = audioCtx.createMediaStreamSource(micStream);
+        micAnalyser = audioCtx.createAnalyser();
+        micAnalyser.fftSize = 256;
+        src.connect(micAnalyser);
+        pumpSpectrum(micAnalyser);
+      }
+    } catch (e) {
+      status("MIC UNAVAILABLE FOR RECORDING");
+      return;
+    }
+
+    const mime = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
+      ? "audio/webm;codecs=opus" : "audio/webm";
+    let rec;
+    try { rec = new MediaRecorder(micStream, { mimeType: mime }); }
+    catch (e) { try { rec = new MediaRecorder(micStream); } catch (e2) { return; } }
+
+    recordingCommand = true;
+    setReactorMode("listening");
+    status("RECORDING · speak your command");
+    const chunks = [];
+    rec.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
+
+    const data = new Uint8Array(micAnalyser.frequencyBinCount);
+    let spokeAt = 0, silentSince = 0;
+    const startedAt = now();
+    const watcher = setInterval(() => {
+      micAnalyser.getByteFrequencyData(data);
+      let sum = 0; for (let i = 0; i < data.length; i++) sum += data[i];
+      const loud = (sum / data.length) > 14;
+      const t = now();
+      if (loud) { spokeAt = spokeAt || t; silentSince = 0; }
+      else if (spokeAt && !silentSince) silentSince = t;
+      const spokeAndPaused = spokeAt && silentSince && (t - silentSince > 1300);
+      const neverSpoke = !spokeAt && (t - startedAt > 6000);
+      const tooLong = t - startedAt > 12000;
+      if (spokeAndPaused || neverSpoke || tooLong) {
+        clearInterval(watcher);
+        try { rec.stop(); } catch (e) { /* already stopped */ }
+      }
+    }, 100);
+
+    rec.onstop = async () => {
+      recordingCommand = false;
+      status("PROCESSING…");
+      const blob = new Blob(chunks, { type: mime });
+      if (blob.size < 2000) { // nothing meaningful captured
+        status("LISTENING · say a command any time");
+        setReactorMode(listeningMode ? "listening" : "idle");
+        return;
+      }
+      const buf = new Uint8Array(await blob.arrayBuffer());
+      let bin = ""; const CHUNK = 0x8000;
+      for (let i = 0; i < buf.length; i += CHUNK) {
+        bin += String.fromCharCode.apply(null, buf.subarray(i, i + CHUNK));
+      }
+      send({ type: "audio_command", data: btoa(bin), mime });
+    };
+    rec.start();
   }
 
   // ----------------------------------------------------------- commands

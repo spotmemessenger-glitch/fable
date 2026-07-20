@@ -150,6 +150,59 @@ class Hub:
 
     # -------------------------------------------------------------- speech
 
+    def stt(self, audio: bytes, mime: str = "audio/webm") -> str | None:
+        """Transcribe a spoken command with ElevenLabs Scribe.
+
+        Far more accurate than the browser's free recognizer, especially for
+        accented English and code-switched speech — this is what makes JARVIS
+        actually understand the owner. Returns None on failure so the caller
+        can fall back to the browser transcript.
+        """
+        if self._eleven is None or not audio:
+            return None
+        import io
+
+        ext = "webm" if "webm" in mime else ("ogg" if "ogg" in mime else "mp3")
+        try:
+            result = self._eleven.speech_to_text.convert(
+                file=(f"command.{ext}", io.BytesIO(audio), mime),
+                model_id="scribe_v1",
+                tag_audio_events=False,
+            )
+            text = (getattr(result, "text", None) or "").strip()
+            return text or None
+        except TypeError:
+            # older/newer SDK signature: positional file object
+            try:
+                result = self._eleven.speech_to_text.convert(
+                    io.BytesIO(audio), model_id="scribe_v1"
+                )
+                text = (getattr(result, "text", None) or "").strip()
+                return text or None
+            except Exception:  # noqa: BLE001
+                log.exception("Scribe STT failed (fallback signature)")
+                return None
+        except Exception:  # noqa: BLE001
+            log.exception("Scribe STT failed")
+            return None
+
+    def handle_voice_command(self, audio_b64: str, mime: str) -> None:
+        """A recorded spoken command from the HUD: transcribe, then execute."""
+        try:
+            audio = base64.b64decode(audio_b64)
+        except Exception:  # noqa: BLE001
+            return
+
+        def work() -> None:
+            text = self.stt(audio, mime)
+            if not text:
+                self.cast({"type": "say", "text": "I didn't catch that, boss. Say it again?"})
+                return
+            self.cast({"type": "user_said", "text": text})
+            self.handle_command(text, want_audio=True)
+
+        threading.Thread(target=work, daemon=True).start()
+
     def tts(self, text: str) -> str | None:
         """Synthesize speech, returning base64 MP3, or None to let the browser
         fall back to its own voice."""
@@ -173,10 +226,10 @@ class Hub:
     # Canned acknowledgements for a bare "Hey Jarvis" — spoken in the cloned
     # voice, no Claude call, so the wake response is instant and free.
     WAKE_LINES = (
-        "Yes sir. Jarvis, at your service.",
-        "At your service, sir.",
-        "Yes sir?",
-        "Online and ready, sir.",
+        "Yes boss. Jarvis, at your service.",
+        "At your service, boss.",
+        "Yes boss?",
+        "Online and ready, boss.",
     )
 
     def wake(self) -> None:
@@ -283,6 +336,8 @@ async def client_handler(ws) -> None:
                     hub.handle_command(text, want_audio=bool(msg.get("audio", True)))
             elif kind == "wake":
                 hub.wake()
+            elif kind == "audio_command":
+                hub.handle_voice_command(str(msg.get("data", "")), str(msg.get("mime", "audio/webm")))
             elif kind == "approval_response":
                 hub.resolve_approval(str(msg.get("id")), bool(msg.get("granted")))
             elif kind == "get_memory":

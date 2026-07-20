@@ -191,7 +191,9 @@ html, body {
 @keyframes fade { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; } }
 
 /* ---------------------------------------------------------- command bar */
-#command-bar { display: grid; grid-template-columns: 46px 1fr auto; gap: 8px; align-items: center; }
+/* Hands-free: the mic icon is gone — JARVIS is always listening. */
+#command-bar { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; }
+#mic-btn { display: none !important; }
 #cmd { height: 44px; background: rgba(20,9,4,0.85); border: 1px solid var(--line); border-radius: 4px; color: #ffeec4; font-family: var(--font); font-size: 14px; padding: 0 14px; letter-spacing: 0.03em; }
 #cmd:focus { outline: none; border-color: var(--gold); box-shadow: var(--glow); }
 #mic-btn, #send-btn { height: 44px; border: 1px solid var(--line); background: rgba(30,14,6,0.8); color: var(--gold); border-radius: 4px; cursor: pointer; font-family: var(--font-display); letter-spacing: 0.12em; font-size: 11px; transition: all 0.2s; }
