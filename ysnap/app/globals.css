@@ -1,0 +1,204 @@
+@import "tailwindcss";
+
+/* ---------------------------------------------------------------------------
+   YSNAP design tokens — premium light theme.
+   Canvas #FAFAFA · ink near-black · soft blue/indigo accents used sparingly.
+--------------------------------------------------------------------------- */
+@theme inline {
+  /* color */
+  --color-canvas: #fafafa;
+  --color-surface: #ffffff;
+  --color-sunken: #f5f5f5;
+  --color-hairline: #ececec;
+  --color-ink: #0b0c0e;
+  --color-ink-soft: #343a43;
+  --color-muted: #566070;
+  --color-faint: #6b7280; /* 4.83:1 on white — AA for small text */
+  --color-accent: #4c7dff;
+  --color-accent-deep: #2f5fe8;
+  --color-violet: #6e6ef7;
+
+  /* spectrum — curated feature hues on the white canvas.
+     Usage: solid for glyphs/details, /10 tints for chips, low alpha for glows. */
+  --color-teal: #10b3a3;
+  --color-coral: #ff6b5e;
+  --color-amber: #f59e0b;
+  --color-green: #34b871;
+  --color-rose: #f0559c;
+  --color-chassis: #f6f6f7;      /* phone chassis */
+  --color-chassis-edge: #e4e4e4; /* phone chassis edge */
+
+  /* type */
+  --font-sans: var(--font-inter);
+  --font-display: var(--font-geist);
+
+  /* elevation */
+  --shadow-soft: 0 1px 2px rgb(11 12 14 / 0.04), 0 8px 24px rgb(11 12 14 / 0.05);
+  --shadow-lift: 0 2px 4px rgb(11 12 14 / 0.05), 0 18px 44px rgb(11 12 14 / 0.1);
+  --shadow-pop: 0 4px 8px rgb(11 12 14 / 0.06), 0 28px 72px rgb(11 12 14 / 0.14);
+  --shadow-glow: 0 0 0 1px rgb(76 125 255 / 0.1), 0 10px 44px rgb(76 125 255 / 0.22);
+
+  /* radii — cards live between 24 and 36px */
+  --radius-card: 1.5rem;   /* 24px */
+  --radius-panel: 1.75rem; /* 28px */
+  --radius-hero: 2.25rem;  /* 36px */
+
+  /* device frame — phone chassis + screen */
+  --radius-device: 3.4rem;
+  --radius-device-screen: 2.8rem;
+
+  /* motion */
+  --ease-out-expo: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+html {
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: var(--font-sans), ui-sans-serif, system-ui, -apple-system,
+    "SF Pro Display", "Segoe UI", sans-serif;
+  font-size: 1.125rem;
+  line-height: 1.65;
+  overflow-x: clip;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-display), var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+  letter-spacing: -0.03em;
+  line-height: 1.05;
+  text-wrap: balance;
+  font-weight: 600;
+}
+
+p { text-wrap: pretty; }
+
+::selection {
+  background: var(--color-ink);
+  color: #ffffff;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
+/* subtle scrollbar that doesn't fight the calm aesthetic */
+* { scrollbar-width: thin; scrollbar-color: #d8d8d8 transparent; }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { background: #d8d8d8; border-radius: 999px; border: 3px solid var(--color-canvas); }
+::-webkit-scrollbar-track { background: transparent; }
+
+/* ------------------------------------------------------------------ helpers */
+
+/* page gutter + max width used by every section */
+.shell {
+  margin-inline: auto;
+  width: 100%;
+  max-width: 76rem; /* 1216px */
+  padding-inline: 1.5rem;
+}
+@media (min-width: 768px) { .shell { padding-inline: 2.5rem; } }
+
+/* frosted glass */
+.glass {
+  background: rgb(255 255 255 / 0.62);
+  backdrop-filter: blur(20px) saturate(1.6);
+  -webkit-backdrop-filter: blur(20px) saturate(1.6);
+  border: 1px solid rgb(255 255 255 / 0.65);
+  box-shadow: var(--shadow-soft);
+}
+
+/* lit card — gradient hairline (darker top edge, lighter mid) + 1px inner top highlight.
+   Replaces `border border-hairline` at card call sites so cards read as material, not outlines. */
+.lit-card {
+  position: relative;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.9), var(--shadow-soft);
+}
+.lit-card::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  pointer-events: none;
+  background: linear-gradient(180deg, rgb(11 12 14 / 0.11), rgb(11 12 14 / 0.05) 45%, rgb(11 12 14 / 0.08));
+  /* -webkit- pair first: the standard `mask` shorthand below resets composite
+     in browsers that alias the two, so standard lines must come last. */
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask-composite: exclude;
+}
+
+/* film-grain overlay — sits on ambient backgrounds so flats never look sterile */
+.noise::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.35;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.05'/%3E%3C/svg%3E");
+}
+
+/* hairline divider */
+.rule { border-color: var(--color-hairline); }
+
+/* the one sanctioned gradient treatment — a single accent phrase per section */
+.text-gradient {
+  background-image: linear-gradient(135deg, var(--color-accent), var(--color-violet));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* marquee track (Trusted By) — duration set inline per instance */
+@keyframes marquee {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-50%); }
+}
+.animate-marquee {
+  animation: marquee var(--marquee-duration, 40s) linear infinite;
+}
+.marquee-mask {
+  -webkit-mask-image: linear-gradient(to right, transparent, black 12%, black 88%, transparent);
+  mask-image: linear-gradient(to right, transparent, black 12%, black 88%, transparent);
+}
+
+/* gentle levitation for decorative elements */
+@keyframes floaty {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-12px); }
+}
+.animate-floaty { animation: floaty 7s ease-in-out infinite; }
+
+@keyframes pulse-ring {
+  0% { transform: scale(1); opacity: 0.5; }
+  100% { transform: scale(1.9); opacity: 0; }
+}
+.animate-pulse-ring { animation: pulse-ring 2.4s var(--ease-out-expo) infinite; }
+
+/* living soundwave bars inside the hero speech-bubble ornament */
+@keyframes soundwave {
+  0%, 100% { transform: scaleY(0.3); }
+  50% { transform: scaleY(1); }
+}
+.animate-soundwave {
+  transform-origin: bottom;
+  animation: soundwave 1.15s ease-in-out infinite;
+}
+
+/* accessibility: honour reduced motion everywhere, including CSS keyframes */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

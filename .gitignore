@@ -1,0 +1,115 @@
+# ---------------------------------------------------------------
+# Secrets — never commit these. Rotate immediately if one slips in.
+# ---------------------------------------------------------------
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*.p12
+credentials.json
+client_secret*.json
+token.json
+*_token.json
+*.credentials
+secrets/
+.secrets/
+
+# ---------------------------------------------------------------
+# Python
+# ---------------------------------------------------------------
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+
+# ---------------------------------------------------------------
+# Node
+# ---------------------------------------------------------------
+node_modules/
+.next/
+out/
+dist/
+build/
+.turbo/
+.vercel/
+*.tsbuildinfo
+.npm/
+.pnpm-store/
+
+# ---------------------------------------------------------------
+# Nested repository — next16-claude-starter has its own .git and is
+# versioned independently. Tracking it here would create an embedded
+# repo that neither side can manage properly.
+# ---------------------------------------------------------------
+next16-claude-starter/
+
+# ---------------------------------------------------------------
+# Agent tooling caches and generated state
+# ---------------------------------------------------------------
+.swarm/
+.claude-flow/
+.playwright/
+.playwright-cli/
+.gstack/
+.claude/
+!.claude/settings.json
+!.claude/agents/
+!.claude/skills/
+
+# ---------------------------------------------------------------
+# JARVIS runtime data — personal, regenerable, or large.
+# Memory databases hold private facts about you. Keep them local,
+# back them up separately (encrypted), never push them to a remote.
+# ---------------------------------------------------------------
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+memory/
+recordings/
+transcripts/
+screenshots/
+renders/
+cache/
+.cache/
+
+# Audio / video artifacts
+*.wav
+*.mp3
+*.m4a
+*.ogg
+*.flac
+*.mp4
+*.mov
+*.mkv
+*.webm
+
+# ---------------------------------------------------------------
+# Logs
+# ---------------------------------------------------------------
+*.log
+logs/
+npm-debug.log*
+yarn-error.log*
+
+# ---------------------------------------------------------------
+# OS / editor noise
+# ---------------------------------------------------------------
+Thumbs.db
+ehthumbs.db
+desktop.ini
+.DS_Store
+*.swp
+*~
+.idea/
+.vscode/*
+!.vscode/settings.json
