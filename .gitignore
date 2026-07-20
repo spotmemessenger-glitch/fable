@@ -115,3 +115,6 @@ desktop.ini
 .idea/
 .vscode/*
 !.vscode/settings.json
+
+# scratch design candidates
+jarvis/ui/preview/
