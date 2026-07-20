@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>J.A.R.V.I.S.</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="scanlines"></div>
+
+<header id="topbar">
+  <div class="tb-left">
+    <div class="reactor-mini"><div class="rm-core"></div></div>
+    <span class="brand">J.A.R.V.I.S.</span>
+    <span class="sub" id="status-line">INITIALISING…</span>
+  </div>
+  <div class="tb-right">
+    <span id="clock">--:--:--</span>
+    <span id="date">—</span>
+    <span class="pill" id="link-state">LINK ▪ OFF</span>
+  </div>
+</header>
+
+<main id="grid">
+
+  <!-- ============ LEFT: vitals + agents ============ -->
+  <section class="col" id="col-left">
+    <div class="panel" id="panel-vitals">
+      <h2>SYSTEM</h2>
+      <div class="vital"><label>CPU</label><div class="bar"><div id="v-cpu" class="fill"></div></div><span id="v-cpu-t">0%</span></div>
+      <div class="vital"><label>RAM</label><div class="bar"><div id="v-ram" class="fill"></div></div><span id="v-ram-t">0%</span></div>
+      <div class="vital"><label>DISK</label><div class="bar"><div id="v-disk" class="fill"></div></div><span id="v-disk-t">0%</span></div>
+      <div id="cores"></div>
+      <div class="kv"><span>NET ▲</span><b id="v-up">—</b><span>NET ▼</span><b id="v-down">—</b></div>
+      <div class="kv"><span>UPTIME</span><b id="v-uptime">—</b><span>FREE C:</span><b id="v-free">—</b></div>
+    </div>
+
+    <div class="panel grow" id="panel-agents">
+      <h2>AGENTS</h2>
+      <div id="agent-list"></div>
+    </div>
+
+    <div class="panel" id="panel-memory">
+      <h2>MEMORY CORE</h2>
+      <div class="kv"><span>FACTS</span><b id="m-facts">0</b><span>TURNS</span><b id="m-turns">0</b></div>
+      <div id="m-list"></div>
+    </div>
+  </section>
+
+  <!-- ============ CENTER: reactor + conversation ============ -->
+  <section class="col" id="col-center">
+    <div id="reactor-wrap">
+      <canvas id="reactor" width="560" height="560"></canvas>
+      <div id="reactor-label">STANDBY</div>
+    </div>
+
+    <div class="panel grow" id="panel-console">
+      <h2>CONSOLE</h2>
+      <div id="transcript"></div>
+    </div>
+
+    <div id="command-bar">
+      <button id="mic-btn" title="voice command (or say 'Jarvis')">
+        <svg viewBox="0 0 24 24" width="22" height="22"><path fill="currentColor" d="M12 14a3 3 0 0 0 3-3V6a3 3 0 1 0-6 0v5a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11h-2z"/></svg>
+      </button>
+      <input id="cmd" type="text" placeholder="Type a command, or press the mic and speak…" autocomplete="off">
+      <button id="send-btn">EXECUTE</button>
+    </div>
+  </section>
+
+  <!-- ============ RIGHT: markets + news ============ -->
+  <section class="col" id="col-right">
+    <div class="panel" id="panel-crypto">
+      <h2>CRYPTO <span class="live-dot" id="crypto-dot"></span></h2>
+      <div id="crypto-rows"></div>
+    </div>
+
+    <div class="panel" id="panel-forex">
+      <h2>CURRENCY</h2>
+      <div id="forex-rows"></div>
+    </div>
+
+    <div class="panel grow" id="panel-news">
+      <h2>WIRE <span class="hint">market-moving flagged</span></h2>
+      <div id="news-list"></div>
+    </div>
+  </section>
+</main>
+
+<!-- approval modal -->
+<div id="approval" class="hidden">
+  <div class="ap-box">
+    <h3>AUTHORISATION REQUIRED</h3>
+    <p id="ap-desc">—</p>
+    <div class="ap-actions">
+      <button id="ap-deny">DENY</button>
+      <button id="ap-allow">AUTHORISE</button>
+    </div>
+    <p class="ap-hint">or answer by voice: “yes” / “no”</p>
+  </div>
+</div>
+
+<script src="hud.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

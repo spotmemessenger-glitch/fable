@@ -56,6 +56,11 @@ class Brain:
         self.client = Anthropic(api_key=settings.anthropic_api_key)
         self._history: list[dict[str, Any]] = []
 
+        # Optional observer, called as on_tool(name, arguments, phase, approved)
+        # with phase "start" or "end". The HUD uses this to light up the agent
+        # that is working; failures in the observer must never break the loop.
+        self.on_tool: Callable[[str, dict[str, Any], str, bool], None] | None = None
+
     # ------------------------------------------------------------------ api
 
     def respond(self, user_text: str) -> Iterator[str]:
@@ -144,6 +149,7 @@ class Brain:
         name = use.name
         arguments = dict(use.input or {})
         tool = self.registry.get(name)
+        self._notify(name, arguments, "start", True)
 
         if tool is None:
             output, approved = f"Error: no tool named {name!r}.", False
@@ -159,6 +165,7 @@ class Brain:
             output, approved = self.registry.run(name, arguments), True
 
         self.memory.log_action(self.session_id, name, arguments, output, approved)
+        self._notify(name, arguments, "end", approved)
 
         return {
             "type": "tool_result",
@@ -166,6 +173,14 @@ class Brain:
             "content": output[:12000],
             **({"is_error": True} if output.startswith("Error:") else {}),
         }
+
+    def _notify(self, name: str, arguments: dict[str, Any], phase: str, ok: bool) -> None:
+        if self.on_tool is None:
+            return
+        try:
+            self.on_tool(name, arguments, phase, ok)
+        except Exception:  # noqa: BLE001 - observers must never break the loop
+            log.exception("on_tool observer failed")
 
     def _system_prompt(self) -> list[dict[str, Any]]:
         return build_system_prompt(
