@@ -1,0 +1,25 @@
+[project]
+name = "jarvis"
+version = "0.1.0"
+description = "A personal assistant with voice, memory, and tools"
+requires-python = ">=3.11"
+dependencies = [
+    "anthropic>=0.117",
+    "elevenlabs>=2.0",
+    "SpeechRecognition>=3.14",
+    "PyAudio>=0.2.14",
+    "python-dotenv>=1.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+[project.scripts]
+jarvis = "jarvis.app:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
