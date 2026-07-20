@@ -283,6 +283,13 @@
   let pausedForSpeech = false;   // temporarily stopped because TTS is playing
   let lastSubmitted = "";        // dedupe identical back-to-back transcripts
   let lastSubmittedAt = 0;
+  let awaitUntil = 0;            // after "Hey Jarvis", accept a command until this time
+
+  // Wake word. Lenient on common mis-hears of "Jarvis". In always-on mode a
+  // phrase is only acted on if it contains the wake word, OR it arrives inside
+  // the short window opened by a bare "Hey Jarvis".
+  const WAKE_RE = /\b(?:hey|hi|ok|okay)?\s*(?:jarvis|jervis|travis|charvis|jarvi|service)\b/i;
+  const WAKE_WINDOW_MS = 9000;
 
   function initSpeech() {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -301,14 +308,12 @@
       for (let i = e.resultIndex; i < e.results.length; i++) txt += e.results[i][0].transcript;
       $("cmd").value = txt;
       const last = e.results[e.results.length - 1];
-      if (last.isFinal) {
-        const t = txt.trim();
-        $("cmd").value = "";
-        if (!t) return;
-        if (t === lastSubmitted && now() - lastSubmittedAt < 4000) return; // echo/dupe
-        lastSubmitted = t; lastSubmittedAt = now();
-        submit(t);
-      }
+      if (!last.isFinal) return;
+      const t = txt.trim();
+      $("cmd").value = "";
+      if (!t) return;
+      if (t === lastSubmitted && now() - lastSubmittedAt < 4000) return; // echo/dupe
+      handleHeard(t);
     };
 
     r.onend = () => {
@@ -384,6 +389,38 @@
   }
 
   function toggleMic() { listeningMode ? disableListening() : enableListening(); }
+
+  // Decide what to do with a heard phrase, applying the wake-word gate.
+  function handleHeard(t) {
+    const hasWake = WAKE_RE.test(t);
+    const inWindow = now() < awaitUntil;
+
+    if (hasWake) {
+      const cmd = t.replace(WAKE_RE, " ").replace(/\s+/g, " ").trim().replace(/^[,.\-\s]+/, "");
+      if (cmd) {
+        awaitUntil = 0;
+        dispatch(cmd);
+      } else {
+        // Bare "Hey Jarvis" — acknowledge and open a command window.
+        awaitUntil = now() + WAKE_WINDOW_MS;
+        send({ type: "wake" });
+        setReactorMode("listening");
+        status("YES, YUVRAJ? · listening for your command");
+      }
+      return;
+    }
+    if (inWindow) {
+      awaitUntil = now() + WAKE_WINDOW_MS; // conversation continues
+      dispatch(t);
+      return;
+    }
+    // No wake word and not in a command window — ignore ambient chatter.
+  }
+
+  function dispatch(text) {
+    lastSubmitted = text; lastSubmittedAt = now();
+    submit(text);
+  }
 
   // ----------------------------------------------------------- commands
 

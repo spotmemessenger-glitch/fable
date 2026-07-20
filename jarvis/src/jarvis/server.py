@@ -65,7 +65,7 @@ class Hub:
     """Owns the session and fans events out to connected HUD clients."""
 
     def __init__(self) -> None:
-        self.session = Session(settings, owner="Yuv")
+        self.session = Session(settings, owner="Yuvraj")
         self.clients: set = set()
         self.loop: asyncio.AbstractEventLoop | None = None
         self.busy = False
@@ -158,6 +158,35 @@ class Hub:
 
     # --------------------------------------------------------------- brain
 
+    # Canned acknowledgements for a bare "Hey Jarvis" — spoken in the cloned
+    # voice, no Claude call, so the wake response is instant and free.
+    WAKE_LINES = (
+        "Yes, Yuvraj?",
+        "At your service, Yuvraj.",
+        "Go ahead, Yuvraj.",
+        "I'm listening.",
+    )
+
+    def wake(self) -> None:
+        """Acknowledge the wake word without invoking the brain."""
+        if self.busy:
+            return
+
+        def work() -> None:
+            # Vary the line by the second so it doesn't feel robotic, without
+            # needing a RNG (unavailable in some sandboxes anyway).
+            idx = int(time.time()) % len(self.WAKE_LINES)
+            text = self.WAKE_LINES[idx]
+            self.cast({"type": "state", "state": "speaking"})
+            payload: dict = {"type": "say", "text": text}
+            audio = self.tts(text)
+            if audio:
+                payload["audio"] = audio
+            self.cast(payload)
+            self.cast({"type": "state", "state": "idle"})
+
+        threading.Thread(target=work, daemon=True).start()
+
     def handle_command(self, text: str, want_audio: bool) -> None:
         """Run one user turn on a worker thread, streaming events to the HUD."""
         if self.busy:
@@ -235,6 +264,8 @@ async def client_handler(ws) -> None:
                 if text:
                     hub.cast({"type": "user_said", "text": text})
                     hub.handle_command(text, want_audio=bool(msg.get("audio", True)))
+            elif kind == "wake":
+                hub.wake()
             elif kind == "approval_response":
                 hub.resolve_approval(str(msg.get("id")), bool(msg.get("granted")))
             elif kind == "get_memory":
