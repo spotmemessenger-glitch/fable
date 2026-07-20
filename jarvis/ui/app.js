@@ -8,6 +8,22 @@
   const WS_URL = "ws://localhost:8765";
   const $ = (id) => document.getElementById(id);
 
+  // The brain/voice/memory run on the local machine. When this page is served
+  // from anywhere else (e.g. a Vercel preview), there is no local server to
+  // reach, so we run a self-contained PREVIEW: the visuals animate, market data
+  // is fetched client-side (real), and vitals/agents are simulated.
+  const LOCAL = ["localhost", "127.0.0.1", ""].includes(location.hostname);
+  const DEMO_AGENTS = [
+    { id: "ceo", name: "J.A.R.V.I.S.", role: "Chief · orchestrator", tier: "fable-5" },
+    { id: "research", name: "SCHOLAR", role: "Web research", tier: "on hold" },
+    { id: "coder", name: "FORGE", role: "Files & code", tier: "sonnet-5" },
+    { id: "designer", name: "MUSE", role: "Design / UI", tier: "on hold" },
+    { id: "video", name: "REEL", role: "Video pipeline", tier: "on hold" },
+    { id: "market", name: "LEDGER", role: "Market intel", tier: "feeds live" },
+    { id: "memory", name: "ARCHIVE", role: "Memory & audit", tier: "sqlite" },
+    { id: "system", name: "CORE", role: "System & shell", tier: "gated" },
+  ];
+
   let ws = null;
   let agents = [];
   let audioCtx = null;
@@ -474,8 +490,89 @@
   $("ap-allow").onclick = () => answerApproval(true);
   $("ap-deny").onclick = () => answerApproval(false);
 
+  // ------------------------------------------------------------ preview mode
+
+  async function fetchJson(url) {
+    const r = await fetch(url, { cache: "no-store" });
+    if (!r.ok) throw new Error(r.status);
+    return r.json();
+  }
+
+  async function demoMarkets() {
+    // Real market data, fetched straight from the browser (CORS-friendly APIs).
+    try {
+      const c = await fetchJson(
+        "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum,solana&vs_currencies=usd,inr&include_24hr_change=true");
+      renderCrypto([
+        { symbol: "BTC", usd: c.bitcoin?.usd, inr: c.bitcoin?.inr, change_24h: +(c.bitcoin?.usd_24h_change || 0).toFixed(2) },
+        { symbol: "ETH", usd: c.ethereum?.usd, inr: c.ethereum?.inr, change_24h: +(c.ethereum?.usd_24h_change || 0).toFixed(2) },
+        { symbol: "SOL", usd: c.solana?.usd, inr: c.solana?.inr, change_24h: +(c.solana?.usd_24h_change || 0).toFixed(2) },
+      ]);
+    } catch (e) { /* leave crypto blank on failure */ }
+    try {
+      // open.er-api.com is CORS-friendly (frankfurter.app is not, in the browser).
+      const f = await fetchJson("https://open.er-api.com/v6/latest/USD");
+      const want = ["INR", "EUR", "GBP", "JPY"];
+      renderForex(want.filter((k) => f.rates && f.rates[k] != null)
+        .map((k) => ({ pair: `USD/${k}`, rate: f.rates[k] })));
+    } catch (e) { /* leave forex blank */ }
+  }
+
+  function demoVitals() {
+    // Smoothly wandering synthetic load so the panels look alive.
+    let cpu = 12, ram = 34, disk = 41;
+    const cores = Array.from({ length: 16 }, () => 10);
+    const step = () => {
+      cpu = Math.max(3, Math.min(96, cpu + (Math.sin(now() / 1400) * 6) + (Math.random() - 0.5) * 8));
+      ram = Math.max(20, Math.min(88, ram + (Math.random() - 0.5) * 3));
+      for (let i = 0; i < cores.length; i++) cores[i] = Math.max(2, Math.min(99, cores[i] + (Math.random() - 0.5) * 22));
+      updateVitals({
+        cpu, ram, disk, cores,
+        net_sent_mb: (now() / 90000).toFixed(1), net_recv_mb: (now() / 12000).toFixed(1),
+        uptime_h: (now() / 3600000 + 3).toFixed(1), disk_free_gb: 686.6,
+      });
+    };
+    step();
+    setInterval(step, 1500);
+  }
+
+  function startDemo() {
+    document.body.classList.add("preview");
+    agents = DEMO_AGENTS; renderAgents();
+    status("PREVIEW · full assistant runs on your PC");
+    const el = $("link-state"); el.textContent = "PREVIEW"; el.classList.add("on");
+    setReactorMode("idle");
+    renderMemory({ stats: { facts: 2, episodes: 0 }, facts: [
+      "[preference] preferred name: Prefers to be called Yuvraj",
+      "[project] Building a personal JARVIS voice assistant",
+    ]});
+    renderNews([
+      { title: "Preview mode — connect on your machine for the live news wire.", alert: false },
+      { title: "Voice, memory, and the AI brain run locally on your PC.", alert: false },
+    ]);
+    addMsg("system", "PREVIEW MODE — this is the live interface. Voice, memory and the AI brain run on your machine; open it there to talk to JARVIS.");
+    demoVitals();
+    demoMarkets();
+    setInterval(demoMarkets, 60000);
+    // A little life: idle → brief "thinking" pulse now and then.
+    setInterval(() => {
+      setReactorMode("thinking"); setReactorLevel(0.4);
+      setTimeout(() => { setReactorMode("idle"); setReactorLevel(0); }, 1400);
+    }, 12000);
+    // Command box explains it's a preview instead of trying to reach a server.
+    $("send-btn").onclick = () => addMsg("system", "Open JARVIS on your PC to send commands — the brain lives there.");
+    $("cmd").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); $("send-btn").onclick(); } });
+    $("mic-btn").onclick = () => addMsg("system", "Voice runs on your machine, alongside the assistant.");
+  }
+
   tickClock();
   setInterval(tickClock, 1000);
+
+  if (!LOCAL) {
+    startDemo();
+    return;
+  }
+
   connect();
 
   // If the user enabled always-on listening before, try to resume it on load.
