@@ -232,16 +232,12 @@
 
   function handleSay(m) {
     addMsg("jarvis", m.text);
-    if (m.audio && wantAudio) {
-      queueAudio(m.audio);
-    } else if (wantAudio && !window.__native && "speechSynthesis" in window) {
-      // Only use the browser's own (generic, wrong-voice) speech synthesis as
-      // a fallback when nothing else is speaking. In native mode the PC is
-      // already speaking every reply out loud in JARVIS's real cloned voice —
-      // falling back here played BOTH at once (JARVIS + Windows' default
-      // system voice, e.g. Zira), which is the "two voices" bug.
-      browserSpeak(m.text);
-    }
+    // ElevenLabs only, deliberately — no fallback to any other voice engine.
+    // A prior fallback to the browser's built-in speechSynthesis caused two
+    // voices to play over each other (JARVIS's real voice + a generic system
+    // voice). If ElevenLabs audio isn't present, the reply is shown as text
+    // only rather than spoken in the wrong voice.
+    if (m.audio && wantAudio) queueAudio(m.audio);
   }
 
   function ensureAudio() {
@@ -288,15 +284,6 @@
       src.start();
       pumpSpectrum(analyser);
     }, () => playNext());
-  }
-
-  function browserSpeak(text) {
-    const u = new SpeechSynthesisUtterance(text);
-    u.rate = 1.05; u.pitch = 0.9;
-    // Pause the mic during synthesized speech too, so it doesn't self-trigger.
-    u.onstart = () => { speaking = true; pauseRecogForSpeech(); };
-    u.onend = () => { speaking = false; suppressUntil = now() + 700; resumeRecogAfterSpeech(); };
-    speechSynthesis.speak(u);
   }
 
   function pumpSpectrum(node) {
