@@ -230,6 +230,10 @@
       analyser.fftSize = 256;
       analyser.connect(audioCtx.destination);
     }
+    // Autoplay policy can leave the context suspended until a gesture; try to
+    // resume eagerly so JARVIS can speak without a click (works once the
+    // browser trusts this origin, or when launched with autoplay allowed).
+    if (audioCtx.state === "suspended") audioCtx.resume().catch(() => {});
   }
 
   function queueAudio(b64) {
@@ -589,14 +593,18 @@
 
   connect();
 
-  // If the user enabled always-on listening before, try to resume it on load.
-  // Browsers may require a gesture to start recognition; if the auto-start is
-  // refused, the mic button (already primed) enables it on the first click.
-  if (localStorage.getItem("jarvis_listen") === "1") {
-    window.addEventListener("load", () => { try { enableListening(); } catch (e) {} });
-    // A gesture-gated fallback: the first click/keypress anywhere re-arms it.
+  // ALWAYS-ON BY DEFAULT: start listening the moment the page opens, no mic
+  // click needed. (The mic button now only turns it OFF.) The browser requires
+  // a one-time permission grant per machine; after that this starts silently.
+  // If the browser refuses to start without a gesture, the first click or
+  // keypress anywhere re-arms it automatically.
+  if (localStorage.getItem("jarvis_listen") !== "0") {
+    localStorage.setItem("jarvis_listen", "1");
+    const boot = () => { try { if (!listeningMode) enableListening(); } catch (e) {} };
+    if (document.readyState === "complete") setTimeout(boot, 300);
+    else window.addEventListener("load", () => setTimeout(boot, 300));
     const rearm = () => {
-      if (localStorage.getItem("jarvis_listen") === "1" && !listeningMode) enableListening();
+      if (localStorage.getItem("jarvis_listen") === "1" && !listeningMode) boot();
       window.removeEventListener("pointerdown", rearm);
       window.removeEventListener("keydown", rearm);
     };

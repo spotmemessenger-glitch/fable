@@ -162,10 +162,10 @@ class Hub:
     # Canned acknowledgements for a bare "Hey Jarvis" — spoken in the cloned
     # voice, no Claude call, so the wake response is instant and free.
     WAKE_LINES = (
-        "Yes, Yuvraj?",
-        "At your service, Yuvraj.",
-        "Go ahead, Yuvraj.",
-        "I'm listening.",
+        "Yes sir. Jarvis, at your service.",
+        "At your service, sir.",
+        "Yes sir?",
+        "Online and ready, sir.",
     )
 
     def wake(self) -> None:
