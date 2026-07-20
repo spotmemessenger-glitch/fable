@@ -264,12 +264,17 @@ class Hub:
         """Acknowledge the wake word without invoking the brain."""
         if self.busy:
             return
+        # Vary the line by the second so it doesn't feel robotic, without
+        # needing a RNG (unavailable in some sandboxes anyway).
+        idx = int(time.time()) % len(self.WAKE_LINES)
+        self.announce(self.WAKE_LINES[idx])
+
+    def announce(self, text: str) -> None:
+        """Speak a fixed line without invoking the brain (wake/sleep acks)."""
+        if self.busy:
+            return
 
         def work() -> None:
-            # Vary the line by the second so it doesn't feel robotic, without
-            # needing a RNG (unavailable in some sandboxes anyway).
-            idx = int(time.time()) % len(self.WAKE_LINES)
-            text = self.WAKE_LINES[idx]
             self.cast({"type": "state", "state": "speaking"})
             payload: dict = {"type": "say", "text": text}
             if self.local_mouth is None:

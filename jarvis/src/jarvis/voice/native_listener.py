@@ -33,7 +33,13 @@ WAKE_RE = re.compile(
     r"charvis|harvis|travis|driver'?s|service|jaan|john)\b",
     re.IGNORECASE,
 )
-COMMAND_WINDOW_S = 12.0
+# Puts JARVIS back to sleep (wake word required again). Plain English, not
+# fuzzy like WAKE_RE, since these words aren't as prone to accent-mangling.
+SLEEP_RE = re.compile(
+    r"\b(go\s*to\s*sleep|goodnight|good\s*night|stop\s*listening|"
+    r"that'?s\s*all(?:\s*for\s*now)?|sleep\s*now|you\s*can\s*sleep)\b",
+    re.IGNORECASE,
+)
 
 
 class NativeListener:
@@ -47,7 +53,10 @@ class NativeListener:
         self._sr = None
         self._recognizer = None
         self._mic = None
-        self._await_until = 0.0
+        # Once woken, stays attentive indefinitely — every utterance is a
+        # command, no need to repeat "Hey Jarvis" — until a sleep phrase is
+        # heard. This is a persistent state, not a timeout.
+        self._awake = False
         self._last_cmd = ""
         self._last_cmd_at = 0.0
 
@@ -192,32 +201,46 @@ class NativeListener:
     def _handle(self, text: str) -> None:
         now = time.monotonic()
         has_wake = bool(WAKE_RE.search(text))
-        in_window = now < self._await_until
-        # Log everything heard so mis-transcriptions of "Jarvis" are visible.
-        log.info("heard %r  (wake=%s, window=%s)", text, has_wake, in_window)
+        has_sleep = bool(SLEEP_RE.search(text))
+        log.info("heard %r  (wake=%s, awake=%s, sleep=%s)", text, has_wake, self._awake, has_sleep)
         if text == self._last_cmd and now - self._last_cmd_at < 4:
             return
 
-        if has_wake:
-            command = WAKE_RE.sub(" ", text)
+        if self._awake:
+            if has_sleep:
+                self._go_to_sleep()
+                return
+            # Already attentive — everything heard is a command. The wake
+            # word is optional here; strip it if present out of habit.
+            command = WAKE_RE.sub(" ", text) if has_wake else text
             command = re.sub(r"\s+", " ", command).strip(" ,.-").strip()
             if command:
-                self._await_until = 0
                 self._dispatch(command)
-            else:
-                # bare wake word: acknowledge, open a command window
-                self._await_until = now + COMMAND_WINDOW_S
-                self.hub.wake()
-                # hub.wake() replies on a background thread; give it a moment
-                # to actually start speaking before we loop back to listening,
-                # or we'll capture the start of our own acknowledgement.
-                time.sleep(0.5)
             return
-        if in_window:
-            self._await_until = now + COMMAND_WINDOW_S
-            self._dispatch(text)
-            return
-        # otherwise ignore ambient chatter (no wake word)
+
+        if not has_wake:
+            return  # asleep, no wake word — ignore ambient chatter
+
+        command = WAKE_RE.sub(" ", text)
+        command = re.sub(r"\s+", " ", command).strip(" ,.-").strip()
+        self._awake = True
+        if has_sleep and not command.strip():
+            # "Hey Jarvis, go to sleep" in the same breath as waking.
+            self._go_to_sleep()
+        elif command:
+            self._dispatch(command)
+        else:
+            # bare wake word: acknowledge, stay attentive until told to sleep
+            self.hub.wake()
+            # hub.wake() replies on a background thread; give it a moment to
+            # actually start speaking before we loop back to listening, or
+            # we'll capture the start of our own acknowledgement.
+            time.sleep(0.5)
+
+    def _go_to_sleep(self) -> None:
+        self._awake = False
+        self.hub.announce("Going to sleep, boss. Say Hey Jarvis when you need me.")
+        time.sleep(0.5)
 
     def _dispatch(self, command: str) -> None:
         self._last_cmd = command
