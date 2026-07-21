@@ -155,7 +155,7 @@ html, body {
 .led-chip.red::before { background: var(--red); box-shadow: 0 0 7px var(--red); animation: blink 1.8s infinite; }
 
 /* ------------------------------------------------------- reactor / core */
-#reactor-wrap { position: relative; flex: 1.9; min-height: 0; display: grid; place-items: center; overflow: hidden; }
+#reactor-wrap { position: relative; flex: 1.6; min-height: 0; display: grid; place-items: center; overflow: hidden; }
 #reactor-stage { position: relative; aspect-ratio: 1280 / 720; height: auto; width: 100%; max-height: 100%; margin: auto; }
 #core-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; border-radius: 4px;
   box-shadow: 0 0 44px rgba(25,181,255,0.25) inset, 0 0 30px rgba(0,0,0,0.6); }
@@ -179,8 +179,13 @@ html, body {
 .ps-fill { height: 100%; width: 100%; background: linear-gradient(90deg, var(--blue-dim), var(--blue), var(--gold)); box-shadow: 0 0 8px var(--blue); animation: pulse 3s infinite; }
 
 /* -------------------------------------------------------------- console */
-/* Kept compact so the Iron Man core is the hero; the console is a status feed. */
-#panel-console { flex: 0 0 auto; height: 150px; }
+/* This is the actual conversation record — every word Yuvraj and JARVIS say,
+   in both directions. It needs real room: a fixed 150px only fit 3-4 short
+   lines, so a normal multi-sentence exchange scrolled straight out of view
+   (looked like messages "vanished" when they were just off-screen). The core
+   still gets more space (flex 1.9 vs 1.1) so it stays the visual centerpiece,
+   but the console now grows too instead of being pinned tiny. */
+#panel-console { flex: 1.5; min-height: 280px; }
 #transcript { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; padding-right: 6px; }
 .msg { font-size: 13px; line-height: 1.4; max-width: 92%; padding: 7px 11px; border-radius: 4px; animation: fade 0.3s; }
 .msg.you { align-self: flex-end; background: rgba(245,187,71,0.1); border: 1px solid var(--gold-dim); color: #ffeec4; }
