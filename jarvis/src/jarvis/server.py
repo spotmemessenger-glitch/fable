@@ -376,12 +376,32 @@ def _start_native_voice() -> None:
                 settings.tts_model, enabled=True,
             )
 
-        listener = NativeListener(hub, language=settings.stt_language)
-        if listener.start():
-            _native_listener = listener
-            print("  Native voice: ONLINE — listening on the microphone, say 'Hey Jarvis'.")
-        else:
-            print("  Native voice: no microphone found; use the browser tab for voice.")
+        # Prefer Deepgram's streaming listener — it reacts to a finished
+        # sentence in near-real-time (transcribes as audio arrives, fast
+        # server-side endpointing) instead of the old record-the-whole-
+        # utterance-THEN-upload-it approach. Falls back to the Scribe-based
+        # listener if no DEEPGRAM_API_KEY is set or the mic can't be opened,
+        # so this never breaks voice for someone who hasn't added the key.
+        listener = None
+        try:
+            from .voice.deepgram_listener import DeepgramListener
+
+            dg_listener = DeepgramListener(hub, language=settings.stt_language)
+            if dg_listener.start():
+                listener = dg_listener
+                print("  Native voice: ONLINE (Deepgram streaming) — say 'Hey Jarvis'.")
+        except Exception:  # noqa: BLE001
+            log.exception("Deepgram listener failed to start; falling back to Scribe")
+
+        if listener is None:
+            fallback = NativeListener(hub, language=settings.stt_language)
+            if fallback.start():
+                listener = fallback
+                print("  Native voice: ONLINE (Scribe) — listening on the microphone, say 'Hey Jarvis'.")
+            else:
+                print("  Native voice: no microphone found; use the browser tab for voice.")
+
+        _native_listener = listener
     except Exception:  # noqa: BLE001
         log.exception("Native voice failed to start")
 
