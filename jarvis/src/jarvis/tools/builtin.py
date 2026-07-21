@@ -295,3 +295,66 @@ def run_command(command: str, reason: str = "") -> str:
 )
 def current_time() -> str:
     return time.strftime("%A %d %B %Y, %H:%M:%S %Z")
+
+
+@registry.register(
+    "system_status",
+    "Read live system information: CPU, memory, disk, battery, uptime, network, "
+    "and the top processes by resource use. Read-only — cannot start, stop, or "
+    "modify anything. Use this for questions like 'how much RAM am I using', "
+    "'what's my disk space', 'what's running', or 'is my CPU under load'.",
+    {
+        "type": "object",
+        "properties": {
+            "detail": {
+                "type": "string",
+                "enum": ["summary", "processes"],
+                "description": "'summary' (default) for CPU/RAM/disk/battery/uptime; "
+                "'processes' to also list the top resource-consuming processes.",
+            },
+        },
+    },
+)
+def system_status(detail: str = "summary") -> str:
+    import psutil
+
+    vm = psutil.virtual_memory()
+    disk = psutil.disk_usage("C:\\" if _is_windows() else "/")
+    cpu = psutil.cpu_percent(interval=0.3)
+    uptime_s = time.time() - psutil.boot_time()
+    uptime_h = uptime_s / 3600
+
+    lines = [
+        f"CPU: {cpu:.0f}% across {psutil.cpu_count()} cores",
+        f"RAM: {vm.percent:.0f}% used ({vm.used / 2**30:.1f} GB of {vm.total / 2**30:.1f} GB)",
+        f"Disk: {disk.percent:.0f}% used, {disk.free / 2**30:.1f} GB free",
+        f"Uptime: {uptime_h:.1f} hours",
+    ]
+
+    battery = getattr(psutil, "sensors_battery", lambda: None)()
+    if battery is not None:
+        state = "charging" if battery.power_plugged else "on battery"
+        lines.append(f"Battery: {battery.percent:.0f}% ({state})")
+
+    if detail == "processes":
+        procs = []
+        for p in psutil.process_iter(["name", "cpu_percent", "memory_percent"]):
+            try:
+                procs.append(p.info)
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                continue
+        top = sorted(procs, key=lambda p: p.get("cpu_percent") or 0, reverse=True)[:8]
+        lines.append("Top processes by CPU:")
+        for p in top:
+            lines.append(
+                f"  {p['name']}: {p.get('cpu_percent') or 0:.0f}% CPU, "
+                f"{p.get('memory_percent') or 0:.1f}% RAM"
+            )
+
+    return "\n".join(lines)
+
+
+def _is_windows() -> bool:
+    import platform
+
+    return platform.system() == "Windows"
