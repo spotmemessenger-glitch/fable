@@ -1,8 +1,10 @@
 """The HUD server.
 
-Serves the interface (plain HTTP, static files) and bridges the browser to the
-brain over a WebSocket. One brain, one memory — the same core as the terminal
-modes, so everything the HUD does lands in the same database.
+Serves the interface (static files) and the brain (WebSocket) on ONE port —
+required for cloud hosts like Railway/Fly that expose a single $PORT. Static
+assets are served for any plain HTTP GET; the WebSocket lives at /ws. One
+brain, one memory — the same core as the terminal modes, so everything the HUD
+does lands in the same database.
 
 Run:  python -m jarvis.server        then open  http://localhost:8770
 """
@@ -11,16 +13,18 @@ from __future__ import annotations
 
 import asyncio
 import base64
-import functools
-import http.server
 import json
 import logging
+import mimetypes
+import os
 import threading
 import time
 from pathlib import Path
 
 import psutil
 import websockets
+from websockets.datastructures import Headers
+from websockets.http11 import Response
 
 from .app import Session, _setup_logging
 from .config import settings
@@ -39,8 +43,11 @@ for _blocked in ("run_command", "write_file", "read_file", "list_directory"):
 
 log = logging.getLogger(__name__)
 
-HTTP_PORT = 8770
-WS_PORT = 8765
+# Railway/Fly/Render inject $PORT and expect the app to listen on it with a
+# single process bound to 0.0.0.0. Locally there's no $PORT, so default to
+# 8770 on loopback only.
+PORT = int(os.environ.get("PORT", 8770))
+BIND_HOST = "0.0.0.0" if "PORT" in os.environ else "127.0.0.1"
 UI_DIR = Path(__file__).resolve().parent.parent.parent / "ui"
 
 APPROVAL_TIMEOUT_SECONDS = 120
@@ -442,44 +449,42 @@ async def feeds_loop() -> None:
 
 # ----------------------------------------------------------------- static http
 
+_MIME_FALLBACK = "application/octet-stream"
 
-class _StaticHandler(http.server.SimpleHTTPRequestHandler):
-    """Serves the UI, plus POST /snap to save a rendered snapshot to disk.
 
-    The snapshot endpoint exists because the preview pane's own screenshot
-    capture is unreliable for this heavily-animated page; the page can render
-    itself to a PNG and POST it here so it can be viewed as a file.
-    """
-
-    def do_POST(self):  # noqa: N802 - stdlib naming
-        if self.path != "/snap":
-            self.send_error(404)
-            return
-        length = int(self.headers.get("Content-Length", 0))
-        body = self.rfile.read(length) if length else b""
-        out = UI_DIR.parent / "data" / "snap.png"
-        out.parent.mkdir(parents=True, exist_ok=True)
-        out.write_bytes(body)
-        self.send_response(200)
-        self.send_header("Content-Type", "text/plain")
-        self.end_headers()
-        self.wfile.write(b"ok")
-
-    def end_headers(self):
-        # Never cache: this is a fast-moving local app and stale JS/CSS has
+def _static_response(path: str) -> Response:
+    """Serve a file from ui/ for a plain HTTP GET on the shared port."""
+    clean = path.split("?", 1)[0].split("#", 1)[0]
+    rel = clean.lstrip("/") or "index.html"
+    target = (UI_DIR / rel).resolve()
+    # Refuse to serve anything outside ui/ (blocks ../.. traversal).
+    if UI_DIR not in target.parents and target != UI_DIR:
+        return Response(403, "Forbidden", Headers({"Content-Type": "text/plain"}), b"forbidden")
+    if target.is_dir():
+        target = target / "index.html"
+    if not target.is_file():
+        return Response(404, "Not Found", Headers({"Content-Type": "text/plain"}), b"not found")
+    body = target.read_bytes()
+    ctype = mimetypes.guess_type(str(target))[0] or _MIME_FALLBACK
+    headers = Headers({
+        "Content-Type": ctype,
+        "Content-Length": str(len(body)),
+        # Never cache: this is a fast-moving app and stale JS/CSS has
         # repeatedly caused "I changed it but it didn't update" confusion.
-        self.send_header("Cache-Control", "no-store, must-revalidate")
-        self.send_header("Pragma", "no-cache")
-        super().end_headers()
-
-    def log_message(self, *args):  # keep the console quiet
-        pass
+        "Cache-Control": "no-store, must-revalidate",
+    })
+    return Response(200, "OK", headers, body)
 
 
-def serve_static() -> None:
-    handler = functools.partial(_StaticHandler, directory=str(UI_DIR))
-    httpd = http.server.ThreadingHTTPServer(("127.0.0.1", HTTP_PORT), handler)
-    httpd.serve_forever()
+async def process_request(connection, request):
+    """Route plain HTTP to static files; let /ws through to the WS handshake."""
+    if request.path.startswith("/ws"):
+        return None  # proceed with the WebSocket handshake
+    try:
+        return _static_response(request.path)
+    except Exception:  # noqa: BLE001
+        log.exception("static file serving failed for %s", request.path)
+        return Response(500, "Internal Server Error", Headers(), b"error")
 
 
 # ----------------------------------------------------------------------- main
@@ -487,13 +492,14 @@ def serve_static() -> None:
 
 async def amain() -> None:
     hub.loop = asyncio.get_running_loop()
-    threading.Thread(target=serve_static, daemon=True).start()
     psutil.cpu_percent(interval=None)  # prime the counter so the first read is real
     _start_native_voice()
 
-    async with websockets.serve(client_handler, "127.0.0.1", WS_PORT):
-        print(f"\n  {settings.assistant_name} HUD:  http://localhost:{HTTP_PORT}")
-        print(f"  WebSocket bridge:  ws://localhost:{WS_PORT}")
+    async with websockets.serve(
+        client_handler, BIND_HOST, PORT, process_request=process_request
+    ):
+        scheme = "0.0.0.0" if BIND_HOST == "0.0.0.0" else "localhost"
+        print(f"\n  {settings.assistant_name} HUD + WebSocket:  http://{scheme}:{PORT}  (ws at /ws)")
         print("  Ctrl+C to stop.\n")
         await asyncio.gather(vitals_loop(), feeds_loop())
 

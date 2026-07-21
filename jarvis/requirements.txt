@@ -1,0 +1,7 @@
+# Cloud deploy (Railway/Fly/etc). Installs the local jarvis package
+# (src-layout) plus its base dependencies from pyproject.toml — deliberately
+# WITHOUT the 'voice' extra (PyAudio/SpeechRecognition), since a cloud
+# container has no physical microphone to use them with, and PyAudio needs
+# the portaudio C library to compile. jarvis.voice.native_listener already
+# catches the missing import and degrades gracefully (available=False).
+-e .

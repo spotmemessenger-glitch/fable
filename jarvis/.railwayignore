@@ -1,0 +1,14 @@
+# Never ship the local memory database, logs, or snapshots — that's
+# Yuvraj's real conversation history and personal data. The cloud instance
+# starts with a fresh, empty memory of its own.
+data/
+
+.pytest_cache/
+__pycache__/
+*.pyc
+.venv/
+node_modules/
+ui/preview/
+
+# Secrets — Railway environment variables carry these, never a committed file.
+.env

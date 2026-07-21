@@ -5,14 +5,17 @@
 (function () {
   "use strict";
 
-  const WS_URL = "ws://localhost:8765";
+  // Same origin as the page, /ws path — works unchanged locally and once
+  // deployed to a cloud host (Railway/Fly), since it's no longer a hardcoded
+  // port. wss:// automatically when the page itself is served over https.
+  const WS_URL = (location.protocol === "https:" ? "wss://" : "ws://") + location.host + "/ws";
   const $ = (id) => document.getElementById(id);
 
-  // The brain/voice/memory run on the local machine. When this page is served
-  // from anywhere else (e.g. a Vercel preview), there is no local server to
-  // reach, so we run a self-contained PREVIEW: the visuals animate, market data
-  // is fetched client-side (real), and vitals/agents are simulated.
-  const LOCAL = ["localhost", "127.0.0.1", ""].includes(location.hostname);
+  // If no real jarvis.server is reachable behind this page (e.g. the
+  // static-only Vercel preview), fall back to a self-contained PREVIEW: the
+  // visuals animate, market data is fetched client-side (real), and
+  // vitals/agents are simulated. Decided by probeThenStart() below via an
+  // actual connection attempt, not by guessing from the hostname.
   const DEMO_AGENTS = [
     { id: "ceo", name: "J.A.R.V.I.S.", role: "Chief · orchestrator", tier: "fable-5" },
     { id: "research", name: "SCHOLAR", role: "Web research", tier: "on hold" },
@@ -675,11 +678,45 @@
   tickClock();
   setInterval(tickClock, 1000);
 
-  if (!LOCAL) {
-    startDemo();
-    return;
+  // Decide preview-vs-full mode by actually trying the backend, not by
+  // guessing from the hostname. A static-only deploy (no server behind the
+  // page, e.g. the Vercel preview) fails this probe and falls back to demo
+  // mode; a real deployment (localhost, or a cloud host actually running
+  // jarvis.server) succeeds and gets full functionality — same code path
+  // regardless of where the server happens to be hosted.
+  probeThenStart();
+
+  function probeThenStart() {
+    let decided = false;
+    let probe;
+    try {
+      probe = new WebSocket(WS_URL);
+    } catch (e) {
+      startDemo();
+      return;
+    }
+    const giveUp = setTimeout(() => {
+      if (decided) return;
+      decided = true;
+      try { probe.close(); } catch (e) {}
+      startDemo();
+    }, 3000);
+    probe.onopen = () => {
+      if (decided) return;
+      decided = true;
+      clearTimeout(giveUp);
+      try { probe.close(); } catch (e) {} // connect() below opens the real one
+      startFull();
+    };
+    probe.onerror = () => {
+      if (decided) return;
+      decided = true;
+      clearTimeout(giveUp);
+      startDemo();
+    };
   }
 
+  function startFull() {
   connect();
 
   // ALWAYS-ON BY DEFAULT: start listening the moment the page opens, no mic
@@ -701,5 +738,6 @@
     };
     window.addEventListener("pointerdown", rearm);
     window.addEventListener("keydown", rearm);
+  }
   }
 })();
