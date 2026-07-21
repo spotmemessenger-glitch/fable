@@ -327,7 +327,7 @@ class Hub:
 
     def vitals(self) -> dict:
         vm = psutil.virtual_memory()
-        disk = psutil.disk_usage("C:\\")
+        disk = psutil.disk_usage("C:\\" if os.name == "nt" else "/")
         net = psutil.net_io_counters()
         return {
             "type": "vitals",

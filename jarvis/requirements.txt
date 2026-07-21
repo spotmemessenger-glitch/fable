@@ -1,7 +1,17 @@
-# Cloud deploy (Railway/Fly/etc). Installs the local jarvis package
-# (src-layout) plus its base dependencies from pyproject.toml — deliberately
-# WITHOUT the 'voice' extra (PyAudio/SpeechRecognition), since a cloud
-# container has no physical microphone to use them with, and PyAudio needs
-# the portaudio C library to compile. jarvis.voice.native_listener already
-# catches the missing import and degrades gracefully (available=False).
--e .
+# Cloud deploy (Railway/Fly/etc). Deliberately WITHOUT the 'voice' extra
+# (PyAudio/SpeechRecognition) — a cloud container has no physical microphone
+# to use them with, and PyAudio needs the portaudio C library to compile.
+# jarvis.voice.native_listener already catches the missing import and
+# degrades gracefully (available=False).
+#
+# NOT using '-e .' here: Railway's build copies requirements.txt/pyproject.toml
+# before the rest of the source (for Docker layer caching), so an editable
+# install of the local package fails at that point (src/ doesn't exist yet in
+# that build step). PYTHONPATH is set to src/ in the Procfile at RUNTIME
+# instead, which sidesteps the issue entirely.
+anthropic>=0.117
+elevenlabs>=2.0
+python-dotenv>=1.0
+websockets>=12.0
+psutil>=6.0
+requests>=2.31

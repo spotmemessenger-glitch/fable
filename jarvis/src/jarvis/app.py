@@ -22,11 +22,22 @@ log = logging.getLogger(__name__)
 
 
 def _setup_logging(log_path: Path) -> None:
-    log_path.parent.mkdir(parents=True, exist_ok=True)
+    """Log to both a local file (for on-machine debugging) and stdout.
+
+    Cloud hosts (Railway, Fly, ...) only capture what a process writes to
+    stdout/stderr — a container's filesystem is ephemeral and invisible to
+    `railway logs`. File-only logging left every cloud error invisible.
+    """
+    handlers: list[logging.Handler] = [logging.StreamHandler()]
+    try:
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        handlers.append(logging.FileHandler(log_path, encoding="utf-8"))
+    except OSError:
+        pass  # read-only filesystem on some hosts; stdout still works
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
-        handlers=[logging.FileHandler(log_path, encoding="utf-8")],
+        handlers=handlers,
     )
 
 
