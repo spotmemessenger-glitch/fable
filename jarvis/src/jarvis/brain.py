@@ -27,6 +27,16 @@ _SENTENCE_END = re.compile(r"(?<=[.!?])\s+")
 # A tool loop that never terminates is the classic way an agent burns money.
 MAX_TOOL_ROUNDS = 12
 
+# Anthropic's hosted web-search tool: runs entirely server-side (search,
+# fetch, and synthesis all happen inside one API call — no client round-trip,
+# so it needs no entry in the local tool registry and no permission gate; it's
+# read-only and can't be pointed at anything destructive). max_uses caps how
+# many searches a single turn can spend, so one question can't spiral into a
+# runaway sequence of paid searches.
+WEB_SEARCH_TOOLS: list[dict[str, Any]] = [
+    {"type": "web_search_20260209", "name": "web_search", "max_uses": 3},
+]
+
 Approver = Callable[[Tool, dict[str, Any]], bool]
 
 
@@ -109,7 +119,7 @@ class Brain:
                 model=self.settings.model,
                 max_tokens=self.settings.max_tokens,
                 system=self._system_prompt(),
-                tools=self.registry.specs(),
+                tools=self.registry.specs() + WEB_SEARCH_TOOLS,
                 messages=self._history,
             ) as stream:
                 for event in stream.text_stream:
