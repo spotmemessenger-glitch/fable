@@ -1,0 +1,22 @@
+{
+  "name": "spotme-core",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Spot Me Messenger — peer-to-peer chat core. Runs unchanged in Node and in a Bare worklet.",
+  "main": "core/index.js",
+  "scripts": {
+    "test": "node test/room.test.js",
+    "test:identity": "node test/identity.test.js",
+    "test:network": "node test/holepunch.test.js"
+  },
+  "dependencies": {
+    "autobase": "^7.28.1",
+    "b4a": "^1.8.1",
+    "bip39": "^3.1.0",
+    "corestore": "^7.11.1",
+    "hypercore": "^11.34.1",
+    "hypercore-crypto": "^3.7.0",
+    "hyperswarm": "^4.17.0",
+    "sodium-universal": "^5.0.1"
+  }
+}

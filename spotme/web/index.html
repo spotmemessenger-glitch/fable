@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <!--
+    viewport-fit=cover plus the safe-area insets in style.css keep the composer
+    clear of the iPhone home indicator. Without it the send button sits under
+    the gesture bar and is genuinely hard to tap.
+  -->
+  <meta name="viewport"
+        content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1" />
+  <meta name="theme-color" content="#F5F5F5" media="(prefers-color-scheme: light)" />
+  <meta name="theme-color" content="#0E0E10" media="(prefers-color-scheme: dark)" />
+  <meta name="description" content="Peer-to-peer chat with live transliteration. No accounts, no servers." />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <title>Spot Me</title>
+  <link rel="stylesheet" href="/src/style.css" />
+</head>
+<body>
+  <div id="app"></div>
+  <script type="module" src="/src/app.js"></script>
+</body>
+</html>
