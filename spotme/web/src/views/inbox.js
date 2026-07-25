@@ -394,6 +394,8 @@ export function render (root, ctx) {
   function renderArchRow () {
     const count = db.convos().filter((c) => c.archived).length
     archCount.textContent = String(count)
+    // Only meaningful once something is archived — but the pull itself is no
+    // longer silent when it is empty: the refresh indicator answers the drag.
     archRow.style.display = count > 0 && !archivedMode ? '' : 'none'
     archRow.classList.toggle('reveal', archivedRevealed)
   }
@@ -484,10 +486,9 @@ export function render (root, ctx) {
   scroll.addEventListener('touchmove', (event) => {
     if (pullStartY == null || archivedRevealed) return
     if (scroll.scrollTop > 0) { pullStartY = null; return }
-    if (event.touches[0].clientY - pullStartY > PULL_REVEAL_PX) {
-      revealArchived()
-      pullStartY = null
-    }
+    // Do NOT clear pullStartY after revealing: the same drag continues into
+    // the refresh gesture, and zeroing it here cancelled the longer pull.
+    if (event.touches[0].clientY - pullStartY > PULL_REVEAL_PX) revealArchived()
   }, { passive: true })
   scroll.addEventListener('wheel', (event) => {
     if (scroll.scrollTop <= 0 && event.deltaY < 0) revealArchived()

@@ -11,6 +11,7 @@ import { db } from './lib/db.js'
 import { lobby } from './lib/discovery.js'
 import { rooms } from './lib/rooms.js'
 import { readyRTC } from './net.js'
+import { attachPullRefresh } from './lib/pullrefresh.js'
 import { el, clear, toast, avatar } from './lib/ui.js'
 import { compressImage } from './lib/media.js'
 import { openCrop } from './lib/crop.js'
@@ -170,6 +171,9 @@ function render () {
     viewContainer = el('div', { class: 'view' })
     app.appendChild(viewContainer)
     app.appendChild(buildNav())
+    // Pull down anywhere to hard-refresh: phones otherwise sit on an old
+    // bundle until someone remembers the browser's own gesture.
+    attachPullRefresh(app)
   }
   clear(viewContainer)
 

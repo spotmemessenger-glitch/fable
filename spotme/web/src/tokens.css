@@ -549,3 +549,47 @@ input, textarea, select { font-family: var(--font); }
 /* ------------------------- app-switcher privacy blur (visibilitychange) */
 
 .privacy-blur { filter: blur(26px); transition: filter .15s ease; }
+
+/* ------------------------------------------------- pull down to refresh */
+/* Always visible feedback for the downward drag — the Archived reveal is
+   silent when nothing is archived, which made the gesture feel broken. */
+.pullref {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translate(-50%, -60px);
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 14px;
+  border-radius: 999px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  box-shadow: 0 6px 20px rgba(12, 52, 59, .16);
+  opacity: 0;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+.pullref-ic {
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  border: 2px solid var(--line);
+  border-top-color: var(--blue);
+  flex: none;
+}
+
+.pullref-tx {
+  font-size: 12px;
+  font-weight: 650;
+  color: var(--ink2);
+  letter-spacing: -.01em;
+}
+
+.pullref.armed .pullref-ic { border-top-color: var(--blue); border-color: color-mix(in srgb, var(--blue) 35%, transparent); }
+.pullref.armed .pullref-tx { color: var(--blue); }
+.pullref.spinning .pullref-ic { animation: pullref-spin .7s linear infinite; }
+
+@keyframes pullref-spin { to { transform: rotate(360deg); } }
