@@ -234,9 +234,15 @@ function createConnection (convo) {
        * instant — which left the requester stuck on "waiting" even after the
        * other person had accepted and was sitting in the room.
        */
-      if (count > 0 && db.convo(convo.roomId)?.pending) {
-        db.upsertConvo({ roomId: convo.roomId, pending: false })
-        if (convo.peer?.id) db.addContact(convo.peer)
+      if (count > 0) {
+        if (db.convo(convo.roomId)?.pending) {
+          db.upsertConvo({ roomId: convo.roomId, pending: false })
+        }
+        /* Every successful connection files them as a contact, not just the
+         * one that cleared a pending flag. Connecting IS the introduction, so
+         * being asked to request someone a second time — after having already
+         * talked to them — is the app forgetting a person it has met. */
+        if (convo.peer?.id && convo.kind !== 'group') db.addContact(convo.peer)
       }
       conn.peerCount = count
       emit({ type: 'peers', count })

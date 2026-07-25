@@ -328,17 +328,69 @@ export function render (root, ctx) {
     hideDrop()
     const convo = db.convos().find((c) => c.kind === 'dm' && c.peer?.id === match.id)
     if (convo) { ctx.openThread(convo.roomId); return }
-    // Send even when our peer list has not found them yet: the request is
-    // addressed, so it reaches them if they are anywhere in the lobby. Saying
-    // "offline" here was wrong for people who were plainly using the app.
-    const live = lobby.peers().find((p) => p.id === match.id)
-    const peer = (live ? { ...live, username: match.username } : null) ||
-      { id: match.id, name: match.name || match.username, username: match.username, avatar: null, lang: 'en' }
-    try {
-      const roomId = lobby.request(peer, 'Hi! Found you by username', 'meet')
-      ctx.toast('Request sent')
-      ctx.openThread(roomId)
-    } catch { ctx.toast('Could not send that request') }
+    openRequestSheet(match)
+  }
+
+  /**
+   * Ask before sending, and let them write the first line.
+   *
+   * Tapping a search result used to fire a request instantly with a canned
+   * "Hi! Found you by username" — so merely looking someone up messaged them,
+   * and the person on the other end got a greeting nobody wrote. The text
+   * rides with the request and is what the recipient reads while deciding, so
+   * it is the one thing worth typing.
+   */
+  function openRequestSheet (match) {
+    const who = match.name || match.username
+    const input = el('input', {
+      class: 'reqmsg', type: 'text', maxlength: '300',
+      placeholder: 'Say something…', value: 'Hi!'
+    })
+
+    let sending = false
+    const send = () => {
+      if (sending) return
+      sending = true
+      // Addressed, so it reaches them anywhere in the lobby — not only if our
+      // peer list already happens to hold them.
+      const live = lobby.peers().find((p) => p.id === match.id)
+      const peer = (live ? { ...live, username: match.username } : null) ||
+        { id: match.id, name: who, username: match.username, avatar: null, lang: 'en' }
+      const text = input.value.trim().slice(0, 300) || 'Hi!'
+      try {
+        const roomId = lobby.request(peer, text, 'meet')
+        close()
+        ctx.toast(`Request sent to @${match.username}`)
+        ctx.openThread(roomId)
+      } catch {
+        sending = false
+        ctx.toast('Could not send that request')
+      }
+    }
+
+    const back = el('div', { class: 'reqback' })
+    const close = () => back.remove()
+    back.addEventListener('click', (e) => { if (e.target === back) close() })
+
+    back.appendChild(el('div', { class: 'reqsheet' }, [
+      el('div', { class: 'reqhead' }, [
+        avatar({ name: who }, 46),
+        el('div', {}, [
+          el('b', { text: who }),
+          el('span', { class: 'requn', text: '@' + match.username })
+        ])
+      ]),
+      el('p', { class: 'reqhint', text: 'They see this message with your request.' }),
+      input,
+      el('div', { class: 'reqbtns' }, [
+        el('button', { class: 'reqcancel', type: 'button', text: 'Cancel', onclick: close }),
+        el('button', { class: 'reqsend', type: 'button', text: 'Send request', onclick: send })
+      ])
+    ]))
+    root.appendChild(back)
+    input.focus()
+    input.select()
+    input.addEventListener('keydown', (e) => { if (e.key === 'Enter') send() })
   }
 
   function renderDrop () {
