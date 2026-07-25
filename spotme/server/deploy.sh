@@ -73,7 +73,7 @@ if [[ -n "$ENV_SRC" ]]; then
   # build variables — VERCEL_GIT_*, TURBO_*, an OIDC token — that would be
   # noise at best and misleading at worst on a machine that is not Vercel.
   # VITE_* are compiled into the bundle and have no business here either.
-  WANTED='^(AZURE_TRANSLATOR_(KEY|ENDPOINT)|GOOGLE_TRANSLATE_KEY|OPENAI_API_KEY|SARVAM_API_KEY|ELEVENLABS_API_KEY|CF_TURN_(KEY_ID|TOKEN)|BLOB_READ_WRITE_TOKEN)='
+  WANTED='^(AZURE_TRANSLATOR_(KEY|ENDPOINT)|GOOGLE_TRANSLATE_KEY|OPENAI_API_KEY|ANTHROPIC_API_KEY|SARVAM_API_KEY|ELEVENLABS_API_KEY|CF_TURN_(KEY_ID|TOKEN)|BLOB_READ_WRITE_TOKEN)='
   count=$(grep -cE "$WANTED" "$ENV_SRC" || true)
   [[ "$count" -gt 0 ]] || die "No API keys found in $ENV_SRC — the language and voice endpoints would all fail."
 
@@ -114,9 +114,14 @@ REMOTE
 # ── verify ──────────────────────────────────────────────────────────────────
 say "Checking"
 sleep 2
-code=$("${SSH[@]}" "curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8080/api/turn" || echo 000)
-if [[ "$code" == "200" ]]; then
-  echo "  api: OK"
+# HTTP 200 is not health here: /api/turn answers 200 with a STUN-only
+# fallback when credentials are missing, and STUN-only means two phones on
+# mobile data can never connect. Assert the relay itself.
+turnbody=$("${SSH[@]}" "curl -s http://127.0.0.1:8080/api/turn" || echo '')
+if echo "$turnbody" | grep -q '"relay":true'; then
+  echo "  api: OK (relay active)"
+elif echo "$turnbody" | grep -q 'iceServers'; then
+  echo "  api: DEGRADED — STUN only, LTE-to-LTE WILL FAIL. Check CF_TURN_* keys."
 else
   echo "  api: HTTP $code — logs:"
   "${SSH[@]}" "sudo journalctl -u spotme-api -n 15 --no-pager" || true

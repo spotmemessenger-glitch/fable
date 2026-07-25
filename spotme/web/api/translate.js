@@ -110,9 +110,67 @@ async function googleTransliterate (q, lang) {
  * ear-spelled input ("Ippo variya" → "Are you coming now?", where the chain
  * gives "Is it tax now?"). Names and brands survive untouched.
  */
-async function llmRead (q, hint) {
+/**
+ * Ask one LLM provider. Kept separate from llmRead so the reading engine can
+ * try a second provider when the first is down, throttled, or holding a key
+ * that has since been rotated — which took the app's headline feature offline
+ * once already.
+ */
+async function askAnthropic (system, user) {
+  const key = process.env.ANTHROPIC_API_KEY
+  if (!key) throw new Error('no anthropic key')
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'x-api-key': key,
+      'anthropic-version': '2023-06-01',
+      'content-type': 'application/json'
+    },
+    body: JSON.stringify({
+      model: 'claude-sonnet-4-5-20250929',
+      max_tokens: 300,
+      temperature: 0,
+      system,
+      // Claude has no JSON response mode, so the reply is steered by
+      // pre-filling the opening brace — it then has nowhere to go but JSON.
+      messages: [{ role: 'user', content: user }, { role: 'assistant', content: '{' }]
+    })
+  })
+  if (!res.ok) throw new Error(`anthropic ${res.status}: ${(await res.text()).slice(0, 200)}`)
+  const json = await res.json()
+  const body = json?.content?.[0]?.text
+  if (!body) throw new Error('anthropic empty')
+  return '{' + body          // put back the brace we pre-filled
+}
+
+async function askOpenAI (system, user) {
   const key = process.env.OPENAI_API_KEY
   if (!key) throw new Error('no openai key')
+  const res = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: { authorization: `Bearer ${key}`, 'content-type': 'application/json' },
+    body: JSON.stringify({
+      // gpt-4o, not mini: measured on held-out Tanglish, mini dropped items
+      // from lists ("eyes, lips, nose, face" became "face under your eyes")
+      // and invented people's names out of ordinary words.
+      model: 'gpt-4o',
+      temperature: 0,
+      max_tokens: 300,
+      response_format: { type: 'json_object' },
+      messages: [{ role: 'system', content: system }, { role: 'user', content: user }]
+    })
+  })
+  if (!res.ok) throw new Error(`openai ${res.status}: ${(await res.text()).slice(0, 200)}`)
+  const json = await res.json()
+  const raw = json?.choices?.[0]?.message?.content
+  if (!raw) throw new Error('openai empty')
+  return raw
+}
+
+async function llmRead (q, hint) {
+  if (!process.env.ANTHROPIC_API_KEY && !process.env.OPENAI_API_KEY) {
+    throw new Error('no llm key')
+  }
   /* Graded against a 26-sentence corpus of the owner's own Tanglish, the
    * bare instruction scored 14/26. The failures were systematic, not random:
    * person markers flipped (ne = YOU became "he"), negation dropped
@@ -155,24 +213,25 @@ async function llmRead (q, hint) {
       + `Use that ONLY if the message really is that language — if it is ordinary English, answer lang "en". `
       + `Message: ${q}`
     : q
-  const res = await fetch('https://api.openai.com/v1/chat/completions', {
-    method: 'POST',
-    headers: { authorization: `Bearer ${key}`, 'content-type': 'application/json' },
-    body: JSON.stringify({
-      // gpt-4o, not mini: measured on held-out Tanglish, mini dropped items
-      // from lists ("eyes, lips, nose, face" became "face under your eyes")
-      // and invented people's names out of ordinary words.
-      model: 'gpt-4o',
-      temperature: 0,
-      max_tokens: 300,
-      response_format: { type: 'json_object' },
-      messages: [{ role: 'system', content: system }, { role: 'user', content: user }]
-    })
-  })
-  if (!res.ok) throw new Error(`openai ${res.status}: ${(await res.text()).slice(0, 200)}`)
-  const json = await res.json()
-  const raw = json?.choices?.[0]?.message?.content
-  if (!raw) throw new Error('openai empty')
+  /* Whichever provider is configured, in order, first success wins. Anthropic
+   * leads because it is the key that is known-good; OpenAI's was found rotated
+   * in the field, and a silent 401 there should cost accuracy, not the whole
+   * feature. Failures are collected so a total outage still says why. */
+  const providers = []
+  if (process.env.ANTHROPIC_API_KEY) providers.push(['anthropic', askAnthropic])
+  if (process.env.OPENAI_API_KEY) providers.push(['openai', askOpenAI])
+
+  let raw = null
+  const failures = []
+  for (const [name, ask] of providers) {
+    try {
+      raw = await ask(system, user)
+      if (raw) break
+    } catch (error) {
+      failures.push(`${name}: ${error.message}`)
+    }
+  }
+  if (!raw) throw new Error(failures.join(' | ') || 'no llm provider')
   const parsed = JSON.parse(raw)
   return {
     lang: String(parsed.lang || '').slice(0, 8),
