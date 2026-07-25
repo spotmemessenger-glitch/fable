@@ -741,6 +741,16 @@
   cursor: pointer;
   font-family: var(--font);
   flex: none;
+  /* Swapping "Send" for "Translating…" during the busy state nearly tripled
+     this button's width with the same fixed padding either side, and with
+     .confbar in flex/nowrap that pushed the row past the screen edge on
+     Android (412px) — a real crop, not a screenshot artefact. Capping the
+     width and truncating keeps the row's total size constant regardless of
+     label; the existing pulse animation still reads as "working". */
+  max-width: 92px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* Compact 'Translate ▾' pill next to Send — 'Original' = untouched clip. */
@@ -2588,4 +2598,15 @@
   .v-chat .msg.jumped .bubOut,
   .v-chat .msg.jumped .imgmsg,
   .v-chat .msg.jumped .voice { animation: none; outline: 3px solid var(--blue); }
+}
+
+/* Under ~380px (small Android phones), the voice confirm bar's five items —
+   play, timer, language picker, cancel, send — have less room than a 412px
+   screen gives them. Shrink gaps and the language pill rather than letting
+   anything clip. */
+@media (max-width: 380px) {
+  .v-chat .confbar { gap: 6px; padding-left: 8px; padding-right: 8px; }
+  .v-chat .vv-lang { max-width: 78px; padding-right: 20px; }
+  .v-chat .vv-cancel { padding: 8px 6px; }
+  .v-chat .vv-send { padding: 10px 14px; max-width: 78px; }
 }

@@ -3,12 +3,19 @@
 <head>
   <meta charset="utf-8" />
   <!--
-    viewport-fit=cover plus the safe-area insets in style.css keep the composer
+    viewport-fit=cover plus the safe-area insets in tokens.css keep the composer
     clear of the iPhone home indicator. Without it the send button sits under
     the gesture bar and is genuinely hard to tap.
+
+    No maximum-scale/user-scalable lock: that disables pinch-zoom, which is an
+    accessibility failure for anyone who needs to magnify text, and Apple
+    itself now ignores the restriction — so it was doing nothing but locking
+    out Android users who could still use it. interactive-widget=resizes-content
+    tells Android to shrink the layout for the on-screen keyboard rather than
+    scroll the page underneath it, which is what the composer needs.
   -->
   <meta name="viewport"
-        content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1" />
+        content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content" />
   <!-- Teal, not white: on Android the theme colour paints the status bar, and
        white made the bar vanish into the header. -->
   <meta name="theme-color" content="#1b8a9d" />
