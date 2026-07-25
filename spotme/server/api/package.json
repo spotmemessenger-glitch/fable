@@ -1,0 +1,10 @@
+{
+  "name": "spotme-api",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Marks this directory as ES modules. Without it Node treats .js as CommonJS and every handler dies on its first import statement — the same files run fine on Vercel because that runtime infers the module type itself.",
+  "engines": {
+    "node": ">=18"
+  }
+}

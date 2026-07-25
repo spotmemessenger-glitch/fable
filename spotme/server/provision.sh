@@ -36,7 +36,11 @@ KEY_DIR="${KEY_DIR:-$HOME/.spotme}"
 KEY_FILE="$KEY_DIR/$NAME.pem"
 VOLUME_GB=20
 
-aws_() { aws --region "$REGION" "$@"; }
+# MSYS_NO_PATHCONV: Git Bash on Windows rewrites any argument that looks like a
+# unix path into a Windows one before the process sees it, which silently turned
+# the SSM parameter name into C:/Program Files/Git/aws/service/... and returned
+# nothing. Harmless everywhere else.
+aws_() { MSYS_NO_PATHCONV=1 aws --region "$REGION" "$@"; }
 
 say() { printf '\n\033[1;36m▸ %s\033[0m\n' "$*"; }
 die() { printf '\n\033[1;31m✗ %s\033[0m\n' "$*" >&2; exit 1; }
@@ -74,7 +78,7 @@ if [[ -f "$KEY_FILE" ]] && aws_ ec2 describe-key-pairs --key-names "$NAME" >/dev
   say "Key pair exists: $KEY_FILE"
 else
   say "Creating key pair"
-  aws_ ec2 delete-key-pair --key-name "$NAME" 2>/dev/null || true
+  aws_ ec2 delete-key-pair --key-name "$NAME" >/dev/null 2>&1 || true
   mkdir -p "$KEY_DIR"
   aws_ ec2 create-key-pair --key-name "$NAME" \
     --query 'KeyMaterial' --output text > "$KEY_FILE"
@@ -118,6 +122,7 @@ else
   AMI=$(aws_ ssm get-parameters \
     --names /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-arm64 \
     --query 'Parameters[0].Value' --output text)
+  [[ "$AMI" == ami-* ]] || die "AMI lookup failed (got '$AMI'). SSM may be unreachable, or the parameter name is wrong for this region."
   echo "  $AMI"
 
   say "Launching $INSTANCE_TYPE"

@@ -45,7 +45,11 @@ server {
         add_header Cache-Control "no-cache, no-store, must-revalidate" always;
         expires -1;
     }
+    # nginx has no mime entry for .webmanifest and falls back to
+    # application/octet-stream, which some browsers refuse to parse — the app
+    # then silently loses its icon and full-screen install.
     location = /manifest.webmanifest {
+        types { } default_type application/manifest+json;
         add_header Cache-Control "no-cache" always;
         expires -1;
     }
