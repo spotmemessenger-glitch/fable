@@ -34,7 +34,23 @@ const app = document.getElementById('app')
  * A reset was asked for via ?fresh — read once, before anything can navigate
  * the URL out from under it. Startup and render both stand down while it runs.
  */
-const RESETTING = new URL(window.location.href).searchParams.has('fresh')
+/**
+ * A reset the owner can order from here, for devices they are not holding.
+ *
+ * Chats live only in each phone's own storage — there is no server copy, which
+ * is the point of the product but also means nothing run from a laptop can
+ * reach them. A device only obeys code it has loaded, so the wipe has to
+ * travel inside the build: bump this string, ship it, and the next load of
+ * every device resets itself once.
+ */
+const RESET_EPOCH = '2026-07-26-fresh-start'
+const EPOCH_KEY = 'spotme:epoch'
+
+const resetOrdered = () => {
+  try { return localStorage.getItem(EPOCH_KEY) !== RESET_EPOCH } catch { return false }
+}
+
+const RESETTING = new URL(window.location.href).searchParams.has('fresh') || resetOrdered()
 
 /* ------------------------------------------------- locked bottom bar (5) */
 
@@ -393,7 +409,8 @@ function adoptRoomLink () {
  */
 async function maybeFreshStart () {
   const url = new URL(window.location.href)
-  if (!url.searchParams.has('fresh')) return false
+  const ordered = resetOrdered()
+  if (!url.searchParams.has('fresh') && !ordered) return false
 
   const me = db.profile()
   if (me?.username) {
@@ -409,8 +426,16 @@ async function maybeFreshStart () {
   }
 
   try { wipeDevice() } catch { /* private mode — nothing to clear */ }
+  // Stamped AFTER the wipe, so a reset interrupted half-way runs again next
+  // time instead of being marked done.
+  try { localStorage.setItem(EPOCH_KEY, RESET_EPOCH) } catch { /* private mode */ }
+
   url.searchParams.delete('fresh')
-  window.location.replace(url.toString())
+  const next = url.toString()
+  // replace() to an identical URL does NOT reload, and this screen is frozen
+  // until something does — RESETTING keeps render() and boot() standing down.
+  if (next === window.location.href) window.location.reload()
+  else window.location.replace(next)
   return true
 }
 
