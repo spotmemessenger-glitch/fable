@@ -62,26 +62,79 @@ export function createStore (roomId, prefix = STORAGE_PREFIX) {
   }
 
   function save () {
+    const ordered = list().slice(-MAX_STORED)
+    const envelope = (messages) => JSON.stringify({
+      messages,
+      reactions: Object.fromEntries(
+        Array.from(reactions, ([target, map]) => [target, Object.fromEntries(map)])
+      ),
+      profiles: Object.fromEntries(profiles),
+      tombstones: Array.from(tombstones).slice(-TOMBSTONE_MAX)
+    })
+
     try {
-      const ordered = list()
-      localStorage.setItem(key, JSON.stringify({
-        messages: ordered.slice(-MAX_STORED).map(stripDerived),
-        reactions: Object.fromEntries(
-          Array.from(reactions, ([target, map]) => [target, Object.fromEntries(map)])
-        ),
-        profiles: Object.fromEntries(profiles),
-        tombstones: Array.from(tombstones).slice(-TOMBSTONE_MAX)
-      }))
+      localStorage.setItem(key, envelope(ordered.map(stripDerived)))
+      return
     } catch {
-      // Quota exceeded, or Safari private mode where writes throw. The room
-      // still works in memory for this session.
+      // Out of quota — almost always one video. Fall through and shed it.
     }
+
+    /* One 40 MB video base64s to ~53 MB against a quota of five to ten, so the
+     * write threw and the catch swallowed it: the ENTIRE conversation then
+     * stopped persisting, silently, and stayed broken. Losing one video's bytes
+     * is a fair trade; losing the conversation is not. Shed the heaviest media
+     * first and keep shedding until it fits, so small photos survive even when
+     * a video does not. */
+    const byWeight = ordered
+      .map((m, i) => ({ i, size: typeof m.data === 'string' ? m.data.length : 0 }))
+      .filter((x) => x.size > 0)
+      .sort((a, b) => b.size - a.size)
+
+    const dropped = new Set()
+    for (const { i } of byWeight) {
+      dropped.add(i)
+      try {
+        localStorage.setItem(key, envelope(
+          ordered.map((m, idx) => dropped.has(idx) ? shedMedia(m) : stripDerived(m))
+        ))
+        return
+      } catch {
+        // Still too big. Shed the next heaviest.
+      }
+    }
+
+    try {
+      // Nothing left to shed: text alone. If even that fails the room is
+      // memory-only for this session, which is the old behaviour.
+      localStorage.setItem(key, envelope(ordered.map(shedMedia)))
+    } catch { /* private mode, or a quota this cannot fit */ }
   }
 
   /** Reactions are folded in at read time, so they must not be persisted twice. */
   function stripDerived (message) {
     const { reactions: _ignored, ...rest } = message
     return rest
+  }
+
+  /**
+   * The message without its payload, marked the same way a lazily-transferred
+   * attachment is. That is not a cosmetic choice: `detached` already means
+   * "the bytes live on a peer, tap to fetch them", and the machinery to go get
+   * them exists. So shedding a video to save the conversation costs a tap
+   * later rather than losing the video.
+   *
+   * The mime type is carried across because it is otherwise only recoverable
+   * from the data URL prefix that is being dropped.
+   */
+  function shedMedia (message) {
+    const { reactions: _ignored, data, ...rest } = message
+    if (typeof data !== 'string') return rest
+    return {
+      ...rest,
+      data: null,
+      detached: true,
+      mime: message.mime || data.slice(5, data.indexOf(';'))
+    }
   }
 
   function notify () {
