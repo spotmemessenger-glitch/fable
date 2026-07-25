@@ -28,6 +28,52 @@
 import { joinRoom, selfId } from '@trystero-p2p/torrent'
 
 /** Namespaces our rooms so we never collide with another Trystero app. */
+/**
+ * WebRTC needs help crossing carrier-grade NAT. Indian mobile networks (Jio,
+ * Airtel) share one public address between many subscribers, so two phones on
+ * mobile data usually cannot negotiate a direct path — which is why a friend
+ * who was plainly online still appeared offline.
+ *
+ * Relay credentials are MINTED PER SESSION by /api/turn (Cloudflare hands out
+ * short-lived ones, so there is nothing durable to embed in this bundle).
+ * Until they arrive we hold STUN-only config, which is enough on friendly
+ * networks; joinRoom waits for the real thing via readyRTC().
+ *
+ * MEASURED 2026-07-25: Cloudflare TURN allocates a relay successfully;
+ * ExpressTURN's free host answered nothing at all (3/3 timeouts on both its
+ * addresses) while their paid host replied instantly from the same machine.
+ */
+const STUN_ONLY = {
+  iceServers: [
+    { urls: ['stun:stun.cloudflare.com:3478', 'stun:stun.l.google.com:19302'] }
+  ]
+}
+
+export let RTC_CONFIG = STUN_ONLY
+let rtcReady = null
+
+/** Resolves once relay credentials are in hand (or STUN-only on failure). */
+export function readyRTC () {
+  if (rtcReady) return rtcReady
+  rtcReady = fetch(`${API_ORIGIN}/api/turn`)
+    .then((r) => (r.ok ? r.json() : null))
+    .then((j) => {
+      if (j?.iceServers?.length) RTC_CONFIG = { iceServers: j.iceServers }
+      return RTC_CONFIG
+    })
+    .catch(() => RTC_CONFIG)
+  return rtcReady
+}
+
+/** True once a real relay (not just STUN) is configured. */
+export const hasRelay = () =>
+  RTC_CONFIG.iceServers.some((s) =>
+    (Array.isArray(s.urls) ? s.urls : [s.urls]).some((u) => String(u).startsWith('turn')))
+
+const API_ORIGIN = (location.hostname === 'localhost' || /^[0-9.]+$/.test(location.hostname))
+  ? 'https://spotme-messenger.vercel.app'
+  : ''
+
 const APP_ID = 'io.ysnapai.spotme'
 
 /**
@@ -52,7 +98,7 @@ export { selfId }
  * @param {function} getHistory called when a new peer needs backlog
  */
 export function createNet (roomId, secret, handlers, getHistory) {
-  const room = joinRoom({ appId: APP_ID, password: secret }, roomId)
+  const room = joinRoom({ appId: APP_ID, password: secret, rtcConfig: RTC_CONFIG }, roomId)
 
   // Trystero 0.25 API notes, all of which differ from older documentation:
   //   - makeAction returns an OBJECT, not a [send, receive] tuple

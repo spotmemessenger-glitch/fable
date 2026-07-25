@@ -376,65 +376,39 @@ export function render (root, ctx, roomId) {
    * language, and that answer holds for THIS conversation until changed —
    * pressing again reopens the same list (with a way out at the top).
    */
-  trBtn.addEventListener('click', () => openTranslateSheet())
+  trBtn.addEventListener('click', () => {
+    const { mode } = composeState()
+    const on = mode !== 'translate'
+    // English is the default target while translation is parked; no language
+    // sheet, because a switch that opens a list cannot be switched off.
+    setCompose({ composeMode: on ? 'translate' : null, langTo: on ? 'en' : null })
+    ctx.toast(on ? 'Translation on for this chat' : 'Translation off')
+  })
 
-  function openTranslateSheet () {
-    const { mode, langTo } = composeState()
-    const on = mode === 'translate'
-    const items = []
-    if (on) {
-      items.push({
-        label: 'Turn off translation',
-        danger: true,
-        fn: () => setCompose({ composeMode: null })
-      })
-    }
-    for (const code of COMPOSE_LANGS) {
-      items.push({
-        label: (on && langTo === code ? '✓ ' : '') + langName(code),
-        // English is a legitimate target — Tamil → English is the whole point.
-        fn: () => setCompose({ langTo: code, composeMode: 'translate' })
-      })
-    }
-    actionSheet(items, on
-      ? 'Translating your messages into…'
-      : 'Translate everything you type into…')
-  }
+  const txBtn = featureCtl('tx', el('span', { class: 'xa', text: '文A' }), 'Transliteration')
 
   /**
-   * Compose-language model (decoupled from the profile — that one is the APP
-   * language for reading incoming messages). Per chat:
-   *   convo.langTo      target language, chosen via the ▾ chip. Default: none.
-   *   convo.composeMode 'translate' | 'translit' | null. Default: OFF —
-   *                     typing sends plain English until a mode is chosen.
-   * The two header buttons are mutually exclusive: translation turns English
-   * into ACTUAL Tamil; transliteration turns Tamil-in-English-letters into
-   * Tamil script. Different features, and the panel labels which is running.
+   * Compose state for this conversation. Both features are OFF until asked:
+   *   composeMode 'translate' | 'translit' | null
+   *   langTo      translation target (English while translation is parked)
    */
   const composeState = () => {
     const c = db.convo(roomId) || convo
     return { mode: c.composeMode || null, langTo: c.langTo || null }
   }
 
-  /** Whole-chat transliteration switch (separate from the composer mode). */
-  const xlitOn = () => Boolean((db.convo(roomId) || convo).xlit)
-
   /**
-   * The language THEIR messages should arrive in — the return half of the
-   * chat's lock. If I am writing Tamil and sending it out as English, English
-   * coming back should reach me as Tamil. What I actually write in this chat
-   * (detected, remembered per conversation) beats the profile default, which
-   * is English for everyone since signup stopped asking.
+   * The language THEIR messages arrive in when translation is on. It reads
+   * only translation's own state — never the transliteration language — so
+   * the two features stay independent, as the owner requires.
    */
   function myReadLang () {
     const c = db.convo(roomId) || convo
-    // Deliberately does NOT consult the transliteration language: 文A is a
-    // reading aid and must never change what translation does.
     const mine = c.myLang
     return mine && mine !== c.langTo ? mine : db.profile().lang
   }
 
-  /** Remember the language I write in here, from a confident detection. */
+  /** Remember the language I write in here (translation side only). */
   function rememberMyLang (detected) {
     const base = String(detected || '').split('-')[0]
     if (!base || base === 'und') return
@@ -442,36 +416,15 @@ export function render (root, ctx, roomId) {
     if (c.myLang !== base) db.upsertConvo({ roomId, myLang: base })
   }
 
+  /** Whole-chat transliteration switch, independent of the composer mode. */
+  const xlitOn = () => Boolean((db.convo(roomId) || convo).xlit)
+
   function setCompose (patch) {
     db.upsertConvo({ roomId, ...patch })
     updateToggles()
     updatePreview()
+    renderList()
   }
-
-  /** South Indian first, then North Indian, then the world — per the spec. */
-  const COMPOSE_LANGS = [
-    'ta', 'te', 'ml', 'kn',
-    'hi', 'mr', 'bn', 'gu', 'pa',
-    'en', 'es', 'fr', 'de', 'pt', 'ar', 'ja', 'zh', 'ko', 'ru'
-  ]
-
-  /** The ▾ chip: change the locked language without leaving the current mode. */
-  function pickComposeLang (thenMode) {
-    if (thenMode === 'translate' || (!thenMode && composeState().mode === 'translate')) {
-      openTranslateSheet()
-      return
-    }
-    actionSheet(COMPOSE_LANGS.map((code) => ({
-      label: (composeState().langTo === code ? '✓ ' : '') + langName(code),
-      fn () {
-        const patch = { langTo: code }
-        if (thenMode) patch.composeMode = thenMode
-        setCompose(patch)
-      }
-    })), 'Convert your typing into…')
-  }
-
-  const txBtn = featureCtl('tx', el('span', { class: 'xa', text: '文A' }), 'Transliteration')
 
   /** Which language this chat is typed in. "Auto" lets detection guess. */
   const XLIT_LANGS = ['ta', 'te', 'ml', 'kn', 'hi', 'mr', 'bn', 'gu', 'pa']
@@ -812,12 +765,7 @@ export function render (root, ctx, roomId) {
     const cur = xlitCache.get(m.id)
     if (cur === null) { existing?.remove(); return }
     const pending = cur === 'pending'
-    const tag = pending
-      ? 'READING…'
-      : `${cur.lang ? langName(cur.lang) : 'Detected'} → English${cur.viaChat ? ' · from this chat' : ''}`
-
     const node = el('div', { class: 'xl' + (pending ? ' pend' : '') }, [
-      el('span', { class: 'xlTag' }, [el('span', { class: 'xa', text: '文A' }), tag]),
       el('span', { class: 'xlText', text: pending ? '…' : cur.text })
     ])
     if (existing) existing.replaceWith(node)

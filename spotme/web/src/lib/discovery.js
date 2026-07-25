@@ -13,6 +13,7 @@
  * still allowing chat requests by name.
  */
 import { joinRoom } from '@trystero-p2p/torrent'
+import { RTC_CONFIG, readyRTC } from '../net.js'
 import { db, randomHex } from './db.js'
 import { rooms } from './rooms.js'
 import { pushNote } from './notify.js'
@@ -54,6 +55,7 @@ function createLobby () {
   }
 
   let watchId = null
+  let relayReady = false
 
   /**
    * PRECISE positions (owner decision 2026-07-25): the 5–500 m radar needs
@@ -88,7 +90,15 @@ function createLobby () {
 
   function start () {
     if (room || !db.ready()) return
-    room = joinRoom({ appId: APP_ID, password: LOBBY_PASS }, LOBBY_ID)
+    // Relay credentials first: joining with STUN-only would strand anyone on
+    // mobile data, and Trystero reads the config once at join time.
+    if (!relayReady) {
+      readyRTC().then(() => { relayReady = true; start() })
+      return
+    }
+    // Same relay config as chat rooms: without TURN, phones on mobile
+    // data never discover each other and everyone looks offline.
+    room = joinRoom({ appId: APP_ID, password: LOBBY_PASS, rtcConfig: RTC_CONFIG }, LOBBY_ID)
 
     hello = room.makeAction('hello')
     req = room.makeAction('req')
@@ -116,6 +126,8 @@ function createLobby () {
 
     req.onMessage = (payload) => {
       if (!payload?.from?.id || !payload.roomId || !payload.secret) return
+      // Broadcast requests carry the intended recipient; ignore other people's.
+      if (payload.to && payload.to !== db.profile().id) return
       const added = db.addRequest({
         fromId: payload.from.id,
         name: payload.from.name || 'Unknown',
@@ -192,9 +204,14 @@ function createLobby () {
     const p = db.profile()
     const target = peers.get(peer.id)?.peerId
     const payload = {
+      to: peer.id,
       from: { id: p.id, name: p.name, avatar: p.avatar, lang: p.lang },
       roomId, secret, text: String(text || '').slice(0, 300), mode
     }
+    // Targeted when we know their transport id; otherwise broadcast to the
+    // lobby and let the addressee pick it up — everyone else drops it. Peer
+    // maps fill in slowly over public trackers, and a request should not fail
+    // just because ours has not caught up.
     safe(req.send(payload, target ? { target } : undefined))
     db.upsertConvo({
       roomId, secret, kind: 'dm', mode,

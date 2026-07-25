@@ -10,6 +10,7 @@
  * transport, so every screen behaves identically either way.
  */
 import { createNet, randomId } from '../net.js'
+import { readyRTC } from '../net.js'
 import { createStore } from '../store.js'
 import { db, ROOM_PREFIX } from './db.js'
 import { pushNote } from './notify.js'

@@ -326,11 +326,11 @@ export function render (root, ctx) {
     hideDrop()
     const convo = db.convos().find((c) => c.kind === 'dm' && c.peer?.id === match.id)
     if (convo) { ctx.openThread(convo.roomId); return }
-    const peer = lobby.peers().find((p) => p.id === match.id)
-    if (!peer) {
-      ctx.toast("They're offline right now — requests deliver only while they're online.")
-      return
-    }
+    // Send even when our peer list has not found them yet: the request is
+    // addressed, so it reaches them if they are anywhere in the lobby. Saying
+    // "offline" here was wrong for people who were plainly using the app.
+    const peer = lobby.peers().find((p) => p.id === match.id) ||
+      { id: match.id, name: match.name || match.username, avatar: null, lang: 'en' }
     try {
       const roomId = lobby.request(peer, 'Hi! Found you by username', 'meet')
       ctx.toast('Request sent')
