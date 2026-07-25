@@ -1,0 +1,551 @@
+/* Spot Me — locked design system (2026-07-24). Do not re-litigate.
+ *
+ * COLOUR ROLES:
+ *   BLACK  var(--ink)  = commit actions (Search, Accept, Send). Solid fill.
+ *   BLUE   var(--blue) = information & state (unread, active tab, distance, links).
+ *   RED    var(--red) on var(--redwell) = destructive only (Reject).
+ *   GREEN  var(--live)/var(--mesh) = presence dots & Bluetooth mesh accent.
+ *
+ * Tokens are pinned for :root and both data-theme values so the host's dark
+ * toggle cannot break the locked light-only palette. */
+:root,
+:root[data-theme="dark"],
+:root[data-theme="light"] {
+  --ink: #0f0f10;
+  --ink2: #3d3d42;
+  --muted: #8e8e96;
+  --bg: #e9e9ec;
+  --surface: #fff;
+  --well: #f1f1f3;
+  --line: #e6e6ea;
+  --hair: #eeeef1;
+  /* Accent family swapped from iOS blue to the owner's teal reference
+     (2026-07-25). The token NAME stays --blue so no call site changes. */
+  --blue: #1b8a9d;
+  --red: #e5342b;
+  --redwell: #feecec;
+  --live: #22c55e;
+  --out: #4db6c9;            /* outgoing chat bubble — light teal, dark text */
+  --outink: #0c343b;         /* text on --out */
+  --teal-deep: #17616b;      /* send button, per the reference */
+  --mesh: #2563eb;           /* bluetooth accent — distinct from Nearby green */
+  --mesh-dim: rgba(37, 99, 235, .12);
+  --green: #16a34a;
+  --amber: #d97757;
+  --sos: #e0322a;
+  /* Discovery map palette */
+  --road: #ffffff;
+  --block: #eceef2;
+  --park: #dfeede;
+  --route: #c3cdf0;
+  --water: #d6e4f0;
+  --ghost-on: #16a34a;
+  --ghost-off: #d97757;
+  --shadow: 0 1px 2px rgba(15, 15, 16, .05), 0 14px 38px rgba(15, 15, 16, .10);
+  --font: "Sora", "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont,
+    "Segoe UI", system-ui, sans-serif;
+  color-scheme: light;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  overscroll-behavior: none;
+}
+
+body {
+  background: var(--surface);
+  color: var(--ink);
+  font-family: var(--font);
+  -webkit-font-smoothing: antialiased;
+  line-height: 1.5;
+}
+
+/* ------------------------------------------------------------- app shell */
+
+#app {
+  height: 100%;
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  max-width: 560px;
+  margin: 0 auto;
+  background: var(--surface);
+  position: relative;
+  overflow: hidden;
+}
+
+.view {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  position: relative;
+}
+
+/* ------------------------------------------- locked bottom bar (verbatim) */
+
+/* WhatsApp's floating bar (owner reference IMG_6987): a rounded plate that
+   sits above the content rather than a full-width strip, larger icons, real
+   labels, and a soft pill behind whichever tab is active. */
+.nav {
+  display: flex;
+  align-items: stretch;
+  background: var(--surface);
+  border: 1px solid var(--hair);
+  border-radius: 999px;
+  margin: 0 10px calc(8px + env(safe-area-inset-bottom));
+  padding: 5px 4px;
+  flex: none;
+  box-shadow: 0 6px 22px rgba(12, 52, 59, .1), 0 1px 3px rgba(12, 52, 59, .06);
+}
+
+.nv {
+  flex: 1;
+  border: none;
+  background: none;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  font-family: var(--font);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: -.01em;
+  color: var(--ink2);
+  padding: 7px 0 5px;
+  border-radius: 999px;
+  position: relative;
+  transition: color .16s ease, background .18s ease;
+}
+
+.nv:hover { color: var(--ink); }
+.nv svg { width: 26px; height: 26px; }
+
+/* Active tab: filled pill + darker label, exactly the reference's grammar. */
+.nv[aria-current="page"] {
+  background: var(--well);
+  color: var(--ink);
+  font-weight: 700;
+}
+.nv[aria-current="page"] svg { stroke-width: 2.1; }
+
+.nv .pip {
+  position: absolute;
+  top: 2px;
+  right: calc(50% - 22px);
+  min-width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  background: var(--blue);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  display: grid;
+  place-items: center;
+  padding: 0 5px;
+  border: 2px solid var(--surface);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Friend requests demand attention, not information — so their pip is RED
+   (the product's explicit call; distinct from the blue unread pip). */
+.nv .pip.req { background: var(--red); animation: pip-pop .3s ease; }
+
+@keyframes pip-pop {
+  0% { transform: scale(.4); }
+  70% { transform: scale(1.18); }
+  100% { transform: scale(1); }
+}
+
+/* ------------------------------------------------------- shared: avatars */
+
+.av {
+  position: relative;
+  width: var(--s, 40px);
+  height: var(--s, 40px);
+  flex: none;
+  display: block;
+}
+
+.av img {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+  display: block;
+}
+
+/* Gradient-initial fallback when there is no photo. */
+.av .init {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  font-weight: 700;
+  font-size: calc(var(--s, 40px) * .42);
+  background: linear-gradient(135deg, #6366f1, #06b6d4);
+  user-select: none;
+}
+
+.av .dot {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: calc(var(--s, 40px) * .24);
+  height: calc(var(--s, 40px) * .24);
+  border-radius: 50%;
+  background: var(--live);
+  border: 2.5px solid var(--surface);
+}
+
+/* --------------------------------------------------------- shared: pills */
+
+.pill {
+  border: none;
+  cursor: pointer;
+  font: inherit;
+  font-family: var(--font);
+  font-size: 12.5px;
+  font-weight: 650;
+  border-radius: 999px;
+  padding: 7px 15px;
+  transition: all .16s ease;
+  letter-spacing: -.01em;
+}
+
+.pill.no { background: var(--redwell); color: var(--red); }
+.pill.no:hover { background: #fddede; }
+
+/* Commit actions are ink, not blue — blue is information, black is "do it". */
+.pill.ok {
+  background: var(--ink);
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(15, 15, 16, .22);
+}
+.pill.ok:hover { background: #000; transform: translateY(-1px); }
+.pill.ok:disabled { opacity: .42; transform: none; cursor: default; }
+
+/* ---------------------------------------------------------- shared: bits */
+
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: calc(84px + env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  background: var(--ink);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 9px 16px;
+  border-radius: 999px;
+  box-shadow: var(--shadow);
+  z-index: 99;
+  max-width: 84vw;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  animation: toast-in .22s ease;
+}
+
+@keyframes toast-in {
+  from { opacity: 0; transform: translate(-50%, 6px); }
+}
+
+.scroll-y {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+button { font-family: var(--font); }
+input, textarea, select { font-family: var(--font); }
+
+/* ------------------------------------------------------------ onboarding */
+
+.onboard { display: flex; }
+
+.ob-inner {
+  margin: auto;
+  width: 100%;
+  max-width: 400px;
+  padding: 42px 26px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.ob-inner h1 {
+  margin: 0;
+  font-size: 32px;
+  letter-spacing: -.04em;
+  font-weight: 700;
+}
+
+.ob-lede { color: var(--muted); font-size: 14px; margin: 0 0 14px; }
+
+.ob-avatar {
+  border: none;
+  background: none;
+  cursor: pointer;
+  align-self: flex-start;
+  padding: 0;
+  margin-bottom: 6px;
+}
+
+.ob-inner label {
+  font-size: 11px;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--muted);
+  font-weight: 650;
+  margin-top: 8px;
+}
+
+.ob-name {
+  border: 1px solid var(--line);
+  background: var(--well);
+  border-radius: 13px;
+  padding: 12px 14px;
+  font-size: 16px;
+  outline: none;
+  color: var(--ink);
+}
+
+.ob-name:focus { border-color: var(--ink); background: var(--surface); }
+
+.ob-langs {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.ob-lang {
+  border: 1px solid var(--line);
+  background: var(--surface);
+  border-radius: 12px;
+  padding: 9px 6px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  align-items: center;
+  transition: all .15s ease;
+}
+
+.ob-lang strong { font-size: 13.5px; font-weight: 650; }
+.ob-lang span { font-size: 10px; color: var(--muted); }
+.ob-lang.on { border-color: var(--ink); background: var(--well); }
+
+.ob-go { margin-top: 18px; padding: 13px; font-size: 15px; }
+.ob-fine { font-size: 11.5px; color: var(--muted); text-align: center; margin: 4px 0 0; }
+
+/* Username row: fixed @ prefix, live availability mark at the right edge. */
+.ob-username {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.ob-uat {
+  position: absolute;
+  left: 14px;
+  font-size: 16px;
+  font-weight: 650;
+  color: var(--muted);
+  pointer-events: none;
+}
+
+.ob-username .ob-uinput {
+  flex: 1;
+  width: 100%;
+  padding-left: 32px;
+  padding-right: 42px;
+}
+
+.ob-ustatus {
+  position: absolute;
+  right: 14px;
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 700;
+  pointer-events: none;
+}
+
+.ob-ustatus.available { color: var(--live); }
+.ob-ustatus.taken { color: var(--red); }
+
+.ob-ustatus.checking {
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--line);
+  border-top-color: var(--ink);
+  border-radius: 50%;
+  animation: ob-uspin .7s linear infinite;
+}
+
+@keyframes ob-uspin { to { transform: rotate(360deg); } }
+
+.ob-uhint { font-size: 11.5px; color: var(--muted); margin: 0; }
+
+/* --------------------------------------------------------- action sheets */
+
+.as-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 15, 16, .32);
+  z-index: 90;
+  display: flex;
+  align-items: flex-end;
+  animation: as-fade .16s ease;
+}
+
+.as-backdrop.closing { opacity: 0; transition: opacity .16s ease; }
+
+@keyframes as-fade { from { opacity: 0; } }
+
+.as-sheet {
+  width: 100%;
+  max-width: 560px;
+  margin: 0 auto;
+  background: var(--surface);
+  border-radius: 18px 18px 0 0;
+  padding: 10px 10px calc(14px + env(safe-area-inset-bottom));
+  animation: as-up .22s cubic-bezier(.4, 0, .2, 1);
+}
+
+@keyframes as-up { from { transform: translateY(40px); } }
+
+.as-title {
+  font-size: 12px;
+  color: var(--muted);
+  text-align: center;
+  padding: 6px 0 8px;
+  font-weight: 600;
+}
+
+.as-item {
+  display: block;
+  width: 100%;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ink);
+  padding: 13px 14px;
+  border-radius: 12px;
+  text-align: left;
+  transition: background .14s ease;
+}
+
+.as-item:hover { background: var(--well); }
+.as-item.danger { color: var(--red); }
+.as-item.cancel { text-align: center; color: var(--muted); margin-top: 4px; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}
+
+/* ------------------------------------------------- avatar crop modal (.crop-) */
+
+.crop-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  background: rgba(10, 10, 12, .84);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: as-fade .16s ease;
+}
+
+.crop-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  padding: 18px;
+}
+
+.crop-view {
+  position: relative;
+  overflow: hidden;
+  border-radius: 12px;
+  background: #000;
+  touch-action: none;
+  cursor: grab;
+}
+
+.crop-view:active { cursor: grabbing; }
+
+.crop-img {
+  position: absolute;
+  top: 0;
+  left: 0;
+  max-width: none;
+  transform-origin: 0 0;
+  will-change: transform;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+/* Circular avatar preview: everything outside the circle dims, inside stays. */
+.crop-mask {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  box-shadow: 0 0 0 400px rgba(10, 10, 12, .55);
+  outline: 2px solid rgba(255, 255, 255, .85);
+  outline-offset: -2px;
+  pointer-events: none;
+}
+
+.crop-hint {
+  color: rgba(255, 255, 255, .72);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.crop-bar { display: flex; gap: 10px; }
+
+.crop-btn {
+  border: none;
+  cursor: pointer;
+  font-family: var(--font);
+  font-size: 13.5px;
+  font-weight: 650;
+  border-radius: 999px;
+  padding: 10px 24px;
+  background: rgba(255, 255, 255, .14);
+  color: #fff;
+  transition: background .16s ease;
+}
+
+.crop-btn:hover { background: rgba(255, 255, 255, .22); }
+
+/* Commit action stays ink; hairline keeps it readable on the dark backdrop. */
+.crop-choose {
+  background: var(--ink);
+  border: 1px solid rgba(255, 255, 255, .30);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, .4);
+}
+
+.crop-choose:hover { background: #000; }
+
+/* ------------------------- app-switcher privacy blur (visibilitychange) */
+
+.privacy-blur { filter: blur(26px); transition: filter .15s ease; }

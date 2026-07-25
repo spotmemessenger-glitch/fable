@@ -23,12 +23,18 @@ const STORAGE_PREFIX = 'spotme:room:'
 /** Bounded so a long-lived room cannot fill localStorage and start throwing. */
 const MAX_STORED = 500
 
-export function createStore (roomId) {
-  const key = STORAGE_PREFIX + roomId
+export function createStore (roomId, prefix = STORAGE_PREFIX) {
+  const key = prefix + roomId
 
   const messages = new Map()          // id -> message
   const reactions = new Map()         // targetId -> Map(from -> emoji)
   const profiles = new Map()          // peerId -> {name, lang}
+  // Ids that were deleted here (tombstones). Without these, a peer's history
+  // backlog resurrects view-once photos and deleted messages on every
+  // reconnect — the ids are absent from the map, so mergeHistory would
+  // happily re-add them. Bounded, persisted alongside the messages.
+  const tombstones = new Set()
+  const TOMBSTONE_MAX = 1000
   const subscribers = new Set()
 
   load()
@@ -38,7 +44,10 @@ export function createStore (roomId) {
       const raw = localStorage.getItem(key)
       if (!raw) return
       const saved = JSON.parse(raw)
-      for (const message of saved.messages || []) messages.set(message.id, message)
+      for (const id of saved.tombstones || []) tombstones.add(id)
+      for (const message of saved.messages || []) {
+        if (!tombstones.has(message.id)) messages.set(message.id, message)
+      }
       for (const [target, entries] of Object.entries(saved.reactions || {})) {
         reactions.set(target, new Map(Object.entries(entries)))
       }
@@ -60,7 +69,8 @@ export function createStore (roomId) {
         reactions: Object.fromEntries(
           Array.from(reactions, ([target, map]) => [target, Object.fromEntries(map)])
         ),
-        profiles: Object.fromEntries(profiles)
+        profiles: Object.fromEntries(profiles),
+        tombstones: Array.from(tombstones).slice(-TOMBSTONE_MAX)
       }))
     } catch {
       // Quota exceeded, or Safari private mode where writes throw. The room
@@ -79,12 +89,43 @@ export function createStore (roomId) {
   }
 
   function add (message) {
-    if (!message?.id || typeof message.text !== 'string') return false
-    if (messages.has(message.id)) return false
+    if (!message?.id) return false
+    // Attachment kinds carry an empty caption; text is always a string.
+    if (typeof message.text !== 'string') {
+      if (message.kind && message.kind !== 'text') message = { ...message, text: '' }
+      else return false
+    }
+    if (messages.has(message.id) || tombstones.has(message.id)) return false
     messages.set(message.id, message)
     save()
     notify()
     return true
+  }
+
+  /**
+   * Delete without residue — no "message was deleted" placeholder, per the
+   * product decision ("unlike WhatsApp"). Cooperative across peers: our UI
+   * honours every tombstone, a modified client could not be forced to.
+   */
+  /** Merge fields into an existing message (e.g. lazily fetched bytes). */
+  function patch (id, fields) {
+    const existing = messages.get(id)
+    if (!existing) return false
+    messages.set(id, { ...existing, ...fields })
+    save()
+    notify()
+    return true
+  }
+
+  function remove (id) {
+    // Tombstone even when we never held the message — a 'del' can arrive
+    // before the backlog copy does, and must still win.
+    tombstones.add(id)
+    const existed = messages.delete(id)
+    reactions.delete(id)
+    save()
+    if (existed) notify()
+    return existed
   }
 
   /**
@@ -93,9 +134,12 @@ export function createStore (roomId) {
    */
   function mergeHistory (incoming) {
     let added = 0
-    for (const message of incoming) {
-      if (!message?.id || messages.has(message.id)) continue
-      if (typeof message.text !== 'string') continue
+    for (let message of incoming) {
+      if (!message?.id || messages.has(message.id) || tombstones.has(message.id)) continue
+      if (typeof message.text !== 'string') {
+        if (message.kind && message.kind !== 'text') message = { ...message, text: '' }
+        else continue
+      }
       messages.set(message.id, message)
       added += 1
     }
@@ -151,6 +195,8 @@ export function createStore (roomId) {
 
   return {
     add,
+    patch,
+    remove,
     mergeHistory,
     addReaction,
     addProfile,

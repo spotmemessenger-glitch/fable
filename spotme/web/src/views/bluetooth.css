@@ -1,0 +1,425 @@
+/* Spot Me — Bluetooth screen (.v-bt): radar-scope rebuild.
+ * The scope is deliberately dark navy with teal lines — it is an instrument,
+ * not a page background; everything around it stays on the locked light
+ * system. All selectors live under .v-bt per the view contract. */
+
+.v-bt {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+}
+
+/* ---------------------------------------------------------------- header */
+
+.v-bt .top {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 15px 16px 11px;
+  flex: none;
+}
+
+.v-bt .hb {
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: none;
+  color: var(--ink);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  flex: none;
+  border-radius: 9px;
+}
+
+.v-bt .hb:hover { background: var(--well); }
+.v-bt .hb svg { width: 18px; height: 18px; }
+
+.v-bt .btIco {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--mesh-dim);
+  display: grid;
+  place-items: center;
+  color: var(--mesh);
+  flex: none;
+}
+
+.v-bt .btIco svg { width: 17px; height: 17px; }
+
+.v-bt .top h1 {
+  flex: 1;
+  margin: 0;
+  font-size: 19.5px;
+  font-weight: 700;
+  letter-spacing: -.03em;
+}
+
+/* -------------------------------------------------- scan row: scope left */
+
+.v-bt .scanrow {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 4px 16px 12px;
+  flex: none;
+}
+
+/* The radar scope — a faithful miniature of the owner's reference: deep navy
+ * dish, concentric teal rings, crosshair, rim ticks, rotating sweep wedge. */
+.v-bt .scope {
+  position: relative;
+  width: 150px;
+  height: 150px;
+  flex: none;
+  border-radius: 50%;
+  overflow: hidden;
+  background: radial-gradient(circle at 50% 42%, #10203a 0%, #0b1526 62%, #081020 100%);
+  border: 1.5px solid rgba(94, 234, 212, .35);
+  box-shadow: inset 0 0 26px rgba(45, 212, 191, .14), 0 4px 14px rgba(11, 21, 38, .3);
+}
+
+@media (max-width: 379px) { .v-bt .scope { width: 126px; height: 126px; } }
+
+.v-bt .ring {
+  position: absolute;
+  border-radius: 50%;
+  border: 1px solid rgba(45, 212, 191, .22);
+}
+
+.v-bt .ring.r1 { inset: 12.5%; }
+.v-bt .ring.r2 { inset: 25%; }
+.v-bt .ring.r3 { inset: 37.5%; }
+
+.v-bt .cross { position: absolute; inset: 0; }
+
+.v-bt .cross::before,
+.v-bt .cross::after {
+  content: "";
+  position: absolute;
+  background: rgba(45, 212, 191, .18);
+}
+
+.v-bt .cross::before { left: 0; right: 0; top: calc(50% - .5px); height: 1px; }
+.v-bt .cross::after { top: 0; bottom: 0; left: calc(50% - .5px); width: 1px; }
+
+/* Rim tick marks: each .tick is a full-size layer rotated about the centre. */
+.v-bt .tick { position: absolute; inset: 0; display: block; }
+
+.v-bt .tick::before {
+  content: "";
+  position: absolute;
+  left: calc(50% - 1px);
+  top: 3px;
+  width: 2px;
+  height: 5px;
+  border-radius: 1px;
+  background: rgba(94, 234, 212, .45);
+}
+
+/* Rotating sweep wedge — brighter and faster while a scan is running. */
+.v-bt .sweep {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: conic-gradient(from 0deg at 50% 50%,
+    rgba(45, 212, 191, .55) 0deg,
+    rgba(45, 212, 191, .16) 46deg,
+    transparent 78deg,
+    transparent 360deg);
+  animation: v-bt-sweep 5.2s linear infinite;
+  opacity: .5;
+}
+
+.v-bt .scope.scanning .sweep { animation-duration: 1.9s; opacity: 1; }
+
+@keyframes v-bt-sweep { to { transform: rotate(360deg); } }
+
+.v-bt .hub {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 7px;
+  height: 7px;
+  margin: -3.5px 0 0 -3.5px;
+  border-radius: 50%;
+  background: #5eead4;
+  box-shadow: 0 0 8px 2px rgba(45, 212, 191, .6);
+}
+
+.v-bt .blips { position: absolute; inset: 0; }
+
+/* A found person: small glowing teal blip, popped in mid-sweep. */
+.v-bt .sblip {
+  position: absolute;
+  width: 9px;
+  height: 9px;
+  margin: -4.5px 0 0 -4.5px;
+  border-radius: 50%;
+  background: #5eead4;
+  box-shadow: 0 0 9px 3px rgba(45, 212, 191, .65);
+  animation:
+    v-bt-pop .4s cubic-bezier(.34, 1.5, .5, 1) backwards,
+    v-bt-glow 2.2s ease-in-out .4s infinite;
+}
+
+@keyframes v-bt-pop { from { transform: scale(.2); opacity: 0; } }
+@keyframes v-bt-glow { 50% { box-shadow: 0 0 4px 1px rgba(45, 212, 191, .35); } }
+
+/* --------------------------------------- scan commit (right of the scope) */
+
+.v-bt .scanside {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+/* Commit action = ink, per the locked colour roles. */
+.v-bt .scanbtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  border: none;
+  cursor: pointer;
+  font-family: var(--font);
+  font-size: 13.5px;
+  font-weight: 700;
+  letter-spacing: -.01em;
+  color: #fff;
+  background: var(--ink);
+  border-radius: 999px;
+  padding: 12px 10px;
+  box-shadow: 0 2px 8px rgba(15, 15, 16, .22);
+  transition: transform .16s ease, background .16s ease;
+}
+
+.v-bt .scanbtn:hover { background: #000; transform: translateY(-1px); }
+.v-bt .scanbtn:disabled { opacity: .45; cursor: default; transform: none; }
+.v-bt .scanbtn .bi { display: grid; place-items: center; }
+.v-bt .scanbtn svg { width: 15px; height: 15px; }
+
+.v-bt .scancap {
+  margin: 0;
+  font-size: 11.5px;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+/* Scanning state: pulsing dot + label (state = blue/teal, per colour roles). */
+.v-bt .scanstate {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+  font-weight: 650;
+  color: var(--blue);
+}
+
+.v-bt .scanstate i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--blue);
+  animation: v-bt-blink 1.1s ease-in-out infinite;
+}
+
+@keyframes v-bt-blink { 50% { opacity: .25; } }
+
+/* ----------------------------- real-device chooser (ghost) / blocked note */
+
+.v-bt .addbt {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin: 0 16px 4px;
+  padding: 9px;
+  border: 1.5px dashed var(--line);
+  background: none;
+  border-radius: 12px;
+  cursor: pointer;
+  font-family: var(--font);
+  font-size: 12.5px;
+  font-weight: 650;
+  color: var(--ink2);
+  flex: none;
+  transition: border-color .16s ease, background .16s ease;
+}
+
+.v-bt .addbt:hover { border-color: var(--muted); background: var(--well); }
+.v-bt .addbt .bi { display: grid; place-items: center; }
+.v-bt .addbt svg { width: 14px; height: 14px; }
+
+.v-bt .noweb {
+  margin: 0 16px 4px;
+  font-size: 11px;
+  color: var(--muted);
+  line-height: 1.5;
+  flex: none;
+}
+
+/* ------------------------------------------------------------- found list */
+
+.v-bt .body { padding-bottom: 8px; }
+
+.v-bt .sh {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 10px 18px 4px;
+}
+
+.v-bt .sh h2 {
+  margin: 0;
+  font-size: 16.5px;
+  font-weight: 700;
+  letter-spacing: -.03em;
+}
+
+.v-bt .sh .n {
+  font-size: 12px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+@keyframes v-bt-rise { from { opacity: 0; transform: translateY(5px); } }
+
+.v-bt .prow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 10px 18px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  text-align: left;
+  font-family: var(--font);
+  position: relative;
+  animation: v-bt-rise .32s ease backwards;
+  transition: background .16s ease;
+}
+
+.v-bt .prow:hover { background: var(--well); }
+
+.v-bt .prow + .prow::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 74px;
+  right: 0;
+  height: 1px;
+  background: var(--hair);
+}
+
+.v-bt .pinfo { flex: 1; min-width: 0; }
+
+.v-bt .pinfo b {
+  display: block;
+  font-size: 14.5px;
+  font-weight: 650;
+  letter-spacing: -.018em;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Distance = information, so it reads in the teal info accent. */
+.v-bt .dist {
+  display: block;
+  font-size: 11.5px;
+  font-weight: 650;
+  color: var(--blue);
+}
+
+/* Mode chip: teal BLUETOOTH tag on every person row. */
+.v-bt .chip {
+  flex: none;
+  font-size: 8.5px;
+  font-weight: 800;
+  letter-spacing: .12em;
+  padding: 4px 9px;
+  border-radius: 999px;
+  background: rgba(27, 138, 157, .12);
+  color: var(--blue);
+}
+
+.v-bt .chip.dev { background: var(--well); color: var(--muted); }
+
+/* ------------------------------------- real device rows (informational) */
+
+.v-bt .drow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 18px;
+}
+
+.v-bt .dico {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: var(--mesh-dim);
+  color: var(--mesh);
+  display: grid;
+  place-items: center;
+  flex: none;
+}
+
+.v-bt .dico svg { width: 17px; height: 17px; }
+
+.v-bt .drow b {
+  flex: 1;
+  min-width: 0;
+  font-size: 14px;
+  font-weight: 650;
+  letter-spacing: -.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ------------------------------------------------------------ empty state */
+
+.v-bt .empty {
+  padding: 30px 30px 22px;
+  text-align: center;
+}
+
+.v-bt .empty span {
+  font-size: 12.5px;
+  color: var(--muted);
+  line-height: 1.55;
+  display: inline-block;
+  max-width: 36ch;
+}
+
+/* ------------------------------------------------------ honesty footnote */
+
+.v-bt .foot {
+  flex: none;
+  margin: 0;
+  padding: 9px 20px calc(10px + env(safe-area-inset-bottom) * 0);
+  font-size: 10.5px;
+  color: var(--muted);
+  text-align: center;
+  line-height: 1.55;
+  border-top: 1px solid var(--hair);
+}
+
+/* -------------------------------------------------------- reduced motion */
+
+@media (prefers-reduced-motion: reduce) {
+  .v-bt .sweep { animation: none; opacity: .3; }
+  .v-bt .sblip { animation: none; }
+  .v-bt .scanstate i { animation: none; }
+  .v-bt .prow { animation: none; }
+}

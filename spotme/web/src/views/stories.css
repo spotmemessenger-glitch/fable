@@ -1,0 +1,88 @@
+/* Spot Me — Stories screen. Ring styling inherited in spirit from the inbox
+ * strip it replaces; shared classes (.av, .scroll-y) come from tokens.css. */
+
+.v-stories { display: flex; flex-direction: column; height: 100%; }
+
+.v-stories .bar { display: flex; align-items: center; gap: 10px; padding: 14px 18px 8px; flex: none; }
+.v-stories .sp { flex: 1; }
+.v-stories .me { border: none; background: none; padding: 0; cursor: pointer; flex: none; display: block; }
+.v-stories .wm { font-size: 17px; font-weight: 800; letter-spacing: -.03em; color: var(--ink); white-space: nowrap; }
+.v-stories .toChats {
+  width: 38px; height: 38px; border-radius: 50%; border: none;
+  background: var(--well); color: var(--ink); cursor: pointer;
+  display: grid; place-items: center; flex: none;
+}
+.v-stories .toChats svg { width: 19px; height: 19px; }
+
+.v-stories .sbody { flex: 1; padding: 4px 18px calc(18px + env(safe-area-inset-bottom)); }
+
+/* ----------------------------------------------------------- my story row */
+
+.v-stories .myst {
+  display: flex; align-items: center; gap: 13px; width: 100%;
+  border: none; background: none; padding: 10px 0; cursor: pointer;
+  text-align: left; font-family: var(--font); color: var(--ink);
+}
+.v-stories .myst .mw { flex: 1; min-width: 0; }
+.v-stories .myst b { display: block; font-size: 14.5px; font-weight: 650; letter-spacing: -.015em; }
+.v-stories .myst .mw > span { display: block; font-size: 12px; color: var(--muted); margin-top: 2px; }
+.v-stories .cam { color: var(--muted); flex: none; }
+.v-stories .cam svg { width: 21px; height: 21px; }
+
+.v-stories .plusDot {
+  position: absolute; right: -2px; bottom: -2px;
+  width: 20px; height: 20px; border-radius: 50%;
+  background: var(--blue); color: #fff;
+  display: grid; place-items: center; border: 2px solid var(--surface);
+}
+.v-stories .plusDot svg { width: 11px; height: 11px; }
+
+/* ---------------------------------------------------------------- rings */
+
+.v-stories .shead {
+  font-size: 11px; font-weight: 800; letter-spacing: .07em; text-transform: uppercase;
+  color: var(--muted); margin: 14px 0 10px;
+}
+
+.v-stories .sgrid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(76px, 1fr));
+  gap: 16px 10px;
+}
+
+.v-stories .st {
+  border: none; background: none; padding: 0; cursor: pointer;
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  font-family: var(--font); min-width: 0;
+}
+.v-stories .stRing {
+  width: 72px; height: 72px; border-radius: 50%; padding: 2.5px;
+  display: grid; place-items: center; background: var(--line);
+  transition: transform .18s ease; position: relative;
+}
+.v-stories .stRing.add { width: 64px; height: 64px; flex: none; }
+.v-stories .st:hover .stRing { transform: scale(1.05); }
+.v-stories .st[data-seen="0"] .stRing { background: var(--ink); }
+.v-stories .stIn {
+  width: 100%; height: 100%; border-radius: 50%;
+  background: var(--surface); padding: 2px; overflow: hidden;
+}
+.v-stories .stIn .av { width: 100%; height: 100%; }
+.v-stories .stN {
+  font-size: 11.5px; color: var(--ink2); max-width: 100%;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+/* ---------------------------------------------------------- empty + note */
+
+.v-stories .sempty { text-align: center; padding: 44px 20px; }
+.v-stories .sempty b { display: block; font-size: 15px; letter-spacing: -.02em; }
+.v-stories .sempty span { display: block; font-size: 12.5px; color: var(--muted); margin-top: 6px; line-height: 1.5; }
+
+.v-stories .snote {
+  font-size: 11px; color: var(--muted); line-height: 1.55;
+  margin: 22px 0 0; padding-top: 14px; border-top: 1px solid var(--line);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .v-stories .st:hover .stRing { transform: none; }
+}

@@ -63,10 +63,42 @@ export function createNet (roomId, secret, handlers, getHistory) {
   const react = room.makeAction('react')
   const profile = room.makeAction('profile')
   const history = room.makeAction('history')
+  // Attachment bytes travel as BINARY with the envelope in metadata — not as
+  // base64 inside JSON. A third smaller on the wire, and both directions get
+  // real progress callbacks, which "photo not sending" feedback demands.
+  const bin = room.makeAction('bin')
+  // Lazy fetch: history backlog carries attachment envelopes without bytes;
+  // the receiver requests the bytes on demand from whoever holds them.
+  const fetchAction = room.makeAction('fetch', {
+    kind: 'request',
+    onRequest: (data, context) => handlers.onFetch ? handlers.onFetch(data, context) : null
+  })
+  // Call signalling: {type:'offer'|'accept'|'decline'|'end', video:bool}.
+  // The media itself rides WebRTC tracks via addStream, not this action.
+  const call = room.makeAction('call')
+  // Live-location updates: {id, lat, lon} while sharing; {id, stop:true} ends.
+  const locup = room.makeAction('locup')
+  // Cooperative signals. "Cooperative" is doing real work in that word: a
+  // modified client can ignore any of these. Honest limits, not guarantees.
+  const del = room.makeAction('del')        // delete-without-trace tombstone
+  const typing = room.makeAction('typing')  // {on:bool, name}
+  const read = room.makeAction('read')      // {upTo:ts} read receipt
+  const seen = room.makeAction('seen')      // {id} view-once was opened
 
   msg.onMessage = (payload, meta) => handlers.onMessage(payload, meta?.peerId)
   react.onMessage = (payload, meta) => handlers.onReaction(payload, meta?.peerId)
   profile.onMessage = (payload, meta) => handlers.onProfile(payload, meta?.peerId)
+  del.onMessage = (payload, meta) => handlers.onDelete?.(payload, meta?.peerId)
+  typing.onMessage = (payload, meta) => handlers.onTyping?.(payload, meta?.peerId)
+  read.onMessage = (payload, meta) => handlers.onRead?.(payload, meta?.peerId)
+  seen.onMessage = (payload, meta) => handlers.onSeen?.(payload, meta?.peerId)
+  bin.onMessage = (payload, context) => handlers.onBinary?.(payload, context)
+  bin.onReceiveProgress = (progress, context) => handlers.onBinaryProgress?.(progress, context)
+  call.onMessage = (payload, meta) => handlers.onCall?.(payload, meta?.peerId)
+  locup.onMessage = (payload, meta) => handlers.onLocup?.(payload, meta?.peerId)
+
+  room.onPeerStream = (stream, peerId, metadata) =>
+    handlers.onStream?.(stream, peerId, metadata)
 
   // Backlog from an existing peer. Merging is the store's job — it may already
   // hold some of these, and several peers may answer the same join.
@@ -101,6 +133,20 @@ export function createNet (roomId, secret, handlers, getHistory) {
     sendMessage: (data) => msgSafe(msg.send(data)),
     sendReaction: (data) => msgSafe(react.send(data)),
     sendProfile: (data) => msgSafe(profile.send(data)),
+    sendDelete: (data) => msgSafe(del.send(data)),
+    sendTyping: (data) => msgSafe(typing.send(data)),
+    sendRead: (data) => msgSafe(read.send(data)),
+    sendSeen: (data) => msgSafe(seen.send(data)),
+    /** Binary with envelope metadata + progress. Returns the send promise. */
+    sendBinary: (buffer, options) => bin.send(buffer, options),
+    /** Ask a specific peer for attachment bytes: ({id}, {target}) -> bytes. */
+    fetchFrom: (data, options) => fetchAction.request(data, options),
+    sendCall: (data, options) => msgSafe(call.send(data, options)),
+    sendLocup: (data) => msgSafe(locup.send(data)),
+    addStream: (stream, options) => room.addStream(stream, options),
+    removeStream: (stream, options) => room.removeStream(stream, options),
+    replaceTrack: (oldTrack, newTrack, options) => room.replaceTrack(oldTrack, newTrack, options),
+    peerIds: () => Object.keys(room.getPeers()),
     peerCount: () => Object.keys(room.getPeers()).length,
     leave: () => room.leave()
   }

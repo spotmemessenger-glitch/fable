@@ -118,3 +118,6 @@ desktop.ini
 
 # scratch design candidates
 jarvis/ui/preview/
+
+.vercel
+.keys/

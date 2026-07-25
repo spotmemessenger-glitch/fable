@@ -1,0 +1,162 @@
+<title>Spot Me - Chat</title>
+<style>
+:root,:root[data-theme=dark],:root[data-theme=light]{
+  --ink:#0f0f10;--ink2:#3d3d42;--muted:#8e8e96;--bg:#e9e9ec;--surface:#fff;
+  --well:#f1f1f3;--line:#e6e6ea;--hair:#eeeef1;--blue:#007aff;--out:#3b53c4;
+  --live:#22c55e;
+  --shadow:0 1px 2px rgba(15,15,16,.05),0 14px 38px rgba(15,15,16,.10);
+  --font:"Sora","Plus Jakarta Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
+  color-scheme:light}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--font);
+  -webkit-font-smoothing:antialiased;line-height:1.5;padding:24px 16px 40px}
+.page{max-width:1120px;margin:0 auto}
+.pgh{margin:0 0 4px;font-size:clamp(20px,4vw,26px);letter-spacing:-.032em;font-weight:700}
+.pgs{color:var(--muted);font-size:14px;margin:0 0 22px;max-width:64ch}
+.stage{display:grid;grid-template-columns:minmax(0,372px) minmax(0,1fr);gap:28px;align-items:start}
+@media(max-width:860px){.stage{grid-template-columns:1fr}}
+.phone{width:100%;max-width:372px;background:var(--surface);border:1px solid var(--line);
+  border-radius:30px;box-shadow:var(--shadow);overflow:hidden;display:flex;flex-direction:column;
+  height:772px;position:relative}
+.av{position:relative;width:var(--s);height:var(--s);flex:none;display:block}
+.av img{width:100%;height:100%;border-radius:50%;object-fit:cover;display:block}
+.av .dot{position:absolute;right:-1px;bottom:-1px;width:calc(var(--s)*.3);height:calc(var(--s)*.3);
+  border-radius:50%;background:var(--live);border:2.5px solid var(--surface)}
+.top{display:flex;align-items:center;gap:10px;padding:14px 14px 12px;border-bottom:1px solid var(--hair)}
+.back{width:30px;height:30px;border:none;background:none;color:var(--ink);cursor:pointer;
+  display:grid;place-items:center;border-radius:9px;flex:none}
+.back:hover{background:var(--well)}
+.back svg{width:19px;height:19px}
+.who{flex:1;min-width:0}
+.who b{display:block;font-size:15px;font-weight:700;letter-spacing:-.018em;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.who span{font-size:11.5px;color:var(--muted);display:block}
+.hact{display:flex;gap:2px;flex:none}
+.ha{width:32px;height:32px;border:none;background:none;color:var(--muted);cursor:pointer;
+  display:grid;place-items:center;border-radius:9px;position:relative;transition:all .16s ease}
+.ha:hover{background:var(--well);color:var(--ink)}
+.ha svg{width:18px;height:18px}
+.ha[aria-pressed="true"]{color:var(--blue)}
+.ha[aria-pressed="true"]::after{content:"";position:absolute;bottom:3px;left:50%;
+  transform:translateX(-50%);width:4px;height:4px;border-radius:50%;background:var(--blue)}
+.xa{font-size:13px;font-weight:700;letter-spacing:-.04em}
+.thread{flex:1;overflow-y:auto;padding:14px 14px 8px;display:flex;flex-direction:column;gap:12px}
+.day{align-self:center;font-size:10px;font-weight:700;letter-spacing:.11em;color:var(--muted);padding:2px 0}
+.rowIn,.rowOut{display:flex;align-items:flex-end;gap:8px;animation:rise .3s ease backwards}
+.rowOut{justify-content:flex-end}
+@keyframes rise{from{opacity:0;transform:translateY(6px)}}
+@media(prefers-reduced-motion:reduce){.rowIn,.rowOut{animation:none}}
+.bubIn{max-width:78%;background:var(--surface);border:1px solid var(--line);border-radius:16px;
+  border-bottom-left-radius:5px;overflow:hidden;box-shadow:0 1px 2px rgba(15,15,16,.05)}
+.src{padding:10px 13px 9px;font-size:14.5px;letter-spacing:-.01em}
+.tr{padding:8px 13px 9px;border-top:1px solid var(--hair);background:#fbfbfc}
+.trTag{display:flex;align-items:center;gap:5px;font-size:9px;font-weight:800;letter-spacing:.09em;
+  color:var(--blue);margin-bottom:4px}
+.trTag .xa{font-size:11px;letter-spacing:-.04em}
+.trTxt{font-size:14px;font-style:italic;color:var(--ink2);letter-spacing:-.008em}
+.meta{display:flex;justify-content:flex-end;padding:0 13px 8px;font-size:10px;color:var(--muted);
+  font-variant-numeric:tabular-nums}
+.bubOut{max-width:76%;background:var(--out);color:#fff;border-radius:16px;
+  border-bottom-right-radius:5px;padding:10px 14px;font-size:14.5px;letter-spacing:-.01em;
+  box-shadow:0 2px 8px rgba(59,83,196,.24)}
+.tOut{font-size:10px;color:var(--muted);font-variant-numeric:tabular-nums;flex:none;
+  align-self:flex-end;padding-bottom:2px}
+.readRow{display:flex;justify-content:flex-end;align-items:center;gap:4px;font-size:10px;
+  color:var(--muted);margin-top:-7px}
+.readRow svg{width:14px;height:9px}
+.readRow.read{color:var(--blue)}
+.sys{align-self:center;display:flex;align-items:center;gap:6px;font-size:10.5px;color:var(--muted);padding:2px 0}
+.sys svg{width:13px;height:13px;color:var(--blue)}
+.bar{border-top:1px solid var(--hair);background:var(--surface);padding:9px 12px 14px;
+  display:flex;align-items:center;gap:9px}
+.plusB,.camB{width:30px;height:30px;border:none;background:none;color:var(--ink);cursor:pointer;
+  display:grid;place-items:center;flex:none;border-radius:9px}
+.plusB:hover,.camB:hover{background:var(--well)}
+.plusB svg,.camB svg{width:20px;height:20px}
+.field{flex:1;display:flex;align-items:center;gap:7px;background:var(--well);border-radius:999px;
+  padding:8px 12px;min-width:0}
+.field input{flex:1;border:none;background:none;outline:none;font:inherit;font-size:14px;
+  color:var(--ink);min-width:0}
+.field input::placeholder{color:var(--muted)}
+.field button{width:22px;height:22px;border:none;background:none;color:var(--muted);cursor:pointer;
+  display:grid;place-items:center;flex:none;padding:0}
+.field svg{width:18px;height:18px}
+.micB{width:40px;height:40px;border-radius:50%;border:none;background:var(--out);color:#fff;
+  cursor:pointer;display:grid;place-items:center;flex:none;box-shadow:0 3px 11px rgba(59,83,196,.34);
+  transition:transform .16s ease}
+.micB:hover{transform:scale(1.06)}
+.micB svg{width:18px;height:18px}
+.notes{display:flex;flex-direction:column;gap:14px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:16px 18px;
+  box-shadow:0 1px 2px rgba(15,15,16,.04)}
+.card h3{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);
+  margin:0 0 11px;font-weight:650}
+.card ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.card li{display:flex;gap:10px;font-size:13.5px;align-items:flex-start}
+.card li::before{content:"";flex:none;width:6px;height:6px;margin-top:6.5px;border-radius:50%;background:var(--blue)}
+.card.warn li::before{background:#d97706}
+.card b{font-weight:650}
+</style>
+<div class="page">
+  <h1 class="pgh">Spot Me &mdash; Nearby Chat</h1>
+  <p class="pgs">The split-translation variant. A foreign-language message shows the source and the
+    translation together in one bubble &mdash; no toggle, nothing to discover, and the original is
+    never thrown away.</p>
+  <div class="stage">
+    <div class="phone">
+      <div class="top">
+        <button class="back" aria-label="Back">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+        </button>
+        <span class="av" style="--s:38px"><img src="data:image/jpeg;base64,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" alt=""/><span class="dot"></span></span>
+        <div class="who"><b>Roberto</b><span>12 m away &middot; Online</span></div>
+        <div class="hact">
+          <button class="ha" id="tx" aria-pressed="false" title="Transliterate" aria-label="Transliterate">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a15 15 0 010 18M12 3a15 15 0 000 18"/></svg>
+          </button>
+          <button class="ha" id="tr" aria-pressed="true" title="Translate" aria-label="Translate"><span class="xa">&#25991;A</span></button>
+          <button class="ha" title="Voice message" aria-label="Voice message">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><rect x="9" y="2.5" width="6" height="11.5" rx="3"/><path d="M5.5 11.5a6.5 6.5 0 0013 0M12 18v3.5" stroke-linecap="round"/></svg>
+          </button>
+        </div>
+      </div>
+      <div class="thread" id="thread"><div class="day">TODAY</div><div class="rowIn" style="animation-delay:55ms"><div class="bubIn"><div class="src">¡Hola! ¿Cómo estás? ¿Quieres ir a tomar un café?</div><div class="tr"><div class="trTag"><span class="xa">&#25991;A</span> TRANSLATED</div><div class="trTxt">Hi! How are you? Do you want to go for a coffee?</div></div><div class="meta">10:42 AM</div></div></div><div class="rowOut" style="animation-delay:110ms"><span class="tOut">10:43 AM</span><div class="bubOut">Sure! That sounds great. I'm just around the corner.</div></div><div class="readRow read"><svg viewBox="0 0 20 12" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M1 6.5l3.4 3.4L11 3"/><path d="M7.5 9.9L14 3"/></svg>Read</div><div class="sys"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l1.6 5.6L19 9l-5.4 1.4L12 16l-1.6-5.6L5 9l5.4-1.4z"/><path d="M18.5 14l.8 2.7L22 17.5l-2.7.8-.8 2.7-.8-2.7L15 17.5l2.7-.8z"/></svg>AI is translating Spanish automatically</div><div class="rowIn" style="animation-delay:220ms"><div class="bubIn"><div class="src">¡Perfecto! Te veo en la Plaza del Sol en 5 minutos.</div><div class="tr"><div class="trTag"><span class="xa">&#25991;A</span> TRANSLATED</div><div class="trTxt">Perfect! I'll see you at Plaza del Sol in 5 minutes.</div></div><div class="meta">10:45 AM</div></div></div><div class="rowOut" style="animation-delay:275ms"><span class="tOut">10:46 AM</span><div class="bubOut">On my way now.</div></div><div class="readRow"><svg viewBox="0 0 20 12" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M1 6.5l3.4 3.4L11 3"/><path d="M7.5 9.9L14 3"/></svg>Delivered</div></div>
+      <div class="bar">
+        <button class="plusB" aria-label="Attach">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+        </button>
+        <div class="field">
+          <input id="q" placeholder="Type a message..." autocomplete="off">
+          <button aria-label="Emoji">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><circle cx="12" cy="12" r="9"/><path d="M8.5 14.5a4.5 4.5 0 007 0M9 9.5h.01M15 9.5h.01" stroke-linecap="round"/></svg>
+          </button>
+        </div>
+        <button class="camB" aria-label="Camera">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 8.5h3.2l1.4-2.2h8.8L17.8 8.5H21a1 1 0 011 1v9a1 1 0 01-1 1H3a1 1 0 01-1-1v-9a1 1 0 011-1z"/><circle cx="12" cy="13.5" r="3.4"/></svg>
+        </button>
+        <button class="micB" id="mic" aria-label="Hold to record">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="2.5" width="6" height="11.5" rx="3"/><path d="M5.5 11.5a6.5 6.5 0 0013 0M12 18v3.5" stroke-linecap="round"/></svg>
+        </button>
+      </div>
+    </div>
+    <div class="notes">
+      <div class="card"><h3>Why the split bubble is right</h3><ul>
+        <li><b>No toggle.</b> Source and translation are both present, always. Nothing to find, no mode to be in, no way to be looking at the wrong one.</li>
+        <li><b>The original is never discarded.</b> Translation is a derived view rendered beneath it &mdash; which matches the P2P model, where each peer translates on arrival and the message keeps its source-language tag.</li>
+        <li><b>It survives a bad translation.</b> If the machine gets it wrong, the reader can see that it did. A toggle hides the evidence.</li>
+        <li>Italic on the translation plus a hairline divider carry the distinction without a second colour.</li>
+      </ul></div>
+      <div class="card"><h3>Details from the reference</h3><ul>
+        <li>Header carries <b>distance and presence</b> &mdash; "12 m away &middot; Online". This is a proximity app, so how far away someone is belongs beside their name.</li>
+        <li><b>Three header actions</b>: transliterate (globe), translate (active), voice.</li>
+        <li>Outgoing timestamp sits <b>outside</b> the bubble on the left, with the read receipt below-right.</li>
+        <li>The AI notice is a <b>system line, not a bubble</b> &mdash; it is not part of the conversation.</li>
+      </ul></div>
+      <div class="card warn"><h3>One thing worth deciding</h3><ul>
+        <li>Your outgoing messages show <b>only English</b>. Roberto reads them in Spanish, but you never see what he actually receives &mdash; so you cannot catch a translation that changes your meaning.</li>
+        <li>The fix is the same split applied outbound: your text on top, "TRANSLATED TO SPANISH" beneath. It costs vertical space on every message you send, which is presumably why the reference omits it. Worth a deliberate call rather than an accident.</li>
+      </ul></div>
+    </div>
+  </div>
+</div>
+" title="Chat

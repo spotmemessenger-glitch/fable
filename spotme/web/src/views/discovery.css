@@ -1,0 +1,607 @@
+/* Spot Me — Discovery view. Lifted from the locked design 02-discovery.html.
+ * Every selector lives under .v-disc. Shared classes (.av, .pill, .scroll-y)
+ * come from tokens.css. */
+
+.v-disc { background: var(--surface); }
+
+/* -------------------------------------------------------------- header */
+
+.v-disc .bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 13px 16px 9px;
+  flex: none;
+}
+
+.v-disc .bar h1 {
+  flex: 1;
+  margin: 0;
+  font-size: 19.5px;
+  font-weight: 700;
+  letter-spacing: -.03em;
+}
+
+/* Map visibility toggle. Green = you are visible (presence green); amber =
+ * you are hidden from other people's maps. The colour states what is true
+ * about YOU. */
+.v-disc .ghost {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: none;
+  cursor: pointer;
+  font: inherit;
+  font-family: var(--font);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: -.005em;
+  border-radius: 999px;
+  padding: 5px 8px 5px 6px;
+  flex: none;
+  transition: background .2s ease, color .2s ease;
+}
+
+.v-disc .ghost svg { width: 13px; height: 13px; }
+.v-disc .ghost[aria-pressed="true"] { background: rgba(22, 163, 74, .14); color: var(--ghost-on); }
+.v-disc .ghost[aria-pressed="false"] { background: rgba(217, 119, 87, .14); color: var(--ghost-off); }
+
+.v-disc .ghost .sw {
+  width: 22px;
+  height: 13px;
+  border-radius: 999px;
+  background: currentColor;
+  opacity: .28;
+  position: relative;
+  flex: none;
+}
+
+.v-disc .ghost .sw::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform .2s cubic-bezier(.34, 1.4, .5, 1);
+}
+
+.v-disc .ghost[aria-pressed="true"] .sw::after { transform: translateX(9px); }
+
+/* ----------------------------------------------------------------- map */
+
+.v-disc .map {
+  position: relative;
+  height: 268px;
+  flex: none;
+  overflow: hidden;
+  background: var(--block);
+}
+
+.v-disc .map svg.plan { position: absolute; inset: 0; width: 100%; height: 100%; }
+
+/* Live Google map layer. It fades in over the drawn plan once tiles have
+ * arrived; until then it is invisible and untouchable, so the map area is
+ * never blank. z-index: 0 contains Google's internal pane z-indexes. */
+.v-disc .map .gmap {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .3s ease;
+}
+
+.v-disc .map .gmap.on { opacity: 1; pointer-events: auto; }
+
+/* Hand-drawn fallback plan (also the loading placeholder). */
+.v-disc .map .drawn { position: absolute; inset: 0; }
+.v-disc .map.gmode .drawn { display: none; }
+
+/* On the live map the sweep must clear the tile panes; still untouchable. */
+.v-disc .map.gmode .sweep { z-index: 2; }
+
+/* Google's logo lives bottom-left and attribution must stay visible (ToS) —
+ * the location chip steps up out of its way. */
+.v-disc .map.gmode .locchip { bottom: 36px; }
+
+/* When hidden, the map dims and the you-dot goes hollow — visible proof. */
+.v-disc .map.hidden .sweep { opacity: 0; }
+.v-disc .map.hidden .rings i { border-style: dashed; opacity: .5; }
+
+.v-disc .map.hidden .you {
+  background: transparent;
+  border-color: var(--ghost-on);
+  box-shadow: 0 0 0 5px rgba(22, 163, 74, .16);
+}
+
+.v-disc .hidechip {
+  position: absolute;
+  left: 50%;
+  top: calc(50% + 18px);
+  transform: translateX(-50%);
+  z-index: 4;
+  background: var(--ghost-on);
+  color: #fff;
+  border-radius: 999px;
+  padding: 3px 9px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .03em;
+  white-space: nowrap;
+  opacity: 0;
+  transition: opacity .2s ease;
+  pointer-events: none;
+}
+
+.v-disc .map.hidden .hidechip { opacity: 1; }
+
+.v-disc .count {
+  position: absolute;
+  left: 12px;
+  top: 12px;
+  z-index: 4;
+  background: rgba(255, 255, 255, .94);
+  border-radius: 999px;
+  padding: 5px 12px;
+  font-size: 11.5px;
+  font-weight: 650;
+  box-shadow: 0 2px 8px rgba(15, 15, 16, .14);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.v-disc .count i { width: 7px; height: 7px; border-radius: 50%; background: var(--live); }
+
+.v-disc .mapb {
+  position: absolute;
+  right: 12px;
+  top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  z-index: 4;
+}
+
+.v-disc .mb {
+  width: 34px;
+  height: 34px;
+  border-radius: 11px;
+  border: none;
+  background: rgba(255, 255, 255, .94);
+  color: var(--ink);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  box-shadow: 0 2px 8px rgba(15, 15, 16, .16);
+}
+
+.v-disc .mb svg { width: 16px; height: 16px; }
+
+/* Geolocation off/denied — honest, and tappable to retry. */
+.v-disc .locchip {
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+  z-index: 4;
+  border: none;
+  cursor: pointer;
+  font-family: var(--font);
+  background: rgba(255, 255, 255, .94);
+  color: var(--ink2);
+  border-radius: 999px;
+  padding: 5px 11px;
+  font-size: 10.5px;
+  font-weight: 650;
+  box-shadow: 0 2px 8px rgba(15, 15, 16, .14);
+  display: none;
+}
+
+.v-disc .locchip.on { display: block; }
+
+.v-disc .rings {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+.v-disc .rings i {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  border: 1px solid color-mix(in srgb, var(--blue) 30%, transparent);
+  transition: width .25s ease, height .25s ease;
+}
+
+.v-disc .sweep {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 196px;
+  height: 196px;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  pointer-events: none;
+  background: conic-gradient(from 0deg,
+    color-mix(in srgb, var(--blue) 22%, transparent), transparent 62%);
+  animation: v-disc-spin 4.4s linear infinite;
+}
+
+@keyframes v-disc-spin { to { transform: translate(-50%, -50%) rotate(360deg); } }
+
+.v-disc .you {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 16px;
+  height: 16px;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: var(--blue);
+  border: 3px solid #fff;
+  box-shadow: 0 0 0 5px color-mix(in srgb, var(--blue) 22%, transparent),
+    0 2px 6px rgba(0, 0, 0, .25);
+  z-index: 3;
+}
+
+.v-disc .you.ping { animation: v-disc-ping .9s ease-out 2; }
+
+@keyframes v-disc-ping {
+  0% { box-shadow: 0 0 0 5px color-mix(in srgb, var(--blue) 22%, transparent); }
+  70% { box-shadow: 0 0 0 22px transparent; }
+  100% { box-shadow: 0 0 0 5px color-mix(in srgb, var(--blue) 22%, transparent); }
+}
+
+.v-disc .mklayer { position: absolute; inset: 0; pointer-events: none; }
+
+.v-disc .mk {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  width: 42px;
+  height: 42px;
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+  z-index: 2;
+  pointer-events: auto;
+  transition: transform .18s cubic-bezier(.34, 1.4, .5, 1);
+}
+
+.v-disc .mk .av { --s: 42px; }
+
+.v-disc .mk .av img,
+.v-disc .mk .av .init {
+  border: 2.5px solid #fff;
+  box-shadow: 0 3px 9px rgba(15, 15, 16, .28);
+}
+
+.v-disc .mk:hover { transform: translate(-50%, -50%) scale(1.14); }
+
+/* -------------------------------------------------------------- filters */
+
+/* One compact chip row overlapping the bottom edge of the map:
+ * [Distance ▾] [Age ▾] [Sex ▾] [locate]. */
+.v-disc .chips {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  margin: -17px 14px 0;
+  position: relative;
+  z-index: 5;
+  flex: none;
+}
+
+/* Chips size to their content (the select keeps its intrinsic width so the
+ * longest option — "500 m" — never clips); min-width 0 lets tiny screens
+ * shrink them gracefully. */
+.v-disc .chip {
+  flex: 0 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 6px 8px;
+  font-size: 11.5px;
+  color: var(--ink);
+  position: relative;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(15, 15, 16, .12);
+}
+
+.v-disc .chip b { font-weight: 600; color: var(--muted); font-size: 10px; flex: none; }
+
+.v-disc .chip select {
+  appearance: none;
+  -webkit-appearance: none;
+  border: none;
+  background: none;
+  font: inherit;
+  font-family: var(--font);
+  font-size: 11.5px;
+  font-weight: 650;
+  letter-spacing: -.01em;
+  color: var(--ink);
+  flex: 0 1 auto;
+  min-width: 0;
+  cursor: pointer;
+  outline: none;
+  padding-right: 13px;
+}
+
+.v-disc .chip .chev {
+  position: absolute;
+  right: 8px;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  pointer-events: none;
+}
+
+.v-disc .chip .chev svg { width: 11px; height: 11px; }
+
+.v-disc .loc {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: none;
+  background: var(--blue);
+  color: #fff;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  flex: none;
+  box-shadow: 0 3px 10px color-mix(in srgb, var(--blue) 34%, transparent);
+}
+
+.v-disc .loc svg { width: 15px; height: 15px; }
+
+/* ----------------------------------------------------------------- list */
+
+.v-disc .lhead {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 14px 18px 4px;
+  flex: none;
+}
+
+.v-disc .lhead h2 { margin: 0; font-size: 17px; font-weight: 700; letter-spacing: -.03em; }
+
+.v-disc .lhead .n {
+  font-size: 13px;
+  font-weight: 650;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.v-disc .row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 18px;
+  cursor: pointer;
+  position: relative;
+  animation: v-disc-fade .28s ease backwards;
+}
+
+@keyframes v-disc-fade { from { opacity: 0; transform: translateY(4px); } }
+
+.v-disc .row:hover { background: var(--well); }
+
+.v-disc .row + .row::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 78px;
+  right: 0;
+  height: 1px;
+  background: var(--hair);
+}
+
+.v-disc .mid { flex: 1; min-width: 0; }
+
+.v-disc .nm {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14.5px;
+  font-weight: 650;
+  letter-spacing: -.016em;
+  min-width: 0;
+}
+
+.v-disc .nm > span:first-child {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.v-disc .st {
+  font-size: 12.5px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Distance is information → blue. */
+.v-disc .dpill {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11.5px;
+  font-weight: 650;
+  color: var(--blue);
+  background: color-mix(in srgb, var(--blue) 10%, transparent);
+  border-radius: 999px;
+  padding: 4px 9px;
+  font-variant-numeric: tabular-nums;
+}
+
+.v-disc .dpill svg { width: 11px; height: 11px; }
+
+.v-disc .mini { padding: 6px 13px; font-size: 11.5px; flex: none; }
+
+.v-disc .empty {
+  text-align: center;
+  padding: 34px 24px;
+  color: var(--muted);
+  font-size: 13px;
+  display: none;
+  margin: 0;
+}
+
+.v-disc .empty.on { display: block; }
+
+/* ------------------------------------------------- overlays (in-view) */
+
+.v-disc .ov {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  background: rgba(15, 15, 16, .32);
+  display: flex;
+  animation: v-disc-ovfade .16s ease;
+}
+
+@keyframes v-disc-ovfade { from { opacity: 0; } }
+
+.v-disc .ov.center { align-items: center; justify-content: center; padding: 24px; }
+.v-disc .ov.bottom { align-items: flex-end; }
+
+/* Profile card raised by a map marker or list row. */
+.v-disc .pcard {
+  background: var(--surface);
+  border-radius: 20px;
+  padding: 22px 20px 18px;
+  width: 100%;
+  max-width: 300px;
+  box-shadow: 0 18px 48px rgba(15, 15, 16, .28);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  text-align: center;
+  animation: v-disc-pop .22s cubic-bezier(.34, 1.3, .5, 1);
+}
+
+@keyframes v-disc-pop { from { opacity: 0; transform: scale(.94) translateY(8px); } }
+
+.v-disc .pcard .pname {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 10px;
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -.02em;
+}
+
+.v-disc .pcard .plang { font-size: 12.5px; color: var(--muted); }
+.v-disc .pcard .dpill { margin-top: 6px; }
+
+.v-disc .tags {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 9px;
+}
+
+.v-disc .tag {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ink2);
+  background: var(--well);
+  border-radius: 999px;
+  padding: 4px 10px;
+}
+
+.v-disc .pacts { display: flex; gap: 9px; margin-top: 16px; width: 100%; }
+
+/* Wave: a quiet well button next to the ink commit. */
+.v-disc .wavebtn {
+  flex: 1;
+  border: none;
+  cursor: pointer;
+  font-family: var(--font);
+  font-size: 12.5px;
+  font-weight: 650;
+  letter-spacing: -.01em;
+  color: var(--ink);
+  background: var(--well);
+  border-radius: 999px;
+  padding: 9px 0;
+  transition: background .16s ease;
+}
+
+.v-disc .wavebtn:hover { background: var(--line); }
+.v-disc .pacts .pill { flex: 1; }
+
+/* Request sheet ("Say hi"). */
+.v-disc .sheet {
+  width: 100%;
+  background: var(--surface);
+  border-radius: 18px 18px 0 0;
+  padding: 18px 18px calc(18px + env(safe-area-inset-bottom));
+  display: flex;
+  flex-direction: column;
+  gap: 11px;
+  animation: v-disc-up .22s cubic-bezier(.4, 0, .2, 1);
+}
+
+@keyframes v-disc-up { from { transform: translateY(40px); } }
+
+.v-disc .sheet .shead { display: flex; align-items: center; gap: 10px; }
+.v-disc .sheet .stitle { min-width: 0; }
+
+.v-disc .sheet .stitle b {
+  display: block;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -.02em;
+}
+
+.v-disc .sheet .stitle span {
+  display: block;
+  font-size: 11.5px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.v-disc .sheet input[type=text] {
+  border: 1px solid var(--line);
+  background: var(--well);
+  border-radius: 12px;
+  padding: 11px 13px;
+  font-size: 14px;
+  font-family: var(--font);
+  outline: none;
+  color: var(--ink);
+  width: 100%;
+}
+
+.v-disc .sheet input[type=text]:focus { border-color: var(--ink); background: var(--surface); }
+
+.v-disc .sheet .pill.ok { width: 100%; padding: 11px 0; font-size: 13.5px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .v-disc .sweep { animation: none; opacity: .35; }
+  .v-disc .you.ping { animation: none; }
+  .v-disc .row { animation: none; }
+}

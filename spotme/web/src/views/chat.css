@@ -1,0 +1,2399 @@
+/* Spot Me — chat thread view. Lifted from design/03-chat.html (locked). */
+
+.v-chat {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--surface);
+}
+
+/* ----------------------------------------------------------------- header */
+
+.v-chat .top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 14px 12px;
+  border-bottom: 1px solid var(--hair);
+  flex: none;
+}
+
+.v-chat .back {
+  width: 30px;
+  height: 30px;
+  border: none;
+  background: none;
+  color: var(--ink);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  border-radius: 9px;
+  flex: none;
+}
+
+.v-chat .back:hover { background: var(--well); }
+.v-chat .back svg { width: 19px; height: 19px; }
+
+.v-chat .avbtn { border: none; background: none; padding: 0; cursor: pointer; flex: none; }
+
+.v-chat .who { flex: 1; min-width: 0; text-align: left; }
+
+.v-chat .who b {
+  display: block;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -.018em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.v-chat .who .st {
+  font-size: 11.5px;
+  color: var(--muted);
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.v-chat .who .st.typing { font-style: italic; }
+
+.v-chat .hact { display: flex; gap: 2px; flex: none; }
+
+.v-chat .ha {
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  border-radius: 9px;
+  position: relative;
+  transition: all .16s ease;
+}
+
+.v-chat .ha:hover { background: var(--well); color: var(--ink); }
+.v-chat .ha svg { width: 18px; height: 18px; }
+.v-chat .ha[aria-pressed="true"] { color: var(--blue); }
+
+.v-chat .ha[aria-pressed="true"]::after {
+  content: "";
+  position: absolute;
+  bottom: 3px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--blue);
+}
+
+.v-chat .xa { font-size: 13px; font-weight: 700; letter-spacing: -.04em; }
+
+/* ----------------------------------------------------------------- thread */
+
+.v-chat .threadwrap { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; }
+
+.v-chat .thread {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 14px 14px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.v-chat .day {
+  align-self: center;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .11em;
+  color: var(--muted);
+  padding: 2px 0;
+  text-transform: uppercase;
+}
+
+.v-chat .msg { display: flex; flex-direction: column; animation: vchat-rise .3s ease backwards; }
+.v-chat .rowIn, .v-chat .rowOut { display: flex; align-items: flex-end; gap: 8px; }
+.v-chat .rowOut { justify-content: flex-end; }
+
+@keyframes vchat-rise { from { opacity: 0; transform: translateY(6px); } }
+@media (prefers-reduced-motion: reduce) { .v-chat .msg { animation: none; } }
+
+.v-chat .sender { font-size: 10.5px; font-weight: 700; color: var(--muted); margin: 0 0 3px 6px; }
+
+/* Bubbles own the long-press gesture — without these, iOS Safari's native
+   text-selection (loupe + handles) fires on the same hold and fights the
+   message sheet. Copy stays available through the sheet's Copy action. */
+.v-chat .bubIn, .v-chat .bubOut {
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.v-chat .bubIn {
+  max-width: 78%;
+  background: var(--well);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  border-bottom-left-radius: 5px;
+  overflow: hidden;
+  box-shadow: 0 1px 2px rgba(15, 15, 16, .05);
+}
+
+.v-chat .src { padding: 10px 13px 9px; font-size: 14.5px; letter-spacing: -.01em; overflow-wrap: anywhere; }
+
+.v-chat .tr { padding: 8px 13px 9px; border-top: 1px solid var(--line); background: var(--surface); }
+
+.v-chat .trTag {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .09em;
+  color: var(--blue);
+  margin-bottom: 4px;
+}
+
+.v-chat .trTag .xa { font-size: 11px; letter-spacing: -.04em; }
+
+.v-chat .trTxt {
+  font-size: 14px;
+  font-style: italic;
+  color: var(--ink2);
+  letter-spacing: -.008em;
+  overflow-wrap: anywhere;
+}
+
+.v-chat .meta {
+  display: flex;
+  justify-content: flex-end;
+  padding: 0 13px 8px;
+  font-size: 10px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.v-chat .bubOut {
+  max-width: 76%;
+  background: var(--out);
+  color: var(--outink);   /* dark ink on light teal, per the reference */
+  border-radius: 16px;
+  border-bottom-right-radius: 5px;
+  padding: 10px 14px;
+  font-size: 14.5px;
+  letter-spacing: -.01em;
+  box-shadow: 0 2px 8px rgba(23, 97, 107, .22);
+  overflow-wrap: anywhere;
+}
+
+.v-chat .tOut {
+  font-size: 10px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  flex: none;
+  align-self: flex-end;
+  padding-bottom: 2px;
+}
+
+.v-chat .readRow {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  color: var(--muted);
+  margin-top: 3px;
+}
+
+.v-chat .readRow svg { width: 14px; height: 9px; }
+.v-chat .readRow.read { color: var(--blue); }
+
+.v-chat .sys {
+  align-self: center;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10.5px;
+  color: var(--muted);
+  padding: 2px 0;
+  text-align: center;
+  max-width: 88%;
+}
+
+.v-chat .sys svg { width: 13px; height: 13px; color: var(--blue); flex: none; }
+
+/* ------------------------------------------------------------ reply quote */
+
+.v-chat .q {
+  border-left: 2.5px solid var(--blue);
+  border-radius: 6px;
+  padding: 4px 9px;
+  font-size: 11.5px;
+  background: rgba(0, 122, 255, .07);
+}
+
+.v-chat .bubIn .q { margin: 8px 10px 0; }
+.v-chat .bubOut .q { border-left-color: rgba(12, 52, 59, .6); background: rgba(255, 255, 255, .3); margin: 0 0 6px; }
+.v-chat .q b { display: block; font-size: 10px; font-weight: 700; }
+.v-chat .q.qgone { font-style: italic; color: var(--muted); border-left-color: var(--line); background: rgba(15, 15, 16, .04); }
+.v-chat .bubOut .q.qgone { color: rgba(255, 255, 255, .72); }
+
+/* ----------------------------------------------------------- media bubbles */
+
+.v-chat .imgmsg {
+  border: none;
+  background: var(--well);
+  padding: 0;
+  cursor: pointer;
+  max-width: 240px;
+  border-radius: 14px;
+  overflow: hidden;
+  display: block;
+}
+
+.v-chat .imgmsg img { display: block; width: 100%; max-width: 240px; }
+
+.v-chat .vonce {
+  position: relative;
+  width: 200px;
+  height: 126px;
+  border-radius: 14px;
+  overflow: hidden;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  background: var(--well);
+}
+
+.v-chat .vonce img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: blur(18px) saturate(.8);
+  transform: scale(1.2);
+}
+
+.v-chat .vonce span {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: 11.5px;
+  font-weight: 650;
+  color: #fff;
+  background: rgba(15, 15, 16, .35);
+  padding: 0 16px;
+  text-align: center;
+}
+
+.v-chat .voMine {
+  position: relative;             /* sparkle + progress-ring anchor */
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  background: var(--out);
+  color: #fff;
+  border-radius: 16px;
+  border-bottom-right-radius: 5px;
+  padding: 10px 14px;
+  font-size: 12.5px;
+  font-weight: 650;
+  box-shadow: 0 2px 8px rgba(59, 83, 196, .24);
+}
+
+.v-chat .voMine .cap { font-size: 10px; font-weight: 600; color: rgba(255, 255, 255, .76); }
+
+/* Inline video clip — same footprint as a photo bubble. */
+.v-chat .vid {
+  position: relative;
+  max-width: 240px;
+  border-radius: 14px;
+  overflow: hidden;
+  background: #000;
+  line-height: 0;
+}
+
+.v-chat .vid video {
+  display: block;
+  width: 100%;
+  max-width: 240px;
+}
+
+.v-chat .voice {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  border-radius: 16px;
+  padding: 9px 13px;
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.v-chat .rowIn .voice { background: var(--well); border: 1px solid var(--line); border-bottom-left-radius: 5px; }
+.v-chat .rowOut .voice { background: var(--out); color: #fff; border-bottom-right-radius: 5px; box-shadow: 0 2px 8px rgba(59, 83, 196, .24); }
+
+.v-chat .vplay {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: none;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  flex: none;
+}
+
+.v-chat .rowIn .vplay { background: var(--ink); color: #fff; }
+.v-chat .rowOut .vplay { background: rgba(255, 255, 255, .24); color: #fff; }
+.v-chat .vplay svg { width: 13px; height: 13px; }
+
+/* Live waveform: played bars turn blue, playhead bars breathe with the mix. */
+.v-chat .wave {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 28px;
+  flex: none;
+}
+
+.v-chat .wave i {
+  display: block;
+  width: 3px;
+  min-height: 4px;
+  border-radius: 2px;
+  background: var(--line);
+  transform-origin: center;
+  transition: background .1s linear;
+}
+
+.v-chat .wave i.played { background: var(--blue); }
+
+.v-chat .vdur { flex: none; }
+
+.v-chat .file {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-radius: 16px;
+  padding: 10px 13px;
+  max-width: 76%;
+  text-decoration: none;
+  color: inherit;
+  cursor: pointer;
+}
+
+.v-chat .rowIn .file { background: var(--well); border: 1px solid var(--line); border-bottom-left-radius: 5px; }
+.v-chat .rowOut .file { background: var(--out); color: #fff; border-bottom-right-radius: 5px; box-shadow: 0 2px 8px rgba(59, 83, 196, .24); }
+.v-chat .file svg { width: 20px; height: 20px; flex: none; }
+.v-chat .file .fmeta { min-width: 0; }
+
+.v-chat .file b {
+  display: block;
+  font-size: 12.5px;
+  font-weight: 650;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 170px;
+}
+
+.v-chat .file span { font-size: 10.5px; opacity: .72; }
+
+.v-chat .loc {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  border-radius: 16px;
+  padding: 10px 14px;
+  font-size: 12.5px;
+}
+
+.v-chat .rowIn .loc { background: var(--well); border: 1px solid var(--line); border-bottom-left-radius: 5px; }
+.v-chat .rowOut .loc { background: var(--out); color: #fff; border-bottom-right-radius: 5px; box-shadow: 0 2px 8px rgba(59, 83, 196, .24); }
+.v-chat .loc b { font-weight: 650; }
+.v-chat .loc a { color: var(--blue); font-weight: 650; font-size: 12px; text-decoration: none; }
+.v-chat .rowOut .loc a { color: #fff; text-decoration: underline; }
+
+/* -------------------------------------------------------------- reactions */
+
+.v-chat .reacts { display: none; gap: 4px; margin-top: 4px; }
+.v-chat .msg.mine .reacts { justify-content: flex-end; }
+
+.v-chat .reacts span {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 1px 7px;
+  font-size: 11px;
+  box-shadow: 0 1px 2px rgba(15, 15, 16, .05);
+}
+
+/* ------------------------------------------------------- new-messages chip */
+
+.v-chat .newchip {
+  position: absolute;
+  bottom: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--blue);
+  color: #fff;
+  border: none;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 650;
+  padding: 7px 15px;
+  cursor: pointer;
+  box-shadow: var(--shadow);
+  z-index: 5;
+  font-family: var(--font);
+}
+
+/* --------------------------------------------------------------- composer */
+
+.v-chat .composer { flex: none; border-top: 1px solid var(--hair); background: var(--surface); }
+
+.v-chat .replybar { display: flex; align-items: center; gap: 8px; padding: 8px 14px 0; font-size: 12px; }
+
+.v-chat .replybar .rq {
+  flex: 1;
+  min-width: 0;
+  border-left: 2.5px solid var(--blue);
+  padding: 3px 9px;
+  background: var(--well);
+  border-radius: 8px;
+}
+
+.v-chat .replybar b { display: block; font-size: 10.5px; color: var(--blue); }
+.v-chat .replybar .rq span { display: block; color: var(--ink2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.v-chat .replybar .rx {
+  width: 26px;
+  height: 26px;
+  border: none;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  flex: none;
+}
+
+.v-chat .replybar .rx:hover { background: var(--well); }
+.v-chat .replybar .rx svg { width: 14px; height: 14px; }
+
+/* Live conversion panel — the specialty of the app, so it reads like one:
+   the converted script is the hero line, the peer-language preview beneath. */
+.v-chat .tlprev {
+  margin: 8px 14px 0;
+  padding: 9px 13px;
+  background: var(--well);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  overflow-wrap: anywhere;
+  animation: vchat-rise .18s ease;
+}
+
+.v-chat .tlTag2 {
+  font-size: 10.5px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--blue);
+  font-weight: 700;
+}
+
+.v-chat .langchip {
+  border: 1px solid var(--line);
+  background: var(--well);
+  color: var(--ink2);
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 11.5px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.v-chat .micB.busy { opacity: .55; pointer-events: none; }
+
+.v-chat .tlMain {
+  font-size: 16.5px;
+  line-height: 1.55;   /* scripts with stacked marks need the air */
+  color: var(--ink);
+  font-weight: 550;
+}
+
+.v-chat .tlSub {
+  font-size: 12px;
+  color: var(--muted);
+  font-style: italic;
+}
+
+.v-chat .bar { padding: 9px 12px calc(14px + env(safe-area-inset-bottom)); display: flex; align-items: center; gap: 9px; }
+
+.v-chat .plusB {
+  width: 30px;
+  height: 30px;
+  border: none;
+  background: none;
+  color: var(--ink);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  flex: none;
+  border-radius: 9px;
+}
+
+.v-chat .plusB:hover { background: var(--well); }
+.v-chat .plusB svg { width: 20px; height: 20px; }
+
+.v-chat .field {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  background: var(--well);
+  border-radius: 999px;
+  padding: 8px 12px;
+  min-width: 0;
+}
+
+.v-chat .field input {
+  flex: 1;
+  border: none;
+  background: none;
+  outline: none;
+  font: inherit;
+  font-size: 14px;
+  color: var(--ink);
+  min-width: 0;
+}
+
+.v-chat .field input::placeholder { color: var(--muted); }
+
+.v-chat .ttlchip {
+  flex: none;
+  border: none;
+  background: rgba(0, 122, 255, .12);
+  color: var(--blue);
+  font-size: 10.5px;
+  font-weight: 700;
+  border-radius: 999px;
+  padding: 2px 9px;
+  cursor: pointer;
+  font-family: var(--font);
+}
+
+.v-chat .dictB {
+  width: 22px;
+  height: 22px;
+  border: none;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  flex: none;
+  padding: 0;
+  border-radius: 50%;
+}
+
+.v-chat .dictB svg { width: 17px; height: 17px; }
+.v-chat .dictB.on { color: var(--blue); animation: vchat-pulse 1.1s ease infinite; }
+
+.v-chat .micB {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: none;
+  background: var(--teal-deep);   /* deep-teal send, per the reference */
+  color: #fff;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  flex: none;
+  box-shadow: 0 3px 11px rgba(23, 97, 107, .34);
+  transition: transform .16s ease;
+}
+
+.v-chat .micB:hover { transform: scale(1.06); }
+.v-chat .micB svg { width: 18px; height: 18px; }
+
+/* -------------------------------------------------------------- recording */
+
+.v-chat .recbar {
+  flex: 1;
+  display: none;
+  align-items: center;
+  gap: 10px;
+  background: var(--well);
+  border-radius: 999px;
+  padding: 6px 8px 6px 15px;
+  min-width: 0;
+}
+
+/* The record dot BLINKS red↔ink while recording (solid red under
+   prefers-reduced-motion). */
+.v-chat .recdot { width: 10px; height: 10px; border-radius: 50%; background: var(--red); animation: vchat-recblink .9s steps(1) infinite; flex: none; }
+
+@keyframes vchat-recblink {
+  0%, 100% { background: var(--red); }
+  50% { background: var(--ink); }
+}
+
+@keyframes vchat-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .25; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .v-chat .recdot { animation: none; background: var(--red); }
+}
+
+/* Live input waveform: ~20 teal bars on the well background, heights driven
+   by the AnalyserNode loop in chat.js. */
+.v-chat .recwave {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2.5px;
+  height: 26px;
+  overflow: hidden;
+}
+
+.v-chat .recwave i {
+  display: block;
+  width: 3px;
+  height: 3px;
+  min-height: 3px;
+  border-radius: 2px;
+  background: var(--blue);
+  transition: height .09s linear;
+}
+
+.v-chat .rectime { font-size: 13px; font-variant-numeric: tabular-nums; color: var(--ink2); flex: none; }
+
+/* While recording, the mic button becomes the stop button. */
+.v-chat .micB.rec { background: var(--ink); box-shadow: 0 3px 11px rgba(15, 15, 16, .3); }
+
+/* ---------------------------------------------- voice confirmation bar */
+
+.v-chat .confbar {
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px calc(14px + env(safe-area-inset-bottom));
+}
+
+.v-chat .vv-play {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  background: var(--well);
+  color: var(--ink);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  flex: none;
+}
+
+.v-chat .vv-play svg { width: 15px; height: 15px; }
+
+.v-chat .vv-time {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink2);
+}
+
+.v-chat .vv-cancel {
+  border: none;
+  background: none;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 650;
+  cursor: pointer;
+  padding: 8px 10px;
+  border-radius: 999px;
+  font-family: var(--font);
+  flex: none;
+}
+
+.v-chat .vv-send {
+  border: none;
+  background: var(--ink);          /* ink pill = commit, per the tokens */
+  color: #fff;
+  font-size: 13.5px;
+  font-weight: 650;
+  border-radius: 999px;
+  padding: 10px 22px;
+  cursor: pointer;
+  font-family: var(--font);
+  flex: none;
+}
+
+/* Compact 'Translate ▾' pill next to Send — 'Original' = untouched clip. */
+.v-chat .vv-lang {
+  appearance: none;
+  -webkit-appearance: none;
+  border: 1px solid var(--line);
+  background: var(--well) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%233d3d42' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E") no-repeat right 8px center / 11px;
+  color: var(--ink);
+  font-size: 12.5px;
+  font-weight: 650;
+  font-family: var(--font);
+  border-radius: 999px;
+  padding: 8px 24px 8px 12px;
+  max-width: 108px;
+  cursor: pointer;
+  flex: none;
+}
+
+/* Translating… — the pipeline is running; the whole bar freezes. */
+.v-chat .confbar.busy .vv-send {
+  opacity: .7;
+  cursor: default;
+  animation: vchat-pulse 1.2s ease infinite;
+}
+
+.v-chat .confbar.busy .vv-cancel,
+.v-chat .confbar.busy .vv-lang { opacity: .45; cursor: default; }
+
+/* ---------------------------------------------------- long-press msg sheet */
+
+.v-chat .ms-back {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 15, 16, .32);
+  z-index: 95;
+  display: flex;
+  align-items: flex-end;
+  animation: vchat-fade .16s ease;
+}
+
+@keyframes vchat-fade { from { opacity: 0; } }
+
+.v-chat .ms-sheet {
+  width: 100%;
+  max-width: 560px;
+  margin: 0 auto;
+  background: var(--surface);
+  border-radius: 18px 18px 0 0;
+  padding: 12px 10px calc(14px + env(safe-area-inset-bottom));
+  animation: vchat-up .22s cubic-bezier(.4, 0, .2, 1);
+  max-height: 82vh;
+  overflow-y: auto;
+}
+
+@keyframes vchat-up { from { transform: translateY(40px); } }
+
+.v-chat .ms-emojis {
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  padding: 2px 6px 10px;
+  border-bottom: 1px solid var(--hair);
+  margin-bottom: 6px;
+}
+
+.v-chat .ms-emojis button {
+  border: none;
+  background: none;
+  font-size: 26px;
+  cursor: pointer;
+  border-radius: 12px;
+  padding: 4px 8px;
+  transition: transform .14s ease;
+  line-height: 1.2;
+}
+
+.v-chat .ms-emojis button:hover { transform: scale(1.18); }
+
+.v-chat .ms-emojis button.plus {
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--muted);
+  padding: 0;
+  display: grid;
+  place-items: center;
+  line-height: 1;
+}
+
+/* Expanded reaction grid behind the “+”. */
+.v-chat .ms-grid {
+  display: none;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 2px;
+  padding: 4px 6px 10px;
+  border-bottom: 1px solid var(--hair);
+  margin-bottom: 6px;
+}
+
+.v-chat .ms-grid.open { display: grid; }
+
+.v-chat .ms-grid button {
+  border: none;
+  background: none;
+  font-size: 24px;
+  cursor: pointer;
+  padding: 6px 0;
+  border-radius: 10px;
+  line-height: 1.2;
+}
+
+.v-chat .ms-grid button:hover { background: var(--well); }
+
+.v-chat .ms-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ink);
+  padding: 13px 14px;
+  border-radius: 12px;
+  text-align: left;
+  transition: background .14s ease;
+  font-family: var(--font);
+}
+
+.v-chat .ms-item:hover { background: var(--well); }
+.v-chat .ms-item.danger { color: var(--red); }
+.v-chat .ms-item.cancel { justify-content: center; color: var(--muted); margin-top: 4px; }
+
+.v-chat .ms-item .mi {
+  width: 18px;
+  height: 18px;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  flex: none;
+}
+
+.v-chat .ms-item.danger .mi { color: var(--red); }
+.v-chat .ms-item .mi svg { width: 17px; height: 17px; }
+
+/* Forward + info sheets. */
+.v-chat .fw-title {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--muted);
+  padding: 4px 12px 10px;
+}
+
+.v-chat .fw-list { max-height: 46vh; overflow-y: auto; }
+
+.v-chat .fw-row {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  width: 100%;
+  border: none;
+  background: none;
+  cursor: pointer;
+  padding: 9px 12px;
+  border-radius: 12px;
+  font-size: 14.5px;
+  font-weight: 600;
+  color: var(--ink);
+  text-align: left;
+  font-family: var(--font);
+}
+
+.v-chat .fw-row:hover { background: var(--well); }
+
+.v-chat .fw-row span:last-child {
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.v-chat .info-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 11px 14px;
+  font-size: 14px;
+  color: var(--ink2);
+  border-bottom: 1px solid var(--hair);
+}
+
+.v-chat .info-row b { color: var(--ink); font-weight: 650; }
+
+/* Static quality line in the video choice sheet — a statement, not a toggle. */
+.v-chat .vq-row {
+  padding: 4px 14px 12px;
+  font-size: 12.5px;
+  color: var(--muted);
+  border-bottom: 1px solid var(--hair);
+  margin-bottom: 6px;
+}
+
+.v-chat .vq-row b { color: var(--ink2); font-weight: 650; }
+
+/* Tiny star beside the timestamp on starred messages (blue = state). */
+.v-chat .starmark { color: var(--blue); font-size: 9px; margin-right: 3px; }
+
+/* ------------------------------------------------------- fullscreen image */
+
+.v-chat .imgview {
+  position: fixed;
+  inset: 0;
+  background: rgba(10, 10, 12, .94);
+  z-index: 96;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  animation: vchat-fade .16s ease;
+}
+
+.v-chat .imgview img { max-width: 94vw; max-height: 92vh; border-radius: 8px; }
+.v-chat .imgview video { max-width: 94vw; max-height: 92vh; border-radius: 8px; }
+
+/* ---------------------------------------------------- contact-info sheet */
+/* WhatsApp-grammar contact card behind the header avatar. Rides the .ms-back
+   backdrop machinery; everything visual lives under .cp-. */
+
+.v-chat .cp-sheet { padding: 22px 14px calc(18px + env(safe-area-inset-bottom)); }
+
+.v-chat .cp-head {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  text-align: center;
+  padding: 2px 0 14px;
+}
+
+.v-chat .cp-head .av { margin-bottom: 7px; }
+
+.v-chat .cp-name { font-size: 19px; font-weight: 700; letter-spacing: -.022em; }
+
+.v-chat .cp-uname { font-size: 13px; font-weight: 650; color: var(--blue); }
+
+.v-chat .cp-status { font-size: 12px; color: var(--muted); }
+
+.v-chat .cp-acts {
+  display: flex;
+  justify-content: center;
+  gap: 28px;
+  padding: 4px 0 16px;
+  border-bottom: 1px solid var(--hair);
+}
+
+.v-chat .cp-act {
+  border: none;
+  background: none;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  padding: 0;
+  font-family: var(--font);
+}
+
+.v-chat .cp-actc {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: var(--well);
+  border: 1px solid var(--line);
+  color: var(--blue);
+  display: grid;
+  place-items: center;
+  transition: transform .14s ease;
+}
+
+.v-chat .cp-act:hover .cp-actc { transform: scale(1.06); }
+.v-chat .cp-actc svg { width: 21px; height: 21px; }
+
+.v-chat .cp-actl { font-size: 11px; font-weight: 650; color: var(--ink2); }
+
+/* Block = destructive: red on the red well, per the locked colour roles. */
+.v-chat .cp-act.danger .cp-actc { background: var(--redwell); border-color: var(--redwell); color: var(--red); }
+.v-chat .cp-act.danger .cp-actl { color: var(--red); }
+
+.v-chat .cp-list { padding: 6px 0 2px; }
+
+.v-chat .cp-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  border: none;
+  background: none;
+  cursor: pointer;
+  text-align: left;
+  padding: 12px 10px;
+  border-radius: 12px;
+  color: var(--ink);
+  font-family: var(--font);
+  transition: background .14s ease;
+}
+
+.v-chat .cp-row:hover { background: var(--well); }
+
+.v-chat .cp-ri {
+  width: 20px;
+  height: 20px;
+  display: grid;
+  place-items: center;
+  color: var(--ink2);
+  flex: none;
+}
+
+.v-chat .cp-ri svg { width: 18px; height: 18px; }
+
+.v-chat .cp-rl { flex: 1; min-width: 0; font-size: 14px; font-weight: 600; letter-spacing: -.012em; }
+
+.v-chat .cp-rv { flex: none; font-size: 12.5px; color: var(--muted); }
+
+.v-chat .cp-chev { width: 14px; height: 14px; color: var(--muted); flex: none; }
+.v-chat .cp-chev svg { width: 14px; height: 14px; }
+
+.v-chat .cp-row.danger { color: var(--red); }
+.v-chat .cp-row.danger .cp-ri { color: var(--red); }
+
+/* Already-saved state of the add-to-contacts row: a check, no action. */
+.v-chat .cp-row.cp-static { cursor: default; }
+.v-chat .cp-row.cp-static:hover { background: none; }
+.v-chat .cp-ri.cp-inck { color: var(--blue); }
+
+/* Inline horizontal media gallery under the Media shared row. */
+.v-chat .cp-gallery {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 4px 10px 10px;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.v-chat .cp-gallery::-webkit-scrollbar { display: none; }
+
+.v-chat .cp-thumb {
+  position: relative;
+  width: 74px;
+  height: 74px;
+  flex: none;
+  border: none;
+  padding: 0;
+  border-radius: 12px;
+  overflow: hidden;
+  cursor: pointer;
+  background: var(--well);
+}
+
+.v-chat .cp-thumb img,
+.v-chat .cp-thumb video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  pointer-events: none;
+}
+
+.v-chat .cp-vplay {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  background: rgba(15, 15, 16, .28);
+  pointer-events: none;
+}
+
+.v-chat .cp-vplay svg { width: 20px; height: 20px; }
+
+.v-chat .cp-empty { font-size: 12.5px; color: var(--muted); padding: 2px 10px 10px; }
+
+/* ------------------------------------------------ photo sheet + burst wheel */
+
+.v-chat .psheet-back {
+  position: fixed; inset: 0; background: rgba(15, 15, 16, .5);
+  z-index: 60; display: flex; align-items: flex-end;
+}
+
+.v-chat .psheet {
+  position: relative;
+  width: 100%; max-width: 560px; margin: 0 auto;
+  background: var(--surface); border-radius: 20px 20px 0 0;
+  padding: 16px 18px calc(18px + env(safe-area-inset-bottom));
+  display: flex; flex-direction: column; gap: 11px;
+  animation: vchat-up .24s cubic-bezier(.4, 0, .2, 1);
+}
+
+@keyframes vchat-up { from { transform: translateY(48px); } }
+
+.v-chat .psx {
+  position: absolute; top: 12px; right: 12px; z-index: 3;
+  width: 32px; height: 32px; border: none; border-radius: 50%;
+  background: var(--well); color: var(--ink); cursor: pointer;
+  display: grid; place-items: center;
+}
+
+.v-chat .psx svg { width: 15px; height: 15px; }
+
+.v-chat .pprev {
+  max-height: 24vh; width: auto; max-width: 100%;
+  align-self: center; border-radius: 14px; object-fit: contain;
+}
+
+.v-chat .plabel {
+  font-size: 11px; letter-spacing: .13em; text-transform: uppercase;
+  color: var(--muted); font-weight: 650;
+}
+
+/* Telegram-style vertical timer picker: rows snap into the centre pill. */
+.v-chat .vpick { position: relative; height: 220px; }
+
+.v-chat .vpick::before,
+.v-chat .vpick::after {
+  content: ""; position: absolute; left: 0; right: 0; height: 56px;
+  z-index: 2; pointer-events: none;
+}
+
+.v-chat .vpick::before { top: 0; background: linear-gradient(var(--surface), transparent); }
+.v-chat .vpick::after { bottom: 0; background: linear-gradient(transparent, var(--surface)); }
+
+.v-chat .vpill {
+  position: absolute; left: 12%; right: 12%; top: 50%; height: 44px;
+  transform: translateY(-50%);
+  background: var(--well); border: 1px solid var(--line); border-radius: 14px;
+  pointer-events: none;
+}
+
+.v-chat .vcol {
+  position: absolute; inset: 0; z-index: 1;
+  overflow-y: auto; scroll-snap-type: y mandatory;
+  padding: 88px 0;                       /* (220 - 44) / 2 centres the ends */
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+.v-chat .vcol::-webkit-scrollbar { display: none; }
+
+.v-chat .vrow {
+  height: 44px; display: flex; align-items: center; justify-content: center;
+  scroll-snap-align: center; scroll-snap-stop: always;
+  font-size: 15px; color: var(--ink2); cursor: pointer;
+  font-variant-numeric: tabular-nums; transition: opacity .1s linear;
+}
+
+.v-chat .vrow.on { font-size: 17px; font-weight: 700; color: var(--ink); }
+
+.v-chat .phint { font-size: 12px; color: var(--muted); text-align: center; }
+
+.v-chat .pdone {
+  width: 100%;
+  border: none; background: var(--ink); color: #fff;   /* ink = commit */
+  border-radius: 999px; padding: 14px; font-size: 15px; font-weight: 700;
+  cursor: pointer; font-family: var(--font);
+}
+
+/* Plain-photo preview: just Cancel/Send under the image, no wheel. */
+.v-chat .pacts { display: flex; align-items: center; gap: 10px; }
+
+.v-chat .pacts .pdone { flex: 1; width: auto; }
+
+.v-chat .pcancel {
+  flex: none;
+  border: none; background: none; color: var(--muted);
+  font-size: 14px; font-weight: 650; cursor: pointer;
+  padding: 14px 18px; border-radius: 999px; font-family: var(--font);
+}
+
+.v-chat .pcancel:hover { background: var(--well); }
+
+/* --------------------------------------------------- masked burst bubbles */
+
+.v-chat .vonce { position: relative; }
+
+.v-chat .vmask {
+  display: block; width: 190px; height: 120px; border-radius: 12px;
+  background: linear-gradient(120deg, #d9dbe3, #c6c9d4, #d9dbe3);
+  position: relative; overflow: hidden;
+}
+
+.v-chat .vshimmer {
+  position: absolute; inset: 0;
+  background: linear-gradient(105deg, transparent 30%, rgba(255, 255, 255, .65) 50%, transparent 70%);
+  animation: vchat-shimmer 1.8s infinite;
+}
+
+@keyframes vchat-shimmer { from { transform: translateX(-100%); } to { transform: translateX(100%); } }
+
+.v-chat .vfire {
+  position: absolute; inset: 0; display: grid; place-items: center; font-size: 30px;
+}
+
+/* Telegram-reference mask: blurred media + dense sparkling grain. */
+.v-chat .vmask { position: relative; }
+
+.v-chat .vblur {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  object-fit: cover; filter: blur(22px) saturate(.85); transform: scale(1.25);
+}
+
+.v-chat .vgrain {
+  position: absolute; inset: 0; pointer-events: none;
+  background-image:
+    radial-gradient(rgba(255,255,255,.9) .7px, transparent 1px),
+    radial-gradient(rgba(255,255,255,.65) .6px, transparent 1px),
+    radial-gradient(rgba(255,255,255,.45) .5px, transparent 1px);
+  background-size: 14px 14px, 23px 23px, 9px 9px;
+  background-position: 0 0, 7px 11px, 3px 5px;
+  animation: vchat-grain 2.6s steps(6) infinite;
+  opacity: .8;
+}
+
+@keyframes vchat-grain {
+  to { background-position: 14px 14px, 30px 34px, 12px 14px; }
+}
+
+.v-chat .bchip {
+  position: absolute; top: 7px; left: 7px;
+  background: rgba(15, 15, 16, .55); color: #fff;
+  font-size: 10.5px; font-weight: 700;
+  border-radius: 999px; padding: 3px 9px;
+  backdrop-filter: blur(4px);
+}
+
+/* Burst sparkle: ~8 tiny ✦ particles twinkling over the masked card, on both
+   the receiver's mask and the sender's voMine card. <i> elements on purpose —
+   the `.vonce span` blanket rule must not restyle them. GPU-cheap: only
+   opacity + transform animate. */
+.v-chat .sprk {
+  position: absolute;
+  z-index: 1;
+  font-style: normal;
+  font-size: 9px;
+  line-height: 1;
+  color: #fff;
+  text-shadow: 0 0 6px rgba(255, 214, 90, .9);
+  opacity: 0;
+  pointer-events: none;
+  will-change: transform, opacity;
+  animation: vchat-twinkle 2.2s ease-in-out infinite;
+}
+
+.v-chat .sprk:nth-of-type(1) { left: 12%; top: 18%; animation-delay: 0s; }
+.v-chat .sprk:nth-of-type(2) { left: 78%; top: 12%; animation-delay: .35s; font-size: 7px; }
+.v-chat .sprk:nth-of-type(3) { left: 30%; top: 66%; animation-delay: .7s; }
+.v-chat .sprk:nth-of-type(4) { left: 88%; top: 58%; animation-delay: 1.05s; font-size: 11px; }
+.v-chat .sprk:nth-of-type(5) { left: 55%; top: 30%; animation-delay: 1.4s; font-size: 6px; }
+.v-chat .sprk:nth-of-type(6) { left: 8%; top: 78%; animation-delay: 1.75s; }
+.v-chat .sprk:nth-of-type(7) { left: 66%; top: 82%; animation-delay: .5s; font-size: 7px; }
+.v-chat .sprk:nth-of-type(8) { left: 42%; top: 8%; animation-delay: 1.2s; }
+
+@keyframes vchat-twinkle {
+  0%, 100% { opacity: 0; transform: scale(.4) rotate(0deg); }
+  50% { opacity: 1; transform: scale(1) rotate(90deg); }
+}
+
+/* Timer chip on the receiver's mask ('🔥 5s' / '🔥 2m'). */
+.v-chat .bchip {
+  position: absolute;
+  top: 7px;
+  left: 7px;
+  z-index: 2;
+  background: rgba(15, 15, 16, .55);
+  color: #fff;
+  font-size: 9.5px;
+  font-weight: 700;
+  border-radius: 999px;
+  padding: 2px 7px;
+  letter-spacing: .02em;
+  pointer-events: none;
+}
+
+/* …and its inline twin on the sender's voMine card. */
+.v-chat .voMine .bchip2 {
+  align-self: flex-start;
+  background: rgba(255, 255, 255, .22);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  border-radius: 999px;
+  padding: 2px 8px;
+  margin-top: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .v-chat .sprk { animation: none; opacity: .5; }
+}
+
+/* --------------------------------------------------------- burst viewer */
+
+.v-chat .burstview img { transition: transform .4s ease, opacity .4s ease, filter .4s ease; }
+.v-chat .burstview img.bursting { transform: scale(1.28); opacity: 0; filter: blur(10px) brightness(1.6); }
+
+.v-chat .bringwrap {
+  position: absolute; top: calc(16px + env(safe-area-inset-top)); right: 18px;
+  width: 60px; height: 60px;
+}
+
+.v-chat .bring { width: 60px; height: 60px; transform: rotate(-90deg); }
+.v-chat .bring-bg { fill: rgba(0, 0, 0, .35); stroke: rgba(255, 255, 255, .25); stroke-width: 4; }
+.v-chat .bring-fg { fill: none; stroke: #ffb703; stroke-width: 4; stroke-linecap: round; }
+
+.v-chat .bcount {
+  position: absolute; inset: 0; display: grid; place-items: center;
+  color: #fff; font-weight: 800; font-size: 17px;
+}
+
+/* Sparkles orbiting the countdown ring: the container rotates with the ring,
+   each ✦ holds a fixed spot on the circle and twinkles on its own stagger.
+   Placement transforms are static — only the container animates transform,
+   the particles animate opacity alone (no keyframe/placement conflict). */
+.v-chat .borbit {
+  position: absolute;
+  inset: -9px;
+  pointer-events: none;
+  animation: vchat-orbit 6s linear infinite;
+}
+
+.v-chat .borbit i {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  font-style: normal;
+  font-size: 9px;
+  line-height: 1;
+  color: #ffd166;
+  text-shadow: 0 0 6px rgba(255, 183, 3, .9);
+  animation: vchat-blink 1.6s ease-in-out infinite;
+}
+
+.v-chat .borbit i:nth-of-type(1) { transform: translate(-50%, -50%) rotate(0deg) translateY(-39px); animation-delay: 0s; }
+.v-chat .borbit i:nth-of-type(2) { transform: translate(-50%, -50%) rotate(60deg) translateY(-39px); animation-delay: .25s; font-size: 7px; }
+.v-chat .borbit i:nth-of-type(3) { transform: translate(-50%, -50%) rotate(120deg) translateY(-39px); animation-delay: .5s; }
+.v-chat .borbit i:nth-of-type(4) { transform: translate(-50%, -50%) rotate(180deg) translateY(-39px); animation-delay: .75s; font-size: 11px; }
+.v-chat .borbit i:nth-of-type(5) { transform: translate(-50%, -50%) rotate(240deg) translateY(-39px); animation-delay: 1s; font-size: 7px; }
+.v-chat .borbit i:nth-of-type(6) { transform: translate(-50%, -50%) rotate(300deg) translateY(-39px); animation-delay: 1.25s; }
+
+@keyframes vchat-orbit { to { transform: rotate(360deg); } }
+@keyframes vchat-blink { 0%, 100% { opacity: .15; } 50% { opacity: 1; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .v-chat .borbit, .v-chat .borbit i { animation: none; }
+  .v-chat .borbit i { opacity: .6; }
+}
+
+/* Particles mount on <body> so they outlive the overlay — global by design. */
+.burst-p {
+  position: fixed; width: 9px; height: 9px; border-radius: 50%;
+  pointer-events: none; z-index: 999;
+  animation: burst-fly .8s cubic-bezier(.16, .84, .44, 1) forwards;
+}
+
+@keyframes burst-fly {
+  to {
+    transform: translate(var(--dx), var(--dy)) scale(.2);
+    opacity: 0;
+  }
+}
+
+/* -------------------------------------------------------- transfer state */
+
+.v-chat .txprog {
+  position: absolute; right: 7px; bottom: 7px;
+  min-width: 34px; height: 22px; border-radius: 999px;
+  background: rgba(15, 15, 16, .72); color: #fff;
+  font-size: 10.5px; font-weight: 700;
+  display: grid; place-items: center; padding: 0 7px;
+}
+
+.v-chat .txprog.failed { background: var(--red); }
+
+.v-chat .rxph {
+  align-self: flex-start; display: flex; align-items: center; gap: 9px;
+  background: var(--well); border: 1px solid var(--line);
+  border-radius: 14px; padding: 10px 14px; margin: 2px 0;
+  font-size: 12.5px; color: var(--ink2);
+}
+
+.v-chat .rxspin {
+  width: 15px; height: 15px; border-radius: 50%;
+  border: 2px solid var(--line); border-top-color: var(--blue);
+  animation: vchat-spin .8s linear infinite;
+}
+
+@keyframes vchat-spin { to { transform: rotate(360deg); } }
+
+.v-chat .detached {
+  display: flex; align-items: center; gap: 9px;
+  background: var(--well); border: 1px dashed var(--line);
+  border-radius: 14px; padding: 11px 14px; cursor: pointer;
+  font-size: 12.5px; color: var(--ink2); font-weight: 600;
+}
+
+.v-chat .detached .dlico svg { width: 17px; height: 17px; }
+.v-chat .detached.loading { opacity: .6; }
+
+/* ------------------------------------------------------------- reactions */
+
+.v-chat .heartpop {
+  position: absolute; left: 50%; top: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 34px; pointer-events: none;
+  animation: vchat-heart .65s ease forwards;
+}
+
+@keyframes vchat-heart {
+  0% { transform: translate(-50%, -50%) scale(.4); opacity: 0; }
+  35% { transform: translate(-50%, -50%) scale(1.25); opacity: 1; }
+  100% { transform: translate(-50%, -90%) scale(1); opacity: 0; }
+}
+
+/* ------------------------------------------------------ premium attach sheet */
+
+.v-chat .at-back {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 15, 16, .32);
+  z-index: 95;
+  display: flex;
+  align-items: flex-end;
+  animation: vchat-fade .16s ease;
+}
+
+.v-chat .at-sheet {
+  width: 100%;
+  max-width: 560px;
+  margin: 0 auto;
+  background: var(--surface);
+  border-radius: 22px 22px 0 0;
+  padding: 24px 16px calc(26px + env(safe-area-inset-bottom));
+  animation: vchat-up .22s cubic-bezier(.4, 0, .2, 1);
+}
+
+.v-chat .at-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 18px 6px;
+}
+
+.v-chat .at-tile {
+  border: none;
+  background: none;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+  padding: 0;
+  font-family: var(--font);
+}
+
+.v-chat .at-circ {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 2px 10px rgba(15, 15, 16, .1), 0 0 0 1px rgba(15, 15, 16, .04);
+  display: grid;
+  place-items: center;
+  transition: transform .14s ease;
+}
+
+.v-chat .at-tile:hover .at-circ { transform: scale(1.07); }
+.v-chat .at-circ svg { width: 24px; height: 24px; }
+
+.v-chat .at-circ.c-photos { color: #3478f6; }   /* blue gallery */
+.v-chat .at-circ.c-camera { color: var(--ink); }
+.v-chat .at-circ.c-private { color: #f97316; }  /* orange fire */
+.v-chat .at-circ.c-video { color: #8b5cf6; }    /* purple play */
+.v-chat .at-circ.c-doc { color: #3478f6; }      /* blue doc */
+.v-chat .at-circ.c-loc { color: #22a06b; }      /* green pin */
+.v-chat .at-circ.c-timer { color: var(--blue); }/* teal clock */
+
+.v-chat .at-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ink2);
+  white-space: nowrap;
+}
+
+/* ------------------------------------------------------------ location sheet */
+
+.v-chat .loc-sheet { display: flex; flex-direction: column; gap: 6px; }
+
+.v-chat .loc-sec {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 12px 12px 14px;
+  border-bottom: 1px solid var(--hair);
+}
+
+.v-chat .loc-sec:last-of-type { border-bottom: none; }
+.v-chat .loc-sec b { font-size: 14.5px; font-weight: 700; letter-spacing: -.01em; }
+.v-chat .loc-sub { font-size: 12px; color: var(--muted); }
+
+.v-chat .loc-seg {
+  display: flex;
+  gap: 6px;
+  background: var(--well);
+  border-radius: 999px;
+  padding: 3px;
+}
+
+.v-chat .loc-segb {
+  flex: 1;
+  border: none;
+  background: none;
+  color: var(--ink2);
+  font-size: 12.5px;
+  font-weight: 650;
+  border-radius: 999px;
+  padding: 7px 0;
+  cursor: pointer;
+  font-family: var(--font);
+}
+
+.v-chat .loc-segb.on {
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 1px 3px rgba(15, 15, 16, .12);
+}
+
+.v-chat .loc-commit {
+  border: none;
+  background: var(--ink);          /* ink = commit */
+  color: #fff;
+  font-size: 13.5px;
+  font-weight: 700;
+  border-radius: 999px;
+  padding: 11px 18px;
+  cursor: pointer;
+  font-family: var(--font);
+  align-self: flex-start;
+}
+
+/* ------------------------------------------------------------ live location */
+
+.v-chat .livedot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #22a06b;
+  margin-right: 6px;
+  animation: vchat-pulse 1.2s ease infinite;
+}
+
+.v-chat .locuntil { font-size: 10.5px; opacity: .78; }
+
+.v-chat .locstop {
+  border: none;
+  background: none;
+  color: var(--red);               /* red text = destructive */
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 4px 0 0;
+  text-align: left;
+  font-family: var(--font);
+}
+
+.v-chat .locEnded b { color: var(--muted); font-weight: 600; font-style: italic; }
+.v-chat .rowOut .locEnded b { color: rgba(255, 255, 255, .8); }
+
+/* ------------------------------------------------------------ timer messages */
+
+/* Centred control line: '⏱ Timer messages on · 1 min'. */
+.v-chat .sysline {
+  font-weight: 600;
+  color: var(--ink2);
+  background: var(--well);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 4px 13px;
+}
+
+/* Live countdown chip inside a disappearing bubble (mm:ss). */
+.v-chat .ttlcount {
+  display: inline-flex;
+  align-items: center;
+  font-size: 9.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  border-radius: 999px;
+  padding: 1px 7px;
+  background: rgba(15, 15, 16, .08);
+  color: var(--ink2);
+  white-space: nowrap;
+  width: max-content;
+}
+
+.v-chat .bubOut .ttlcount {
+  background: rgba(12, 52, 59, .16);
+  color: inherit;
+  margin-left: 7px;
+  vertical-align: 1px;
+}
+
+.v-chat .bubIn .ttlcount { margin: 0 13px 8px; }
+
+/* ------------------------------------------------------------ call overlay */
+
+.v-chat .callov {
+  position: fixed; inset: 0; z-index: 70;
+  background: rgba(20, 20, 22, .96);
+  display: flex; flex-direction: column; align-items: center;
+  justify-content: space-between;
+  padding: calc(60px + env(safe-area-inset-top)) 24px calc(46px + env(safe-area-inset-bottom));
+  animation: vchat-fade .2s ease;
+}
+
+.v-chat .callov .callinfo {
+  display: flex; flex-direction: column; align-items: center; gap: 10px;
+  color: #fff; z-index: 2;
+}
+
+.v-chat .callov .callinfo b { font-size: 22px; letter-spacing: -.02em; }
+.v-chat .callov .callst { color: rgba(255, 255, 255, .75); font-size: 14px; animation: vchat-pulse 1.6s infinite; }
+.v-chat .callov .calltime { color: rgba(255, 255, 255, .75); font-size: 14px; font-variant-numeric: tabular-nums; }
+
+@keyframes vchat-pulse { 50% { opacity: .45; } }
+
+.v-chat .callov .callacts {
+  display: flex; gap: 14px; align-items: center; z-index: 2;
+}
+
+.v-chat .callov .pill.big { padding: 13px 30px; font-size: 15px; }
+
+.v-chat .callov .callmute {
+  border: 1px solid rgba(255, 255, 255, .4); background: none; color: #fff;
+  border-radius: 999px; padding: 12px 22px; font-size: 14px; font-weight: 650; cursor: pointer;
+}
+
+.v-chat .callov .callmute.on { background: #fff; color: var(--ink); }
+
+.v-chat .callov .callremote {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  object-fit: cover; z-index: 0;
+}
+
+.v-chat .callov.video .callinfo {
+  position: absolute; top: calc(18px + env(safe-area-inset-top)); left: 0; right: 0;
+}
+.v-chat .callov.video .callinfo b { font-size: 16px; text-shadow: 0 1px 6px rgba(0,0,0,.6); }
+
+.v-chat .callov .callpip {
+  position: absolute; right: 14px; top: calc(70px + env(safe-area-inset-top));
+  width: 96px; border-radius: 12px; z-index: 2;
+  border: 2px solid rgba(255, 255, 255, .5);
+}
+
+/* ----------------------------------------------- composer button rework */
+
+/* Small in-field voice-note mic (the big circle is the camera now). */
+.v-chat .voiceB {
+  width: 22px;
+  height: 22px;
+  border: none;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  flex: none;
+  padding: 0;
+  border-radius: 50%;
+}
+
+.v-chat .voiceB svg { width: 17px; height: 17px; }
+.v-chat .voiceB:hover { color: var(--ink); }
+
+/* Dictation is live (started from Attach › Dictate) — the field pulses. */
+.v-chat .field.dicton {
+  box-shadow: 0 0 0 1.5px var(--blue);
+  animation: vchat-pulse 1.4s ease infinite;
+}
+
+/* 'Listening…' hint chip inside the field, with a blinking red dot. */
+.v-chat .dicthint {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+  font-size: 12px;
+  font-weight: 650;
+  color: var(--red);
+  white-space: nowrap;
+}
+
+.v-chat .dicthint::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--red);
+  animation: vchat-recblink .9s steps(1) infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .v-chat .dicthint::before { animation: none; }
+}
+
+.v-chat .at-circ.c-dictate { color: var(--blue); }  /* teal mic = state */
+
+/* Session running: the attach-sheet mic tile turns red and pulses. */
+.v-chat .at-tile.dict-live .at-circ.c-dictate {
+  color: var(--red);
+  box-shadow: 0 2px 10px rgba(229, 52, 43, .22), 0 0 0 1.5px var(--red);
+  animation: vchat-pulse 1.1s ease infinite;
+}
+
+.v-chat .at-tile.dict-live .at-label { color: var(--red); }
+
+/* Caption line under a photo bubble (message.text on an image). */
+.v-chat .imgcap {
+  display: block;
+  padding: 8px 11px 9px;
+  font-size: 13px;
+  text-align: left;
+  color: var(--ink);
+  background: var(--well);
+  overflow-wrap: anywhere;
+  font-family: var(--font);
+}
+
+/* ------------------------------------------------------- photo editor (.pe-) */
+/* Fullscreen dark editor mounted on <body> by lib/photoedit.js. Namespaced
+   under .pe- on purpose — it lives outside the .v-chat view root. */
+
+.pe-back {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  background: #0e0e10;
+  display: flex;
+  flex-direction: column;
+  overscroll-behavior: contain;
+  animation: vchat-fade .16s ease;
+}
+
+.pe-top {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: calc(10px + env(safe-area-inset-top)) 14px 10px;
+}
+
+.pe-x, .pe-tb {
+  width: 38px;
+  height: 38px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, .13);
+  color: #fff;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  font-family: var(--font);
+  font-size: 14px;
+  font-weight: 800;
+  flex: none;
+}
+
+.pe-x svg, .pe-tb svg { width: 18px; height: 18px; }
+.pe-tools { display: flex; gap: 10px; align-items: center; }
+.pe-tb.on { box-shadow: 0 0 0 2px #fff; }   /* white ring = active tool */
+
+/* HD toggle (WhatsApp badge): outlined circle when off, filled white-on-ink
+   with a tick when on. One choice for the whole batch. */
+.pe-hd {
+  width: 38px;
+  height: 38px;
+  border: 1.5px solid rgba(255, 255, 255, .8);
+  border-radius: 50%;
+  background: none;
+  color: #fff;
+  font-family: var(--font);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .01em;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  flex: none;
+  padding: 0;
+}
+
+.pe-hd.on {
+  background: var(--ink);
+  border-color: var(--ink);
+  box-shadow: 0 0 0 2px #fff;
+  font-size: 10px;
+}
+
+.pe-stage {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+  touch-action: none;
+}
+
+.pe-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+/* Crop overlay: the box dims everything outside itself. */
+.pe-cropbox {
+  position: absolute;
+  border: 1.5px solid #fff;
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, .55);
+  cursor: move;
+  touch-action: none;
+}
+
+.pe-ch {
+  position: absolute;
+  width: 24px;
+  height: 24px;
+  touch-action: none;
+}
+
+.pe-ch::after {
+  content: "";
+  position: absolute;
+  inset: 3px;
+  border: 0 solid #fff;
+}
+
+.pe-ch-tl { left: -8px; top: -8px; cursor: nwse-resize; }
+.pe-ch-tr { right: -8px; top: -8px; cursor: nesw-resize; }
+.pe-ch-bl { left: -8px; bottom: -8px; cursor: nesw-resize; }
+.pe-ch-br { right: -8px; bottom: -8px; cursor: nwse-resize; }
+.pe-ch-tl::after { border-left-width: 3px; border-top-width: 3px; }
+.pe-ch-tr::after { border-right-width: 3px; border-top-width: 3px; }
+.pe-ch-bl::after { border-left-width: 3px; border-bottom-width: 3px; }
+.pe-ch-br::after { border-right-width: 3px; border-bottom-width: 3px; }
+
+/* Trash affordance while a layer is selected. */
+.pe-trash {
+  position: absolute;
+  bottom: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 44px;
+  height: 44px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(229, 52, 43, .92);   /* red = destructive */
+  color: #fff;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+}
+
+.pe-trash svg { width: 19px; height: 19px; }
+
+/* Text tool overlay. */
+.pe-textui {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, .55);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  padding: 20px;
+}
+
+.pe-tinput {
+  width: 100%;
+  border: none;
+  background: none;
+  outline: none;
+  text-align: center;
+  color: #fff;
+  font: 800 30px Sora, sans-serif;
+}
+
+.pe-tinput::placeholder { color: rgba(255, 255, 255, .45); }
+
+.pe-fontrow, .pe-colorrow { display: flex; gap: 10px; align-items: center; }
+
+.pe-chip {
+  border: 1px solid rgba(255, 255, 255, .4);
+  background: rgba(255, 255, 255, .1);
+  color: #fff;
+  border-radius: 999px;
+  padding: 7px 16px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: var(--font);
+}
+
+.pe-chip.on { background: #fff; color: #0f0f10; }
+
+.pe-dot {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, .55);
+  cursor: pointer;
+  padding: 0;
+  flex: none;
+}
+
+.pe-dot.on { box-shadow: 0 0 0 2.5px #fff; border-color: transparent; }
+
+.pe-tdone {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  border: none;
+  background: #fff;
+  color: #0f0f10;
+  border-radius: 999px;
+  padding: 8px 18px;
+  font-size: 13.5px;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: var(--font);
+}
+
+/* Sticker grid. */
+.pe-stickers {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(20, 20, 23, .96);
+  border-radius: 18px 18px 0 0;
+  padding: 14px 12px;
+  max-height: 46%;
+  overflow-y: auto;
+}
+
+.pe-stgrid {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 4px;
+}
+
+.pe-stgrid button {
+  border: none;
+  background: none;
+  font-size: 26px;
+  line-height: 1.3;
+  cursor: pointer;
+  border-radius: 10px;
+  padding: 4px 0;
+}
+
+.pe-stgrid button:hover { background: rgba(255, 255, 255, .1); }
+
+/* Tool sub-bars (pencil colours/widths, crop actions). */
+.pe-sub { flex: none; }
+
+.pe-penbar, .pe-cropbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+}
+
+.pe-gap { flex: 1; }
+
+.pe-w {
+  width: 30px;
+  height: 30px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, .13);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  flex: none;
+}
+
+.pe-w span { display: block; border-radius: 50%; background: #fff; }
+.pe-w.on { box-shadow: 0 0 0 2px #fff; }
+
+.pe-undo, .pe-cropcancel {
+  border: none;
+  background: none;
+  color: rgba(255, 255, 255, .8);
+  font-size: 13px;
+  font-weight: 650;
+  cursor: pointer;
+  padding: 8px 12px;
+  border-radius: 999px;
+  font-family: var(--font);
+}
+
+.pe-undo:hover, .pe-cropcancel:hover { background: rgba(255, 255, 255, .1); }
+
+.pe-rot {
+  width: 36px;
+  height: 36px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, .13);
+  color: #fff;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  flex: none;
+}
+
+.pe-rot svg { width: 17px; height: 17px; }
+
+.pe-cropapply {
+  border: none;
+  background: #fff;
+  color: #0f0f10;
+  border-radius: 999px;
+  padding: 9px 20px;
+  font-size: 13.5px;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: var(--font);
+}
+
+/* Multi-photo thumbnail strip above the caption bar: 56px rounded thumbs,
+   white ring on the active one, horizontal scroll for long batches. */
+.pe-strip {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px 2px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+.pe-strip::-webkit-scrollbar { display: none; }
+
+.pe-thumb {
+  width: 56px;
+  height: 56px;
+  flex: none;
+  border: none;
+  padding: 0;
+  border-radius: 12px;
+  overflow: hidden;
+  cursor: pointer;
+  background: rgba(255, 255, 255, .08);
+  opacity: .62;
+  transition: opacity .14s ease;
+}
+
+.pe-thumb img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  pointer-events: none;
+}
+
+.pe-thumb.on { opacity: 1; box-shadow: 0 0 0 2px #fff; }   /* active ring */
+
+/* Bottom bar: caption, ① private toggle, teal-deep send. */
+.pe-bottom {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px calc(14px + env(safe-area-inset-bottom));
+}
+
+.pe-cap {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: rgba(255, 255, 255, .13);
+  color: #fff;
+  border-radius: 999px;
+  padding: 11px 16px;
+  font-size: 14px;
+  font-family: var(--font);
+}
+
+.pe-cap::placeholder { color: rgba(255, 255, 255, .5); }
+
+.pe-once {
+  width: 34px;
+  height: 34px;
+  border: none;
+  border-radius: 50%;
+  background: #fff;                  /* white when off */
+  color: #0f0f10;
+  font-size: 14px;
+  font-weight: 800;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  flex: none;
+  font-family: var(--font);
+  box-shadow: inset 0 0 0 2px #0f0f10;
+}
+
+.pe-once.on {
+  background: #f97316;               /* orange when on = private photo */
+  color: #fff;
+  box-shadow: inset 0 0 0 2px #fff;
+}
+
+.pe-send {
+  width: 46px;
+  height: 46px;
+  border: none;
+  border-radius: 50%;
+  background: var(--teal-deep);
+  color: #fff;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  flex: none;
+  box-shadow: 0 3px 11px rgba(23, 97, 107, .4);
+}
+
+.pe-send svg { width: 20px; height: 20px; }
+
+/* Discard confirm sheet. */
+.pe-confirm {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, .5);
+  display: flex;
+  align-items: flex-end;
+  z-index: 5;
+}
+
+.pe-csheet {
+  width: 100%;
+  max-width: 560px;
+  margin: 0 auto;
+  background: #1c1c1f;
+  color: #fff;
+  border-radius: 18px 18px 0 0;
+  padding: 14px 12px calc(16px + env(safe-area-inset-bottom));
+  animation: vchat-up .22s cubic-bezier(.4, 0, .2, 1);
+}
+
+.pe-ctitle {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, .6);
+  padding: 4px 12px 10px;
+}
+
+.pe-cbtn {
+  display: block;
+  width: 100%;
+  border: none;
+  background: none;
+  color: #fff;
+  font-size: 15px;
+  font-weight: 600;
+  padding: 13px 14px;
+  border-radius: 12px;
+  cursor: pointer;
+  text-align: left;
+  font-family: var(--font);
+}
+
+.pe-cbtn:hover { background: rgba(255, 255, 255, .08); }
+.pe-cbtn.pe-cdanger { color: #ff6259; }   /* red = destructive */
+
+.v-chat .cp-enc {
+  font-size: 11px;
+  color: var(--muted);
+  text-align: center;
+  margin: 10px 18px calc(14px + env(safe-area-inset-bottom));
+  line-height: 1.5;
+}
+
+/* ----------------------------------------------------------- photo album */
+/* A run of four or more photos collapses into one pile (WhatsApp grammar)
+   so a burst of pictures cannot swallow the whole thread. */
+
+.v-chat .album {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 3px;
+  width: min(74vw, 260px);
+  border-radius: 14px;
+  overflow: hidden;
+}
+.v-chat .album.three { grid-template-columns: 1fr 1fr 1fr; }
+
+.v-chat .altile {
+  position: relative;
+  border: none;
+  padding: 0;
+  margin: 0;
+  background: var(--well);
+  cursor: pointer;
+  aspect-ratio: 1;
+  overflow: hidden;
+}
+.v-chat .altile img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.v-chat .altile:active img { filter: brightness(.88); }
+
+.v-chat .almore {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgba(8, 26, 30, .55);
+  color: #fff;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -.02em;
+}
+
+.v-chat .alcount {
+  font-size: 10.5px;
+  color: var(--muted);
+  margin-top: 3px;
+  padding: 0 2px;
+}
+.v-chat .msg.mine .alcount { text-align: right; }
+
+/* ------------------------------------------- headline feature controls */
+/* The two things this app exists for get the header's spare room: a large
+   icon plus its own switch, each with a colour of its own when live. */
+
+.v-chat .hact { display: flex; gap: 8px; flex: none; align-items: center; }
+
+.v-chat .fx {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px 5px 7px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--muted);
+  cursor: pointer;
+  font-family: var(--font);
+  transition: color .16s ease, background .16s ease, border-color .16s ease;
+}
+
+.v-chat .fx-ic { display: grid; place-items: center; }
+.v-chat .fx-ic svg { width: 22px; height: 22px; display: block; }
+.v-chat .fx .xa { font-size: 17px; font-weight: 700; letter-spacing: -.05em; line-height: 1; }
+
+/* The little switch beside each icon. */
+.v-chat .fx-sw {
+  width: 24px;
+  height: 13px;
+  border-radius: 999px;
+  background: var(--line);
+  position: relative;
+  flex: none;
+  transition: background .18s ease;
+}
+.v-chat .fx-knob {
+  position: absolute;
+  top: 1.5px;
+  left: 1.5px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--surface);
+  box-shadow: 0 1px 2px rgba(12, 52, 59, .35);
+  transition: transform .18s ease;
+}
+.v-chat .fx[data-on="true"] .fx-knob { transform: translateX(11px); }
+
+/* Distinct identities: transliteration amber, translation teal. */
+.v-chat .fx-tx[data-on="true"] {
+  color: var(--amber);
+  border-color: color-mix(in srgb, var(--amber) 45%, transparent);
+  background: color-mix(in srgb, var(--amber) 10%, transparent);
+}
+.v-chat .fx-tx[data-on="true"] .fx-sw { background: var(--amber); }
+
+.v-chat .fx-tr[data-on="true"] {
+  color: var(--blue);
+  border-color: color-mix(in srgb, var(--blue) 45%, transparent);
+  background: color-mix(in srgb, var(--blue) 10%, transparent);
+}
+.v-chat .fx-tr[data-on="true"] .fx-sw { background: var(--blue); }
+
+/* ------------------------------------------ per-message transliteration */
+
+.v-chat .xl {
+  display: block;
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px dashed color-mix(in srgb, var(--amber) 40%, transparent);
+}
+.v-chat .xlTag {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  color: var(--amber);
+  margin-bottom: 2px;
+}
+.v-chat .xlTag .xa { font-size: 11px; letter-spacing: -.04em; }
+.v-chat .xlText { display: block; font-size: 14px; line-height: 1.4; }
+.v-chat .xl.pend .xlText { opacity: .5; }
+.v-chat .bubOut .xl { border-top-color: rgba(255, 255, 255, .35); }
+.v-chat .bubOut .xlTag { color: rgba(255, 255, 255, .85); }
+
+/* The transliteration language chip — sits beside 文A, only while it is on. */
+.v-chat .xchip {
+  border: 1px solid color-mix(in srgb, var(--amber) 40%, transparent);
+  background: color-mix(in srgb, var(--amber) 8%, transparent);
+  color: var(--amber);
+  font-family: var(--font);
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: -.01em;
+  padding: 6px 9px;
+  border-radius: 999px;
+  cursor: pointer;
+  flex: none;
+  white-space: nowrap;
+}
+.v-chat .xchip[data-pinned="false"] { color: var(--muted); border-color: var(--line); background: var(--surface); }

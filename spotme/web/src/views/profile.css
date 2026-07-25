@@ -1,0 +1,825 @@
+/* Spot Me — Profile & Settings view (#/settings).
+   Lifted from design/05-profile-andamp-settings.html (locked 2026-07-24):
+   compact centred identity head, then straight into rows. Every selector
+   namespaced under .v-profile. */
+
+.v-profile {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+}
+
+/* ------------------------------------------------------------------ top */
+
+.v-profile .top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 16px 10px;
+  flex: none;
+}
+
+.v-profile .top h1 {
+  flex: 1;
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -.03em;
+}
+
+.v-profile .body { padding-bottom: 6px; }
+
+/* -------------------------------------------------- identity (phead) */
+
+.v-profile .phead {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 6px 20px 16px;
+}
+
+.v-profile .pav {
+  position: relative;
+  width: 104px;
+  height: 104px;
+  margin-bottom: 12px;
+  border: none;
+  background: none;
+  padding: 0;
+  cursor: pointer;
+}
+
+.v-profile .pav .cam {
+  position: absolute;
+  right: 0;
+  bottom: 2px;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--ink);
+  color: #fff;
+  border: 3px solid var(--surface);
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+
+.v-profile .pav:hover .cam { background: #000; }
+.v-profile .pav .cam svg { width: 14px; height: 14px; }
+
+.v-profile .pname-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 34px;
+}
+
+.v-profile .pname {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -.028em;
+}
+
+.v-profile .pedit {
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  flex: none;
+}
+
+.v-profile .pedit:hover { background: var(--well); color: var(--ink); }
+.v-profile .pedit svg { width: 15px; height: 15px; }
+
+.v-profile .pname-input {
+  border: 1px solid var(--ink);
+  background: var(--surface);
+  border-radius: 10px;
+  padding: 5px 12px;
+  font: inherit;
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -.02em;
+  color: var(--ink);
+  text-align: center;
+  outline: none;
+  width: 210px;
+  max-width: 70vw;
+}
+
+/* Identity chip — the pstatus pill from the design, carrying the claimed
+   @username (never the raw hex id). */
+.v-profile .idchip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12.5px;
+  color: var(--ink2);
+  margin-top: 9px;
+  background: var(--well);
+  border: none;
+  border-radius: 999px;
+  padding: 5px 13px;
+  cursor: pointer;
+  font-family: var(--font);
+  font-weight: 600;
+}
+
+.v-profile .idchip:hover { background: var(--line); }
+.v-profile .idchip .uv { font-weight: 650; letter-spacing: -.01em; }
+.v-profile .idchip svg { width: 13px; height: 13px; color: var(--muted); }
+
+/* No username claimed yet: muted, copy disabled. */
+.v-profile .idchip.nouser { color: var(--muted); cursor: default; }
+.v-profile .idchip.nouser:hover { background: var(--well); }
+.v-profile .idchip.nouser .uv { font-weight: 550; }
+
+/* --------------------------------------------------- sections & rows */
+
+.v-profile .sec {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .13em;
+  text-transform: uppercase;
+  color: var(--muted);
+  padding: 15px 18px 6px;
+}
+
+.v-profile .row {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 18px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font: inherit;
+  font-family: var(--font);
+  text-align: left;
+  position: relative;
+  color: var(--ink);
+}
+
+.v-profile .row:hover { background: var(--well); }
+
+.v-profile .row + .row::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 48px;
+  right: 0;
+  height: 1px;
+  background: var(--hair);
+}
+
+.v-profile .ri {
+  width: 22px;
+  height: 22px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  color: var(--ink2);
+}
+
+.v-profile .ri svg { width: 19px; height: 19px; }
+
+.v-profile .rl {
+  flex: 1;
+  min-width: 0;
+  font-size: 14px;
+  font-weight: 550;
+  letter-spacing: -.012em;
+}
+
+.v-profile .rl b { display: block; font-weight: 550; }
+
+.v-profile .rl .sub {
+  display: block;
+  font-size: 11.5px;
+  color: var(--muted);
+  font-weight: 500;
+  line-height: 1.35;
+  margin-top: 1px;
+}
+
+.v-profile .val {
+  font-size: 12.5px;
+  color: var(--muted);
+  flex: none;
+  max-width: 44%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.v-profile .chev { width: 14px; height: 14px; color: var(--muted); flex: none; }
+
+.v-profile .row.danger .rl b,
+.v-profile .row.danger .ri { color: var(--red); }
+
+.v-profile .note {
+  font-size: 11.5px;
+  color: var(--muted);
+  line-height: 1.4;
+  padding: 2px 18px 6px 52px;
+}
+
+/* ----------------------------------------------------------- toggles */
+
+.v-profile .tog {
+  width: 38px;
+  height: 22px;
+  border-radius: 999px;
+  background: var(--line);
+  position: relative;
+  flex: none;
+  transition: background .2s ease;
+}
+
+.v-profile .tog::after {
+  content: "";
+  position: absolute;
+  top: 2.5px;
+  left: 2.5px;
+  width: 17px;
+  height: 17px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, .24);
+  transition: transform .2s cubic-bezier(.34, 1.4, .5, 1);
+}
+
+.v-profile .tog.on { background: var(--green); }
+.v-profile .tog.on::after { transform: translateX(16px); }
+
+/* ------------------------------------------------------- cards */
+
+.v-profile .pcard {
+  margin: 4px 14px 0;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 14px 15px;
+  background: var(--surface);
+}
+
+.v-profile .pcard ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.v-profile .pcard li {
+  display: flex;
+  gap: 10px;
+  font-size: 12.5px;
+  line-height: 1.45;
+  align-items: flex-start;
+  color: var(--ink2);
+}
+
+.v-profile .pcard li::before {
+  content: "";
+  flex: none;
+  width: 6px;
+  height: 6px;
+  margin-top: 6px;
+  border-radius: 50%;
+  background: var(--blue);
+}
+
+/* --------------------------------------------------- blocked people */
+
+.v-profile .brow {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 8px 18px;
+  position: relative;
+}
+
+.v-profile .brow + .brow::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 64px;
+  right: 0;
+  height: 1px;
+  background: var(--hair);
+}
+
+.v-profile .brow .bname {
+  flex: 1;
+  min-width: 0;
+  font-size: 14px;
+  font-weight: 550;
+  letter-spacing: -.012em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.v-profile .empty {
+  padding: 10px 18px 6px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+/* ------------------------------------------------ invite card (vcard) */
+
+.v-profile .vcard {
+  margin: 4px 14px 0;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 14px 15px;
+  background: linear-gradient(160deg, #fbfcff, #f5f7fb);
+}
+
+.v-profile .vtop {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  margin-bottom: 11px;
+}
+
+.v-profile .vic {
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  background: var(--ink);
+  color: #fff;
+  display: grid;
+  place-items: center;
+  flex: none;
+}
+
+.v-profile .vic svg { width: 19px; height: 19px; }
+
+.v-profile .vtx { flex: 1; min-width: 0; }
+
+.v-profile .vtx b {
+  display: block;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: -.015em;
+}
+
+.v-profile .vtx span {
+  display: block;
+  font-size: 11.5px;
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+.v-profile .vbtn {
+  width: 100%;
+  border: none;
+  cursor: pointer;
+  font: inherit;
+  font-family: var(--font);
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #fff;
+  background: var(--ink);
+  border-radius: 10px;
+  padding: 9px 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.v-profile .vbtn:hover { background: #000; }
+.v-profile .vbtn svg { width: 14px; height: 14px; }
+
+/* ------------------------------------------------------------ footer */
+
+.v-profile .foot {
+  text-align: center;
+  color: var(--muted);
+  font-size: 11px;
+  padding: 18px 16px 20px;
+}
+
+/* -------------------------------------------------- language sheet */
+
+.v-profile .ls-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 15, 16, .32);
+  z-index: 90;
+  display: flex;
+  align-items: flex-end;
+  animation: vp-fade .16s ease;
+}
+
+@keyframes vp-fade { from { opacity: 0; } }
+
+.v-profile .ls-sheet {
+  width: 100%;
+  max-width: 560px;
+  margin: 0 auto;
+  background: var(--surface);
+  border-radius: 18px 18px 0 0;
+  padding: 18px 16px calc(18px + env(safe-area-inset-bottom));
+  max-height: 72vh;
+  display: flex;
+  flex-direction: column;
+  animation: vp-up .22s cubic-bezier(.4, 0, .2, 1);
+}
+
+@keyframes vp-up { from { transform: translateY(40px); } }
+
+.v-profile .ls-title {
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: -.02em;
+}
+
+.v-profile .ls-sub {
+  font-size: 12px;
+  color: var(--muted);
+  margin: 2px 0 12px;
+}
+
+.v-profile .ls-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 4px;
+}
+
+.v-profile .ls-lang {
+  border: 1px solid var(--line);
+  background: var(--surface);
+  border-radius: 12px;
+  padding: 9px 6px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  align-items: center;
+  font-family: var(--font);
+  transition: all .15s ease;
+}
+
+.v-profile .ls-lang strong { font-size: 13.5px; font-weight: 650; color: var(--ink); }
+.v-profile .ls-lang span { font-size: 10px; color: var(--muted); }
+.v-profile .ls-lang.on { border-color: var(--ink); background: var(--well); }
+
+/* --------------------------------------------- generated-avatar sheet */
+
+.v-profile .ai-back {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 15, 16, .32);
+  z-index: 92;                 /* above the chooser actionSheet backdrop (90) */
+  display: flex;
+  align-items: flex-end;
+  animation: vp-fade .16s ease;
+}
+
+.v-profile .ai-sheet {
+  width: 100%;
+  max-width: 560px;
+  margin: 0 auto;
+  background: var(--surface);
+  border-radius: 18px 18px 0 0;
+  padding: 18px 16px calc(18px + env(safe-area-inset-bottom));
+  max-height: 76vh;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  animation: vp-up .22s cubic-bezier(.4, 0, .2, 1);
+}
+
+.v-profile .ai-title {
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: -.02em;
+}
+
+.v-profile .ai-sub {
+  font-size: 12px;
+  color: var(--muted);
+  margin: 2px 0 12px;
+}
+
+.v-profile .ai-loading {
+  font-size: 13px;
+  color: var(--muted);
+  padding: 6px 0 14px;
+}
+
+.v-profile .ai-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  padding-bottom: 4px;
+}
+
+.v-profile .ai-cell {
+  border: 1px solid var(--line);
+  background: var(--well);
+  border-radius: 14px;
+  padding: 0;
+  overflow: hidden;
+  cursor: pointer;
+  aspect-ratio: 1;
+  transition: transform .14s ease, border-color .14s ease;
+}
+
+.v-profile .ai-cell:hover { transform: scale(1.05); border-color: var(--ink); }
+
+.v-profile .ai-cell img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* -------------------------------------------------- my voice (clone) */
+
+/* Info row variant: not clickable as a whole — only its Delete button is. */
+.v-profile .row.static { cursor: default; }
+.v-profile .row.static:hover { background: none; }
+
+.v-profile .vc-del {
+  flex: none;
+  border: 1px solid var(--red);
+  color: var(--red);
+  background: none;
+  border-radius: 999px;
+  padding: 6px 13px;
+  font: inherit;
+  font-family: var(--font);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all .15s ease;
+}
+
+.v-profile .vc-del:hover { background: var(--red); color: #fff; }
+
+/* Record sheet — same bottom-sheet pattern as ls-/ai- sheets. */
+.v-profile .vc-back {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 15, 16, .32);
+  z-index: 92;
+  display: flex;
+  align-items: flex-end;
+  animation: vp-fade .16s ease;
+}
+
+.v-profile .vc-sheet {
+  width: 100%;
+  max-width: 560px;
+  margin: 0 auto;
+  background: var(--surface);
+  border-radius: 18px 18px 0 0;
+  padding: 18px 16px calc(18px + env(safe-area-inset-bottom));
+  max-height: 88vh;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  animation: vp-up .22s cubic-bezier(.4, 0, .2, 1);
+}
+
+.v-profile .vc-title {
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: -.02em;
+}
+
+.v-profile .vc-sub {
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.45;
+  margin: 2px 0 12px;
+}
+
+.v-profile .vc-passage {
+  border: 1px solid var(--line);
+  background: var(--well);
+  border-radius: 14px;
+  padding: 13px 14px;
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: var(--ink2);
+}
+
+.v-profile .vc-status {
+  text-align: center;
+  font-size: 13px;
+  color: var(--muted);
+  margin: 14px 0 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+.v-profile .vc-status.rec { color: var(--red); font-weight: 700; }
+
+.v-profile .vc-recbtn {
+  display: grid;
+  place-items: center;
+  width: 74px;
+  height: 74px;
+  margin: 0 auto;
+  border: none;
+  border-radius: 50%;
+  background: var(--red);
+  color: #fff;
+  cursor: pointer;
+  transition: transform .15s ease;
+}
+
+.v-profile .vc-recbtn:hover { transform: scale(1.05); }
+.v-profile .vc-recbtn svg { width: 30px; height: 30px; }
+
+.v-profile .vc-recbtn.recording { animation: vc-pulse 1.2s ease infinite; }
+
+@keyframes vc-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, .35); }
+  50% { box-shadow: 0 0 0 12px rgba(239, 68, 68, 0); }
+}
+
+.v-profile .vc-rerecord {
+  display: block;
+  margin: 8px auto 0;
+  border: none;
+  background: none;
+  color: var(--blue);
+  font: inherit;
+  font-family: var(--font);
+  font-size: 12.5px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+/* Rights/consent gate: Create stays disabled until this is ticked. */
+.v-profile .vc-consent {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--ink2);
+  margin: 14px 2px 12px;
+  cursor: pointer;
+}
+
+.v-profile .vc-consent input {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  margin-top: 1px;
+  accent-color: var(--ink);
+  cursor: pointer;
+}
+
+.v-profile .vc-create {
+  width: 100%;
+  border: none;
+  cursor: pointer;
+  font: inherit;
+  font-family: var(--font);
+  font-size: 13.5px;
+  font-weight: 700;
+  color: #fff;
+  background: var(--ink);
+  border-radius: 12px;
+  padding: 12px 0;
+}
+
+.v-profile .vc-create:hover:not(:disabled) { background: #000; }
+.v-profile .vc-create:disabled { opacity: .35; cursor: default; }
+
+/* ------------------------------------------------- profile field card */
+/* WhatsApp Profile grammar: label left, current value right, tap to change. */
+
+.v-profile .pfields {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  overflow: hidden;
+  margin: 0 0 6px;
+}
+
+.v-profile .pfr {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 14px 14px 14px 16px;
+  border: none;
+  border-bottom: 1px solid var(--line);
+  background: none;
+  font-family: var(--font);
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+}
+.v-profile .pfr:last-child { border-bottom: none; }
+.v-profile .pfr:hover { background: var(--well); }
+
+.v-profile .pfl { font-size: 14.5px; font-weight: 600; letter-spacing: -.015em; flex: none; }
+.v-profile .pfv {
+  flex: 1; min-width: 0; text-align: right;
+  font-size: 13.5px; color: var(--ink2);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.v-profile .pfv.none { color: var(--muted); }
+.v-profile .pfc { flex: none; color: var(--muted); display: grid; place-items: center; }
+.v-profile .pfc svg { width: 15px; height: 15px; }
+
+.v-profile .pfcopy {
+  position: absolute; right: 34px; top: 50%; transform: translateY(-50%);
+  width: 26px; height: 26px; border-radius: 8px;
+  display: grid; place-items: center; color: var(--muted); cursor: pointer;
+}
+.v-profile .pfcopy:hover { background: var(--line); color: var(--ink); }
+.v-profile .pfcopy svg { width: 13px; height: 13px; }
+.v-profile .pfr:has(.pfcopy) .pfv { padding-right: 30px; }
+
+/* ------------------------------------------------------- field sheets */
+
+.v-profile .fsheet { padding: 20px 18px calc(18px + env(safe-area-inset-bottom)); }
+.v-profile .fsTitle { font-size: 16.5px; font-weight: 700; letter-spacing: -.02em; }
+.v-profile .fsHint { margin: 6px 0 14px; font-size: 12px; color: var(--muted); line-height: 1.5; }
+
+.v-profile .fsField {
+  display: flex; align-items: center; gap: 6px;
+  border: 1px solid var(--line); border-radius: 12px;
+  padding: 10px 12px; background: var(--surface);
+}
+.v-profile .fsField:focus-within { border-color: var(--blue); }
+.v-profile .fsAt { color: var(--muted); font-size: 15px; flex: none; }
+.v-profile .fsIn {
+  flex: 1; min-width: 0; border: none; outline: none; background: none;
+  font: inherit; font-size: 15px; color: var(--ink); resize: none;
+}
+.v-profile .fsIn.area { line-height: 1.45; }
+.v-profile .fsCt { font-size: 11px; color: var(--muted); flex: none; align-self: flex-end; }
+
+.v-profile .fsState { margin: 9px 2px 0; font-size: 12px; min-height: 16px; color: var(--muted); }
+.v-profile .fsState[data-k="ok"] { color: var(--green); }
+.v-profile .fsState[data-k="bad"] { color: var(--red); }
+
+.v-profile .fsActs { display: flex; gap: 10px; justify-content: flex-end; margin-top: 16px; }
+.v-profile .fsActs .pill { padding: 9px 20px; font-size: 13.5px; }
+.v-profile .fsActs .pill.ghost { background: var(--well); color: var(--ink); }
+.v-profile .fsActs .pill.ok[disabled] { opacity: .45; cursor: not-allowed; }
+
+/* ------------------------------------------- clone recorder: live wave */
+/* Proof we are hearing you through a 30-second read — and, with the screen
+ * wake lock, the reason the phone no longer dims mid-passage. */
+
+.v-profile .vc-wave {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  height: 46px;
+  margin: 12px 0 2px;
+}
+
+.v-profile .vc-wave .vcb {
+  width: 4px;
+  height: 100%;
+  border-radius: 2px;
+  background: var(--blue);
+  transform: scaleY(.12);
+  transform-origin: center;
+  transition: transform .07s linear;
+}
+
+/* Fallback when no analyser is available: a calm travelling pulse. */
+.v-profile .vc-wave.idle .vcb {
+  animation: vcbIdle 1.1s ease-in-out infinite;
+  transition: none;
+}
+.v-profile .vc-wave.idle .vcb:nth-child(3n) { animation-delay: .18s; }
+.v-profile .vc-wave.idle .vcb:nth-child(3n+1) { animation-delay: .36s; }
+
+@keyframes vcbIdle {
+  0%, 100% { transform: scaleY(.18); }
+  50% { transform: scaleY(.72); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .v-profile .vc-wave .vcb { transition: none; }
+  .v-profile .vc-wave.idle .vcb { animation: none; transform: scaleY(.4); }
+}

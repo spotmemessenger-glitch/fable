@@ -1,0 +1,117 @@
+/* Spot Me — Notifications view. Same list grammar as Requests/inbox; the
+ * sectioned overview formerly on the inbox General tab lives here now.
+ * Shared classes (.av, .pill, .scroll-y) come from tokens.css. */
+
+.v-notif .nhead { padding: 18px 18px 6px; flex: none; }
+.v-notif .nhead h1 { margin: 0; font-size: 31px; font-weight: 700; letter-spacing: -.038em; }
+
+.v-notif .nbody { padding: 4px 0 14px; }
+
+/* ------------------------------------------------------ section headers */
+
+.v-notif .nsec { padding: 4px 0 6px; }
+.v-notif .nsHead { display: flex; align-items: center; gap: 8px; padding: 12px 18px 5px; }
+.v-notif .nsChip {
+  font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+  color: #fff; border-radius: 6px; padding: 2px 8px; line-height: 1.7; flex: none;
+}
+/* Requests demand attention (red); new chats are information (teal). */
+.v-notif .nsChip[data-sec="req"] { background: var(--red); }
+.v-notif .nsChip[data-sec="chats"] { background: var(--blue); }
+.v-notif .nsAll {
+  margin-left: auto; border: none; background: none; padding: 0; cursor: pointer;
+  font: inherit; font-family: var(--font); font-size: 11.5px; font-weight: 600;
+  color: var(--muted); display: inline-flex; align-items: center; gap: 2px;
+}
+.v-notif .nsAll:hover { color: var(--blue); }
+.v-notif .nsAll svg { width: 11px; height: 11px; }
+
+/* --------------------------------------------------------- request rows */
+
+.v-notif .nreq {
+  display: flex; align-items: center; gap: 11px; padding: 9px 18px;
+  animation: v-notif-fade .28s ease backwards;
+}
+.v-notif .nreq .nw b { display: block; font-size: 14px; font-weight: 650; letter-spacing: -.015em; }
+.v-notif .nreq .nw span {
+  display: block; font-size: 11.5px; color: var(--muted);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.v-notif .nacts { display: flex; gap: 7px; flex: none; }
+.v-notif .nw { flex: 1; min-width: 0; }
+
+/* -------------------------------------------------------- new-chat rows */
+
+.v-notif .nchat {
+  display: flex; align-items: center; gap: 12px; width: 100%;
+  border: none; background: none; cursor: pointer; text-align: left;
+  padding: 9px 18px; font-family: var(--font);
+  animation: v-notif-fade .28s ease backwards;
+}
+.v-notif .nchat:hover { background: var(--well); }
+.v-notif .nl1 { display: flex; align-items: baseline; gap: 8px; }
+.v-notif .nl1 b {
+  font-size: 15px; font-weight: 700; letter-spacing: -.016em; color: var(--ink);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; min-width: 0;
+}
+.v-notif .ndemo {
+  flex: none; align-self: center; font-size: 9px; font-weight: 700;
+  letter-spacing: .07em; text-transform: uppercase; color: var(--muted);
+  background: var(--well); border: 1px solid var(--line);
+  border-radius: 5px; padding: 0 5px; line-height: 1.6;
+}
+.v-notif .ntm { flex: none; font-size: 11px; color: var(--blue); font-weight: 650; font-variant-numeric: tabular-nums; }
+.v-notif .npv {
+  display: block; font-size: 13px; color: var(--ink2); margin-top: 1px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.v-notif .nbdg {
+  min-width: 20px; height: 20px; border-radius: 999px; padding: 0 6px;
+  display: grid; place-items: center; font-size: 11px; font-weight: 700;
+  color: #fff; background: var(--blue); flex: none;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ----------------------------------------------------------- empty state */
+
+.v-notif .nempty {
+  text-align: center; padding: 64px 32px; color: var(--muted);
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+}
+.v-notif .nempty .nic svg { width: 44px; height: 44px; color: var(--line); }
+.v-notif .nempty b { color: var(--ink2); font-size: 15px; }
+.v-notif .nempty span { font-size: 12.5px; max-width: 34ch; }
+
+@keyframes v-notif-fade { from { opacity: 0; transform: translateY(4px); } }
+@media (prefers-reduced-motion: reduce) {
+  .v-notif .nreq, .v-notif .nchat { animation: none; }
+}
+
+/* ---- round 11: counts on every section + source chips + nearby + opt-in */
+.v-notif .nsChip { display: inline-flex; align-items: center; gap: 7px; }
+.v-notif .nsChip[data-sec="near"] { background: var(--green); }
+.v-notif .nsCt {
+  min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px;
+  background: rgba(255, 255, 255, .3);
+  font-size: 11px; font-weight: 800;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.v-notif .nrq1 { display: flex; align-items: center; gap: 7px; min-width: 0; }
+.v-notif .nrq1 b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.v-notif .nsrc {
+  flex: none; font-size: 9.5px; font-weight: 800; letter-spacing: .05em;
+  text-transform: uppercase; padding: 2px 7px; border-radius: 8px;
+  color: #fff; background: var(--blue);
+}
+.v-notif .nsrc[data-mode="nearby"] { background: var(--green); }
+.v-notif .nsrc[data-mode="bluetooth"] { background: var(--mesh); }
+.v-notif .nenable {
+  display: flex; align-items: center; gap: 12px; width: 100%;
+  margin: 0 0 14px; padding: 12px 14px; border: 0; border-radius: 16px;
+  background: var(--blue); color: #fff; text-align: left; cursor: pointer;
+}
+.v-notif .nenable .nic { flex: none; width: 26px; height: 26px; }
+.v-notif .nenable .nic svg { width: 100%; height: 100%; }
+.v-notif .nenable b { display: block; font-size: 13.5px; letter-spacing: -.01em; }
+.v-notif .nenable .nw > span { display: block; font-size: 11.5px; opacity: .85; margin-top: 2px; }
+@media (prefers-reduced-motion: reduce) { .v-notif .nnear { animation: none; } }

@@ -1,0 +1,3561 @@
+/**
+ * Spot Me — chat thread view (design/03-chat.html, the split-translation
+ * variant). Receives a third argument: the roomId to open.
+ *
+ * Incremental by default: conn events patch individual DOM nodes; a full
+ * thread rebuild happens only on 'history' merges.
+ */
+import './chat.css'
+import { db } from '../lib/db.js'
+import { rooms } from '../lib/rooms.js'
+import { lobby, distanceM, fmtDistance } from '../lib/discovery.js'
+import { translateText, transliterateRemote, detectLanguage, readMessage, SCRIPT_MAP, warmup, langName, speak, dictate } from '../lib/translate.js'
+import { sttBlob, ttsClone } from '../lib/voice.js'
+import { compressImage, fileToDataURL, recordVoice, currentLocation, mapLink, fileFromDataURL, downloadFile, shareOut, VIDEO_CAP_BYTES } from '../lib/media.js'
+import { openPhotoEditor, closePhotoEditor } from '../lib/photoedit.js'
+import { el, clear, avatar, fmtTime, fmtDay, actionSheet } from '../lib/ui.js'
+import { transliterate, supportedScripts } from 'spotme-core/core/translit.js'
+
+const LONG_PRESS_MS = 420
+const TYPING_THROTTLE_MS = 2000
+const TYPING_IDLE_MS = 3000
+const NEAR_BOTTOM_PX = 80
+const QUOTE_CHARS = 40
+const EDIT_MAX_EDGE = 2048   // editing headroom; the editor re-bounds on send (1280 std / 2048 HD)
+const EDIT_QUALITY = 0.9     // intake quality — the editor re-encodes at .82/.9
+const MAX_BATCH_PHOTOS = 10  // WhatsApp-style multi-select cap
+const REACT_EMOJI = ['👍', '❤️', '😂', '😮', '😢', '🙏', '🥰']
+
+/** The expanded reaction grid behind the “+” in the message sheet. */
+const EMOJI_GRID = [
+  '😀', '😅', '🤣', '😊', '😍', '😘',
+  '🤗', '🤔', '😴', '😷', '🥳', '😎',
+  '😭', '😱', '😡', '🤯', '👏', '🙌',
+  '🤝', '💪', '🔥', '💯', '🎉', '✨'
+]
+
+/** Receiving side of the activity indicator (typing-action payload kinds). */
+const ACTIVITY_TEXT = {
+  typing: 'typing…',
+  voice: 'recording a voice note…',
+  photo: 'sending a photo…',
+  viewonce: 'sending a private photo…',
+  file: 'sending a file…',
+  video: 'sending a video…'
+}
+
+const WAVE_BARS = 28
+const REC_BARS = 20          // live bars in the recording bar
+const ACTIVITY_PING_MS = 2500
+
+/** Per-chat disappearing-message durations (WhatsApp semantics). 0 = off. */
+const TIMER_OPTIONS = [
+  { label: 'Off', secs: 0 },
+  { label: '10 seconds', secs: 10 },
+  { label: '30 seconds', secs: 30 },
+  { label: '1 minute', secs: 60 },
+  { label: '1 hour', secs: 3600 },
+  { label: '24 hours', secs: 86400 },
+  { label: '1 month', secs: 2592000 },
+  { label: '3 months', secs: 7776000 }
+]
+
+/** Timer month = 30 days, matching the wheel labels above. */
+const TTL_DAY_SECS = 86400
+const TTL_MONTH_SECS = 2592000
+
+/** Private-photo burst wheel (Telegram-style). No Off — a private photo
+ * always bursts; the default detent is 10 seconds. */
+const BURST_OPTIONS = [
+  ...Array.from({ length: 20 }, (_, i) => ({
+    label: `${i + 1} second${i ? 's' : ''}`, secs: i + 1
+  })),
+  { label: '30 seconds', secs: 30 },
+  { label: '1 minute', secs: 60 },
+  { label: '2 minutes', secs: 120 },
+  { label: '3 minutes', secs: 180 }
+]
+
+/** '1 min' / '10 sec' / '1 hour' / '24 hours' / '3 months' — the sys-line +
+ * hint spelling. A single day reads '24 hours' to match its wheel label. */
+const fmtTtlLong = (secs) => {
+  if (secs >= TTL_MONTH_SECS) {
+    const months = Math.round(secs / TTL_MONTH_SECS)
+    return `${months} month${months > 1 ? 's' : ''}`
+  }
+  if (secs >= TTL_DAY_SECS) {
+    if (secs < TTL_DAY_SECS * 2) return '24 hours'
+    return `${Math.round(secs / TTL_DAY_SECS)} days`
+  }
+  if (secs >= 3600) return `${Math.round(secs / 3600)} hour${secs >= 7200 ? 's' : ''}`
+  return secs >= 60 ? `${Math.round(secs / 60)} min` : `${secs} sec`
+}
+
+/** Compact spelling for the composer chip: '10 s' / '1 min' / '1 h' / '1 mo'. */
+const fmtTtlChip = (secs) => {
+  if (secs >= TTL_MONTH_SECS) return `${Math.round(secs / TTL_MONTH_SECS)} mo`
+  if (secs >= TTL_DAY_SECS) return `${Math.round(secs / TTL_DAY_SECS)} d`
+  return secs >= 3600
+    ? `${Math.round(secs / 3600)} h`
+    : secs >= 60 ? `${Math.round(secs / 60)} min` : `${secs} s`
+}
+
+const IC = {
+  back: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>',
+  globe: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a15 15 0 010 18M12 3a15 15 0 000 18"/></svg>',
+  plus: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>',
+  mic: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="2.5" width="6" height="11.5" rx="3"/><path d="M5.5 11.5a6.5 6.5 0 0013 0M12 18v3.5" stroke-linecap="round"/></svg>',
+  micGhost: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><rect x="9" y="2.5" width="6" height="11.5" rx="3"/><path d="M5.5 11.5a6.5 6.5 0 0013 0M12 18v3.5" stroke-linecap="round"/></svg>',
+  send: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4z"/></svg>',
+  check1: '<svg viewBox="0 0 20 12" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6.5l3.4 3.4L14 3.3"/></svg>',
+  check2: '<svg viewBox="0 0 20 12" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M1 6.5l3.4 3.4L11 3"/><path d="M7.5 9.9L14 3"/></svg>',
+  play: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13l11-6.5z"/></svg>',
+  pause: '<svg viewBox="0 0 24 24" fill="currentColor"><rect x="7" y="5" width="3.4" height="14" rx="1.2"/><rect x="13.6" y="5" width="3.4" height="14" rx="1.2"/></svg>',
+  doc: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M14 2.5H6.5A1.5 1.5 0 005 4v16a1.5 1.5 0 001.5 1.5h11A1.5 1.5 0 0019 20V8z"/><path d="M14 2.5V8h5"/></svg>',
+  x: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>',
+  spark: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l1.6 5.6L19 9l-5.4 1.4L12 16l-1.6-5.6L5 9l5.4-1.4z"/><path d="M18.5 14l.8 2.7L22 17.5l-2.7.8-.8 2.7-.8-2.7L15 17.5l2.7-.8z"/></svg>',
+  stop: '<svg viewBox="0 0 24 24" fill="currentColor"><rect x="6.5" y="6.5" width="11" height="11" rx="2.5"/></svg>',
+  reply: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14L4 9l5-5"/><path d="M4 9h10a6 6 0 016 6v4"/></svg>',
+  forward: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M15 14l5-5-5-5"/><path d="M20 9H10a6 6 0 00-6 6v4"/></svg>',
+  share: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v7a1 1 0 001 1h14a1 1 0 001-1v-7"/><path d="M12 15V3"/><path d="M8 7l4-4 4 4"/></svg>',
+  download: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 13v6a1 1 0 001 1h14a1 1 0 001-1v-6"/><path d="M12 3v12"/><path d="M8 11l4 4 4-4"/></svg>',
+  copy: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 012-2h10"/></svg>',
+  info: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><path d="M12 7.5h.01"/></svg>',
+  star: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"><path d="M12 3.5l2.6 5.4 5.9.8-4.3 4.1 1 5.9-5.2-2.8-5.2 2.8 1-5.9-4.3-4.1 5.9-.8z"/></svg>',
+  trash: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16"/><path d="M9 7V5a1.5 1.5 0 011.5-1.5h3A1.5 1.5 0 0115 5v2"/><path d="M18.5 7l-1 12.6a2 2 0 01-2 1.9h-7a2 2 0 01-2-1.9L5.5 7"/><path d="M10 11.5v5M14 11.5v5"/></svg>',
+  more: '<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="19" cy="12" r="1.7"/></svg>',
+  gallery: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="9" cy="9" r="2"/><path d="M21 15l-5-5L5 21"/></svg>',
+  camera: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l2-2.5h6L17 8h3a1.5 1.5 0 011.5 1.5V19a1.5 1.5 0 01-1.5 1.5H4A1.5 1.5 0 012.5 19V9.5A1.5 1.5 0 014 8z"/><circle cx="12" cy="13.5" r="3.5"/></svg>',
+  fire: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2c.9 2.3 2.4 3.8 4 5.5 2 2.1 3.2 4 3.2 6.6A7.2 7.2 0 0112 21.5a7.2 7.2 0 01-7.2-7.4c0-1.9.8-3.7 2-5.1 0 0 .4 1.6 1.9 2.4C8.4 8.6 9.7 4.9 12 2z"/></svg>',
+  pin: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21.5s-7-6.3-7-11.3a7 7 0 0114 0c0 5-7 11.3-7 11.3z"/><circle cx="12" cy="10" r="2.6"/></svg>',
+  clock: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg>',
+  phone: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16.5v3a1.6 1.6 0 01-1.8 1.6 17.4 17.4 0 01-7.6-2.7 17.1 17.1 0 01-5-5A17.4 17.4 0 013.9 5.8 1.6 1.6 0 015.5 4h3a1.6 1.6 0 011.6 1.4c.1.9.3 1.8.6 2.6a1.6 1.6 0 01-.4 1.7l-1.2 1.2a14 14 0 005 5l1.2-1.2a1.6 1.6 0 011.7-.4c.8.3 1.7.5 2.6.6A1.6 1.6 0 0121 16.5z"/></svg>',
+  videocam: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="6.5" width="13" height="11" rx="2.5"/><path d="M15.5 11l6-3.5v9l-6-3.5z"/></svg>',
+  block: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M5.7 5.7l12.6 12.6"/></svg>',
+  chev: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>'
+}
+
+/* ------------------------------------------------------------ shared audio */
+/** One AudioContext for the whole app: waveform decode, live analysers and
+ * the picker tick. Created lazily; resumed on each use (autoplay policy). */
+let sharedAC = null
+const peaksCache = new Map()        // message id -> { peaks, duration } | null
+const mediaSources = new WeakMap()  // <audio> -> { analyser }
+
+function getAudioCtx () {
+  const AC = window.AudioContext || window.webkitAudioContext
+  if (!AC) return null
+  if (!sharedAC) {
+    try { sharedAC = new AC() } catch { return null }
+  }
+  if (sharedAC.state === 'suspended') sharedAC.resume().catch(() => { /* needs gesture */ })
+  return sharedAC
+}
+
+/** Decode a voice clip into ~28 normalised peak bars. Null on any failure —
+ * the bubble then falls back to the plain player. Cached per message id. */
+async function decodePeaks (m) {
+  if (!m.data) return null
+  if (peaksCache.has(m.id)) return peaksCache.get(m.id)
+  let out = null
+  try {
+    const ac = getAudioCtx()
+    if (!ac) throw new Error('no AudioContext')
+    const buf = await (await fetch(m.data)).arrayBuffer()
+    const decoded = await new Promise((resolve, reject) => {
+      // Callback form first: promise-less Safari builds still decode.
+      const maybe = ac.decodeAudioData(buf, resolve, reject)
+      if (maybe?.then) maybe.then(resolve, reject)
+    })
+    const ch = decoded.getChannelData(0)
+    const step = Math.max(1, Math.floor(ch.length / WAVE_BARS))
+    const peaks = []
+    let max = 0
+    for (let i = 0; i < WAVE_BARS; i++) {
+      let peak = 0
+      const start = i * step
+      const end = Math.min(ch.length, start + step)
+      for (let j = start; j < end; j += 8) {
+        const v = Math.abs(ch[j])
+        if (v > peak) peak = v
+      }
+      peaks.push(peak)
+      if (peak > max) max = peak
+    }
+    out = { peaks: peaks.map((p) => (max > 0 ? p / max : 0)), duration: decoded.duration }
+  } catch { out = null }
+  if (peaksCache.size > 300) peaksCache.clear()
+  peaksCache.set(m.id, out)
+  return out
+}
+
+/** Soft picker tick: a 2ms 2kHz blip at low gain, plus a haptic tap. */
+function tickBlip () {
+  const ac = getAudioCtx()
+  if (ac) {
+    try {
+      const osc = ac.createOscillator()
+      const gain = ac.createGain()
+      osc.frequency.value = 2000
+      osc.connect(gain)
+      gain.connect(ac.destination)
+      const t = ac.currentTime
+      gain.gain.setValueAtTime(0.05, t)
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.02)
+      osc.start(t)
+      osc.stop(t + 0.025)
+    } catch { /* audio unavailable — vibration still fires */ }
+  }
+  navigator.vibrate?.(8)
+}
+
+/** True when the text carries no non-Latin letters — i.e. it is written in
+ *  English letters, so it may be romanized ("Tanglish") rather than English. */
+/** Everyday English that a one- or two-word message is likely to be. Used
+ *  only where language detection is unreliable (under three words). */
+const COMMON_EN = new Set(['ok', 'okay', 'yes', 'no', 'yeah', 'yep', 'nope', 'hi', 'hello',
+  'hey', 'bye', 'thanks', 'thank', 'you', 'please', 'sorry', 'sure', 'good', 'morning',
+  'night', 'evening', 'afternoon', 'see', 'later', 'me', 'too', 'why', 'what', 'when',
+  'where', 'who', 'how', 'now', 'today', 'tomorrow', 'yesterday', 'call', 'come', 'coming',
+  'going', 'home', 'work', 'done', 'wait', 'here', 'there', 'welcome', 'congrats', 'lol', 'haha'])
+
+const looksEnglish = (text) => {
+  const words = String(text || '').toLowerCase().match(/[a-z']+/g) || []
+  return words.length > 0 && words.every((w) => COMMON_EN.has(w))
+}
+
+const flatten = (t) => String(t || '').replace(/[\s\p{P}]+/gu, ' ').trim().toLowerCase()
+
+const isLatinScript = (text) => !/[^\p{Script=Latin}\p{N}\p{P}\p{Zs}\p{S}\p{M}]/u.test(text)
+
+const hasLocalScript =(lang) => supportedScripts().some((s) => s.code === lang)
+/** Scripted = convertible: by the built-in rules (instant) or Azure (network). */
+
+const kindLabel = (m) => {
+  switch (m.kind) {
+    case 'image': return m.viewOnce ? 'Private photo' : 'Photo'
+    case 'voice': return `Voice note (${m.dur || 0}s)`
+    case 'video': return 'Video'
+    case 'file': return m.fileName || 'File'
+    case 'location': return m.live === false ? 'Live location ended'
+      : m.live ? 'Live location' : 'Current location'
+    default: return String(m.text || '').slice(0, QUOTE_CHARS)
+  }
+}
+
+/** '🔥 5s' / '🔥 2m' — the sender-chosen burst timer, shown on both sides.
+ * Legacy view-once photos without a stored timer burst after 10s (the viewer
+ * default), so the chip says exactly that. */
+const burstChip = (m) => {
+  const secs = m.burst || 10
+  return `🔥 ${secs >= 60 ? `${secs / 60}m` : `${secs}s`}`
+}
+
+/** Eight tiny ✦ particles twinkling over a burst card. Positions and
+ * staggered delays live in chat.css (nth-of-type) — pure CSS, GPU-cheap.
+ * <i> on purpose: the legacy `.vonce span` blanket rule must not hit these. */
+const sparkEls = () =>
+  Array.from({ length: 8 }, () => el('i', { class: 'sprk', 'aria-hidden': 'true', text: '✦' }))
+
+/** Voice-note translate targets: South Indian languages first, then North. */
+const VOICE_NOTE_LANGS = ['ta', 'te', 'ml', 'kn', 'hi', 'mr', 'bn', 'gu', 'pa']
+
+/** ElevenLabs dictation re-transcribes the WHOLE take at every chunk
+ * boundary — accuracy beats latency for a composer draft. */
+const DICTATE_SLICE_MS = 4000
+
+/** Serialize a Blob to a data URL — voice notes travel as data URLs. */
+const blobToDataURL = (blob) => new Promise((resolve, reject) => {
+  const reader = new FileReader()
+  reader.onload = () => resolve(reader.result)
+  reader.onerror = () => reject(new Error('read failed'))
+  reader.readAsDataURL(blob)
+})
+
+/** Best-effort clip duration in seconds; falls back when metadata is
+ * unavailable (some mp3 encodes report Infinity until fully buffered). */
+const audioDuration = (src, fallback) => new Promise((resolve) => {
+  const probe = new Audio()
+  probe.preload = 'metadata'
+  probe.onloadedmetadata = () => resolve(
+    Number.isFinite(probe.duration) && probe.duration > 0
+      ? Math.round(probe.duration)
+      : fallback
+  )
+  probe.onerror = () => resolve(fallback)
+  probe.src = src
+})
+
+export function render (root, ctx, roomId) {
+  if (!db.convo(roomId)) {
+    ctx.toast('Conversation not found')
+    ctx.nav('#/chat')
+    return () => {}
+  }
+
+  const convo = db.convo(roomId)
+  const conn = rooms.ensure(roomId)
+  const myId = db.profile().id
+
+  /* ------------------------------------------------------------- state */
+  let mounted = true
+  let lastDayKey = null
+  let replyTarget = null
+  let viewOncePick = false
+  let recording = null
+  let recInterval = null
+  let recStartedAt = 0
+  let activityPingAt = 0
+  let earlyKind = null      // attachment kind signalled from the attach sheet
+  let earlyTimer = null     // its 2.5s keep-alive interval
+  let pickerArmed = false   // a native file picker is open (cancel heuristic)
+  let pendingClip = null
+  let confAudio = null
+  const voiceStops = new Set()   // live waveform loops to halt on unmount
+  let dictating = null
+  let dictBase = ''         // composer text that predates the dictation session
+  let lastTypingSent = 0
+  let idleTimer = null
+  let statusTimer = null
+  const msgEls = new Map()      // id -> { wrap, message }
+  const trCache = new Map()     // id -> {text, engine} | 'pending'
+  const timers = new Set()
+  const countdowns = new Set()  // 1s intervals behind live ttl chips
+  const liveShares = new Map()  // message id -> { watchId, stopTimer } (mine)
+
+  const later = (fn, ms) => {
+    const t = setTimeout(() => { timers.delete(t); fn() }, ms)
+    timers.add(t)
+    return t
+  }
+  const drop = (t) => { if (t !== null) { clearTimeout(t); timers.delete(t) } }
+
+  /* --------------------------------------------------------------- DOM */
+  root.classList.add('v-chat')
+
+  const backBtn = el('button', {
+    class: 'back', type: 'button', 'aria-label': 'Back', html: IC.back,
+    onclick: () => ctx.nav('#/chat')
+  })
+
+  const avBtn = el('button', { class: 'avbtn', type: 'button', 'aria-label': 'Contact info' })
+  avBtn.addEventListener('click', () => openContactSheet())
+
+  function beginCall (video) {
+    if (conn.peerCount === 0) {
+      ctx.toast('They are offline — calls connect while you are both online')
+      return
+    }
+    conn.startCall(video).catch((e) => ctx.toast(e.message || 'Microphone permission needed'))
+  }
+
+  const statusEl = el('span', { class: 'st' })
+  const who = el('div', { class: 'who' }, [
+    el('b', { text: convo.title || convo.peer?.name || 'Chat' }),
+    statusEl
+  ])
+
+  /**
+   * The two headline features get the header's spare room: a big icon plus a
+   * little switch each, side by side. Owner's mapping (references 2026-07-25):
+   *   文A  = TRANSLITERATION — same words, the other script
+   *   🌐   = TRANSLATION     — different language, asks which
+   * Each lights its own colour when on and greys out when off.
+   */
+  const featureCtl = (kind, iconNode, label) => {
+    const knob = el('span', { class: 'fx-sw' }, [el('span', { class: 'fx-knob' })])
+    return el('button', {
+      class: `fx fx-${kind}`, type: 'button', 'data-on': 'false',
+      title: label, 'aria-label': label, 'aria-pressed': 'false'
+    }, [el('span', { class: 'fx-ic' }, [iconNode]), knob])
+  }
+
+  const trBtn = featureCtl('tr', el('span', { html: IC.globe }), 'Translation')
+  /**
+   * Translation is an explicit, locked choice: pressing 文A always asks which
+   * language, and that answer holds for THIS conversation until changed —
+   * pressing again reopens the same list (with a way out at the top).
+   */
+  trBtn.addEventListener('click', () => openTranslateSheet())
+
+  function openTranslateSheet () {
+    const { mode, langTo } = composeState()
+    const on = mode === 'translate'
+    const items = []
+    if (on) {
+      items.push({
+        label: 'Turn off translation',
+        danger: true,
+        fn: () => setCompose({ composeMode: null })
+      })
+    }
+    for (const code of COMPOSE_LANGS) {
+      items.push({
+        label: (on && langTo === code ? '✓ ' : '') + langName(code),
+        // English is a legitimate target — Tamil → English is the whole point.
+        fn: () => setCompose({ langTo: code, composeMode: 'translate' })
+      })
+    }
+    actionSheet(items, on
+      ? 'Translating your messages into…'
+      : 'Translate everything you type into…')
+  }
+
+  /**
+   * Compose-language model (decoupled from the profile — that one is the APP
+   * language for reading incoming messages). Per chat:
+   *   convo.langTo      target language, chosen via the ▾ chip. Default: none.
+   *   convo.composeMode 'translate' | 'translit' | null. Default: OFF —
+   *                     typing sends plain English until a mode is chosen.
+   * The two header buttons are mutually exclusive: translation turns English
+   * into ACTUAL Tamil; transliteration turns Tamil-in-English-letters into
+   * Tamil script. Different features, and the panel labels which is running.
+   */
+  const composeState = () => {
+    const c = db.convo(roomId) || convo
+    return { mode: c.composeMode || null, langTo: c.langTo || null }
+  }
+
+  /** Whole-chat transliteration switch (separate from the composer mode). */
+  const xlitOn = () => Boolean((db.convo(roomId) || convo).xlit)
+
+  /**
+   * The language THEIR messages should arrive in — the return half of the
+   * chat's lock. If I am writing Tamil and sending it out as English, English
+   * coming back should reach me as Tamil. What I actually write in this chat
+   * (detected, remembered per conversation) beats the profile default, which
+   * is English for everyone since signup stopped asking.
+   */
+  function myReadLang () {
+    const c = db.convo(roomId) || convo
+    // Deliberately does NOT consult the transliteration language: 文A is a
+    // reading aid and must never change what translation does.
+    const mine = c.myLang
+    return mine && mine !== c.langTo ? mine : db.profile().lang
+  }
+
+  /** Remember the language I write in here, from a confident detection. */
+  function rememberMyLang (detected) {
+    const base = String(detected || '').split('-')[0]
+    if (!base || base === 'und') return
+    const c = db.convo(roomId) || convo
+    if (c.myLang !== base) db.upsertConvo({ roomId, myLang: base })
+  }
+
+  function setCompose (patch) {
+    db.upsertConvo({ roomId, ...patch })
+    updateToggles()
+    updatePreview()
+  }
+
+  /** South Indian first, then North Indian, then the world — per the spec. */
+  const COMPOSE_LANGS = [
+    'ta', 'te', 'ml', 'kn',
+    'hi', 'mr', 'bn', 'gu', 'pa',
+    'en', 'es', 'fr', 'de', 'pt', 'ar', 'ja', 'zh', 'ko', 'ru'
+  ]
+
+  /** The ▾ chip: change the locked language without leaving the current mode. */
+  function pickComposeLang (thenMode) {
+    if (thenMode === 'translate' || (!thenMode && composeState().mode === 'translate')) {
+      openTranslateSheet()
+      return
+    }
+    actionSheet(COMPOSE_LANGS.map((code) => ({
+      label: (composeState().langTo === code ? '✓ ' : '') + langName(code),
+      fn () {
+        const patch = { langTo: code }
+        if (thenMode) patch.composeMode = thenMode
+        setCompose(patch)
+      }
+    })), 'Convert your typing into…')
+  }
+
+  const txBtn = featureCtl('tx', el('span', { class: 'xa', text: '文A' }), 'Transliteration')
+
+  /** Which language this chat is typed in. "Auto" lets detection guess. */
+  const XLIT_LANGS = ['ta', 'te', 'ml', 'kn', 'hi', 'mr', 'bn', 'gu', 'pa']
+
+  const xlitChip = el('button', {
+    class: 'xchip', type: 'button', 'aria-label': 'Language you type in',
+    onclick () {
+      const cur = (db.convo(roomId) || convo).xlitLang || null
+      actionSheet([
+        { label: (cur ? '' : '✓ ') + 'Auto-detect', fn: () => setXlitLang(null) },
+        ...XLIT_LANGS.map((code) => ({
+          label: (cur === code ? '✓ ' : '') + langName(code),
+          fn: () => setXlitLang(code)
+        }))
+      ], 'You are typing in…')
+    }
+  })
+
+  function setXlitLang (code) {
+    db.upsertConvo({ roomId, xlitLang: code, translitLang: code })
+    xlitCache.clear()
+    updateToggles()
+    renderList()
+    updatePreview()
+  }
+  /**
+   * Transliteration is a MODE for the whole chat, not a per-message choice:
+   * one tap and everything you type is converted into its own script. The
+   * language is DETECTED from what you type — no picking a language first,
+   * because the app already knows how to recognise "ta-Latn" and friends.
+   * The ▾ chip still pins a language when someone wants to force one.
+   */
+  /**
+   * Transliteration is a plain switch — no language question, because it
+   * detects. Turning it on rewrites the WHOLE conversation (old messages and
+   * everything arriving after), not just what you type next.
+   */
+  txBtn.addEventListener('click', () => {
+    const on = !xlitOn()
+    const { mode } = composeState()
+    db.upsertConvo({
+      roomId,
+      xlit: on,
+      // Translation owns the composer when both are on: it changes what is
+      // actually sent, so it must not be silently overridden.
+      composeMode: mode === 'translate' ? mode : (on ? 'translit' : null)
+    })
+    updateToggles()
+    updatePreview()
+    renderList()
+    scrollBottom()
+    ctx.toast(on ? 'Transliteration on for this chat' : 'Transliteration off')
+  })
+
+  const top = el('div', { class: 'top' }, [
+    backBtn, avBtn, who,
+    el('div', { class: 'hact' }, [txBtn, xlitChip, trBtn])
+  ])
+
+  const thread = el('div', { class: 'thread' })
+  const newChip = el('button', {
+    class: 'newchip', type: 'button', text: 'New messages', style: 'display:none',
+    onclick () { scrollBottom(); newChip.style.display = 'none' }
+  })
+  const threadwrap = el('div', { class: 'threadwrap' }, [thread, newChip])
+
+  /* composer */
+  const replyName = el('b')
+  const replySnippet = el('span')
+  const replybar = el('div', { class: 'replybar', style: 'display:none' }, [
+    el('div', { class: 'rq' }, [replyName, replySnippet]),
+    el('button', { class: 'rx', type: 'button', 'aria-label': 'Cancel reply', html: IC.x, onclick: clearReply })
+  ])
+
+  const tlTag = el('div', { class: 'tlTag2', style: 'display:none' })
+  const tlMain = el('div', { class: 'tlMain', style: 'display:none' })
+  const tlSub = el('div', { class: 'tlSub', style: 'display:none' })
+  const tlprev = el('div', { class: 'tlprev', style: 'display:none' }, [tlTag, tlMain, tlSub])
+
+  const input = el('input', { type: 'text', placeholder: 'Type a message…', autocomplete: 'off' })
+  // Shows while the per-chat timer mode is on; tapping reopens the wheel.
+  const ttlChip = el('button', {
+    class: 'ttlchip', type: 'button', style: 'display:none', title: 'Timer messages',
+    onclick: openTimerSheet
+  })
+  // The small IN-FIELD button is the voice-note mic (tap to record, tap the
+  // big stop button to review). Dictation lives in the attach grid now.
+  const voiceBtn = el('button', {
+    class: 'voiceB', type: 'button', title: 'Record a voice note',
+    'aria-label': 'Record a voice note', html: IC.micGhost,
+    onclick () { if (recording) stopRecording(); else startRecording() }
+  })
+  // 'Listening…' hint chip — visible only while a dictation session runs.
+  const dictHint = el('span', { class: 'dicthint', style: 'display:none', text: 'Listening…' })
+  const field = el('div', { class: 'field' }, [ttlChip, dictHint, input, voiceBtn])
+
+  const plusBtn = el('button', {
+    class: 'plusB', type: 'button', 'aria-label': 'Attach', html: IC.plus, onclick: openAttach
+  })
+
+  const recTime = el('span', { class: 'rectime', text: '0:00' })
+  // Live input waveform between the blinking dot and the timer.
+  const recWave = el('div', { class: 'recwave', 'aria-hidden': 'true' },
+    Array.from({ length: REC_BARS }, () => el('i')))
+  const recbar = el('div', { class: 'recbar' }, [
+    el('span', { class: 'recdot' }),
+    recWave,
+    recTime
+  ])
+
+  const micBtn = el('button', {
+    class: 'micB', type: 'button', 'aria-label': 'Take a photo', html: IC.camera
+  })
+  // One button, three moods: send text / stop recording / open the camera
+  // (capture → editor). Voice notes start from the small in-field mic.
+  micBtn.addEventListener('click', () => {
+    if (recording) { stopRecording(); return }
+    if (input.value.trim()) { sendText(); return }
+    if (guardPending()) return
+    viewOncePick = false
+    startEarlyActivity('photo')
+    cameraInput.click()
+  })
+
+  /** Voice review bar — swaps in for the composer after a recording stops. */
+  const confbar = el('div', { class: 'confbar', style: 'display:none' })
+
+  const photoInput = el('input', { type: 'file', accept: 'image/*', multiple: '', style: 'display:none' })
+  const cameraInput = el('input', { type: 'file', accept: 'image/*', capture: 'environment', style: 'display:none' })
+  const fileInput = el('input', { type: 'file', style: 'display:none' })
+  const videoInput = el('input', { type: 'file', accept: 'video/*', style: 'display:none' })
+
+  const bar = el('div', { class: 'bar' }, [plusBtn, field, recbar, micBtn, photoInput, cameraInput, fileInput, videoInput])
+  const composer = el('div', { class: 'composer' }, [replybar, tlprev, bar, confbar])
+
+  root.appendChild(top)
+  root.appendChild(threadwrap)
+  root.appendChild(composer)
+
+  /* ------------------------------------------------------------ scroll */
+  function nearBottom () {
+    return thread.scrollHeight - thread.scrollTop - thread.clientHeight < NEAR_BOTTOM_PX
+  }
+  function scrollBottom () { thread.scrollTop = thread.scrollHeight }
+  thread.addEventListener('scroll', () => {
+    if (nearBottom()) newChip.style.display = 'none'
+  })
+
+  /* ------------------------------------------------------------ header */
+  function updateAvatar () {
+    clear(avBtn)
+    const online = conn.peerCount > 0 || convo.kind === 'demo'
+    avBtn.appendChild(avatar(convo.peer || { name: convo.title }, 38, { dot: online }))
+  }
+
+  function updateToggles () {
+    const { mode, langTo } = composeState()
+    const trOn = mode === 'translate' && Boolean(langTo)
+    const txOn = xlitOn()
+    for (const [button, on, title] of [
+      [trBtn, trOn, trOn ? `Translation · ${langName(langTo)}` : 'Translation'],
+      [txBtn, txOn, txOn ? 'Transliteration · on' : 'Transliteration']
+    ]) {
+      button.setAttribute('aria-pressed', String(on))
+      button.dataset.on = String(on)
+      button.title = title
+      button.setAttribute('aria-label', title)
+    }
+    const pinned = (db.convo(roomId) || convo).xlitLang
+    xlitChip.textContent = (pinned ? langName(pinned) : 'Auto') + ' ▾'
+    xlitChip.style.display = txOn ? '' : 'none'
+    xlitChip.dataset.pinned = String(Boolean(pinned))
+  }
+
+  function updateStatus () {
+    if (!mounted) return
+    const c = db.convo(roomId) || convo
+    const t = conn.typing
+    let typing = false
+    let text
+    if (t && t.until > Date.now()) {
+      typing = true
+      text = ACTIVITY_TEXT[t.kind] || ACTIVITY_TEXT.typing
+      drop(statusTimer)
+      statusTimer = later(updateStatus, t.until - Date.now() + 60)
+    } else if (c.kind === 'demo') {
+      text = 'online · demo'
+    } else if (c.pending) {
+      text = 'Request pending — they have not accepted yet'
+    } else if (conn.peerCount > 0 || lobby.peers().some((x) => x.id === c.peer?.id)) {
+      // Connected to this room, or visible in the app-wide lobby: online.
+      text = 'Online'
+    } else if (c.peerSeen) {
+      text = `Last seen ${fmtDay(c.peerSeen)}`
+    } else {
+      text = 'Offline'
+    }
+    if (c.mode === 'nearby' && !typing) {
+      const live = lobby.peers().find((x) => x.id === c.peer?.id)
+      const d = fmtDistance(distanceM(lobby.myPosition(), live))
+      if (d) text += ` · ${d} away`
+    }
+    statusEl.textContent = text
+    statusEl.classList.toggle('typing', typing)
+    input.placeholder = pendingLocked() ? 'Waiting for them to accept…' : 'Type a message…'
+  }
+
+  /* ------------------------------------------------------- translation */
+  /* ------------------------------------------- whole-chat transliteration */
+  /**
+   * With 文A on, every text message in the thread — old ones, mine, theirs,
+   * and everything arriving later — gets a second line in the other script:
+   * romanized ("Tanglish") becomes the real script, and a native-script
+   * message becomes readable in English letters. The words never change;
+   * that is translation's job.
+   */
+  const xlitCache = new Map()          // id -> {text, lang} | 'pending' | null
+
+  /**
+   * Owner's rule (2026-07-25): "enga iruka ?" → "where are you" — English
+   * letters in, English words out. So this reads whatever language the
+   * message is in (romanized or native script) and renders it in plain
+   * English. Messages already in English are left alone.
+   */
+  /** The language this conversation actually speaks, learned as it goes. */
+  const chatLang = () => {
+    const c = db.convo(roomId) || convo
+    return c.xlitLang || c.translitLang || c.myLang || null
+  }
+
+  /** True when the owner named the language — detection must not override. */
+  const langIsPinned = () => Boolean((db.convo(roomId) || convo).xlitLang)
+
+  /**
+   * Measured on the live service: romanized detection is 0% accurate at one
+   * word and 12% at two ("vanakkam" reads as English, "kem cho" as
+   * Vietnamese). Below this many words we do not ask — the conversation's own
+   * language is a far better answer than a confident wrong one.
+   */
+  const DETECT_MIN_WORDS = 3
+  const wordCount = (text) => String(text || '').trim().split(/\s+/).filter(Boolean).length
+
+  async function computeXlit (m) {
+    const text = m.text
+
+    /* One LLM call answers language + script + English together, and handles
+     * the ear-spelling the classic chain cannot ("Ippo variya" → "Are you
+     * coming now?" vs "Is it tax now?"). It also leaves names and English
+     * alone by itself. Everything below is the fallback when it is down. */
+    const pinned = (db.convo(roomId) || convo).xlitLang
+    const read = await readMessage(text, pinned ? langName(pinned) : '')
+    if (read) {
+      if (read.lang === 'en' || !read.english) return null
+      return { text: read.english, lang: read.lang, script: read.script }
+    }
+    const latin = isLatinScript(text)
+
+    // Already in a real script: translating it straight is reliable.
+    if (!latin) {
+      const res = await translateText(text, null, 'en')
+      if (!res?.text || res.text === text) return null
+      return { text: res.text, lang: String(res.detected || '').split('-')[0] }
+    }
+
+    /* Romanized. Measured head-to-head: going through the language's own
+     * script first is dramatically better than translating the ear-spelling
+     * directly ("enga vetuku variya" → "Let's go to our house…" instead of
+     * "Let's eat one of our cuts"), because the transliterator knows real
+     * words. So the only question is WHICH language. */
+    let lang = chatLang()
+    let viaChat = Boolean(lang)
+    /* Even with a language pinned, plain English must pass through untouched —
+     * otherwise "ok see you" gets pushed through Tamil and comes back as
+     * "Okay, C U.". One-word messages skip this test because detection calls
+     * everything short English ("vanakkam" included). */
+    /* Detection only earns a vote at three words or more — below that it
+     * calls almost everything English, which silently swallowed real Tamil
+     * ("Naan varala"). Short English is caught by a word list instead. */
+    if (wordCount(text) >= DETECT_MIN_WORDS) {
+      const hit = await detectLanguage(text)
+      if (hit?.base === 'en') return null
+      if (!langIsPinned() && hit?.romanized && SCRIPT_MAP[hit.base]) {
+        lang = hit.base
+        viaChat = false
+        rememberChatLang(lang)
+      }
+    } else if (looksEnglish(text)) {
+      return null
+    }
+    if (!lang || lang === 'en' || !SCRIPT_MAP[lang]) return null
+
+    const native = await transliterateRemote(text, lang)
+    if (!native || native === text) return null
+    const res = await translateText(native, lang, 'en')
+    if (!res?.text || res.text === native) return null
+    return { text: res.text, lang, viaChat }
+  }
+
+  function rememberChatLang (base) {
+    const c = db.convo(roomId) || convo
+    if (!base || base === 'en' || c.translitLang === base) return
+    db.upsertConvo({ roomId, translitLang: base })
+    /* Short messages ("vanakkam", "enga iruka?") give up when the chat has no
+     * known language yet. Learning one makes them answerable, so drop those
+     * give-ups and let them run again — otherwise the first lines of every
+     * conversation stay blank forever. */
+    let retried = false
+    for (const [id, value] of xlitCache) {
+      if (value === null) { xlitCache.delete(id); retried = true }
+    }
+    if (retried && mounted) {
+      for (const { message } of msgEls.values()) {
+        if (message && (!message.kind || message.kind === 'text')) applyXlit(message)
+      }
+    }
+  }
+
+  function applyXlit (m) {
+    const entry = msgEls.get(m.id)
+    const bub = entry?.wrap.querySelector('.bubIn, .bubOut')
+    if (!bub) return
+    const existing = bub.querySelector('.xl')
+    if (!xlitOn() || !m.text || (m.kind && m.kind !== 'text')) { existing?.remove(); return }
+
+    if (!xlitCache.has(m.id)) {
+      xlitCache.set(m.id, 'pending')
+      computeXlit(m)
+        .then((res) => { xlitCache.set(m.id, res) })
+        .catch(() => { xlitCache.set(m.id, null) })
+        .then(() => {
+          if (!mounted) return
+          const stick = nearBottom()
+          applyXlit(m)
+          if (stick) scrollBottom()
+        })
+    }
+
+    const cur = xlitCache.get(m.id)
+    if (cur === null) { existing?.remove(); return }
+    const pending = cur === 'pending'
+    const tag = pending
+      ? 'READING…'
+      : `${cur.lang ? langName(cur.lang) : 'Detected'} → English${cur.viaChat ? ' · from this chat' : ''}`
+
+    const node = el('div', { class: 'xl' + (pending ? ' pend' : '') }, [
+      el('span', { class: 'xlTag' }, [el('span', { class: 'xa', text: '文A' }), tag]),
+      el('span', { class: 'xlText', text: pending ? '…' : cur.text })
+    ])
+    if (existing) existing.replaceWith(node)
+    else bub.appendChild(node)
+  }
+
+  function applyTranslation (m) {
+    const entry = msgEls.get(m.id)
+    const bub = entry?.wrap.querySelector('.bubIn')
+    if (!bub) return
+    const existing = bub.querySelector('.tr')
+    const p = db.profile()
+    // The chat's lock governs BOTH directions: what I read here is my own
+    // language for this conversation, not the profile default. m.lang is only
+    // the sender's profile claim, so it cannot decide whether to translate —
+    // detection does that, and an unchanged result costs nothing to show.
+    const readLang = myReadLang()
+    const { mode: cmode, langTo: clang } = composeState()
+    const want = m.from !== myId && (!m.kind || m.kind === 'text') &&
+      Boolean(m.text) && Boolean(readLang) && p.autoTranslate &&
+      // Translation is opt-in per chat: with the globe off, incoming messages
+      // are left exactly as they arrived.
+      cmode === 'translate' && Boolean(clang)
+    if (!want) { existing?.remove(); return }
+
+    if (!trCache.has(m.id)) {
+      // Instant path: the sender pre-translated into my language and shipped
+      // it inside the message — nothing to fetch, zero wait.
+      if (m.tr?.lang === readLang && m.tr.text) {
+        trCache.set(m.id, { text: m.tr.text, engine: 'instant' })
+      } else {
+        trCache.set(m.id, 'pending')
+        // m.lang is the SENDER'S profile language, not a fact about this
+        // text — someone set to English types romanized Tamil all the time.
+        // Detection beats the claim and costs one round trip instead of two.
+        translateText(m.text, null, myReadLang())
+          .then((res) => { trCache.set(m.id, res) })
+          .catch(() => { trCache.set(m.id, { text: null, engine: null }) })
+          .then(() => {
+            if (!mounted) return
+            const stick = nearBottom()
+            applyTranslation(m)
+            if (stick) scrollBottom()
+          })
+      }
+    }
+
+    const cur = trCache.get(m.id)
+    if (cur !== 'pending' && cur?.engine === null) { existing?.remove(); return }
+    if (cur !== 'pending' && cur?.text && flatten(cur.text) === flatten(m.text)) {
+      existing?.remove()
+      return
+    }
+
+    const pending = cur === 'pending'
+    const engineTag = cur?.engine === 'device' ? 'ON-DEVICE'
+      : cur?.engine === 'instant' ? 'INSTANT' : 'CLOUD'
+    const tag = pending ? 'TRANSLATING' : `TRANSLATED · ${engineTag}`
+    const node = el('div', { class: 'tr' }, [
+      el('div', { class: 'trTag' }, [el('span', { class: 'xa', text: '文A' }), tag]),
+      el('div', { class: 'trTxt', text: pending ? '…' : cur.text })
+    ])
+    if (existing) existing.replaceWith(node)
+    else bub.insertBefore(node, bub.querySelector('.meta'))
+  }
+
+  function refreshTranslations () {
+    for (const { message } of msgEls.values()) {
+      if (message.from !== myId && (!message.kind || message.kind === 'text')) applyTranslation(message)
+    }
+  }
+
+  /* ---------------------------------------------------------- messages */
+  function dayLabel (ts) {
+    return new Date(ts).toDateString() === new Date().toDateString() ? 'Today' : fmtDay(ts)
+  }
+
+  function buildQuote (replyToId) {
+    const orig = conn.store.list().find((x) => x.id === replyToId)
+    if (!orig) return el('div', { class: 'q qgone', text: 'Original message deleted' })
+    return el('div', { class: 'q' }, [
+      el('b', { text: orig.from === myId ? 'You' : (orig.name || convo.peer?.name || '') }),
+      kindLabel(orig)
+    ])
+  }
+
+  /**
+   * Voice bubble with a live waveform: peaks are decoded once per message id,
+   * playback colours the bars left-to-right, and the bars around the playhead
+   * breathe with the LIVE amplitude (AnalyserNode + rAF). If decoding fails
+   * (unsupported codec, blocked AudioContext) the plain player still works.
+   */
+  function buildVoice (m) {
+    const audio = el('audio', { src: m.data, preload: 'metadata' })
+    const btn = el('button', { class: 'vplay', type: 'button', 'aria-label': 'Play voice note', html: IC.play })
+    const durEl = el('span', { class: 'vdur', text: `${m.dur || 0}s` })
+    const wrap = el('div', { class: 'voice' }, [btn, durEl, audio])
+
+    let bars = null
+    let clipDur = m.dur || 0
+    let raf = 0
+    let analyser = null
+    let ampBuf = null
+
+    decodePeaks(m).then((decoded) => {
+      if (!mounted || !decoded) return
+      clipDur = decoded.duration || clipDur
+      const wave = el('div', { class: 'wave', 'aria-hidden': 'true' })
+      bars = decoded.peaks.map((p) => {
+        const bar = el('i', { style: `height:${Math.round(4 + p * 18)}px` })
+        wave.appendChild(bar)
+        return bar
+      })
+      wrap.insertBefore(wave, durEl)
+    })
+
+    const effDur = () => (Number.isFinite(audio.duration) && audio.duration) || clipDur || 1
+
+    function setupAnalyser () {
+      if (analyser || !bars) return
+      try {
+        const ac = getAudioCtx()
+        if (!ac) return
+        let entry = mediaSources.get(audio)
+        if (!entry) {
+          // A MediaElementSource can only ever be created once per element.
+          const src = ac.createMediaElementSource(audio)
+          const an = ac.createAnalyser()
+          an.fftSize = 256
+          src.connect(an)
+          an.connect(ac.destination)
+          entry = { analyser: an }
+          mediaSources.set(audio, entry)
+        }
+        analyser = entry.analyser
+        ampBuf = new Uint8Array(analyser.fftSize)
+      } catch { analyser = null }
+    }
+
+    function paintBars (finalFrac) {
+      if (!bars) return
+      const frac = finalFrac !== undefined ? finalFrac : Math.min(1, audio.currentTime / effDur())
+      const playPos = frac * bars.length
+      let amp = 0
+      if (analyser && !audio.paused) {
+        analyser.getByteTimeDomainData(ampBuf)
+        let sum = 0
+        for (let i = 0; i < ampBuf.length; i++) {
+          const v = (ampBuf[i] - 128) / 128
+          sum += v * v
+        }
+        amp = Math.min(1, Math.sqrt(sum / ampBuf.length) * 3)
+      }
+      const head = Math.floor(playPos)
+      for (let i = 0; i < bars.length; i++) {
+        bars[i].classList.toggle('played', i < playPos)
+        const near = !audio.paused && Math.abs(i - head) <= 1
+        bars[i].style.transform = near && amp > 0 ? `scaleY(${(1 + amp * 0.9).toFixed(2)})` : ''
+      }
+    }
+
+    function loop () {
+      if (!mounted || audio.paused) return
+      paintBars()
+      raf = requestAnimationFrame(loop)
+    }
+
+    const stopLoop = () => { if (raf) { cancelAnimationFrame(raf); raf = 0 } }
+    const stopAll = () => { stopLoop(); try { audio.pause() } catch { /* detached */ } }
+    voiceStops.add(stopAll)
+
+    btn.addEventListener('click', () => {
+      if (audio.paused) {
+        setupAnalyser()
+        audio.play().catch(() => ctx.toast('Could not play this voice note'))
+      } else audio.pause()
+    })
+    audio.addEventListener('play', () => {
+      btn.innerHTML = IC.pause
+      btn.classList.add('playing')
+      stopLoop()
+      raf = requestAnimationFrame(loop)
+    })
+    audio.addEventListener('pause', () => {
+      btn.innerHTML = IC.play
+      btn.classList.remove('playing')
+      stopLoop()
+      paintBars()
+    })
+    audio.addEventListener('ended', () => {
+      btn.innerHTML = IC.play
+      btn.classList.remove('playing')
+      stopLoop()
+      paintBars(0)
+    })
+    audio.addEventListener('timeupdate', () => { if (audio.paused) paintBars() })
+    return wrap
+  }
+
+  function openImage (data) {
+    const overlay = el('div', { class: 'imgview' }, [el('img', { src: data, alt: '' })])
+    overlay.addEventListener('click', () => overlay.remove())
+    root.appendChild(overlay)
+  }
+
+  /** Fullscreen video, same overlay grammar as openImage. Backdrop closes;
+   * taps on the player itself keep working the native controls. */
+  function openVideoView (data) {
+    const overlay = el('div', { class: 'imgview' }, [
+      el('video', { src: data, controls: '', autoplay: '', playsinline: '' })
+    ])
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove() })
+    root.appendChild(overlay)
+  }
+
+  /**
+   * The burst viewer. A countdown ring runs for the sender-chosen time while
+   * the photo shows; at zero (or on early close) the photo bursts into
+   * particles and is deleted without trace — tombstoned, gone from both ends.
+   */
+  function openViewOnce (m) {
+    const secs = Math.max(1, m.burst || 10)
+    const R = 26
+    const CIRC = 2 * Math.PI * R
+    const img = el('img', { src: m.data, alt: '' })
+    const count = el('span', { class: 'bcount', text: String(secs) })
+    const ringFg = document.createElementNS('http://www.w3.org/2000/svg', 'circle')
+    ringFg.setAttribute('cx', '30'); ringFg.setAttribute('cy', '30'); ringFg.setAttribute('r', String(R))
+    ringFg.setAttribute('class', 'bring-fg')
+    ringFg.style.strokeDasharray = String(CIRC)
+    ringFg.style.strokeDashoffset = '0'
+    ringFg.style.transition = `stroke-dashoffset ${secs}s linear`
+    const ringBg = document.createElementNS('http://www.w3.org/2000/svg', 'circle')
+    ringBg.setAttribute('cx', '30'); ringBg.setAttribute('cy', '30'); ringBg.setAttribute('r', String(R))
+    ringBg.setAttribute('class', 'bring-bg')
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
+    svg.setAttribute('viewBox', '0 0 60 60')
+    svg.setAttribute('class', 'bring')
+    svg.appendChild(ringBg); svg.appendChild(ringFg)
+
+    // Orbiting sparkles around the countdown ring — the container spins, each
+    // ✦ sits on the circle and twinkles on its own stagger (pure CSS).
+    const orbit = el('span', { class: 'borbit', 'aria-hidden': 'true' },
+      Array.from({ length: 6 }, () => el('i', { text: '✦' })))
+    const overlay = el('div', { class: 'imgview burstview' }, [
+      img,
+      el('span', { class: 'bringwrap' }, [orbit, svg, count])
+    ])
+    root.appendChild(overlay)
+
+    let left = secs
+    let done = false
+    requestAnimationFrame(() => { ringFg.style.strokeDashoffset = String(CIRC) })
+    const tick = setInterval(() => {
+      left -= 1
+      count.textContent = String(Math.max(0, left))
+      if (left <= 0) finish()
+    }, 1000)
+
+    function burstParticles () {
+      const rect = img.getBoundingClientRect()
+      const cx = rect.left + rect.width / 2
+      const cy = rect.top + rect.height / 2
+      for (let i = 0; i < 26; i++) {
+        const p = el('span', { class: 'burst-p' })
+        const angle = (Math.PI * 2 * i) / 26 + Math.random() * 0.4
+        const dist = 90 + Math.random() * 140
+        p.style.left = `${cx}px`
+        p.style.top = `${cy}px`
+        p.style.setProperty('--dx', `${Math.cos(angle) * dist}px`)
+        p.style.setProperty('--dy', `${Math.sin(angle) * dist}px`)
+        p.style.background = ['#ffb703', '#fb5607', '#ff006e', '#e5342b', '#f4a261'][i % 5]
+        document.body.appendChild(p)
+        setTimeout(() => p.remove(), 850)
+      }
+    }
+
+    function finish () {
+      if (done) return
+      done = true
+      clearInterval(tick)
+      burstParticles()
+      img.classList.add('bursting')
+      setTimeout(() => {
+        overlay.remove()
+        rooms.viewOnceOpened(roomId, m.id)
+        removeRow(m.id)
+        ctx.toast('Burst — the photo is gone')
+      }, 420)
+    }
+
+    // Closing early consumes it too, exactly like Telegram.
+    overlay.addEventListener('click', finish)
+  }
+
+  /** History gave us the envelope but not the bytes — fetch on tap. */
+  function buildDetached (m) {
+    const label = m.kind === 'voice' ? 'Voice note'
+      : m.kind === 'file' ? (m.fileName || 'File')
+      : m.kind === 'video' ? 'Video' : 'Photo'
+    const b = el('button', { class: 'detached', type: 'button' }, [
+      el('span', { class: 'dlico', html: IC.doc }),
+      el('span', { text: `${label} — tap to load` })
+    ])
+    b.addEventListener('click', () => {
+      b.classList.add('loading')
+      b.querySelector('span:last-child').textContent = 'Loading…'
+      rooms.fetchAttachment(roomId, m.id)
+        .then(() => refreshRow(m.id))
+        .catch((e) => {
+          b.classList.remove('loading')
+          b.querySelector('span:last-child').textContent = `${label} — tap to load`
+          ctx.toast(e.message)
+        })
+    })
+    return b
+  }
+
+  function buildBubble (m, mine) {
+    if (m.data === null && m.detached && m.kind !== 'text') return buildDetached(m)
+    if (m.kind === 'image' && m.viewOnce && !mine) {
+      // Masked until opened — the photo never shows in the thread.
+      const b = el('button', { class: 'vonce', type: 'button' }, [
+        el('span', { class: 'vmask' }, [
+          // Telegram reference: the photo shows through, heavily blurred,
+          // under a dense field of sparkling grain.
+          m.data ? el('img', { class: 'vblur', src: m.data, alt: '' }) : null,
+          el('span', { class: 'vgrain' }),
+          el('span', { class: 'vshimmer' }),
+          ...sparkEls(),
+          el('b', { class: 'bchip', text: burstChip(m) }),
+          el('span', { class: 'vfire', text: '🔥' })
+        ]),
+        el('span', { text: m.burst ? `Private photo · ${m.burst >= 60 ? `${m.burst / 60}m` : `${m.burst}s`} — tap to open` : 'Private photo — tap to open' })
+      ])
+      b.addEventListener('click', () => openViewOnce(m))
+      return b
+    }
+    if (m.kind === 'image' && m.viewOnce && mine) {
+      return el('div', { class: 'voMine' }, [
+        ...sparkEls(),
+        el('span', { text: 'Private photo' }),
+        el('span', { class: 'bchip2', text: burstChip(m) }),
+        el('span', {
+          class: 'cap', text: m.burst ? 'Burst 🔥' : 'Opened',
+          style: conn.seenByPeer.has(m.id) ? '' : 'display:none'
+        })
+      ])
+    }
+    if (m.kind === 'image') {
+      const img = el('img', { src: m.data, alt: 'Photo' })
+      img.addEventListener('load', () => { if (nearBottom()) scrollBottom() })
+      const b = el('button', { class: 'imgmsg', type: 'button', 'aria-label': 'Open photo' }, [
+        img,
+        m.text ? el('span', { class: 'imgcap', text: m.text }) : null
+      ])
+      b.addEventListener('click', () => openImage(m.data))
+      return b
+    }
+    if (m.kind === 'video') {
+      // A wrapper div, not the <video> itself, so the progress ring has a home.
+      return el('div', { class: 'vid' }, [
+        el('video', { src: m.data, controls: '', playsinline: '', preload: 'metadata' })
+      ])
+    }
+    if (m.kind === 'voice') return buildVoice(m)
+    if (m.kind === 'file') {
+      const kb = Math.max(1, Math.round((m.fileSize || 0) / 1024))
+      return el('a', { class: 'file', href: m.data, download: m.fileName || 'file', html: IC.doc }, [
+        el('span', { class: 'fmeta' }, [
+          el('b', { text: m.fileName || 'File' }),
+          el('span', { text: `${kb} KB` })
+        ])
+      ])
+    }
+    if (m.kind === 'location') {
+      // Live share that ended — both sides show the same muted line.
+      if (m.live === false) {
+        return el('div', { class: 'loc locEnded' }, [
+          el('b', { text: 'Live location ended' })
+        ])
+      }
+      if (m.live) {
+        const untilTxt = m.until ? `Until ${fmtTime(m.until)}` : '∞'
+        if (mine) {
+          return el('div', { class: 'loc locLive' }, [
+            el('b', {}, [el('span', { class: 'livedot' }), 'Live location · sharing']),
+            el('span', { class: 'locuntil', text: untilTxt }),
+            el('button', {
+              class: 'locstop', type: 'button', text: 'Stop sharing',
+              onclick: () => stopLiveShare(m.id)
+            })
+          ])
+        }
+        return el('div', { class: 'loc locLive' }, [
+          el('b', {}, [el('span', { class: 'livedot' }), 'Live location']),
+          el('a', {
+            href: mapLink(m.lat, m.lon), target: '_blank', rel: 'noopener', text: 'Open map'
+          }),
+          el('span', { class: 'locuntil', text: untilTxt })
+        ])
+      }
+      return el('div', { class: 'loc' }, [
+        el('b', { text: 'Current location' }),
+        el('a', {
+          href: mapLink(m.lat, m.lon), target: '_blank', rel: 'noopener', text: 'Open map'
+        })
+      ])
+    }
+    /* text */
+    if (mine) {
+      return el('div', { class: 'bubOut' }, [
+        m.replyTo ? buildQuote(m.replyTo) : null,
+        m.text
+      ])
+    }
+    return el('div', { class: 'bubIn' }, [
+      m.replyTo ? buildQuote(m.replyTo) : null,
+      el('div', { class: 'src', text: m.text }),
+      el('div', { class: 'meta' }, [
+        m.starred ? el('span', { class: 'starmark', text: '★' }) : null,
+        fmtTime(m.ts)
+      ])
+    ])
+  }
+
+  function buildReadRow (m) {
+    const read = conn.readUpTo >= m.ts
+    return el('div', {
+      class: 'readRow' + (read ? ' read' : ''),
+      html: read ? IC.check2 : IC.check1
+    }, [read ? 'Read' : 'Sent'])
+  }
+
+  function renderReacts (node, reactions = []) {
+    clear(node)
+    const counts = new Map()
+    for (const r of reactions) counts.set(r.emoji, (counts.get(r.emoji) || 0) + 1)
+    node.style.display = counts.size ? 'flex' : 'none'
+    for (const [emoji, count] of counts) {
+      node.appendChild(el('span', { text: count > 1 ? `${emoji} ${count}` : emoji }))
+    }
+  }
+
+  function attachPress (bubble, m) {
+    let pressTimer = null
+    let fired = false
+    const cancel = () => { drop(pressTimer); pressTimer = null }
+    bubble.addEventListener('touchstart', () => {
+      fired = false
+      pressTimer = later(() => { fired = true; openMsgSheet(m) }, LONG_PRESS_MS)
+    }, { passive: true })
+    // Non-passive on purpose: when the long-press fired mid-touch, the browser
+    // would synthesize a click hit-tested against the sheet backdrop that just
+    // mounted under the finger, instantly closing it (or worse, pressing a
+    // sheet item). preventDefault on touchend suppresses that ghost click.
+    bubble.addEventListener('touchend', (e) => {
+      cancel()
+      if (fired) { fired = false; e.preventDefault() }
+    }, { passive: false })
+    bubble.addEventListener('touchmove', cancel, { passive: true })
+    bubble.addEventListener('touchcancel', cancel)
+    bubble.addEventListener('contextmenu', (e) => { e.preventDefault(); openMsgSheet(m) })
+  }
+
+  /** WhatsApp-style swipe-right-to-reply, without stealing vertical scroll. */
+  function attachSwipeReply (wrap, m) {
+    let startX = 0
+    let startY = 0
+    let dragging = false
+    wrap.addEventListener('touchstart', (e) => {
+      startX = e.touches[0].clientX
+      startY = e.touches[0].clientY
+      dragging = true
+    }, { passive: true })
+    wrap.addEventListener('touchmove', (e) => {
+      if (!dragging) return
+      const dx = e.touches[0].clientX - startX
+      const dy = e.touches[0].clientY - startY
+      if (Math.abs(dy) > Math.abs(dx) * 1.4) { dragging = false; wrap.style.transform = ''; return }
+      if (dx > 0) wrap.style.transform = `translateX(${Math.min(dx, 72)}px)`
+    }, { passive: true })
+    const finish = (e) => {
+      if (!dragging) return
+      dragging = false
+      const dx = (e.changedTouches?.[0]?.clientX ?? startX) - startX
+      wrap.style.transition = 'transform .18s ease'
+      wrap.style.transform = ''
+      setTimeout(() => { wrap.style.transition = '' }, 200)
+      if (dx > 56) setReply(m)
+    }
+    wrap.addEventListener('touchend', finish, { passive: true })
+    wrap.addEventListener('touchcancel', finish, { passive: true })
+  }
+
+  /** Double-tap → quick heart, with a little pop. Desktop double-click too. */
+  function attachDoubleTap (bubble, m) {
+    let lastTap = 0
+    const react = () => {
+      rooms.react(roomId, m.id, '❤️')
+      updateReactions(m.id)
+      const pop = el('span', { class: 'heartpop', text: '❤️' })
+      bubble.appendChild(pop)
+      setTimeout(() => pop.remove(), 700)
+    }
+    bubble.addEventListener('touchend', () => {
+      const now = Date.now()
+      if (now - lastTap < 320) { react(); lastTap = 0 } else lastTap = now
+    }, { passive: true })
+    bubble.addEventListener('dblclick', react)
+  }
+
+  function buildRow (m) {
+    const mine = m.from === myId
+    const wrap = el('div', { class: 'msg' + (mine ? ' mine' : ''), 'data-id': m.id })
+    if (!mine && convo.kind === 'group') {
+      wrap.appendChild(el('div', { class: 'sender', text: m.name || 'Unknown' }))
+    }
+    const bubble = buildBubble(m, mine)
+    const time = el('span', { class: 'tOut' }, [
+      m.starred ? el('span', { class: 'starmark', text: '★' }) : null,
+      fmtTime(m.ts)
+    ])
+    const row = mine
+      ? el('div', { class: 'rowOut' }, [time, bubble])
+      : el('div', { class: 'rowIn' }, [bubble, (m.kind && m.kind !== 'text') ? time : null])
+    wrap.appendChild(row)
+    // Outgoing attachments carry a live progress ring until delivered.
+    if (mine && m.kind && m.kind !== 'text' && m.kind !== 'location' && m.data) {
+      bubble.style.position = 'relative'
+      bubble.appendChild(el('span', { class: 'txprog', text: '…' }))
+    }
+    const reacts = el('div', { class: 'reacts' })
+    renderReacts(reacts, m.reactions)
+    wrap.appendChild(reacts)
+    if (mine) wrap.appendChild(buildReadRow(m))
+    if (m.ttl) attachCountdown(bubble, m)
+    attachPress(bubble, m)
+    attachSwipeReply(wrap, m)
+    attachDoubleTap(bubble, m)
+    return wrap
+  }
+
+  /** Live mm:ss countdown chip inside a timer-mode bubble. The interval
+   * self-clears on expiry or once the row leaves the DOM; expiry removal
+   * of the row itself is handled by the existing ttl machinery. */
+  function attachCountdown (bubble, m) {
+    const chip = el('span', { class: 'ttlcount' })
+    bubble.appendChild(chip)
+    const deadline = m.ts + m.ttl * 1000
+    const paint = () => {
+      const left = Math.max(0, Math.ceil((deadline - Date.now()) / 1000))
+      chip.textContent = `⏱ ${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`
+      return left
+    }
+    paint()
+    const iv = setInterval(() => {
+      if (!mounted || !chip.isConnected || paint() <= 0) {
+        clearInterval(iv)
+        countdowns.delete(iv)
+      }
+    }, 1000)
+    countdowns.add(iv)
+  }
+
+  /** 'system' control messages render as a centred sys line, not a bubble. */
+  function buildRowAny (m) {
+    if (m.kind === 'system') {
+      const text = m.sys === 'timer'
+        ? (m.secs ? `⏱ Timer messages on · ${fmtTtlLong(m.secs)}` : '⏱ Timer messages off')
+        : (m.text || '')
+      return el('div', { class: 'sys sysline', 'data-id': m.id }, [text])
+    }
+    return buildRow(m)
+  }
+
+  /** Rebuild one row in place (lazy-loaded bytes, burst state changes). */
+  function refreshRow (id) {
+    const entry = msgEls.get(id)
+    const fresh = conn.store.list().find((x) => x.id === id)
+    if (!entry || !fresh) return
+    if (entry.album) { renderList(); return }
+    const wrap = buildRowAny(fresh)
+    // A delivered row needs no progress ring.
+    wrap.querySelector('.txprog')?.remove()
+    entry.wrap.replaceWith(wrap)
+    msgEls.set(id, { wrap, message: fresh })
+    if (fresh.from !== myId && (!fresh.kind || fresh.kind === 'text')) applyTranslation(fresh)
+    if (!fresh.kind || fresh.kind === 'text') applyXlit(fresh)
+  }
+
+  function appendMessage (m, skipAlbumCheck) {
+    // A newly arrived photo may complete a run of four — the whole thread has
+    // to regroup, which incremental appending cannot do.
+    if (!skipAlbumCheck && albumable(m) && completesAlbum(m)) {
+      renderList()
+      return
+    }
+    const dayKey = new Date(m.ts).toDateString()
+    if (dayKey !== lastDayKey) {
+      thread.appendChild(el('div', { class: 'day', text: dayLabel(m.ts) }))
+      lastDayKey = dayKey
+    }
+    const wrap = buildRowAny(m)
+    thread.appendChild(wrap)
+    msgEls.set(m.id, { wrap, message: m })
+    if (m.from !== myId && (!m.kind || m.kind === 'text')) applyTranslation(m)
+    if (!m.kind || m.kind === 'text') applyXlit(m)
+    if (m.ttl && m.from === myId) {
+      // rooms removes my own timed message from the store without an event.
+      later(() => removeRow(m.id), Math.max(0, m.ts + m.ttl * 1000 - Date.now()))
+    }
+  }
+
+  function removeRow (id) {
+    const entry = msgEls.get(id)
+    if (entry?.album) {
+      msgEls.delete(id)
+      renderList()
+      if (replyTarget?.id === id) clearReply()
+      return
+    }
+    entry?.wrap.remove()
+    msgEls.delete(id)
+    if (replyTarget?.id === id) clearReply()
+  }
+
+  function sysLine () {
+    return el('div', { class: 'sys', html: IC.spark }, [
+      'Messages are end-to-end between devices. Translation runs on-device when possible.'
+    ])
+  }
+
+  /* ------------------------------------------------------ photo albums */
+  /**
+   * A run of photos collapses into one WhatsApp-style album instead of
+   * filling the screen: four tiles, "+N" on the last when there are more.
+   * One-shot photos (private/burst) never join an album — they have their own
+   * lifecycle — and neither do captioned ones, whose caption must stay legible.
+   */
+  const ALBUM_MIN = 4
+  const ALBUM_GAP_MS = 10 * 60_000
+
+  const albumable = (m) =>
+    m.kind === 'image' && m.data && !m.viewOnce && !m.burst && !m.text && !m.ttl
+
+  /** Would this incoming photo turn a run into an album (or extend one)? */
+  function completesAlbum (m) {
+    const list = conn.store.list()
+    let run = 0
+    for (let i = list.length - 1; i >= 0; i--) {
+      const prev = list[i]
+      if (prev.id === m.id) continue
+      if (!albumable(prev) || prev.from !== m.from) break
+      if (m.ts - prev.ts > ALBUM_GAP_MS) break
+      run += 1
+      if (run >= ALBUM_MIN - 1) return true
+    }
+    return false
+  }
+
+  /** The message list as a mix of single messages and photo runs. */
+  function groupForRender (list) {
+    const groups = []
+    let run = []
+    const flush = () => {
+      if (run.length >= ALBUM_MIN) groups.push({ album: run })
+      else for (const m of run) groups.push({ single: m })
+      run = []
+    }
+    for (const m of list) {
+      const joins = albumable(m) && run.length > 0 &&
+        run[run.length - 1].from === m.from &&
+        new Date(m.ts).toDateString() === new Date(run[run.length - 1].ts).toDateString() &&
+        m.ts - run[run.length - 1].ts <= ALBUM_GAP_MS
+      if (joins) { run.push(m); continue }
+      flush()
+      if (albumable(m)) run = [m]
+      else groups.push({ single: m })
+    }
+    flush()
+    return groups
+  }
+
+  function buildAlbum (messages) {
+    const mine = messages[0].from === myId
+    const shown = messages.slice(0, 4)
+    const extra = messages.length - shown.length
+
+    const grid = el('div', { class: 'album' + (messages.length === 3 ? ' three' : '') },
+      shown.map((m, i) => {
+        const tile = el('button', {
+          class: 'altile', type: 'button', 'aria-label': `Open photo ${i + 1} of ${messages.length}`,
+          onclick: () => openImage(m.data)
+        }, [el('img', { src: m.data, alt: '' })])
+        if (extra > 0 && i === shown.length - 1) {
+          tile.appendChild(el('span', { class: 'almore', text: `+${extra}` }))
+        }
+        return tile
+      }))
+
+    const wrap = el('div', { class: 'msg' + (mine ? ' mine' : '') }, [
+      el('div', { class: mine ? 'rowOut' : 'rowIn' }, [
+        el('span', { class: mine ? 'tOut' : 'tIn', text: fmtTime(messages[messages.length - 1].ts) }),
+        grid
+      ]),
+      el('div', { class: 'alcount', text: `${messages.length} photos` })
+    ])
+
+    // Long-press (or right-click) the pile for the whole-album actions.
+    let pressTimer = null
+    const openSheet = () => openAlbumSheet(messages)
+    grid.addEventListener('contextmenu', (e) => { e.preventDefault(); openSheet() })
+    grid.addEventListener('pointerdown', () => {
+      drop(pressTimer)
+      pressTimer = later(openSheet, LONG_PRESS_MS)
+    })
+    for (const stop of ['pointerup', 'pointercancel', 'pointerleave', 'pointermove']) {
+      grid.addEventListener(stop, () => { drop(pressTimer); pressTimer = null })
+    }
+    return wrap
+  }
+
+  /** Album actions: the "save all" the pile exists to make possible. */
+  function openAlbumSheet (messages) {
+    const files = messages
+      .map((m) => fileFromDataURL(m.data, baseNameOf(m)))
+      .filter(Boolean)
+    const items = [{
+      label: `Save all ${files.length} photos`,
+      async fn () {
+        let saved = 0
+        for (const file of files) {
+          if (downloadFile(file)) saved += 1
+          await new Promise((resolve) => later(resolve, 250))   // browsers throttle bursts
+        }
+        ctx.toast(saved ? `Saved ${saved} photos` : 'Your browser blocked the downloads')
+      }
+    }]
+    if (navigator.canShare?.({ files })) {
+      items.push({
+        label: `Share all ${files.length} photos`,
+        async fn () {
+          const result = await shareOut({ title: 'Shared from Spot Me', file: null, files })
+          if (result === 'unsupported') ctx.toast('Sharing is not available on this device')
+        }
+      })
+    }
+    actionSheet(items, `${messages.length} photos`)
+  }
+
+  function renderList () {
+    clear(thread)
+    msgEls.clear()
+    lastDayKey = null
+    const list = conn.store.list()
+    if (!list.length) { thread.appendChild(sysLine()); return }
+    for (const group of groupForRender(list)) {
+      if (group.single) { appendMessage(group.single); continue }
+      const first = group.album[0]
+      const dayKey = new Date(first.ts).toDateString()
+      if (dayKey !== lastDayKey) {
+        thread.appendChild(el('div', { class: 'day', text: dayLabel(first.ts) }))
+        lastDayKey = dayKey
+      }
+      const wrap = buildAlbum(group.album)
+      thread.appendChild(wrap)
+      // Every member points at the album, so refresh/remove still find a home.
+      for (const m of group.album) msgEls.set(m.id, { wrap, message: m, album: true })
+    }
+  }
+
+  /* ------------------------------------------- share / save / copy out */
+
+  const KIND_NOUN = {
+    image: 'photo', voice: 'voice note', video: 'video', file: 'file', location: 'location'
+  }
+
+  const downloadLabel = (m) => `Download ${KIND_NOUN[m.kind] || 'file'}`
+
+  /** A filename that means something six months later in a Downloads folder. */
+  function baseNameOf (m) {
+    if (m.kind === 'file' && m.fileName) return m.fileName.replace(/\.[^.]+$/, '')
+    const when = new Date(m.ts || Date.now()).toISOString().slice(0, 19).replace(/[:T]/g, '-')
+    // The message id keeps a "save all" of photos taken in the same second
+    // from collapsing onto one filename and overwriting itself.
+    const tag = String(m.id || '').slice(-4)
+    return `spotme-${KIND_NOUN[m.kind]?.replace(/\s+/g, '-') || 'message'}-${when}${tag ? '-' + tag : ''}`
+  }
+
+  /** What "Copy" should put on the clipboard for this message. */
+  function copyTextOf (m) {
+    if (m.kind === 'location') return mapLink(m.lat, m.lon)
+    return m.text || ''
+  }
+
+  function copyOut (text) {
+    if (!text) { ctx.toast('Nothing to copy'); return }
+    navigator.clipboard?.writeText(text)
+      .then(() => ctx.toast('Copied'))
+      .catch(() => ctx.toast('Could not copy'))
+  }
+
+  function saveMessage (m) {
+    const file = m.data ? fileFromDataURL(m.data, baseNameOf(m)) : null
+    if (!file) { ctx.toast('Nothing to download yet — tap the message to load it first'); return }
+    ctx.toast(downloadFile(file) ? `Saved ${file.name}` : 'Your browser blocked the download')
+  }
+
+  /**
+   * Send a message out to any other app. Phones get the real OS share sheet;
+   * where the browser has no share support (most desktops) we do the closest
+   * honest thing — save media, copy text — and say which happened.
+   */
+  async function shareMessage (m) {
+    const title = 'Shared from Spot Me'
+    const file = m.data ? fileFromDataURL(m.data, baseNameOf(m)) : null
+    const text = copyTextOf(m) || (file ? '' : String(m.text || ''))
+
+    const result = await shareOut(file ? { title, file } : { title, text })
+    if (result === 'shared' || result === 'cancelled') return
+
+    if (file) {
+      ctx.toast(downloadFile(file)
+        ? `Sharing is not available here — saved ${file.name} instead`
+        : 'Sharing is not available on this device')
+      return
+    }
+    if (text) {
+      navigator.clipboard?.writeText(text)
+        .then(() => ctx.toast('Sharing is not available here — copied instead'))
+        .catch(() => ctx.toast('Sharing is not available on this device'))
+      return
+    }
+    ctx.toast('Nothing to share')
+  }
+
+  /* ------------------------------------------------- long-press sheet */
+  function openMsgSheet (m) {
+    if (root.querySelector('.ms-back')) return
+    const isText = !m.kind || m.kind === 'text'
+    // View-once/burst photos are one-shot by contract — never forwardable.
+    // Detached envelopes (bytes not fetched yet) have nothing to forward.
+    const canForward = !m.viewOnce && !m.burst &&
+      (isText || m.kind === 'location' || Boolean(m.data))
+    const back = el('div', { class: 'ms-back' })
+    const close = () => back.remove()
+    // Ghost-click armour: the sheet mounts mid-press, so a click synthesized
+    // from that same press must neither dismiss it nor activate an item.
+    const mountedAt = Date.now()
+    back.addEventListener('click', (e) => {
+      if (Date.now() - mountedAt < 400) { e.stopPropagation(); e.preventDefault() }
+    }, true)
+    back.addEventListener('click', (e) => { if (e.target === back) close() })
+
+    const sendReact = (emoji) => {
+      rooms.react(roomId, m.id, emoji)
+      updateReactions(m.id)
+      close()
+    }
+
+    const grid = el('div', { class: 'ms-grid' }, EMOJI_GRID.map((emoji) =>
+      el('button', {
+        type: 'button', text: emoji, 'aria-label': `React ${emoji}`,
+        onclick: () => sendReact(emoji)
+      })
+    ))
+
+    const emojis = el('div', { class: 'ms-emojis' }, [
+      ...REACT_EMOJI.map((emoji) =>
+        el('button', {
+          type: 'button', text: emoji, 'aria-label': `React ${emoji}`,
+          onclick: () => sendReact(emoji)
+        })
+      ),
+      el('button', {
+        class: 'plus', type: 'button', text: '+', 'aria-label': 'More reactions',
+        onclick: () => grid.classList.toggle('open')
+      })
+    ])
+
+    const item = (icon, label, fn, cls = '') =>
+      el('button', { class: 'ms-item' + cls, type: 'button', onclick: fn }, [
+        el('span', { class: 'mi', html: icon }), label
+      ])
+
+    const items = [item(IC.reply, 'Reply', () => { close(); setReply(m) })]
+    if (canForward) items.push(item(IC.forward, 'Forward', () => { close(); openForwardSheet(m) }))
+    // Forward stays inside Spot Me; Share hands it to the phone's own sheet,
+    // which is how anything reaches WhatsApp, Mail, Files or Drive.
+    if (canForward) items.push(item(IC.share, 'Share…', () => { close(); shareMessage(m) }))
+    if (m.data) {
+      items.push(item(IC.download, downloadLabel(m), () => { close(); saveMessage(m) }))
+    }
+    if (isText || m.kind === 'location' || m.text) {
+      items.push(item(IC.copy, isText ? 'Copy' : 'Copy text', () => {
+        close()
+        copyOut(copyTextOf(m))
+      }))
+    }
+    items.push(item(IC.info, 'Info', () => { close(); openInfoSheet(m) }))
+    items.push(item(IC.star, m.starred ? 'Unstar' : 'Star', () => {
+      close()
+      conn.store.patch(m.id, { starred: !m.starred })
+      refreshRow(m.id)
+    }))
+    items.push(item(IC.trash, 'Delete', () => { close(); openDeleteSheet(m) }, ' danger'))
+    if (isText) items.push(item(IC.more, 'More…', () => { close(); openMoreSheet(m) }))
+    items.push(el('button', { class: 'ms-item cancel', type: 'button', text: 'Cancel', onclick: close }))
+
+    back.appendChild(el('div', { class: 'ms-sheet' }, [emojis, grid, ...items]))
+    root.appendChild(back)
+  }
+
+  /** Forward: clone the message content into another conversation, stripped
+   * of reply/translation context and reactions. */
+  function forwardTo (c, m) {
+    const name = c.title || c.peer?.name || 'chat'
+    let sent = null
+    if (!m.kind || m.kind === 'text') {
+      sent = rooms.sendMessage(c.roomId, m.lang ? { text: m.text, lang: m.lang } : { text: m.text })
+    } else if (m.kind === 'location') {
+      sent = rooms.sendMessage(c.roomId, { kind: 'location', lat: m.lat, lon: m.lon })
+    } else if (m.data) {
+      const partial = { kind: m.kind, data: m.data }
+      if (m.fileName) partial.fileName = m.fileName
+      if (m.fileSize) partial.fileSize = m.fileSize
+      if (m.dur) partial.dur = m.dur
+      sent = rooms.sendAttachment(c.roomId, partial)
+    }
+    if (!sent) { ctx.toast('Could not forward that message'); return }
+    if (c.roomId === roomId) { appendMessage(sent); scrollBottom() }
+    ctx.toast(`Forwarded to ${name}`)
+  }
+
+  function openForwardSheet (m) {
+    const targets = db.convos().filter((c) => !c.archived)
+    if (!targets.length) { ctx.toast('No conversations to forward to'); return }
+    const back = el('div', { class: 'ms-back' })
+    const close = () => back.remove()
+    back.addEventListener('click', (e) => { if (e.target === back) close() })
+    const rows = targets.map((c) => el('button', {
+      class: 'fw-row', type: 'button', onclick () { close(); forwardTo(c, m) }
+    }, [
+      avatar(c.peer || { name: c.title }, 34),
+      el('span', { text: c.title || c.peer?.name || 'Chat' })
+    ]))
+    back.appendChild(el('div', { class: 'ms-sheet' }, [
+      el('div', { class: 'fw-title', text: 'Forward to…' }),
+      el('div', { class: 'fw-list' }, rows),
+      el('button', { class: 'ms-item cancel', type: 'button', text: 'Cancel', onclick: close })
+    ]))
+    root.appendChild(back)
+  }
+
+  /** Honest info: Sent time, and for my messages the read state. No fake
+   * "Delivered" tier — the transport cannot prove delivery. */
+  function openInfoSheet (m) {
+    const back = el('div', { class: 'ms-back' })
+    const close = () => back.remove()
+    back.addEventListener('click', (e) => { if (e.target === back) close() })
+    const rows = [
+      el('div', { class: 'info-row' }, [
+        el('span', { text: 'Sent' }), el('b', { text: fmtTime(m.ts) })
+      ])
+    ]
+    if (m.from === myId) {
+      rows.push(el('div', { class: 'info-row' }, [
+        el('span', { text: 'Read' }),
+        el('b', { text: conn.readUpTo >= m.ts ? 'Read' : 'Not read yet' })
+      ]))
+    }
+    back.appendChild(el('div', { class: 'ms-sheet' }, [
+      el('div', { class: 'fw-title', text: 'Message info' }),
+      ...rows,
+      el('button', { class: 'ms-item cancel', type: 'button', text: 'Close', onclick: close })
+    ]))
+    root.appendChild(back)
+  }
+
+  /** Delete chooser: local removal for anything; network delete only for mine. */
+  function openDeleteSheet (m) {
+    const items = [{
+      label: 'Delete for me',
+      danger: true,
+      fn () {
+        conn.store.remove(m.id)   // local only — nothing is broadcast
+        removeRow(m.id)
+      }
+    }]
+    if (m.from === myId) {
+      items.push({
+        label: 'Delete for everyone',
+        danger: true,
+        fn () {
+          rooms.deleteMessage(roomId, m.id)
+          removeRow(m.id)
+        }
+      })
+    }
+    actionSheet(items, 'Delete message?')
+  }
+
+  function openMoreSheet (m) {
+    actionSheet([{
+      label: 'Read aloud',
+      fn () {
+        const cached = trCache.get(m.id)
+        const spoken = (cached && cached !== 'pending' && cached.text) || m.text
+        if (!speak(spoken, db.profile().lang)) ctx.toast('Read aloud is not available on this device')
+      }
+    }], 'More')
+  }
+
+  /* -------------------------------------------------- contact-info sheet */
+  /** "~24 m · Online" — the header status logic, contact-card flavoured. */
+  function contactStatusLine () {
+    const c = db.convo(roomId) || convo
+    let text
+    if (c.kind === 'demo') text = 'online · demo'
+    else if (c.pending) text = 'Request pending'
+    else if (conn.peerCount > 0 || lobby.peers().some((x) => x.id === c.peer?.id)) text = 'Online'
+    else if (c.peerSeen) text = `Last seen ${fmtDay(c.peerSeen)}`
+    else text = 'Offline'
+    if (c.mode === 'nearby') {
+      const live = lobby.peers().find((x) => x.id === c.peer?.id)
+      const d = fmtDistance(distanceM(lobby.myPosition(), live))
+      if (d) text = `${d} · ${text}`
+    }
+    return text
+  }
+
+  /** The peer's claimed @handle, if any surface carries one: the convo peer
+   * record first, then any profile the room store has seen for this person. */
+  function peerUsername () {
+    const c = db.convo(roomId) || convo
+    if (c.peer?.username) return c.peer.username
+    for (const p of conn.store.profiles().values()) {
+      if (p?.username && (!c.peer?.name || p.name === c.peer.name)) return p.username
+    }
+    return null
+  }
+
+  /** This chat's revisitable media: plain photos with bytes (view-once burst
+   * photos are one-shot by contract) and videos. */
+  function mediaMessages () {
+    return conn.store.list().filter((m) =>
+      (m.kind === 'image' && m.data && !m.viewOnce) || (m.kind === 'video' && m.data))
+  }
+
+  /** Plain-text export of this thread — same line grammar as the inbox export. */
+  function exportChat () {
+    try {
+      const messages = conn.store.list().filter((m) => m.kind !== 'system')
+      if (!messages.length) { ctx.toast('Nothing to export yet'); return }
+      const line = (m) => {
+        const when = new Date(m.ts).toLocaleString()
+        const who = m.from === myId ? 'You' : (m.name || convo.peer?.name || 'Unknown')
+        let body = m.text || ''
+        if (m.kind === 'image') body = '[photo]'
+        else if (m.kind === 'voice') body = `[voice note ${m.dur || 0}s]`
+        else if (m.kind === 'video') body = '[video]'
+        else if (m.kind === 'file') body = `[file] ${m.fileName || ''}`.trim()
+        else if (m.kind === 'location') body = '[location]'
+        return `[${when}] ${who}: ${body}`
+      }
+      const blob = new Blob([messages.map(line).join('\n') + '\n'], { type: 'text/plain' })
+      const url = URL.createObjectURL(blob)
+      const safe = (convo.title || convo.peer?.name || 'chat').replace(/[^\w\- ]+/g, '').trim() || 'chat'
+      const link = el('a', { href: url, download: `${safe}.txt` })
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      setTimeout(() => URL.revokeObjectURL(url), 2000)
+    } catch { ctx.toast('Could not export this chat') }
+  }
+
+  /** Block: same flow as the inbox row menu — record the block, leave the
+   * room, remove the convo, land back on the inbox. */
+  function doBlock () {
+    const c = db.convo(roomId) || convo
+    const name = c.title || c.peer?.name || 'them'
+    if (!c.peer?.id) { ctx.toast('This chat has nobody to block'); return }
+    db.block(c.peer.id, name)
+    rooms.leave(roomId)
+    db.removeConvo(roomId)
+    ctx.toast(`${name} blocked`)
+    ctx.nav('#/chat')
+  }
+
+  /** WhatsApp-grammar contact card: identity head, three round actions,
+   * then the per-chat settings list. Opens from the header avatar. */
+  function openContactSheet () {
+    if (root.querySelector('.cp-back')) return
+    const c = db.convo(roomId) || convo
+    const person = c.peer || { name: c.title }
+    const name = c.title || c.peer?.name || 'Chat'
+    const canBlock = Boolean(c.peer?.id)
+    const back = el('div', { class: 'ms-back cp-back' })
+    const close = () => back.remove()
+    // Ghost-click armour, same 400ms as every other sheet here.
+    const mountedAt = Date.now()
+    back.addEventListener('click', (e) => {
+      if (Date.now() - mountedAt < 400) { e.stopPropagation(); e.preventDefault() }
+    }, true)
+    back.addEventListener('click', (e) => { if (e.target === back) close() })
+
+    const callAct = (video) => {
+      if (c.kind === 'demo') { ctx.toast('Demo chats cannot take calls'); return }
+      close()
+      beginCall(video)
+    }
+
+    // The confirm actionSheet mounts at z-index 90, under this sheet's 95 —
+    // close first so the confirmation is actually on top.
+    const confirmBlock = () => {
+      close()
+      actionSheet(
+        [{ label: `Block ${name}`, danger: true, fn: doBlock }],
+        `${name} will not be able to message you. This chat is removed from this device.`
+      )
+    }
+
+    const act = (cls, icon, label, fn) => el('button', {
+      class: 'cp-act' + cls, type: 'button', 'aria-label': label, onclick: fn
+    }, [
+      el('span', { class: 'cp-actc', html: icon }),
+      el('span', { class: 'cp-actl', text: label })
+    ])
+
+    /* -------- media gallery: built lazily on first expand */
+    const gallery = el('div', { class: 'cp-gallery', style: 'display:none' })
+    let galleryBuilt = false
+    function toggleGallery () {
+      if (gallery.style.display !== 'none') { gallery.style.display = 'none'; return }
+      if (!galleryBuilt) {
+        galleryBuilt = true
+        const media = mediaMessages()
+        if (!media.length) {
+          gallery.appendChild(el('div', { class: 'cp-empty', text: 'No media yet' }))
+        } else {
+          for (const m of media) {
+            const isVideo = m.kind === 'video'
+            const thumb = el('button', {
+              class: 'cp-thumb' + (isVideo ? ' cp-vid' : ''), type: 'button',
+              'aria-label': isVideo ? 'Open video' : 'Open photo'
+            }, [
+              isVideo
+                ? el('video', { src: m.data, muted: '', playsinline: '', preload: 'metadata' })
+                : el('img', { src: m.data, alt: '' }),
+              isVideo ? el('span', { class: 'cp-vplay', html: IC.play }) : null
+            ])
+            thumb.addEventListener('click', () => {
+              if (isVideo) openVideoView(m.data)
+              else openImage(m.data)
+            })
+            gallery.appendChild(thumb)
+          }
+        }
+      }
+      gallery.style.display = 'flex'
+    }
+
+    const row = (icon, label, value, fn, cls = '') => el('button', {
+      class: 'cp-row' + cls, type: 'button', onclick: fn
+    }, [
+      el('span', { class: 'cp-ri', html: icon }),
+      el('span', { class: 'cp-rl', text: label }),
+      value ? el('span', { class: 'cp-rv', text: value }) : null,
+      el('span', { class: 'cp-chev', html: IC.chev })
+    ])
+
+    const msgTtl = c.msgTtl || 0
+    const uname = peerUsername()
+    const mediaCount = mediaMessages().length
+
+    /* -------- add-to-contacts: once added, the row flips to a permanent
+     * 'In your contacts' state (re-rendered in place, no action). */
+    const peerId = c.peer?.id
+    const contactSlot = el('div', { class: 'cp-contact-slot' })
+    function renderContactRow () {
+      clear(contactSlot)
+      if (!peerId) return
+      const isContact = db.contacts().some((k) => k.id === peerId)
+      if (isContact) {
+        contactSlot.appendChild(el('div', { class: 'cp-row cp-static' }, [
+          el('span', { class: 'cp-ri cp-inck', html: IC.check1 }),
+          el('span', { class: 'cp-rl', text: 'In your contacts' })
+        ]))
+        return
+      }
+      contactSlot.appendChild(row(IC.plus, 'Add to contacts', null, () => {
+        db.addContact({
+          id: peerId,
+          name: c.peer.name || name,
+          avatar: c.peer.avatar || null,
+          lang: c.peer.lang || null
+        })
+        ctx.toast('Added to contacts')
+        renderContactRow()
+      }))
+    }
+    renderContactRow()
+
+    back.appendChild(el('div', { class: 'ms-sheet cp-sheet' }, [
+      el('div', { class: 'cp-head' }, [
+        avatar(person, 96),
+        el('b', { class: 'cp-name', text: name }),
+        uname ? el('span', { class: 'cp-uname', text: '@' + uname }) : null,
+        el('span', { class: 'cp-status', text: contactStatusLine() })
+      ]),
+      el('div', { class: 'cp-acts' }, [
+        act('', IC.phone, 'Voice', () => callAct(false)),
+        act('', IC.videocam, 'Video', () => callAct(true)),
+        canBlock ? act(' danger', IC.block, 'Block', confirmBlock) : null
+      ]),
+      el('div', { class: 'cp-list' }, [
+        row(IC.clock, 'Disappearing messages', msgTtl ? fmtTtlLong(msgTtl) : 'Off',
+          () => { close(); openTimerSheet() }),
+        row(IC.doc, 'Export chat', null, () => { close(); exportChat() }),
+        row(IC.gallery, 'Media shared', mediaCount ? String(mediaCount) : null, toggleGallery),
+        gallery,
+        contactSlot,
+        // Per the WhatsApp reference: red local clear + the encryption note.
+        row(IC.x, 'Clear chat', null, () => {
+          actionSheet([{
+            label: 'Clear all messages on this device',
+            danger: true,
+            fn () {
+              conn.store.clear()
+              renderList()
+              ctx.toast('Chat cleared on this device')
+            }
+          }], `Clear your copy of this chat with ${name}? Their copy is unaffected.`)
+          close()
+        }, ' danger'),
+        // Clear empties the thread; Delete removes the conversation itself.
+        row(IC.trash, 'Delete chat', null, () => {
+          actionSheet([{
+            label: 'Delete this conversation',
+            danger: true,
+            fn () {
+              rooms.leave(roomId)
+              db.removeConvo(roomId)
+              ctx.toast(`Conversation with ${name} deleted`)
+              ctx.nav('#/chat')
+            }
+          }], `Delete your whole conversation with ${name}? Messages and media on this device are removed — their copy is unaffected.`)
+          close()
+        }, ' danger'),
+        canBlock
+          ? row(IC.block, `Block ${name}`, null, confirmBlock, ' danger')
+          : null
+      ]),
+      el('p', { class: 'cp-enc', text: '🔒 Messages are end-to-end encrypted between your devices. No server can read them.' })
+    ]))
+    root.appendChild(back)
+  }
+
+  /* ------------------------------------------------------------- reply */
+  function setReply (m) {
+    replyTarget = m
+    replyName.textContent = m.from === myId ? 'You' : (m.name || convo.peer?.name || 'Them')
+    replySnippet.textContent = kindLabel(m)
+    replybar.style.display = 'flex'
+    input.focus()
+  }
+
+  function clearReply () {
+    replyTarget = null
+    replybar.style.display = 'none'
+  }
+
+  /* ---------------------------------------------------------- composer */
+  /**
+   * Live conversion, driven by the per-chat composeMode + langTo chosen in
+   * the header. OFF by default — typing sends exactly what you typed.
+   *
+   *  'translit'  — Tamil-in-English-letters → Tamil script. Local rules are
+   *                instant for ta/hi; Azure (debounced, cached) upgrades them
+   *                and covers every SCRIPT_MAP language.
+   *  'translate' — English (or anything; the engines detect) → ACTUAL
+   *                target-language text. The hero line is what sends.
+   *
+   * Failures never block typing: the raw draft always stays sendable.
+   */
+  let bestConvert = null       // translit: { src, text, lang, engine }
+
+  /** @param lang - resolved by detection in translit mode; falls back to the
+   *  pinned ▾ language when the user forced one. */
+  function convertDraft (raw, lang) {
+    const { mode, langTo } = composeState()
+    const target = lang || langTo
+    if (mode !== 'translit' || !target || !raw) return null
+    if (bestConvert?.src === raw && bestConvert.lang === target && bestConvert.engine === 'azure') {
+      return { text: bestConvert.text, lang: target }
+    }
+    if (hasLocalScript(target)) {
+      try {
+        const converted = transliterate(raw, target)
+        if (converted && converted !== raw) return { text: converted, lang: target }
+      } catch { /* fall through */ }
+    }
+    if (bestConvert?.src === raw && bestConvert.lang === target) {
+      return { text: bestConvert.text, lang: target }
+    }
+    return null
+  }
+
+  /**
+   * The live conversion panel — the specialty of the app. Line one converts
+   * INSTANTLY as you type (transliteration is synchronous). Line two shows
+   * what the other person will read in THEIR language, debounced through the
+   * fast proxy; whatever translation is showing when you hit send travels
+   * WITH the message, so the receiver sees it with zero wait.
+   */
+  let lastTranslation = null   // translate: { src, text, lang, detected }
+  let trSeq = 0
+  let trTimer = null
+  let cvSeq = 0
+  let cvTimer = null
+  let lastDetect = null        // translit: { src, base, romanized } last detection
+
+  /**
+   * Transliteration mode: DETECT the language of the draft, say which it is,
+   * then show that same sentence in its own script. Never translates — the
+   * words are unchanged, only the letters they are written in.
+   *
+   * Order matters to the reader: the tag line names the detected language,
+   * the hero line carries the converted text.
+   */
+  function runTranslit (raw) {
+    tlMain.style.display = ''
+    const known = lastDetect?.src === raw ? lastDetect : null
+    tlTag.textContent = known ? translitTag(known) : '文A Reading…'
+    tlMain.textContent = (bestConvert?.src === raw ? bestConvert.text : '…')
+
+    const seq = ++cvSeq
+    cvTimer = later(async () => {
+      const hit = await detectLanguage(raw)
+      if (!mounted || seq !== cvSeq) return
+      if (hit && hit.base === 'en') {
+        lastDetect = null
+        bestConvert = null
+        tlTag.textContent = '文A Already English'
+        tlMain.textContent = raw
+        return
+      }
+      const res = await translateText(raw, null, 'en')
+      if (!mounted || seq !== cvSeq) return
+      if (!res?.text || res.text === raw) {
+        tlTag.textContent = '文A Could not read that one'
+        tlMain.textContent = raw
+        bestConvert = null
+        return
+      }
+      const base = (hit?.base || String(res.detected || '').split('-')[0] || '')
+      lastDetect = { src: raw, base, romanized: Boolean(hit?.romanized) }
+      if (base) rememberChatLang(base)
+      bestConvert = { src: raw, text: res.text, lang: 'en', engine: 'cloud' }
+      tlTag.textContent = translitTag(lastDetect)
+      if (input.value.trim() === raw) tlMain.textContent = res.text
+    }, 260)
+  }
+
+  const translitTag = (hit) =>
+    `文A ${hit.base ? langName(hit.base) : 'Detected'} → English`
+
+  function updatePreview () {
+    const raw = input.value.trim()
+    const { mode, langTo } = composeState()
+    drop(cvTimer); cvTimer = null
+    drop(trTimer); trTimer = null
+
+    // Transliteration needs no target language — it detects one. Translation
+    // still does, since "into what?" has no default answer.
+    if (!mode || !raw || (mode === 'translate' && !langTo)) {
+      lastTranslation = null
+      tlprev.style.display = 'none'
+      return
+    }
+
+    tlprev.style.display = ''
+    tlSub.style.display = 'none'
+    tlTag.style.display = ''
+
+    if (mode === 'translit') {
+      runTranslit(raw)
+      return
+    }
+
+    /* translate mode — the hero line IS what will send */
+    tlTag.textContent = `文A Translation · ${langName(langTo)}`
+    const fresh = lastTranslation?.src === raw && lastTranslation.lang === langTo
+    tlMain.textContent = fresh ? lastTranslation.text : '…'
+    tlMain.style.display = ''
+    if (fresh && lastTranslation.detected && lastTranslation.detected !== langTo) {
+      const base = String(lastTranslation.detected).split('-')[0]
+      const roman = String(lastTranslation.detected).includes('-Latn') ? ' (romanized)' : ''
+      tlSub.textContent = `Detected ${langName(base)}${roman}`
+      tlSub.style.display = ''
+    }
+    const seq = ++trSeq
+    trTimer = later(() => {
+      translateText(raw, null, langTo).then((res) => {
+        if (!mounted || seq !== trSeq) return
+        if (res.text && res.engine !== null) {
+          lastTranslation = { src: raw, text: res.text, lang: langTo, detected: res.detected }
+          rememberMyLang(res.detected)
+          if (input.value.trim() === raw) {
+            tlMain.textContent = res.text
+            if (res.detected && res.detected !== langTo) {
+              const base = String(res.detected).split('-')[0]
+              const roman = String(res.detected).includes('-Latn') ? ' (romanized)' : ''
+              tlSub.textContent = `Detected ${langName(base)}${roman}`
+              tlSub.style.display = ''
+            }
+          }
+        }
+      })
+    }, 320)
+  }
+
+  function updateMic () {
+    if (recording) return   // the stop icon owns the button while recording
+    const hasText = Boolean(input.value.trim())
+    micBtn.innerHTML = hasText ? IC.send : IC.camera
+    micBtn.setAttribute('aria-label', hasText ? 'Send' : 'Take a photo')
+  }
+
+  function sendPartial (partial) {
+    if (replyTarget) partial.replyTo = replyTarget.id
+    const m = rooms.sendMessage(roomId, partial)
+    clearReply()
+    if (m) { appendMessage(m); scrollBottom() }
+    return m
+  }
+
+  /**
+   * The request gate: while the convo is pending, the requester gets exactly
+   * ONE message (their hello). Everything after that pops the waiting notice
+   * until the other person accepts. Their accept (or first reply) unlocks it;
+   * their reject removes this conversation entirely.
+   */
+  function pendingLocked () {
+    const c = db.convo(roomId)
+    if (!c?.pending) return false
+    return conn.store.list().some((m) => m.from === myId)
+  }
+
+  function guardPending () {
+    if (!pendingLocked()) return false
+    ctx.toast('Waiting for them to accept your request')
+    return true
+  }
+
+  function dispatchSend (partial) {
+    // Timer-messages mode: every outgoing text carries the per-chat ttl.
+    const msgTtl = db.convo(roomId)?.msgTtl || 0
+    if (msgTtl) partial.ttl = msgTtl
+    sendPartial(partial)
+    bestConvert = null
+    lastTranslation = null
+    input.value = ''
+    updatePreview()
+    updateMic()
+    rooms.typing(roomId, false)
+    lastTypingSent = 0
+    drop(idleTimer)
+    idleTimer = null
+  }
+
+  let sendBusy = false
+
+  function sendText () {
+    if (sendBusy) return
+    if (guardPending()) return
+    const raw = input.value.trim()
+    if (!raw) return
+    const { mode, langTo } = composeState()
+
+    // Transliteration never rewrites what leaves the device — it is a reading
+    // aid. Changing the outgoing words is translation's job (the globe).
+    if (mode === 'translit') {
+      dispatchSend({ text: raw })
+      return
+    }
+    if (mode === 'translate' && langTo) {
+      if (lastTranslation?.src === raw && lastTranslation.lang === langTo) {
+        const src = String(lastTranslation.detected || 'en').split('-')[0]
+        // tr carries the ORIGINAL: a receiver reading my language sees it instantly.
+        dispatchSend({ text: lastTranslation.text, lang: langTo, tr: { lang: src, text: raw } })
+        return
+      }
+      // Preview has not caught up — finish the translation, then send. Capped
+      // at 4s; if every engine is down the plain draft goes out instead.
+      sendBusy = true
+      micBtn.classList.add('busy')
+      Promise.race([
+        translateText(raw, null, langTo),
+        new Promise((resolve) => later(() => resolve({ text: null, engine: null }), 4000))
+      ]).then((res) => {
+        sendBusy = false
+        micBtn.classList.remove('busy')
+        if (!mounted) return
+        if (res?.text && res.engine !== null) {
+          const src = String(res.detected || 'en').split('-')[0]
+          dispatchSend({ text: res.text, lang: langTo, tr: { lang: src, text: raw } })
+        } else {
+          dispatchSend({ text: raw })
+        }
+      })
+      return
+    }
+
+    dispatchSend({ text: raw })
+  }
+
+  input.addEventListener('input', () => {
+    updatePreview()
+    updateMic()
+    const now = Date.now()
+    if (input.value && now - lastTypingSent > TYPING_THROTTLE_MS) {
+      rooms.typing(roomId, true, 'typing')
+      lastTypingSent = now
+    }
+    drop(idleTimer)
+    idleTimer = later(() => rooms.typing(roomId, false), TYPING_IDLE_MS)
+  })
+
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && db.settings().enterSends) {
+      e.preventDefault()
+      sendText()
+    }
+  })
+
+  /* ------------------------------------------------------- attachments */
+  /** The composer chip mirrors the per-chat timer mode (set via control
+   * messages from either side). Visible only while the mode is on. */
+  function updateTtlChip () {
+    const secs = db.convo(roomId)?.msgTtl || 0
+    ttlChip.style.display = secs ? '' : 'none'
+    ttlChip.textContent = secs ? `⏱ ${fmtTtlChip(secs)}` : ''
+  }
+
+  /** Timer-messages wheel (same vertical wheel as the private-photo picker).
+   * Committing sends a control message through the normal path; rooms.js
+   * flips convo.msgTtl on BOTH sides when it lands. */
+  function openTimerSheet () {
+    if (guardPending()) return
+    const cur = db.convo(roomId)?.msgTtl || 0
+    const idx = Math.max(0, TIMER_OPTIONS.findIndex((o) => o.secs === cur))
+    const hint = el('div', { class: 'phint' })
+    const wheel = buildWheel(TIMER_OPTIONS, idx, (o) => {
+      hint.textContent = o.secs
+        ? `New messages disappear for both of you after ${o.label}`
+        : 'New messages stay in the chat'
+    })
+    const back = el('div', { class: 'psheet-back' })
+    back.appendChild(el('div', { class: 'psheet' }, [
+      el('button', {
+        class: 'psx', type: 'button', 'aria-label': 'Close', html: IC.x,
+        onclick () { back.remove() }
+      }),
+      el('div', { class: 'plabel', text: 'Timer messages' }),
+      wheel.pick,
+      hint,
+      el('button', {
+        class: 'pdone', type: 'button', text: 'Set',
+        onclick () {
+          const secs = wheel.selected().secs
+          back.remove()
+          if (secs === (db.convo(roomId)?.msgTtl || 0)) return   // unchanged — no control spam
+          const m = rooms.sendMessage(roomId, { kind: 'system', sys: 'timer', secs, text: '' })
+          if (m) { appendMessage(m); scrollBottom() }
+        }
+      })
+    ]))
+    root.appendChild(back)
+    wheel.init()
+  }
+
+  function sendLocation () {
+    currentLocation()
+      .then(({ lat, lon }) => { sendPartial({ kind: 'location', lat, lon }) })
+      .catch((e) => ctx.toast(e.message))
+  }
+
+  /* ------------------------------------------------------ live location */
+  function startLiveShare (ms) {
+    if (!navigator.geolocation?.watchPosition) {
+      ctx.toast('Location is not available on this device')
+      return
+    }
+    currentLocation()
+      .then(({ lat, lon }) => {
+        if (!mounted) return
+        const until = ms ? Date.now() + ms : null
+        const m = sendPartial({ kind: 'location', lat, lon, live: true, until })
+        if (!m) return
+        const watchId = navigator.geolocation.watchPosition(
+          (pos) => {
+            if (!liveShares.has(m.id)) return
+            rooms.locup(roomId, { id: m.id, lat: pos.coords.latitude, lon: pos.coords.longitude })
+            refreshRow(m.id)
+          },
+          () => { /* a lost fix mid-share is not fatal — the last pin stands */ },
+          { enableHighAccuracy: true }
+        )
+        // Auto-stop when the chosen duration ends (∞ has no deadline).
+        const stopTimer = until ? later(() => stopLiveShare(m.id), until - Date.now()) : null
+        liveShares.set(m.id, { watchId, stopTimer })
+      })
+      .catch((e) => ctx.toast(e.message))
+  }
+
+  function stopLiveShare (id) {
+    const share = liveShares.get(id)
+    if (share) {
+      try { navigator.geolocation?.clearWatch?.(share.watchId) } catch { /* already gone */ }
+      drop(share.stopTimer)
+      liveShares.delete(id)
+    }
+    rooms.locup(roomId, { id, stop: true })
+    refreshRow(id)
+  }
+
+  /** WhatsApp-reference location sheet: one-shot pin behind an explicit
+   * confirm, or a live share with a duration. Nothing sends on open. */
+  function openLocationSheet () {
+    if (guardPending()) return
+    if (root.querySelector('.loc-back')) return
+    const back = el('div', { class: 'at-back loc-back' })
+    const close = () => back.remove()
+    const mountedAt = Date.now()
+    back.addEventListener('click', (e) => {
+      if (Date.now() - mountedAt < 400) { e.stopPropagation(); e.preventDefault() }
+    }, true)
+    back.addEventListener('click', (e) => { if (e.target === back) close() })
+
+    const DURATIONS = [
+      { label: '15 min', ms: 15 * 60000 },
+      { label: '1 h', ms: 3600000 },
+      { label: '8 h', ms: 8 * 3600000 },
+      { label: '12 h', ms: 12 * 3600000 },
+      { label: '24 h', ms: 24 * 3600000 },
+      { label: '∞', ms: null }
+    ]
+    let sel = DURATIONS[0]
+    const segSub = el('span', { class: 'loc-sub', style: 'display:none', text: 'until you turn it off' })
+    const segBtns = DURATIONS.map((d, i) => el('button', {
+      class: 'loc-segb' + (i === 0 ? ' on' : ''), type: 'button', text: d.label,
+      onclick () {
+        sel = d
+        segBtns.forEach((b, j) => b.classList.toggle('on', j === i))
+        segSub.style.display = d.ms === null ? '' : 'none'
+      }
+    }))
+
+    back.appendChild(el('div', { class: 'at-sheet loc-sheet' }, [
+      el('div', { class: 'fw-title', text: 'Location' }),
+      el('div', { class: 'loc-sec' }, [
+        el('b', { text: 'Send current location' }),
+        el('span', { class: 'loc-sub', text: 'A one-time pin of where you are right now.' }),
+        el('button', {
+          class: 'loc-commit', type: 'button', text: 'Send location',
+          onclick () { close(); sendLocation() }
+        })
+      ]),
+      el('div', { class: 'loc-sec' }, [
+        el('b', { text: 'Share live location' }),
+        el('div', { class: 'loc-seg' }, segBtns),
+        segSub,
+        el('button', {
+          class: 'loc-commit', type: 'button', text: 'Start sharing',
+          onclick () { close(); startLiveShare(sel.ms) }
+        })
+      ]),
+      el('button', { class: 'ms-item cancel', type: 'button', text: 'Cancel', onclick: close })
+    ]))
+    root.appendChild(back)
+  }
+
+  /**
+   * Early activity: the peer's header says 'sending a photo…' from the moment
+   * an attachment type is COMMITTED in the attach sheet — not just during the
+   * wire send. Kept alive every 2.5s while the picker or a preview sheet is
+   * open; the in-flight indicator in sendAttachmentWithUI then takes over
+   * silently, so the peer sees ONE continuous signal from tap to sent.
+   */
+  function startEarlyActivity (kind) {
+    stopEarlyActivity(true)
+    earlyKind = kind
+    pickerArmed = true          // every early kind opens a native picker first
+    rooms.typing(roomId, true, kind)
+    earlyTimer = setInterval(() => rooms.typing(roomId, true, kind), ACTIVITY_PING_MS)
+  }
+
+  /** silent=true is the handoff: the in-flight indicator continues the same
+   * kind immediately, so no typing(false) gap must reach the peer. */
+  function stopEarlyActivity (silent) {
+    if (earlyTimer) { clearInterval(earlyTimer); earlyTimer = null }
+    pickerArmed = false
+    if (earlyKind && !silent) rooms.typing(roomId, false)
+    earlyKind = null
+  }
+
+  /** Focus returned with the picker still unanswered → treat as cancelled.
+   * A real selection fires `change` around the same moment (before or after
+   * focus, per browser), so give it a beat before concluding. */
+  function onWindowFocus () {
+    if (!pickerArmed) return
+    later(() => { if (mounted && pickerArmed) stopEarlyActivity() }, 900)
+  }
+  window.addEventListener('focus', onWindowFocus)
+  // Browsers that support the input `cancel` event tell us outright.
+  for (const inp of [photoInput, cameraInput, fileInput, videoInput]) {
+    inp.addEventListener('cancel', () => stopEarlyActivity())
+  }
+
+  /** Premium attach sheet (WhatsApp reference): a grid of white circular
+   * tiles, four per row, each with a coloured icon and an 11px label. */
+  function openAttach () {
+    if (guardPending()) return
+    if (root.querySelector('.at-back')) return
+    const back = el('div', { class: 'at-back' })
+    const close = () => back.remove()
+    // Ghost-click armour, same 400ms as every other sheet here.
+    const mountedAt = Date.now()
+    back.addEventListener('click', (e) => {
+      if (Date.now() - mountedAt < 400) { e.stopPropagation(); e.preventDefault() }
+    }, true)
+    back.addEventListener('click', (e) => { if (e.target === back) close() })
+
+    const tile = (cls, icon, label, fn, extra = '') => el('button', {
+      class: 'at-tile' + extra, type: 'button', 'aria-label': label,
+      onclick () { close(); fn() }
+    }, [
+      el('span', { class: 'at-circ ' + cls, html: icon }),
+      el('span', { class: 'at-label', text: label })
+    ])
+
+    back.appendChild(el('div', { class: 'at-sheet' }, [
+      el('div', { class: 'at-grid' }, [
+        tile('c-photos', IC.gallery, 'Photos', () => { viewOncePick = false; startEarlyActivity('photo'); photoInput.click() }),
+        tile('c-camera', IC.camera, 'Camera', () => { viewOncePick = false; startEarlyActivity('photo'); cameraInput.click() }),
+        tile('c-private', IC.fire, 'Private photo', () => { viewOncePick = true; startEarlyActivity('viewonce'); photoInput.click() }),
+        tile('c-video', IC.play, 'Video', () => { startEarlyActivity('video'); videoInput.click() }),
+        tile('c-doc', IC.doc, 'Document', () => { startEarlyActivity('file'); fileInput.click() }),
+        tile('c-loc', IC.pin, 'Location', openLocationSheet),
+        tile('c-timer', IC.clock, 'Timer', openTimerSheet),
+        // While a session runs the mic tile goes red/pulsing; tapping stops it.
+        tile('c-dictate', IC.micGhost, dictating ? 'Listening…' : 'Dictate',
+          toggleDictation, dictating ? ' dict-live' : '')
+      ])
+    ]))
+    root.appendChild(back)
+  }
+
+  /** Send any attachment with a live progress ring on the bubble, plus the
+   * Telegram-style peer activity ping ('sending a photo…') while in flight. */
+  function sendAttachmentWithUI (partial) {
+    if (guardPending()) { stopEarlyActivity(); return }
+    stopEarlyActivity(true)   // handoff — the in-flight signalling below continues it
+    if (replyTarget) { partial.replyTo = replyTarget.id; clearReply() }
+    const actKind = partial.kind === 'image'
+      ? (partial.viewOnce ? 'viewonce' : 'photo')
+      : partial.kind === 'file' ? 'file'
+      : partial.kind === 'video' ? 'video' : null
+    if (actKind) { rooms.typing(roomId, true, actKind); activityPingAt = Date.now() }
+    let sent = null
+    const message = rooms.sendAttachment(roomId, partial, (p) => {
+      if (actKind) {
+        if (p >= 1 || p === -1) rooms.typing(roomId, false)
+        else if (Date.now() - activityPingAt > ACTIVITY_PING_MS) {
+          // Receivers expire the indicator after 4s — keep it alive mid-send.
+          rooms.typing(roomId, true, actKind)
+          activityPingAt = Date.now()
+        }
+      }
+      const entry = sent && msgEls.get(sent.id)
+      const ring = entry?.wrap.querySelector('.txprog')
+      if (!ring) return
+      if (p === -1) {
+        ring.classList.add('failed')
+        ring.textContent = '!'
+        ring.title = 'Delivery failed'
+      } else if (p >= 1) {
+        ring.remove()
+      } else {
+        ring.textContent = `${Math.round(p * 100)}%`
+      }
+    })
+    sent = message
+    if (!message && actKind) rooms.typing(roomId, false)
+    if (message) { appendMessage(message); scrollBottom() }
+  }
+
+  /**
+   * The Telegram-style VERTICAL wheel, shared by the private-photo burst
+   * picker and the timer-messages picker. Rows snap to a centre highlight
+   * pill with a soft tick per detent. Call init() after mounting.
+   */
+  function buildWheel (options, initialIdx, onChange) {
+    const ROW_H = 44
+    let selIdx = Math.max(0, Math.min(options.length - 1, initialIdx))
+
+    const rows = options.map((o, i) => el('div', {
+      class: 'vrow',
+      text: o.label,
+      onclick () { col.scrollTo({ top: i * ROW_H, behavior: 'smooth' }) }
+    }))
+    const col = el('div', { class: 'vcol' }, rows)
+    const pick = el('div', { class: 'vpick' }, [el('div', { class: 'vpill' }), col])
+
+    function applySelection (idx, silent) {
+      idx = Math.max(0, Math.min(options.length - 1, idx))
+      if (idx !== selIdx) {
+        selIdx = idx
+        if (!silent) tickBlip()
+      }
+      onChange?.(options[selIdx])
+    }
+
+    /** Centre row pops, neighbours fade/scale with distance from the pill. */
+    function styleRows () {
+      const fidx = col.scrollTop / ROW_H
+      rows.forEach((row, i) => {
+        const d = Math.abs(i - fidx)
+        row.style.opacity = String(Math.max(0.22, 1 - d * 0.32))
+        row.style.transform = `scale(${Math.max(0.82, 1 - d * 0.07).toFixed(3)})`
+        row.classList.toggle('on', Math.round(fidx) === i)
+      })
+    }
+
+    let settleTimer = null
+    col.addEventListener('scroll', () => {
+      styleRows()
+      applySelection(Math.round(col.scrollTop / ROW_H))
+      // Debounced settle for browsers without scrollend.
+      drop(settleTimer)
+      settleTimer = later(() => {
+        applySelection(Math.round(col.scrollTop / ROW_H), true)
+        styleRows()
+      }, 120)
+    }, { passive: true })
+    if ('onscrollend' in window) {
+      col.addEventListener('scrollend', () => {
+        applySelection(Math.round(col.scrollTop / ROW_H), true)
+        styleRows()
+      })
+    }
+
+    return {
+      pick,
+      selected: () => options[selIdx],
+      init () {
+        applySelection(selIdx, true)
+        requestAnimationFrame(() => {
+          col.scrollTop = selIdx * ROW_H
+          styleRows()
+        })
+      }
+    }
+  }
+
+  /**
+   * Photo sheet. Plain photos: preview + Cancel/Send (legacy path; Photos/
+   * Camera now route through the editor first). Private photos: preview +
+   * the burst wheel (no Off; 10s default) — masked, opens once, counts down,
+   * bursts, deleted without trace. Accepts a single dataURL (+ caption) or a
+   * batch of {dataURL, caption} from the editor; a private batch spins the
+   * wheel ONCE and the chosen burst applies to every photo. Captions ride
+   * along as message.text on whichever path sends.
+   */
+  function openPhotoSheet (photosOrURL, caption) {
+    const photos = typeof photosOrURL === 'string'
+      ? [{ dataURL: photosOrURL, caption: caption || '' }]
+      : photosOrURL
+    if (!photos?.length) { stopEarlyActivity(); return }
+    const back = el('div', { class: 'psheet-back' })
+    const sendAll = (extra) => {
+      for (const p of photos) {
+        const partial = { kind: 'image', data: p.dataURL, ...extra }
+        if (p.caption) partial.text = p.caption
+        sendAttachmentWithUI(partial)
+      }
+    }
+
+    if (!viewOncePick) {
+      back.appendChild(el('div', { class: 'psheet' }, [
+        el('img', { class: 'pprev', src: photos[0].dataURL, alt: '' }),
+        el('div', { class: 'pacts' }, [
+          el('button', {
+            class: 'pcancel', type: 'button', text: 'Cancel',
+            onclick () { back.remove(); stopEarlyActivity() }
+          }),
+          el('button', {
+            class: 'pdone', type: 'button', text: photos.length > 1 ? `Send ${photos.length}` : 'Send',
+            onclick () {
+              back.remove()
+              sendAll({})
+            }
+          })
+        ])
+      ]))
+      root.appendChild(back)
+      return
+    }
+
+    const hint = el('div', { class: 'phint' })
+    const wheel = buildWheel(
+      BURST_OPTIONS,
+      Math.max(0, BURST_OPTIONS.findIndex((o) => o.secs === 10)),
+      (o) => {
+        hint.textContent = photos.length > 1
+          ? `Each opens once · bursts after ${o.label}`
+          : `Opens once · bursts after ${o.label}`
+      }
+    )
+    back.appendChild(el('div', { class: 'psheet' }, [
+      el('button', {
+        class: 'psx',
+        type: 'button',
+        'aria-label': 'Close',
+        html: IC.x,
+        onclick () { back.remove(); stopEarlyActivity() }
+      }),
+      el('img', { class: 'pprev', src: photos[0].dataURL, alt: '' }),
+      el('div', { class: 'plabel', text: photos.length > 1 ? `Private photos · ${photos.length}` : 'Private photo' }),
+      wheel.pick,
+      hint,
+      el('button', {
+        class: 'pdone',
+        type: 'button',
+        text: photos.length > 1 ? `Send ${photos.length}` : 'Send',
+        onclick () {
+          const secs = wheel.selected().secs
+          back.remove()
+          sendAll({ viewOnce: true, burst: secs })
+        }
+      })
+    ]))
+    root.appendChild(back)
+    wheel.init()
+  }
+
+  /**
+   * Photos/Camera picks route through the fullscreen editor. While it is
+   * open the early 'photo' keep-alive keeps pinging (pickerArmed is false,
+   * so the focus heuristic leaves it alone). A null resolve is a full
+   * cancel; a ①-toggled resolve hands the EDITED batch to the burst wheel
+   * (one wheel choice for every photo). Plain batches send in order as
+   * separate image messages, each with its own caption.
+   */
+  function editThenSend (dataURLs) {
+    openPhotoEditor(dataURLs).then((res) => {
+      if (!mounted) return
+      if (!res) { stopEarlyActivity(); return }
+      const photos = res.photos || [{ dataURL: res.dataURL, caption: res.caption }]
+      if (res.privatePhoto) {
+        viewOncePick = true
+        openPhotoSheet(photos)
+        return
+      }
+      for (const p of photos) {
+        const partial = { kind: 'image', data: p.dataURL }
+        if (p.caption) partial.text = p.caption
+        sendAttachmentWithUI(partial)
+      }
+    })
+  }
+
+  photoInput.addEventListener('change', () => {
+    let files = Array.from(photoInput.files || [])
+    photoInput.value = ''
+    if (!files.length) { stopEarlyActivity(); return }
+    pickerArmed = false   // picker answered — the editor/sheet keeps the signal alive
+    if (viewOncePick) {
+      // The Private-photo tile keeps its direct single-photo path to the wheel.
+      if (files.length > 1) ctx.toast('Private photos send one at a time')
+      compressImage(files[0])
+        .then(({ dataURL }) => { if (mounted) openPhotoSheet(dataURL) })
+        .catch(() => { stopEarlyActivity(); ctx.toast('Could not read that image') })
+      return
+    }
+    if (files.length > MAX_BATCH_PHOTOS) {
+      ctx.toast('Up to 10 photos at once')
+      files = files.slice(0, MAX_BATCH_PHOTOS)
+    }
+    Promise.all(files.map((f) =>
+      compressImage(f, EDIT_MAX_EDGE, EDIT_QUALITY).then((r) => r.dataURL).catch(() => null)
+    )).then((urls) => {
+      if (!mounted) return
+      const ok = urls.filter(Boolean)
+      if (!ok.length) { stopEarlyActivity(); ctx.toast('Could not read that image'); return }
+      if (ok.length < urls.length) ctx.toast('Some photos could not be read')
+      editThenSend(ok)
+    })
+  })
+
+  // Camera capture lands in the SAME editor flow (single photo, never
+  // viewOnce by default).
+  cameraInput.addEventListener('change', () => {
+    const file = cameraInput.files?.[0]
+    cameraInput.value = ''
+    if (!file) { stopEarlyActivity(); return }
+    pickerArmed = false
+    viewOncePick = false
+    compressImage(file, EDIT_MAX_EDGE, EDIT_QUALITY)
+      .then(({ dataURL }) => { if (mounted) editThenSend(dataURL) })
+      .catch(() => { stopEarlyActivity(); ctx.toast('Could not read that photo') })
+  })
+
+  fileInput.addEventListener('change', () => {
+    const file = fileInput.files?.[0]
+    fileInput.value = ''
+    if (!file) { stopEarlyActivity(); return }
+    pickerArmed = false
+    fileToDataURL(file)
+      .then(({ dataURL, name, size }) => {
+        sendAttachmentWithUI({ kind: 'file', data: dataURL, fileName: name, fileSize: size })
+      })
+      .catch((e) => { stopEarlyActivity(); ctx.toast(e.message) })
+  })
+
+  /** Video: whole-clip send over the existing chunked binary path. No fake
+   * trimmer — trimming honestly waits for the native app. */
+  function sendVideo (file) {
+    fileToDataURL(file, VIDEO_CAP_BYTES)
+      .then(({ dataURL, name, size }) => {
+        sendAttachmentWithUI({ kind: 'video', data: dataURL, fileName: name, fileSize: size })
+      })
+      .catch((e) => { stopEarlyActivity(); ctx.toast(e.message) })
+  }
+
+  /** Video choice sheet: Send / Trim plus a STATIC quality line — the web
+   * build always ships the original bytes, honestly stated, no fake toggle. */
+  function openVideoSheet (file) {
+    if (root.querySelector('.vq-back')) return
+    const back = el('div', { class: 'ms-back vq-back' })
+    const close = () => back.remove()
+    const mountedAt = Date.now()
+    back.addEventListener('click', (e) => {
+      if (Date.now() - mountedAt < 400) { e.stopPropagation(); e.preventDefault() }
+    }, true)
+    back.addEventListener('click', (e) => { if (e.target === back) { close(); stopEarlyActivity() } })
+    back.appendChild(el('div', { class: 'ms-sheet' }, [
+      el('div', { class: 'fw-title', text: 'Send video' }),
+      el('div', { class: 'vq-row' }, [
+        el('b', { text: 'Quality: Original' }),
+        el('span', { text: ' — compression arrives with the native app' })
+      ]),
+      el('button', {
+        class: 'ms-item', type: 'button', text: 'Send entire video',
+        onclick () { close(); sendVideo(file) }
+      }),
+      el('button', {
+        class: 'ms-item', type: 'button', text: 'Trim video',
+        onclick () { close(); stopEarlyActivity(); ctx.toast('Trimming arrives with the native app') }
+      }),
+      el('button', {
+        class: 'ms-item cancel', type: 'button', text: 'Cancel',
+        onclick () { close(); stopEarlyActivity() }
+      })
+    ]))
+    root.appendChild(back)
+  }
+
+  videoInput.addEventListener('change', () => {
+    const file = videoInput.files?.[0]
+    videoInput.value = ''
+    if (!file) { stopEarlyActivity(); return }
+    pickerArmed = false   // choice sheet open — keep-alive keeps signalling
+    openVideoSheet(file)
+  })
+
+  /* -------------------------------------------------------- voice note */
+  /**
+   * Live recording waveform: an AnalyserNode on the mic stream drives the
+   * REC_BARS bars via rAF while recording. Decorative — any failure (blocked
+   * AudioContext, odd device) leaves the bars flat and recording untouched.
+   */
+  let recSource = null
+  let recAnalyser = null
+  let recRaf = 0
+
+  function startRecWave (stream) {
+    try {
+      const ac = getAudioCtx()
+      if (!ac || !stream) return
+      recSource = ac.createMediaStreamSource(stream)
+      recAnalyser = ac.createAnalyser()
+      recAnalyser.fftSize = 128
+      recSource.connect(recAnalyser)   // analyser only — never to the speakers
+      const buf = new Uint8Array(recAnalyser.frequencyBinCount)
+      const bars = [...recWave.children]
+      const step = Math.max(1, Math.floor(buf.length / bars.length))
+      const loop = () => {
+        if (!mounted || !recAnalyser) return
+        recAnalyser.getByteFrequencyData(buf)
+        for (let i = 0; i < bars.length; i++) {
+          let peak = 0
+          for (let j = i * step; j < (i + 1) * step && j < buf.length; j++) {
+            if (buf[j] > peak) peak = buf[j]
+          }
+          bars[i].style.height = `${3 + Math.round((peak / 255) * 19)}px`
+        }
+        recRaf = requestAnimationFrame(loop)
+      }
+      recRaf = requestAnimationFrame(loop)
+    } catch { /* no waveform — the recording itself is unaffected */ }
+  }
+
+  function stopRecWave () {
+    if (recRaf) { cancelAnimationFrame(recRaf); recRaf = 0 }
+    try { recSource?.disconnect() } catch { /* already detached */ }
+    recSource = null
+    recAnalyser = null
+    for (const b of recWave.children) b.style.height = ''
+  }
+
+  function setRecordingUI (on) {
+    plusBtn.style.display = on ? 'none' : ''
+    field.style.display = on ? 'none' : ''
+    recbar.style.display = on ? 'flex' : ''
+    micBtn.classList.toggle('rec', on)
+    micBtn.innerHTML = on ? IC.stop : IC.camera
+    micBtn.setAttribute('aria-label', on ? 'Stop recording' : 'Take a photo')
+    if (!on) updateMic()
+  }
+
+  /** Honest failure surfacing — phones fail for several distinct reasons. */
+  function voiceError (e) {
+    const name = e?.name || ''
+    if (name === 'NotAllowedError' || name === 'PermissionDeniedError' || name === 'SecurityError') {
+      return 'Microphone permission denied — allow mic access for this site and try again'
+    }
+    if (name === 'NotFoundError' || name === 'DevicesNotFoundError' || name === 'OverconstrainedError') {
+      return 'No microphone found on this device'
+    }
+    if (name === 'NotReadableError') return 'The microphone is in use by another app'
+    return `Could not start recording${e?.message ? ` — ${e.message}` : ''}`
+  }
+
+  let recStarting = false
+
+  async function startRecording () {
+    if (recording || recStarting || pendingClip) return
+    if (guardPending()) return
+    if (!navigator.mediaDevices?.getUserMedia) {
+      ctx.toast('Recording is not supported here — it needs HTTPS and a modern browser')
+      return
+    }
+    if (typeof window.MediaRecorder === 'undefined') {
+      ctx.toast('This browser cannot record audio — MediaRecorder is missing')
+      return
+    }
+    recStarting = true
+    let rec
+    try {
+      rec = await recordVoice()
+    } catch (e) {
+      recStarting = false
+      ctx.toast(voiceError(e))
+      return
+    }
+    recStarting = false
+    if (!mounted) { rec.cancel(); return }
+    recording = rec
+    recStartedAt = Date.now()
+    recTime.textContent = '0:00'
+    setRecordingUI(true)
+    startRecWave(rec.stream)
+    rooms.typing(roomId, true, 'voice')
+    activityPingAt = Date.now()
+    recInterval = setInterval(() => {
+      const s = Math.floor((Date.now() - recStartedAt) / 1000)
+      recTime.textContent = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
+      if (Date.now() - activityPingAt > ACTIVITY_PING_MS) {
+        // Receivers expire the indicator after 4s — keep it alive.
+        rooms.typing(roomId, true, 'voice')
+        activityPingAt = Date.now()
+      }
+    }, 250)
+  }
+
+  function endRecordingUI () {
+    if (recInterval) { clearInterval(recInterval); recInterval = null }
+    stopRecWave()
+    setRecordingUI(false)
+  }
+
+  /** Mic tap #2: stop, then hand the clip to the review bar. Nothing sends yet. */
+  async function stopRecording () {
+    if (!recording) return
+    const rec = recording
+    recording = null
+    endRecordingUI()
+    rooms.typing(roomId, false)
+    let clip = null
+    try { clip = await rec.stop() } catch { /* falls through to the size check */ }
+    if (!mounted) return
+    if (!clip || !clip.size) {
+      ctx.toast('Nothing was recorded — the microphone produced no audio')
+      return
+    }
+    showVoiceConfirm(clip)
+  }
+
+  function cancelRecording () {
+    if (!recording) return
+    recording.cancel()
+    recording = null
+    endRecordingUI()
+    rooms.typing(roomId, false)
+  }
+
+  const fmtClock = (secs) => {
+    const s = Math.max(0, Math.round(secs || 0))
+    return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
+  }
+
+  /** The confirmation bar: preview player + Cancel + Send (ink pill). */
+  function showVoiceConfirm (clip) {
+    pendingClip = clip
+    clear(confbar)
+    confAudio = el('audio', { src: clip.dataURL, preload: 'metadata' })
+    const playBtn = el('button', { class: 'vv-play', type: 'button', 'aria-label': 'Preview voice note', html: IC.play })
+    const timeEl = el('span', { class: 'vv-time', text: `0:00 / ${fmtClock(clip.dur)}` })
+    let raf = 0
+    const paint = () => {
+      if (!confAudio) return
+      timeEl.textContent = `${fmtClock(confAudio.currentTime)} / ${fmtClock(clip.dur)}`
+      if (!confAudio.paused) raf = requestAnimationFrame(paint)
+    }
+    playBtn.addEventListener('click', () => {
+      if (!confAudio) return
+      if (confAudio.paused) confAudio.play().catch(() => ctx.toast('Could not play the recording'))
+      else confAudio.pause()
+    })
+    confAudio.addEventListener('play', () => { playBtn.innerHTML = IC.pause; raf = requestAnimationFrame(paint) })
+    const settle = () => {
+      playBtn.innerHTML = IC.play
+      if (raf) { cancelAnimationFrame(raf); raf = 0 }
+      paint()
+    }
+    confAudio.addEventListener('pause', settle)
+    confAudio.addEventListener('ended', settle)
+    // Compact 'Translate ▾' select: 'Original' sends the clip untouched;
+    // picking a language re-voices it via the sender's ElevenLabs clone.
+    const trSel = el('select', {
+      class: 'vv-lang', title: 'Translate', 'aria-label': 'Translate voice note'
+    }, [
+      el('option', { value: '', text: 'Original' }),
+      ...VOICE_NOTE_LANGS.map((code) => el('option', { value: code, text: langName(code) }))
+    ])
+    const cancelBtn = el('button', { class: 'vv-cancel', type: 'button', text: 'Cancel', onclick: discardVoice })
+    const sendBtn = el('button', {
+      class: 'vv-send', type: 'button', text: 'Send',
+      onclick: () => sendVoice(trSel, sendBtn, cancelBtn)
+    })
+    confbar.appendChild(playBtn)
+    confbar.appendChild(timeEl)
+    confbar.appendChild(trSel)
+    confbar.appendChild(cancelBtn)
+    confbar.appendChild(sendBtn)
+    confbar.appendChild(confAudio)
+    bar.style.display = 'none'
+    confbar.style.display = 'flex'
+  }
+
+  function discardVoice () {
+    if (confAudio) { try { confAudio.pause() } catch { /* detached */ } }
+    confAudio = null
+    pendingClip = null
+    clear(confbar)
+    confbar.classList.remove('busy')
+    confbar.style.display = 'none'
+    bar.style.display = ''
+  }
+
+  /**
+   * Send the reviewed clip. 'Original' is the old path, untouched. A chosen
+   * language runs STT → translate → cloned TTS and sends the resulting mp3
+   * through the SAME voice-note path; any step failing leaves the original
+   * clip sitting in the confirm bar, still sendable.
+   */
+  async function sendVoice (trSel, sendBtn, cancelBtn) {
+    if (!pendingClip) return
+    if (guardPending()) return
+    const lang = trSel?.value || ''
+    if (!lang) {
+      const clip = pendingClip
+      discardVoice()
+      sendAttachmentWithUI({ kind: 'voice', data: clip.dataURL, dur: clip.dur })
+      return
+    }
+    const voiceId = db.profile().voiceId
+    if (!voiceId) { ctx.toast('Create your voice in Settings first'); return }
+    const clip = pendingClip
+    // 'Translating…' state — freeze the bar while the pipeline runs.
+    confbar.classList.add('busy')
+    const sendLabel = sendBtn.textContent
+    sendBtn.textContent = 'Translating…'
+    sendBtn.disabled = true
+    cancelBtn.disabled = true
+    trSel.disabled = true
+    let step = 'Transcription'
+    try {
+      const recorded = await (await fetch(clip.dataURL)).blob()
+      const heard = await sttBlob(recorded)
+      if (!heard?.text) throw new Error('nothing heard')
+      step = 'Translation'
+      const from = heard.lang ? String(heard.lang).slice(0, 2) : (db.profile().lang || null)
+      const out = await translateText(heard.text, from, lang)
+      if (!out?.text) throw new Error('no translation')
+      step = 'Voice generation'
+      const spoken = await ttsClone(out.text, voiceId)
+      if (!spoken || !spoken.size) throw new Error('no audio')
+      const dataURL = await blobToDataURL(spoken)
+      const dur = await audioDuration(dataURL, clip.dur)
+      if (!mounted || pendingClip !== clip) return
+      discardVoice()
+      sendAttachmentWithUI({ kind: 'voice', data: dataURL, dur })
+    } catch {
+      if (!mounted || pendingClip !== clip) return
+      ctx.toast(`${step} failed — the original note is still ready to send`)
+      confbar.classList.remove('busy')
+      sendBtn.textContent = sendLabel
+      sendBtn.disabled = false
+      cancelBtn.disabled = false
+      trSel.disabled = false
+    }
+  }
+
+  /* --------------------------------------------------------- dictation */
+  /** Rewrite ONLY the text this dictation session produced; anything typed
+   * before the session started stays untouched in front of it. */
+  function setDictatedText (text) {
+    const sep = dictBase && !/\s$/.test(dictBase) && text ? ' ' : ''
+    input.value = dictBase + sep + (text || '')
+    updatePreview()
+    updateMic()
+  }
+
+  function setDictationUI (on) {
+    field.classList.toggle('dicton', on)
+    dictHint.style.display = on ? '' : 'none'
+  }
+
+  /** Offline fallback: the old Web Speech path. Keeps dictBase, so it can
+   * take over an ElevenLabs session mid-flight without losing text. */
+  function startWebSpeechDictation () {
+    const rec = dictate(db.profile().lang, (text) => {
+      setDictatedText(text)
+    }, () => {
+      dictating = null
+      setDictationUI(false)
+    })
+    if (!rec) { ctx.toast('Dictation is not available on this device'); return }
+    dictating = rec
+    setDictationUI(true)
+    ctx.toast('Listening — open Attach › Dictate again to stop')
+  }
+
+  /**
+   * ElevenLabs dictation: MediaRecorder collects 4s slices; every boundary
+   * sends the FULL accumulated take to sttBlob and rewrites the session's
+   * text (whole-take passes self-correct earlier mishearings). Tap #2 stops,
+   * runs one final pass and releases the mic. Any sttBlob failure mid-take
+   * falls back to Web Speech so dictation still works offline.
+   */
+  async function startCloudDictation () {
+    let stream
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+    } catch (e) {
+      ctx.toast(voiceError(e))
+      return
+    }
+    if (!mounted || dictating) { stream.getTracks().forEach((t) => t.stop()); return }
+    const mime = MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm'
+      : MediaRecorder.isTypeSupported('audio/mp4') ? 'audio/mp4' : ''
+    const recorder = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined)
+    const chunks = []
+    let stopped = false
+    let fellBack = false
+    let pending = 0            // STT passes queued — coalesced, never stacked
+    let sttChain = Promise.resolve()
+
+    const release = () => stream.getTracks().forEach((t) => t.stop())
+
+    const fallBackToWebSpeech = () => {
+      if (fellBack || stopped || !mounted) return
+      fellBack = true
+      recorder.ondataavailable = null
+      recorder.onstop = null
+      try { recorder.stop() } catch { /* already stopped */ }
+      release()
+      dictating = null
+      setDictationUI(false)
+      startWebSpeechDictation()
+    }
+
+    /** Serialized whole-take transcription; at most one pass waiting. */
+    const scheduleStt = () => {
+      if (pending > 1) return sttChain
+      pending++
+      sttChain = sttChain.then(async () => {
+        try {
+          if (fellBack || !mounted || !chunks.length) return
+          const blob = new Blob(chunks, { type: recorder.mimeType || 'audio/webm' })
+          const heard = await sttBlob(blob)
+          if (fellBack || !mounted || dictating !== session) return
+          if (typeof heard?.text === 'string') setDictatedText(heard.text.trim())
+        } catch {
+          if (stopped) ctx.toast('Could not transcribe — check your connection')
+          else fallBackToWebSpeech()
+        } finally {
+          pending--
+        }
+      })
+      return sttChain
+    }
+
+    recorder.ondataavailable = (e) => {
+      if (e.data && e.data.size) chunks.push(e.data)
+      if (!stopped && !fellBack) scheduleStt()
+    }
+    recorder.onstop = async () => {
+      release()
+      if (fellBack) return
+      await scheduleStt()      // final pass over the complete take
+      if (dictating === session) dictating = null
+      setDictationUI(false)
+    }
+
+    const session = {
+      stop () {
+        if (stopped) return
+        stopped = true
+        try { recorder.stop() } catch { release() }
+      },
+      abort () {               // unmount path — no final pass, just let go
+        stopped = true
+        fellBack = true
+        recorder.ondataavailable = null
+        recorder.onstop = null
+        try { recorder.stop() } catch { /* already stopped */ }
+        release()
+      }
+    }
+    recorder.start(DICTATE_SLICE_MS)
+    dictating = session
+    setDictationUI(true)
+    ctx.toast('Listening — open Attach › Dictate again to stop')
+  }
+
+  function toggleDictation () {
+    if (dictating) {
+      try { dictating.stop() } catch { /* already ended */ }
+      return
+    }
+    dictBase = input.value
+    if (navigator.mediaDevices?.getUserMedia && typeof window.MediaRecorder !== 'undefined') {
+      startCloudDictation()
+    } else {
+      startWebSpeechDictation()
+    }
+  }
+
+  /* ---------------------------------------------------- event patching */
+  function updateReactions (targetId) {
+    const entry = msgEls.get(targetId)
+    if (!entry) return
+    const fresh = conn.store.list().find((x) => x.id === targetId)
+    if (!fresh) return
+    entry.message = fresh
+    renderReacts(entry.wrap.querySelector('.reacts'), fresh.reactions)
+  }
+
+  function updateReadTicks () {
+    for (const entry of msgEls.values()) {
+      if (entry.message.from !== myId) continue
+      entry.wrap.querySelector('.readRow')?.replaceWith(buildReadRow(entry.message))
+    }
+  }
+
+  function updateSeen (id) {
+    const entry = msgEls.get(id)
+    if (!entry) return
+    const cap = entry.wrap.querySelector('.cap')
+    if (cap) cap.style.display = ''
+  }
+
+  /* ------------------------------------------------ incoming transfers */
+  const rxPlaceholders = new Map()   // id -> element
+
+  function showRxProgress (event) {
+    let ph = rxPlaceholders.get(event.id)
+    if (!ph) {
+      const stick = nearBottom()
+      const label = event.meta?.kind === 'voice' ? 'voice note'
+        : event.meta?.kind === 'video' ? 'video'
+        : event.meta?.kind === 'file' ? (event.meta.fileName || 'file') : 'photo'
+      ph = el('div', { class: 'rxph' }, [
+        el('span', { class: 'rxspin' }),
+        el('span', { class: 'rxtext', text: `Receiving ${label}… 0%` })
+      ])
+      rxPlaceholders.set(event.id, ph)
+      thread.appendChild(ph)
+      if (stick) scrollBottom()
+    }
+    const pct = Math.round((event.progress || 0) * 100)
+    const t = ph.querySelector('.rxtext')
+    if (t) t.textContent = t.textContent.replace(/\d+%$/, `${pct}%`)
+  }
+
+  function clearRxProgress (id) {
+    rxPlaceholders.get(id)?.remove()
+    rxPlaceholders.delete(id)
+  }
+
+  /* ------------------------------------------------------ call overlay */
+  let callOverlay = null
+  let callTimer = null
+  let callStartedAt = 0
+
+  function closeCallOverlay () {
+    if (callTimer) { clearInterval(callTimer); callTimer = null }
+    callOverlay?.remove()
+    callOverlay = null
+  }
+
+  function renderCall () {
+    const call = conn.call
+    closeCallOverlay()
+    if (call.state === 'idle') return
+
+    const kind = call.video ? 'Video call' : 'Voice call'
+    const parts = []
+
+    if (call.state === 'active' && call.remote) {
+      if (call.video) {
+        const remote = el('video', { class: 'callremote', autoplay: '', playsinline: '' })
+        remote.srcObject = call.remote
+        parts.push(remote)
+        if (call.local) {
+          const localV = el('video', { class: 'callpip', autoplay: '', playsinline: '', muted: '' })
+          localV.muted = true
+          localV.srcObject = call.local
+          parts.push(localV)
+        }
+      } else {
+        const remoteA = el('audio', { autoplay: '' })
+        remoteA.srcObject = call.remote
+        parts.push(remoteA)
+      }
+    }
+
+    const timerEl = el('div', { class: 'calltime', text: '' })
+    const face = call.video && call.state === 'active'
+      ? null
+      : el('div', { class: 'callface' }, [avatar(convo.peer || { name: convo.title }, 96)])
+
+    const label = call.state === 'ringing-in' ? `Incoming ${kind.toLowerCase()}…`
+      : call.state === 'ringing-out' ? 'Calling…'
+      : call.state === 'connecting' ? 'Connecting…' : ''
+
+    const actions = []
+    if (call.state === 'ringing-in') {
+      actions.push(
+        el('button', { class: 'pill no big', type: 'button', text: 'Decline', onclick: () => conn.declineCall() }),
+        el('button', {
+          class: 'pill ok big',
+          type: 'button',
+          text: 'Accept',
+          onclick: () => conn.acceptCall().catch((e) => ctx.toast(e.message || 'Permission needed'))
+        })
+      )
+    } else {
+      const muteBtn = el('button', {
+        class: 'callmute', type: 'button', text: 'Mute',
+        onclick () {
+          const muted = conn.toggleMute()
+          muteBtn.textContent = muted ? 'Unmute' : 'Mute'
+          muteBtn.classList.toggle('on', muted)
+        }
+      })
+      actions.push(muteBtn,
+        el('button', { class: 'pill no big', type: 'button', text: 'End', onclick: () => conn.endCall() }))
+    }
+
+    callOverlay = el('div', { class: 'callov' + (call.video && call.state === 'active' ? ' video' : '') }, [
+      ...parts,
+      el('div', { class: 'callinfo' }, [
+        face,
+        el('b', { text: convo.title || 'Call' }),
+        label ? el('span', { class: 'callst', text: label }) : timerEl
+      ]),
+      el('div', { class: 'callacts' }, actions)
+    ])
+    root.appendChild(callOverlay)
+
+    if (call.state === 'active') {
+      if (!callStartedAt) callStartedAt = Date.now()
+      const fmt = () => {
+        const s = Math.floor((Date.now() - callStartedAt) / 1000)
+        timerEl.textContent = `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`
+      }
+      fmt()
+      callTimer = setInterval(fmt, 1000)
+    } else if (call.state === 'idle') {
+      callStartedAt = 0
+    }
+  }
+
+  function onEvent (event) {
+    if (!mounted) return
+    switch (event.type) {
+      case 'message': {
+        clearRxProgress(event.message?.id)
+        const stick = nearBottom()
+        appendMessage(event.message)
+        rooms.markRead(roomId)
+        if (stick) scrollBottom()
+        else newChip.style.display = ''
+        break
+      }
+      case 'history': {
+        const stick = nearBottom()
+        renderList()
+        if (stick) scrollBottom()
+        break
+      }
+      case 'deleted':
+      case 'expired':
+        removeRow(event.id)
+        break
+      case 'typing':
+        updateStatus()
+        break
+      case 'read':
+        updateReadTicks()
+        break
+      case 'reaction':
+        updateReactions(event.payload?.target)
+        break
+      case 'seen':
+        updateSeen(event.id)
+        break
+      case 'peers':
+        updateStatus()
+        updateAvatar()
+        break
+      case 'locup':
+        refreshRow(event.id)
+        break
+      case 'rxprogress':
+        showRxProgress(event)
+        break
+      case 'rxdone':
+        clearRxProgress(event.id)
+        break
+      case 'call':
+        if (event.declined) ctx.toast(event.busy ? 'They are on another call' : 'Call declined')
+        if (event.ended) ctx.toast('Call ended')
+        if (conn.call.state === 'idle') callStartedAt = 0
+        renderCall()
+        break
+    }
+  }
+
+  function onDb () {
+    if (!mounted) return
+    if (!db.convo(roomId)) { ctx.nav('#/chat'); return }
+    updateToggles()
+    updateStatus()
+    updatePreview()
+    updateTtlChip()
+    refreshTranslations()
+  }
+
+  /* -------------------------------------------------------------- boot */
+  const unsubConn = conn.on(onEvent)
+  const unsubDb = db.subscribe(onDb)
+  const unsubLobby = lobby.subscribe(updateStatus)
+
+  db.setOpenRoom(roomId)
+  rooms.markRead(roomId)
+  updateAvatar()
+  updateToggles()
+  updateStatus()
+  updateTtlChip()
+  renderList()
+  scrollBottom()
+  later(scrollBottom, 80)
+  // A call that kept running while the user was on another screen.
+  if (conn.call.state !== 'idle') renderCall()
+  // Warm the translation path the moment the chat opens, so the first live
+  // preview and the first incoming translation are fast, not cold-started.
+  warmup(db.profile().lang, convo.peer?.lang)
+
+  /* ----------------------------------------------------------- cleanup */
+  return function cleanup () {
+    mounted = false
+    db.setOpenRoom(null)
+    if (earlyTimer) { clearInterval(earlyTimer); earlyTimer = null }
+    window.removeEventListener('focus', onWindowFocus)
+    rooms.typing(roomId, false)
+    unsubConn()
+    unsubDb()
+    unsubLobby()
+    for (const t of timers) clearTimeout(t)
+    timers.clear()
+    for (const iv of countdowns) clearInterval(iv)
+    countdowns.clear()
+    // Live-location watches stop with the screen; the share message itself
+    // stays live until Stop sharing (or its deadline) says otherwise.
+    for (const share of liveShares.values()) {
+      try { navigator.geolocation?.clearWatch?.(share.watchId) } catch { /* gone */ }
+    }
+    liveShares.clear()
+    if (recInterval) clearInterval(recInterval)
+    stopRecWave()
+    if (recording) { try { recording.cancel() } catch { /* stopped */ } recording = null }
+    if (confAudio) { try { confAudio.pause() } catch { /* detached */ } confAudio = null }
+    pendingClip = null
+    for (const stop of voiceStops) { try { stop() } catch { /* detached */ } }
+    voiceStops.clear()
+    if (dictating) { try { dictating.abort() } catch { /* ended */ } dictating = null }
+    // The call itself lives at the rooms layer and keeps running; only the
+    // overlay is torn down. Re-entering the thread rebuilds it.
+    closeCallOverlay()
+    // The photo editor mounts on <body>; leaving the thread cancels it.
+    closePhotoEditor()
+    root.classList.remove('v-chat')
+  }
+}
