@@ -139,7 +139,8 @@ function createConnection (convo) {
       const p = db.profile()
       // About rides the handshake (WhatsApp semantics); the phone number
       // never does — it is unverified and stays on the device.
-      return { name: p.name, lang: p.lang, about: p.about || '' }
+      // The picture rides too: it is how the other side learns you have one.
+      return { id: p.id, name: p.name, lang: p.lang, about: p.about || '', avatar: p.avatar || null }
     },
     onMessage (payload) {
       if (store.add(payload)) onIncoming(payload)
@@ -161,7 +162,33 @@ function createConnection (convo) {
       }
     },
     onReaction (payload) { store.addReaction(payload); emit({ type: 'reaction', payload }) },
-    onProfile (payload, peerId) { store.addProfile(peerId, payload) },
+    /**
+     * The peer's name and picture, refreshed on every reconnect.
+     *
+     * Without this they are frozen at whatever was known when the chat was
+     * created — and a chat started from username search is created with no
+     * avatar at all, so the other person stayed a coloured initial forever
+     * however many pictures they set.
+     */
+    onProfile (payload, peerId) {
+      store.addProfile(peerId, payload)
+      const current = db.convo(convo.roomId)
+      if (!current || current.kind === 'group' || !payload?.name) return
+      const peer = current.peer || {}
+      const next = {
+        ...peer,
+        id: peer.id || payload.id || null,
+        name: payload.name,
+        lang: payload.lang || peer.lang || 'en',
+        avatar: payload.avatar || peer.avatar || null
+      }
+      if (next.name === peer.name && next.avatar === peer.avatar && next.id === peer.id) return
+      db.upsertConvo({ roomId: convo.roomId, peer: next })
+      // Refresh an existing contact card, but never create one — adding a
+      // contact stays the owner's deliberate act.
+      if (next.id && db.contacts().some((c) => c.id === next.id)) db.addContact(next)
+      emit({ type: 'peer', peer: next })
+    },
     /** The sender corrected their text — patch it in place and mark it. */
     onEdit (payload) {
       if (!payload?.id || typeof payload.text !== 'string') return

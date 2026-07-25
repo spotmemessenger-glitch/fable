@@ -13,7 +13,7 @@ import { rooms } from './lib/rooms.js'
 import { readyRTC } from './net.js'
 import { attachPullRefresh } from './lib/pullrefresh.js'
 import { el, clear, toast, avatar } from './lib/ui.js'
-import { compressImage } from './lib/media.js'
+import { compressImage, shrinkDataURL, AVATAR_EDGE, AVATAR_QUALITY } from './lib/media.js'
 import { openCrop } from './lib/crop.js'
 import { readLink } from './net.js'
 
@@ -272,7 +272,7 @@ function renderOnboarding () {
     const file = filePick.files?.[0]
     if (!file) return
     try {
-      const { dataURL } = await compressImage(file, 1024, 0.9)
+      const { dataURL } = await compressImage(file, AVATAR_EDGE, AVATAR_QUALITY)
       const cropped = await openCrop(dataURL)
       if (!cropped) return                       // cancelled — keep whatever was there
       avatarData = cropped
@@ -414,8 +414,24 @@ async function maybeFreshStart () {
   return true
 }
 
+/**
+ * Avatars captured before the 256px cap are hundreds of KB and now ride the
+ * room handshake. Shrink once, in place, so the cost is paid one time rather
+ * than on every reconnect.
+ */
+const AVATAR_WIRE_LIMIT = 60_000
+
+function healOversizedAvatar () {
+  const me = db.profile()
+  if (!me?.avatar || me.avatar.length <= AVATAR_WIRE_LIMIT) return
+  shrinkDataURL(me.avatar).then((small) => {
+    if (small && small.length < me.avatar.length) db.setProfile({ avatar: small })
+  }).catch(() => { /* keep the big one rather than lose the picture */ })
+}
+
 function boot () {
   if (!db.ready()) return
+  healOversizedAvatar()
   /**
    * Relay credentials FIRST. Trystero reads the connection config once, at
    * join time, so a conversation that joins before the relay arrives is stuck

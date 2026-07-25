@@ -26,6 +26,57 @@ const EDIT_QUALITY = 0.9     // intake quality — the editor re-encodes at .82/
 const MAX_BATCH_PHOTOS = 10  // WhatsApp-style multi-select cap
 const REACT_EMOJI = ['👍', '❤️', '😂', '😮', '😢', '🙏', '🥰']
 
+/**
+ * Telegram's jumbo emoji: a message that is nothing but emoji drops its bubble
+ * and plays large. Three is their cutoff and it is a good one — beyond that
+ * the row becomes a wall of glyphs.
+ *
+ * Their actual animations are Lottie files from Telegram's own sticker sets,
+ * which are their artwork and not ours to ship. The motion below is written
+ * here, one movement per feeling, so it costs nothing to download.
+ */
+const JUMBO_MAX = 3
+
+/** Motion per emoji — a heart beats, a laugh shakes, fire flickers. */
+const EMOJI_MOTION = new Map()
+const addMotion = (motion, list) => list.forEach((e) => EMOJI_MOTION.set(e, motion))
+addMotion('beat', ['❤', '🧡', '💛', '💚', '💙', '💜', '🖤', '🤍', '🤎', '💖', '💗', '💓', '💞', '💕', '😍', '🥰', '😘', '😻'])
+addMotion('laugh', ['😂', '🤣', '😆', '😹', '😅', '🤪'])
+addMotion('bounce', ['👍', '👏', '🙌', '🤝', '✌', '🤞', '👌', '🫰'])
+addMotion('flicker', ['🔥', '⚡', '✨', '🌟', '💫', '⭐'])
+addMotion('party', ['🎉', '🎊', '🥳', '🎈', '🎂', '🍾'])
+addMotion('gasp', ['😮', '😱', '😲', '🤯', '😳', '👀'])
+addMotion('sob', ['😢', '😭', '😔', '💔', '🥺', '😞'])
+addMotion('pulse', ['🙏', '💪', '🫶', '🤲'])
+
+/** Variation selectors and skin tones are styling, not identity. */
+const motionKey = (glyph) => glyph.replace(/[️︎\u{1F3FB}-\u{1F3FF}]/gu, '')
+const motionFor = (glyph) => EMOJI_MOTION.get(motionKey(glyph)) || 'pop'
+
+const isEmojiGrapheme = (g) => /\p{Extended_Pictographic}/u.test(g)
+
+/**
+ * The emoji of an emoji-only message, or null when it is ordinary text.
+ *
+ * Every grapheme must be pictographic — "❤️!" stays a normal bubble, the way
+ * it does in Telegram. Graphemes, not code points: a family emoji is several
+ * code points joined by zero-width joiners and must count as one.
+ */
+function jumboEmoji (text) {
+  const trimmed = String(text || '').trim()
+  if (!trimmed || trimmed.length > 60) return null
+  if (typeof Intl === 'undefined' || !Intl.Segmenter) return null
+  const glyphs = Array.from(
+    new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(trimmed),
+    (s) => s.segment
+  ).filter((g) => g.trim())
+  if (!glyphs.length || glyphs.length > JUMBO_MAX) return null
+  return glyphs.every(isEmojiGrapheme) ? glyphs : null
+}
+
+const REDUCED_MOTION = () =>
+  window.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true
+
 /** The expanded reaction grid behind the “+” in the message sheet. */
 const EMOJI_GRID = [
   '😀', '😅', '🤣', '😊', '😍', '😘',
@@ -869,10 +920,40 @@ export function render (root, ctx, roomId) {
     return new Date(ts).toDateString() === new Date().toDateString() ? 'Today' : fmtDay(ts)
   }
 
+  /**
+   * Scroll to the quoted message and flash it — WhatsApp's behaviour, and the
+   * only reason a quote is worth tapping.
+   */
+  function jumpToMessage (id) {
+    const entry = msgEls.get(id)
+    if (!entry) { ctx.toast('That message is no longer here'); return }
+    entry.wrap.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    // Re-adding the class only repeats the flash after a forced reflow;
+    // otherwise the browser folds both changes into one frame.
+    entry.wrap.classList.remove('jumped')
+    void entry.wrap.offsetWidth
+    entry.wrap.classList.add('jumped')
+    setTimeout(() => entry.wrap.classList.remove('jumped'), 1500)
+  }
+
   function buildQuote (replyToId) {
     const orig = conn.store.list().find((x) => x.id === replyToId)
     if (!orig) return el('div', { class: 'q qgone', text: 'Original message deleted' })
-    return el('div', { class: 'q' }, [
+    return el('div', {
+      class: 'q',
+      role: 'button',
+      tabindex: '0',
+      title: 'Go to message',
+      // Stop here, or the tap also reaches the bubble's press and double-tap
+      // handlers and opens the message sheet on the way past.
+      onclick: (e) => { e.stopPropagation(); jumpToMessage(replyToId) },
+      onkeydown: (e) => {
+        if (e.key !== 'Enter' && e.key !== ' ') return
+        e.preventDefault()
+        e.stopPropagation()
+        jumpToMessage(replyToId)
+      }
+    }, [
       el('b', { text: orig.from === myId ? 'You' : (orig.name || convo.peer?.name || '') }),
       kindLabel(orig)
     ])
@@ -1202,6 +1283,8 @@ export function render (root, ctx, roomId) {
       ])
     }
     /* text */
+    const jumbo = jumboEmoji(m.text)
+    if (jumbo) return buildJumbo(m, mine, jumbo)
     if (mine) {
       return el('div', { class: 'bubOut' }, [
         m.replyTo ? buildQuote(m.replyTo) : null,
@@ -1217,6 +1300,61 @@ export function render (root, ctx, roomId) {
         fmtTime(m.ts)
       ])
     ])
+  }
+
+  /**
+   * A bubble-less run of large emoji, each with its own motion, replayed on
+   * tap — Telegram's behaviour, which is the part worth copying.
+   */
+  function buildJumbo (m, mine, glyphs) {
+    const grid = el('div', { class: 'jgrid' + (glyphs.length > 1 ? ' multi' : '') },
+      glyphs.map((glyph, i) => {
+        const node = el('span', { class: `jem m-${motionFor(glyph)}`, text: glyph })
+        node.style.setProperty('--i', String(i))   // each lands after the last
+        return node
+      }))
+    const box = el('div', {
+      class: `${mine ? 'bubOut' : 'bubIn'} jumbo`
+    }, [
+      m.replyTo ? buildQuote(m.replyTo) : null,
+      grid,
+      mine ? null : el('div', { class: 'meta' }, [
+        m.starred ? el('span', { class: 'starmark', text: '★' }) : null,
+        m.editedAt ? el('span', { class: 'edited', text: 'edited' }) : null,
+        fmtTime(m.ts)
+      ])
+    ])
+
+    // Tap one to play it again, with a scatter of itself — Telegram's reward
+    // for tapping. Restarting means removing the class and forcing a reflow;
+    // without that the browser coalesces both changes and nothing replays.
+    for (const node of grid.querySelectorAll('.jem')) {
+      node.addEventListener('click', () => {
+        if (REDUCED_MOTION()) return
+        const motion = node.className.match(/m-\w+/)?.[0]
+        if (!motion) return
+        node.classList.remove(motion)
+        void node.offsetWidth
+        node.classList.add(motion)
+        scatter(grid, node.textContent)
+      })
+    }
+    return box
+  }
+
+  /** A handful of shrinking copies thrown outward from the tapped emoji. */
+  function scatter (host, glyph) {
+    const box = el('div', { class: 'jburst', 'aria-hidden': 'true' })
+    for (let i = 0; i < 10; i++) {
+      const bit = el('span', { text: glyph })
+      bit.style.setProperty('--dx', `${(Math.random() * 170 - 85).toFixed(1)}px`)
+      bit.style.setProperty('--dy', `${(-50 - Math.random() * 120).toFixed(1)}px`)
+      bit.style.setProperty('--rot', `${(Math.random() * 140 - 70).toFixed(1)}deg`)
+      bit.style.animationDelay = `${i * 22}ms`
+      box.appendChild(bit)
+    }
+    host.appendChild(box)
+    setTimeout(() => box.remove(), 1500)
   }
 
   function buildReadRow (m) {
@@ -3492,6 +3630,12 @@ export function render (root, ctx, roomId) {
         break
       case 'seen':
         updateSeen(event.id)
+        break
+      /* Their name or picture arrived (or changed) over the handshake. */
+      case 'peer':
+        if (event.peer) convo.peer = event.peer
+        who.querySelector('b').textContent = convo.title || convo.peer?.name || 'Chat'
+        updateAvatar()
         break
       case 'peers':
         updateStatus()

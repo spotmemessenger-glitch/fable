@@ -2427,3 +2427,165 @@
   cursor: default;
 }
 .v-chat .cp-row.cp-static .cp-rv { color: var(--ink2); font-weight: 600; }
+
+/* ---------------------------------------------- jumbo emoji (Telegram-style)
+
+   An emoji-only message loses its bubble and plays large. The animations are
+   ours: Telegram's are Lottie files from their sticker sets. One movement per
+   feeling — a heart beats, a laugh shakes, fire flickers — so a glance at the
+   motion tells you the mood before you have read the glyph. */
+
+.v-chat .jumbo {
+  background: none !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+  max-width: none;
+}
+.v-chat .jumbo .jgrid {
+  position: relative;
+  display: flex;
+  gap: 4px;
+  line-height: 1;
+  padding: 2px 0;
+}
+.v-chat .jumbo .jem {
+  font-size: 56px;
+  line-height: 1.1;
+  cursor: pointer;
+  user-select: none;
+  transform-origin: 50% 70%;
+  /* Each lands in turn rather than all at once, which reads as one gesture
+     instead of a flicker. */
+  animation-delay: calc(var(--i, 0) * 90ms);
+}
+/* Two or three sit smaller so a triple still fits a narrow phone. */
+.v-chat .jumbo .jgrid.multi .jem { font-size: 44px; }
+
+.v-chat .jumbo .meta { justify-content: flex-start; padding-left: 2px; }
+.v-chat .msg.mine .jumbo .jgrid { justify-content: flex-end; }
+
+/* Every emoji arrives with the same overshoot, then takes on its own life. */
+@keyframes jland {
+  0%   { transform: scale(.2) rotate(-12deg); opacity: 0; }
+  55%  { transform: scale(1.18) rotate(3deg); opacity: 1; }
+  100% { transform: scale(1) rotate(0deg); opacity: 1; }
+}
+@keyframes jbeat {
+  0%, 100% { transform: scale(1); }
+  14% { transform: scale(1.22); }
+  28% { transform: scale(1); }
+  42% { transform: scale(1.16); }
+  56% { transform: scale(1); }
+}
+@keyframes jlaugh {
+  0%, 100% { transform: rotate(0) translateY(0); }
+  15% { transform: rotate(-13deg) translateY(-4px); }
+  30% { transform: rotate(11deg) translateY(0); }
+  45% { transform: rotate(-9deg) translateY(-3px); }
+  60% { transform: rotate(7deg) translateY(0); }
+  75% { transform: rotate(-4deg) translateY(-1px); }
+}
+@keyframes jbounce {
+  0%, 100% { transform: translateY(0) scale(1); }
+  25% { transform: translateY(-18px) scale(1.08); }
+  45% { transform: translateY(0) scale(.94); }
+  62% { transform: translateY(-7px) scale(1.03); }
+  80% { transform: translateY(0) scale(1); }
+}
+@keyframes jflicker {
+  0%, 100% { transform: scale(1) rotate(0); filter: brightness(1); }
+  20% { transform: scale(1.13) rotate(-4deg); filter: brightness(1.25); }
+  40% { transform: scale(.97) rotate(3deg); filter: brightness(.95); }
+  60% { transform: scale(1.1) rotate(-2deg); filter: brightness(1.2); }
+  80% { transform: scale(1.01) rotate(1deg); filter: brightness(1); }
+}
+@keyframes jparty {
+  0%, 100% { transform: rotate(0) scale(1); }
+  20% { transform: rotate(-18deg) scale(1.16); }
+  40% { transform: rotate(14deg) scale(1.08); }
+  60% { transform: rotate(-10deg) scale(1.12); }
+  80% { transform: rotate(6deg) scale(1.02); }
+}
+@keyframes jgasp {
+  0%, 100% { transform: scale(1); }
+  30% { transform: scale(1.32); }
+  45% { transform: scale(1.12); }
+  62% { transform: scale(1.24); }
+}
+@keyframes jsob {
+  0%, 100% { transform: translateY(0) rotate(0); }
+  30% { transform: translateY(5px) rotate(-6deg); }
+  60% { transform: translateY(2px) rotate(5deg); }
+  85% { transform: translateY(4px) rotate(-2deg); }
+}
+@keyframes jpulse {
+  0%, 100% { transform: scale(1); }
+  35% { transform: scale(1.14); }
+  70% { transform: scale(1.04); }
+}
+
+/* Land first, then the character motion — two animations, one after the
+   other, so nothing pops in mid-beat. */
+.v-chat .jumbo .m-pop     { animation: jland .52s cubic-bezier(.22,1.4,.36,1) both; }
+.v-chat .jumbo .m-beat    { animation: jland .52s cubic-bezier(.22,1.4,.36,1) both, jbeat 1.5s .5s ease-in-out 2; }
+.v-chat .jumbo .m-laugh   { animation: jland .52s cubic-bezier(.22,1.4,.36,1) both, jlaugh 1.1s .5s ease-in-out 2; }
+.v-chat .jumbo .m-bounce  { animation: jland .52s cubic-bezier(.22,1.4,.36,1) both, jbounce 1.05s .5s cubic-bezier(.3,.8,.4,1) 2; }
+.v-chat .jumbo .m-flicker { animation: jland .52s cubic-bezier(.22,1.4,.36,1) both, jflicker .95s .5s ease-in-out 3; }
+.v-chat .jumbo .m-party   { animation: jland .52s cubic-bezier(.22,1.4,.36,1) both, jparty 1.05s .5s ease-in-out 2; }
+.v-chat .jumbo .m-gasp    { animation: jland .52s cubic-bezier(.22,1.4,.36,1) both, jgasp .85s .5s ease-out 2; }
+.v-chat .jumbo .m-sob     { animation: jland .52s cubic-bezier(.22,1.4,.36,1) both, jsob 1.5s .5s ease-in-out 2; }
+.v-chat .jumbo .m-pulse   { animation: jland .52s cubic-bezier(.22,1.4,.36,1) both, jpulse 1.3s .5s ease-in-out 2; }
+
+/* The scatter thrown out by a tap. Pointer-events off so it never eats the
+   next tap, and absolutely placed so it cannot reflow the conversation. */
+.v-chat .jumbo .jburst {
+  position: absolute;
+  left: 50%; top: 40%;
+  width: 0; height: 0;
+  pointer-events: none;
+  z-index: 3;
+}
+.v-chat .jumbo .jburst span {
+  position: absolute;
+  font-size: 22px;
+  animation: jscatter 1.15s cubic-bezier(.15,.7,.35,1) forwards;
+}
+@keyframes jscatter {
+  0%   { transform: translate(0, 0) scale(.4) rotate(0); opacity: 0; }
+  18%  { opacity: 1; }
+  100% { transform: translate(var(--dx), var(--dy)) scale(1) rotate(var(--rot)); opacity: 0; }
+}
+
+/* A reaction landing should be felt, not just appear. */
+@keyframes reactPop {
+  0%   { transform: scale(0); }
+  60%  { transform: scale(1.35); }
+  100% { transform: scale(1); }
+}
+.v-chat .reacts span { animation: reactPop .34s cubic-bezier(.22,1.4,.36,1) both; }
+
+@media (prefers-reduced-motion: reduce) {
+  .v-chat .jumbo .jem,
+  .v-chat .jumbo .jburst span,
+  .v-chat .reacts span { animation: none !important; }
+}
+
+/* The quoted message is a link to the original — tappable, and it flashes on
+   arrival so the eye can find it after the scroll. */
+.v-chat .q { cursor: pointer; }
+.v-chat .q:active { opacity: .65; }
+.v-chat .msg.jumped .bubIn,
+.v-chat .msg.jumped .bubOut,
+.v-chat .msg.jumped .imgmsg,
+.v-chat .msg.jumped .voice { animation: jumpFlash 1.4s ease-out; }
+@keyframes jumpFlash {
+  0%, 100% { box-shadow: 0 0 0 0 transparent; }
+  15%, 55% { box-shadow: 0 0 0 3px color-mix(in srgb, var(--blue) 55%, transparent); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .v-chat .msg.jumped .bubIn,
+  .v-chat .msg.jumped .bubOut,
+  .v-chat .msg.jumped .imgmsg,
+  .v-chat .msg.jumped .voice { animation: none; outline: 3px solid var(--blue); }
+}

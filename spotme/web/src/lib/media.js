@@ -16,6 +16,36 @@ export const FILE_CAP_BYTES = 2_500_000    // ~2.5 MB keeps WebRTC + localStorag
 export const VIDEO_CAP_BYTES = 40_000_000  // videos ride the chunked binary path; bigger waits for native streaming
 export const VOICE_MAX_SECS = 60
 
+/**
+ * Avatars are never drawn larger than 96 CSS px, so 256 covers a 2x screen
+ * with room to spare. They also ride the room handshake now, and a 1024px
+ * portrait is a third of a megabyte re-sent on every reconnect — most of a
+ * mobile-data conversation spent on a picture nobody sees at that size.
+ */
+export const AVATAR_EDGE = 256
+export const AVATAR_QUALITY = 0.85
+
+/**
+ * Re-encode an existing data URL smaller. Used to heal avatars captured
+ * before the cap above existed, so old profiles do not keep paying for them.
+ */
+export function shrinkDataURL (dataURL, maxEdge = AVATAR_EDGE, quality = AVATAR_QUALITY) {
+  return new Promise((resolve) => {
+    const img = new Image()
+    img.onload = () => {
+      const scale = Math.min(1, maxEdge / Math.max(img.width, img.height))
+      const canvas = document.createElement('canvas')
+      canvas.width = Math.round(img.width * scale)
+      canvas.height = Math.round(img.height * scale)
+      canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height)
+      resolve(canvas.toDataURL('image/jpeg', quality))
+    }
+    // On failure keep the original: a heavy avatar beats a lost one.
+    img.onerror = () => resolve(dataURL)
+    img.src = dataURL
+  })
+}
+
 /** Compress a picked image to a bounded JPEG data URL. */
 export function compressImage (file, maxEdge = IMAGE_MAX_EDGE, quality = IMAGE_QUALITY) {
   return new Promise((resolve, reject) => {

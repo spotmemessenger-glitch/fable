@@ -9,7 +9,7 @@ import { db, randomHex } from '../lib/db.js'
 import { lobby } from '../lib/discovery.js'
 import { rooms } from '../lib/rooms.js'
 import { LANGS } from '../lib/translate.js'
-import { compressImage, recordVoice } from '../lib/media.js'
+import { compressImage, recordVoice, AVATAR_EDGE, AVATAR_QUALITY } from '../lib/media.js'
 import { cloneVoice, deleteClone, dataURLToBlob } from '../lib/voice.js'
 import { openCrop } from '../lib/crop.js'
 import { el, clear, avatar, actionSheet } from '../lib/ui.js'
@@ -55,7 +55,7 @@ export function render (root, ctx) {
     filePick.value = ''
     if (!file) return
     try {
-      const { dataURL } = await compressImage(file, 1024, 0.9)
+      const { dataURL } = await compressImage(file, AVATAR_EDGE, AVATAR_QUALITY)
       const cropped = await openCrop(dataURL)
       if (!cropped) return                       // cancelled — keep the old photo
       db.setProfile({ avatar: cropped })
