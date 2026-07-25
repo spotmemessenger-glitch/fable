@@ -114,18 +114,18 @@ body {
   justify-content: center;
   gap: 3px;
   font-family: var(--font);
-  font-size: 11px;
+  font-size: 10.5px;
   font-weight: 600;
   letter-spacing: -.01em;
   color: var(--ink2);
-  padding: 7px 0 5px;
+  padding: 6px 0 4px;
   border-radius: 999px;
   position: relative;
   transition: color .16s ease, background .18s ease;
 }
 
 .nv:hover { color: var(--ink); }
-.nv svg { width: 26px; height: 26px; }
+.nv svg { width: 22px; height: 22px; }
 
 /* Active tab: filled pill + darker label, exactly the reference's grammar. */
 .nv[aria-current="page"] {
