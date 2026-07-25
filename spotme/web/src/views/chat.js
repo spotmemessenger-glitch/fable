@@ -748,6 +748,22 @@ export function render (root, ctx, roomId) {
     }
   }
 
+  /**
+   * The one line above a reading: where it came from and what was done to it.
+   * "Tamil · Translated".
+   *
+   * The engine name is deliberately gone — whether Azure or a local model
+   * answered is our problem, not the reader's. When detection did not settle
+   * on a language we know, the mode stands alone rather than printing a raw
+   * code or naming a language we are guessing at.
+   */
+  function readingTag (code, mode) {
+    const base = String(code || '').split('-')[0]
+    if (!base || base === 'en') return mode
+    const name = langName(base)
+    return name && name !== base ? `${name} · ${mode}` : mode
+  }
+
   function applyXlit (m) {
     const entry = msgEls.get(m.id)
     const bub = entry?.wrap.querySelector('.bubIn, .bubOut')
@@ -772,6 +788,10 @@ export function render (root, ctx, roomId) {
     if (cur === null) { existing?.remove(); return }
     const pending = cur === 'pending'
     const node = el('div', { class: 'xl' + (pending ? ' pend' : '') }, [
+      el('span', {
+        class: 'xlTag',
+        text: pending ? 'Reading…' : readingTag(cur.lang, 'Transliterated')
+      }),
       el('span', { class: 'xlText', text: pending ? '…' : cur.text })
     ])
     if (existing) existing.replaceWith(node)
@@ -827,11 +847,11 @@ export function render (root, ctx, roomId) {
     }
 
     const pending = cur === 'pending'
-    const engineTag = cur?.engine === 'device' ? 'ON-DEVICE'
-      : cur?.engine === 'instant' ? 'INSTANT' : 'CLOUD'
-    const tag = pending ? 'TRANSLATING' : `TRANSLATED · ${engineTag}`
+    // The instant path carries no detection — it was translated by the sender,
+    // so their profile language is the only source we have.
+    const from = cur?.detected || (cur?.engine === 'instant' ? m.lang : null)
     const node = el('div', { class: 'tr' }, [
-      el('div', { class: 'trTag' }, [el('span', { class: 'xa', text: '文A' }), tag]),
+      el('div', { class: 'trTag', text: pending ? 'Translating…' : readingTag(from, 'Translated') }),
       el('div', { class: 'trTxt', text: pending ? '…' : cur.text })
     ])
     if (existing) existing.replaceWith(node)

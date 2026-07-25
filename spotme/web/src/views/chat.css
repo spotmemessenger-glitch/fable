@@ -152,18 +152,16 @@
 
 .v-chat .tr { padding: 8px 13px 9px; border-top: 1px solid var(--line); background: var(--surface); }
 
+/* Reads as a caption, not a badge: the old wide-tracked caps suited the
+   shouty "TRANSLATED · CLOUD" and turn a language name into a smear. */
 .v-chat .trTag {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  font-size: 9px;
-  font-weight: 800;
-  letter-spacing: .09em;
+  display: block;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .01em;
   color: var(--blue);
-  margin-bottom: 4px;
+  margin-bottom: 3px;
 }
-
-.v-chat .trTag .xa { font-size: 11px; letter-spacing: -.04em; }
 
 .v-chat .trTxt {
   font-size: 14px;
@@ -2370,6 +2368,17 @@
   overflow-wrap: anywhere;
 }
 .v-chat .xl.pend .xlText { opacity: .4; }
+
+/* Same caption as the translation line, so the two readings are told apart by
+   their words rather than by two different-looking labels. */
+.v-chat .xlTag {
+  display: block;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .01em;
+  color: var(--amber);
+  margin-bottom: 2px;
+}
 .v-chat .bubOut .xlTag { color: rgba(255, 255, 255, .85); }
 
 /* The transliteration language chip — sits beside 文A, only while it is on. */
