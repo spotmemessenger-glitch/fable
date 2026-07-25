@@ -2411,3 +2411,10 @@
   margin-right: 4px;
 }
 .v-chat .edsheet-in { min-height: 64px; }
+
+/* Informational contact rows: readable, not pressable. */
+.v-chat .cp-row.cp-static {
+  opacity: 1;
+  cursor: default;
+}
+.v-chat .cp-row.cp-static .cp-rv { color: var(--ink2); font-weight: 600; }

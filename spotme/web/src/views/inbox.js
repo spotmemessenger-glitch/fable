@@ -119,7 +119,9 @@ export function render (root, ctx) {
   /** Requests for the active tab: Chats, Nearby and Bluetooth each carry
    * their own Accept/Reject strip (owner decision). */
   function visibleRequests () {
-    return db.requests().filter((request) => reqTabOf(request) === tab)
+    // Same rule as the list: Chats shows every pending request, the other
+    // tabs narrow to their own kind.
+    return db.requests().filter((request) => tab === 'chats' || reqTabOf(request) === tab)
   }
 
   function actOnNewest (ok) {
@@ -562,7 +564,8 @@ export function render (root, ctx) {
   }
 
   function matches (convo) {
-    return tabOf(convo) === tab && convoVisible(convo)
+    if (!convoVisible(convo)) return false
+    return tab === 'chats' ? true : tabOf(convo) === tab
   }
 
   function buildEmpty () {

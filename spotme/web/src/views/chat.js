@@ -121,6 +121,7 @@ const IC = {
   download: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 13v6a1 1 0 001 1h14a1 1 0 001-1v-6"/><path d="M12 3v12"/><path d="M8 11l4 4 4-4"/></svg>',
   pencil: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4L19 9l-4-4L4 16v4z"/><path d="M14.5 5.5l4 4"/></svg>',
   copy: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 012-2h10"/></svg>',
+  link: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M10 14a5 5 0 007.07 0l2.12-2.12a5 5 0 00-7.07-7.07L11 5.93"/><path d="M14 10a5 5 0 00-7.07 0l-2.12 2.12a5 5 0 007.07 7.07L13 18.07"/></svg>',
   info: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><path d="M12 7.5h.01"/></svg>',
   star: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"><path d="M12 3.5l2.6 5.4 5.9.8-4.3 4.1 1 5.9-5.2-2.8-5.2 2.8 1-5.9-4.3-4.1 5.9-.8z"/></svg>',
   trash: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16"/><path d="M9 7V5a1.5 1.5 0 011.5-1.5h3A1.5 1.5 0 0115 5v2"/><path d="M18.5 7l-1 12.6a2 2 0 01-2 1.9h-7a2 2 0 01-2-1.9L5.5 7"/><path d="M10 11.5v5M14 11.5v5"/></svg>',
@@ -259,6 +260,10 @@ const sparkEls = () =>
   Array.from({ length: 8 }, () => el('i', { class: 'sprk', 'aria-hidden': 'true', text: '✦' }))
 
 /** Voice-note translate targets: South Indian languages first, then North. */
+/** How a conversation began — shown on the contact page now that every chat
+ *  lives in one list. */
+const CONNECTED_VIA = { meet: 'Username search', nearby: 'Nearby', bluetooth: 'Bluetooth' }
+
 const VOICE_NOTE_LANGS = ['ta', 'te', 'ml', 'kn', 'hi', 'mr', 'bn', 'gu', 'pa', 'ur']
 
 /** ElevenLabs dictation re-transcribes the WHOLE take at every chunk
@@ -1971,13 +1976,16 @@ export function render (root, ctx, roomId) {
       gallery.style.display = 'flex'
     }
 
+    // A row with no action is information, not a control: no chevron, no
+    // press state — otherwise "Connected through" looks like it opens something.
     const row = (icon, label, value, fn, cls = '') => el('button', {
-      class: 'cp-row' + cls, type: 'button', onclick: fn
+      class: 'cp-row' + cls + (fn ? '' : ' cp-static'),
+      type: 'button', onclick: fn || undefined, disabled: fn ? undefined : ''
     }, [
       el('span', { class: 'cp-ri', html: icon }),
       el('span', { class: 'cp-rl', text: label }),
       value ? el('span', { class: 'cp-rv', text: value }) : null,
-      el('span', { class: 'cp-chev', html: IC.chev })
+      fn ? el('span', { class: 'cp-chev', html: IC.chev }) : null
     ])
 
     const msgTtl = c.msgTtl || 0
@@ -2025,6 +2033,7 @@ export function render (root, ctx, roomId) {
         canBlock ? act(' danger', IC.block, 'Block', confirmBlock) : null
       ]),
       el('div', { class: 'cp-list' }, [
+        row(IC.link, 'Connected through', CONNECTED_VIA[convo.mode] || 'Invite link', null),
         row(IC.clock, 'Disappearing messages', msgTtl ? fmtTtlLong(msgTtl) : 'Off',
           () => { close(); openTimerSheet() }),
         row(IC.doc, 'Export chat', null, () => { close(); exportChat() }),
