@@ -126,8 +126,16 @@ function createLobby () {
 
     req.onMessage = (payload) => {
       if (!payload?.from?.id || !payload.roomId || !payload.secret) return
-      // Broadcast requests carry the intended recipient; ignore other people's.
-      if (payload.to && payload.to !== db.profile().id) return
+      /* Addressed requests let us broadcast safely — but the address may be
+       * STALE. A username lookup returns the id recorded when that name was
+       * claimed, and someone who reinstalled now has a different id. Matching
+       * the username as well means a re-registered friend still receives the
+       * request instead of it vanishing silently. */
+      const me = db.profile()
+      const addressed = Boolean(payload.to || payload.toUsername)
+      const forMe = (payload.to && payload.to === me.id) ||
+        (payload.toUsername && me.username && payload.toUsername === me.username)
+      if (addressed && !forMe) return
       const added = db.addRequest({
         fromId: payload.from.id,
         name: payload.from.name || 'Unknown',
@@ -197,6 +205,19 @@ function createLobby () {
     }, HEARTBEAT_MS)
   }
 
+  /** Send a request the moment the lobby can carry one, retrying briefly. */
+  function deliverRequest (payload, peerId, attempt = 0) {
+    if (!req) {
+      start()                                    // idempotent; may still be joining
+      if (attempt < 20) {                        // ~30s of patience, then give up
+        setTimeout(() => deliverRequest(payload, peerId, attempt + 1), 1500)
+      }
+      return
+    }
+    const target = peers.get(peerId)?.peerId
+    safe(req.send(payload, target ? { target } : undefined))
+  }
+
   /** Send a chat request. Creates the room credentials and a pending convo. */
   function request (peer, text, mode = 'nearby') {
     const roomId = randomHex(8)
@@ -205,14 +226,21 @@ function createLobby () {
     const target = peers.get(peer.id)?.peerId
     const payload = {
       to: peer.id,
+      toUsername: peer.username || null,
       from: { id: p.id, name: p.name, avatar: p.avatar, lang: p.lang },
       roomId, secret, text: String(text || '').slice(0, 300), mode
     }
-    // Targeted when we know their transport id; otherwise broadcast to the
-    // lobby and let the addressee pick it up — everyone else drops it. Peer
-    // maps fill in slowly over public trackers, and a request should not fail
-    // just because ours has not caught up.
-    safe(req.send(payload, target ? { target } : undefined))
+    /**
+     * Deliver as soon as the lobby can carry it. The conversation is recorded
+     * either way, so the request is never silently lost:
+     *  - targeted when we know their transport id, broadcast otherwise (peer
+     *    maps fill in slowly over public trackers, and a request must not fail
+     *    just because ours has not caught up);
+     *  - retried while the lobby is still joining. Waiting for relay
+     *    credentials means `req` can legitimately not exist yet, and tapping
+     *    send in that window used to throw.
+     */
+    deliverRequest(payload, peer.id)
     db.upsertConvo({
       roomId, secret, kind: 'dm', mode,
       peer: { id: peer.id, name: peer.name, avatar: peer.avatar || null, lang: peer.lang || 'en' },

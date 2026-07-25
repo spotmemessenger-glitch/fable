@@ -329,8 +329,9 @@ export function render (root, ctx) {
     // Send even when our peer list has not found them yet: the request is
     // addressed, so it reaches them if they are anywhere in the lobby. Saying
     // "offline" here was wrong for people who were plainly using the app.
-    const peer = lobby.peers().find((p) => p.id === match.id) ||
-      { id: match.id, name: match.name || match.username, avatar: null, lang: 'en' }
+    const live = lobby.peers().find((p) => p.id === match.id)
+    const peer = (live ? { ...live, username: match.username } : null) ||
+      { id: match.id, name: match.name || match.username, username: match.username, avatar: null, lang: 'en' }
     try {
       const roomId = lobby.request(peer, 'Hi! Found you by username', 'meet')
       ctx.toast('Request sent')
@@ -591,6 +592,7 @@ export function render (root, ctx) {
       return
     }
     chatsHead.style.display = ''
+    chatsHead.textContent = TABS.find((t) => t.key === tab)?.label || 'Chats'
     const rows = db.convos().filter(matches)
     if (!rows.length) { listEl.appendChild(buildEmpty()); return }
     rows.forEach((convo, i) => listEl.appendChild(buildRow(convo, online, i)))

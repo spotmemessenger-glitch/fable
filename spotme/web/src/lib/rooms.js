@@ -188,6 +188,17 @@ function createConnection (convo) {
       if (count > 0 || conn.peerCount > 0) {
         db.upsertConvo({ roomId: convo.roomId, peerSeen: Date.now() })
       }
+      /**
+       * Their presence in THIS room is proof they accepted: nobody else knows
+       * its id and secret. The lobby's 'acc' signal is a single best-effort
+       * message that is simply lost if the two are not connected there at that
+       * instant — which left the requester stuck on "waiting" even after the
+       * other person had accepted and was sitting in the room.
+       */
+      if (count > 0 && db.convo(convo.roomId)?.pending) {
+        db.upsertConvo({ roomId: convo.roomId, pending: false })
+        if (convo.peer?.id) db.addContact(convo.peer)
+      }
       conn.peerCount = count
       emit({ type: 'peers', count })
     },
