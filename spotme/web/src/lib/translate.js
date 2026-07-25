@@ -31,6 +31,7 @@ export const LANGS = [
   { code: 'ml', name: 'Malayalam', native: 'മലയാളം' },
   { code: 'gu', name: 'Gujarati', native: 'ગુજરાતી' },
   { code: 'pa', name: 'Punjabi', native: 'ਪੰਜਾਬੀ' },
+  { code: 'ur', name: 'Urdu', native: 'اردو' },
   { code: 'es', name: 'Spanish', native: 'Español' },
   { code: 'fr', name: 'French', native: 'Français' },
   { code: 'de', name: 'German', native: 'Deutsch' },
@@ -234,7 +235,7 @@ export async function translateText (text, from, to) {
  */
 export const SCRIPT_MAP = {
   ta: 'Taml', hi: 'Deva', mr: 'Deva', te: 'Telu', bn: 'Beng', gu: 'Gujr',
-  kn: 'Knda', ml: 'Mlym', pa: 'Guru', ar: 'Arab', ja: 'Jpan', zh: 'Hans',
+  kn: 'Knda', ml: 'Mlym', pa: 'Guru', ur: 'Arab', ar: 'Arab', ja: 'Jpan', zh: 'Hans',
   ru: 'Cyrl', ko: 'Kore'
 }
 

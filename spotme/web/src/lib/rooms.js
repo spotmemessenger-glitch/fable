@@ -10,7 +10,6 @@
  * transport, so every screen behaves identically either way.
  */
 import { createNet, randomId } from '../net.js'
-import { readyRTC } from '../net.js'
 import { createStore } from '../store.js'
 import { db, ROOM_PREFIX } from './db.js'
 import { pushNote } from './notify.js'
@@ -163,6 +162,19 @@ function createConnection (convo) {
     },
     onReaction (payload) { store.addReaction(payload); emit({ type: 'reaction', payload }) },
     onProfile (payload, peerId) { store.addProfile(peerId, payload) },
+    /** The sender corrected their text — patch it in place and mark it. */
+    onEdit (payload) {
+      if (!payload?.id || typeof payload.text !== 'string') return
+      const target = store.list().find((m) => m.id === payload.id)
+      // Only the author may rewrite their own words.
+      if (!target || target.from !== payload.from) return
+      store.patch(payload.id, { text: payload.text, editedAt: payload.editedAt || Date.now() })
+      const latest = store.list().at(-1)
+      if (latest?.id === payload.id) {
+        db.bump(convo.roomId, { text: preview(latest), ts: latest.ts, fromMe: false })
+      }
+      emit({ type: 'edited', id: payload.id })
+    },
     onDelete (payload) {
       if (payload?.id && store.remove(payload.id)) emit({ type: 'deleted', id: payload.id })
     },
@@ -425,6 +437,27 @@ export const rooms = {
     const dataURL = bufferToDataURL(bytes, m?.mime || 'image/jpeg')
     conn.store.patch(id, { data: dataURL, detached: false })
     return dataURL
+  },
+
+  /**
+   * Rewrite a message you already sent. WhatsApp semantics: the text changes
+   * on both sides and both sides show that it was edited — an edit that only
+   * the author could see would be a way to lie about what was said.
+   */
+  editMessage (roomId, id, text) {
+    const conn = this.ensure(roomId)
+    if (!conn) return null
+    const message = conn.store.list().find((m) => m.id === id)
+    const me = db.profile().id
+    if (!message || message.from !== me) return null
+    const next = String(text || '').trim()
+    if (!next || next === message.text) return null
+    const editedAt = Date.now()
+    conn.store.patch(id, { text: next, editedAt })
+    conn.net.sendEdit({ id, text: next, from: me, editedAt })
+    const latest = conn.store.list().at(-1)
+    if (latest?.id === id) db.bump(roomId, { text: preview(latest), ts: latest.ts, fromMe: true })
+    return next
   },
 
   /** Delete on both sides, without residue. */

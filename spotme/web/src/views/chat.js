@@ -119,6 +119,7 @@ const IC = {
   forward: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M15 14l5-5-5-5"/><path d="M20 9H10a6 6 0 00-6 6v4"/></svg>',
   share: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v7a1 1 0 001 1h14a1 1 0 001-1v-7"/><path d="M12 15V3"/><path d="M8 7l4-4 4 4"/></svg>',
   download: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 13v6a1 1 0 001 1h14a1 1 0 001-1v-6"/><path d="M12 3v12"/><path d="M8 11l4 4 4-4"/></svg>',
+  pencil: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4L19 9l-4-4L4 16v4z"/><path d="M14.5 5.5l4 4"/></svg>',
   copy: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 012-2h10"/></svg>',
   info: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><path d="M12 7.5h.01"/></svg>',
   star: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"><path d="M12 3.5l2.6 5.4 5.9.8-4.3 4.1 1 5.9-5.2-2.8-5.2 2.8 1-5.9-4.3-4.1 5.9-.8z"/></svg>',
@@ -258,7 +259,7 @@ const sparkEls = () =>
   Array.from({ length: 8 }, () => el('i', { class: 'sprk', 'aria-hidden': 'true', text: '✦' }))
 
 /** Voice-note translate targets: South Indian languages first, then North. */
-const VOICE_NOTE_LANGS = ['ta', 'te', 'ml', 'kn', 'hi', 'mr', 'bn', 'gu', 'pa']
+const VOICE_NOTE_LANGS = ['ta', 'te', 'ml', 'kn', 'hi', 'mr', 'bn', 'gu', 'pa', 'ur']
 
 /** ElevenLabs dictation re-transcribes the WHOLE take at every chunk
  * boundary — accuracy beats latency for a composer draft. */
@@ -427,7 +428,7 @@ export function render (root, ctx, roomId) {
   }
 
   /** Which language this chat is typed in. "Auto" lets detection guess. */
-  const XLIT_LANGS = ['ta', 'te', 'ml', 'kn', 'hi', 'mr', 'bn', 'gu', 'pa']
+  const XLIT_LANGS = ['ta', 'te', 'ml', 'kn', 'hi', 'mr', 'bn', 'gu', 'pa', 'ur']
 
   const xlitChip = el('button', {
     class: 'xchip', type: 'button', 'aria-label': 'Language you type in',
@@ -1187,6 +1188,7 @@ export function render (root, ctx, roomId) {
       el('div', { class: 'src', text: m.text }),
       el('div', { class: 'meta' }, [
         m.starred ? el('span', { class: 'starmark', text: '★' }) : null,
+        m.editedAt ? el('span', { class: 'edited', text: 'edited' }) : null,
         fmtTime(m.ts)
       ])
     ])
@@ -1287,6 +1289,9 @@ export function render (root, ctx, roomId) {
     const bubble = buildBubble(m, mine)
     const time = el('span', { class: 'tOut' }, [
       m.starred ? el('span', { class: 'starmark', text: '★' }) : null,
+      // Both sides see that a message was changed — an invisible edit would
+      // let someone rewrite what they said.
+      m.editedAt ? el('span', { class: 'edited', text: 'edited' }) : null,
       fmtTime(m.ts)
     ])
     const row = mine
@@ -1538,6 +1543,39 @@ export function render (root, ctx, roomId) {
     }
   }
 
+  /** Rewrite one of your own messages; both sides see it marked as edited. */
+  function openEditSheet (m) {
+    const input = el('textarea', { class: 'fsIn area edsheet-in', rows: '3', maxlength: '2000' })
+    input.value = m.text || ''
+    const back = el('div', { class: 'sheet-back' })
+    const close = () => back.remove()
+    const save = () => {
+      const next = input.value.trim()
+      if (!next || next === m.text) { close(); return }
+      const applied = rooms.editMessage(roomId, m.id, next)
+      close()
+      if (applied) { refreshRow(m.id); ctx.toast('Message edited') }
+      else ctx.toast('Could not edit that message')
+    }
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); save() }
+      if (e.key === 'Escape') close()
+    })
+    back.appendChild(el('div', { class: 'sheet fsheet' }, [
+      el('div', { class: 'fsTitle', text: 'Edit message' }),
+      el('p', { class: 'fsHint', text: 'They will see the new text, marked as edited.' }),
+      el('div', { class: 'fsField' }, [input]),
+      el('div', { class: 'fsActs' }, [
+        el('button', { class: 'pill ghost', type: 'button', text: 'Cancel', onclick: close }),
+        el('button', { class: 'pill ok', type: 'button', text: 'Save', onclick: save })
+      ])
+    ]))
+    back.addEventListener('click', (e) => { if (e.target === back) close() })
+    root.appendChild(back)
+    input.focus()
+    input.setSelectionRange(input.value.length, input.value.length)
+  }
+
   /* ------------------------------------------- share / save / copy out */
 
   const KIND_NOUN = {
@@ -1659,6 +1697,10 @@ export function render (root, ctx, roomId) {
     if (canForward) items.push(item(IC.share, 'Share…', () => { close(); shareMessage(m) }))
     if (m.data) {
       items.push(item(IC.download, downloadLabel(m), () => { close(); saveMessage(m) }))
+    }
+    // Only the author can rewrite their own words, and only plain text.
+    if (isText && m.from === myId) {
+      items.push(item(IC.pencil, 'Edit', () => { close(); openEditSheet(m) }))
     }
     if (isText || m.kind === 'location' || m.text) {
       items.push(item(IC.copy, isText ? 'Copy' : 'Copy text', () => {
@@ -3403,6 +3445,9 @@ export function render (root, ctx, roomId) {
         if (stick) scrollBottom()
         break
       }
+      case 'edited':
+        refreshRow(event.id)
+        break
       case 'deleted':
       case 'expired':
         removeRow(event.id)

@@ -127,6 +127,7 @@ export function createNet (roomId, secret, handlers, getHistory) {
   // Cooperative signals. "Cooperative" is doing real work in that word: a
   // modified client can ignore any of these. Honest limits, not guarantees.
   const del = room.makeAction('del')        // delete-without-trace tombstone
+  const edit = room.makeAction('edit')      // corrected text for a sent message
   const typing = room.makeAction('typing')  // {on:bool, name}
   const read = room.makeAction('read')      // {upTo:ts} read receipt
   const seen = room.makeAction('seen')      // {id} view-once was opened
@@ -135,6 +136,7 @@ export function createNet (roomId, secret, handlers, getHistory) {
   react.onMessage = (payload, meta) => handlers.onReaction(payload, meta?.peerId)
   profile.onMessage = (payload, meta) => handlers.onProfile(payload, meta?.peerId)
   del.onMessage = (payload, meta) => handlers.onDelete?.(payload, meta?.peerId)
+  edit.onMessage = (payload) => handlers.onEdit?.(payload)
   typing.onMessage = (payload, meta) => handlers.onTyping?.(payload, meta?.peerId)
   read.onMessage = (payload, meta) => handlers.onRead?.(payload, meta?.peerId)
   seen.onMessage = (payload, meta) => handlers.onSeen?.(payload, meta?.peerId)
@@ -180,6 +182,7 @@ export function createNet (roomId, secret, handlers, getHistory) {
     sendReaction: (data) => msgSafe(react.send(data)),
     sendProfile: (data) => msgSafe(profile.send(data)),
     sendDelete: (data) => msgSafe(del.send(data)),
+    sendEdit: (data) => msgSafe(edit.send(data)),
     sendTyping: (data) => msgSafe(typing.send(data)),
     sendRead: (data) => msgSafe(read.send(data)),
     sendSeen: (data) => msgSafe(seen.send(data)),

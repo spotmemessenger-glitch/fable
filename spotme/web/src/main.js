@@ -10,6 +10,7 @@ import './tokens.css'
 import { db } from './lib/db.js'
 import { lobby } from './lib/discovery.js'
 import { rooms } from './lib/rooms.js'
+import { readyRTC } from './net.js'
 import { el, clear, toast, avatar } from './lib/ui.js'
 import { compressImage } from './lib/media.js'
 import { openCrop } from './lib/crop.js'
@@ -365,8 +366,18 @@ function adoptRoomLink () {
 
 function boot () {
   if (!db.ready()) return
-  rooms.connectAll()
-  lobby.start()
+  /**
+   * Relay credentials FIRST. Trystero reads the connection config once, at
+   * join time, so a conversation that joins before the relay arrives is stuck
+   * on a direct-only path for its whole lifetime — which on Indian mobile
+   * networks means presence works while messages silently never arrive.
+   * readyRTC() resolves either way (STUN-only on failure), so this cannot
+   * strand the app offline.
+   */
+  readyRTC().then(() => {
+    rooms.connectAll()
+    lobby.start()
+  })
 }
 
 db.subscribe(() => {
