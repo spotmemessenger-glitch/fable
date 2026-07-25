@@ -389,11 +389,20 @@ export function render (root, ctx) {
         const res = await fetch(`${REGISTRY_API}/api/username`, {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ username: handle, id: me.id, name: me.name })
+          body: JSON.stringify({ username: handle, id: me.id, name: me.name, secret: me.claimSecret })
         })
         if (res.status === 409) { setState('bad', 'Just taken — try another'); return }
         if (!res.ok) { setState('bad', 'Could not claim that one'); return }
         db.setProfile({ username: handle })
+        // Hand the old name back only once the new one is safely held, so a
+        // failed claim never leaves this device with no username at all.
+        if (current && current !== handle) {
+          fetch(`${REGISTRY_API}/api/username`, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ op: 'release', username: current, secret: me.claimSecret, id: me.id })
+          }).catch(() => { /* the old name stays taken; harmless */ })
+        }
         ctx.toast(current ? 'Username changed' : 'Username claimed')
         close()
       } catch {

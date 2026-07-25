@@ -7,7 +7,7 @@
  * proven two-phone flow, now joining straight into a conversation.
  */
 import './tokens.css'
-import { db } from './lib/db.js'
+import { db, wipeDevice } from './lib/db.js'
 import { lobby } from './lib/discovery.js'
 import { rooms } from './lib/rooms.js'
 import { readyRTC } from './net.js'
@@ -29,6 +29,12 @@ import * as notifications from './views/notifications.js'
 import * as stories from './views/stories.js'
 
 const app = document.getElementById('app')
+
+/**
+ * A reset was asked for via ?fresh — read once, before anything can navigate
+ * the URL out from under it. Startup and render both stand down while it runs.
+ */
+const RESETTING = new URL(window.location.href).searchParams.has('fresh')
 
 /* ------------------------------------------------- locked bottom bar (5) */
 
@@ -158,6 +164,9 @@ const ctx = {
 }
 
 function render () {
+  // A reset is in flight and will replace the URL — painting the old profile
+  // first would flash the very data being erased.
+  if (RESETTING) return
   const hash = window.location.hash || '#/chat'
 
   if (!db.ready()) { renderOnboarding(); return }
@@ -294,7 +303,7 @@ function renderOnboarding () {
       const res = await fetch(`${REGISTRY_API}/api/username`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ username: handle, id: me.id, name: chosen })
+        body: JSON.stringify({ username: handle, id: me.id, name: chosen, secret: me.claimSecret })
       })
       if (res.status === 409) {
         setUsernameState('taken')
@@ -368,6 +377,43 @@ function adoptRoomLink () {
   return link.roomId
 }
 
+/**
+ * ?fresh — wipe this device's Spot Me data and start onboarding again.
+ *
+ * Testing two phones means resetting them repeatedly, and Settings > Clear all
+ * is several taps deep behind a profile you are trying to destroy.
+ *
+ * The username goes back to the registry FIRST, while the secret proving we
+ * hold it still exists. Skipping that would burn the name: the record would
+ * outlive the device, still pointing at a profile id nothing answers to, so
+ * anyone searching it would send a request into a void. Best-effort — if the
+ * registry is unreachable the wipe still happens, and the name stays taken.
+ *
+ * Everything else is local. It cannot touch the other person's phone.
+ */
+async function maybeFreshStart () {
+  const url = new URL(window.location.href)
+  if (!url.searchParams.has('fresh')) return false
+
+  const me = db.profile()
+  if (me?.username) {
+    try {
+      await fetch(`${REGISTRY_API}/api/username`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          op: 'release', username: me.username, secret: me.claimSecret || '', id: me.id
+        })
+      })
+    } catch { /* offline — the name stays claimed, nothing else breaks */ }
+  }
+
+  try { wipeDevice() } catch { /* private mode — nothing to clear */ }
+  url.searchParams.delete('fresh')
+  window.location.replace(url.toString())
+  return true
+}
+
 function boot () {
   if (!db.ready()) return
   /**
@@ -408,8 +454,12 @@ document.addEventListener('visibilitychange', () => {
 
 window.addEventListener('hashchange', render)
 
-const linkedRoom = db.ready() ? adoptRoomLink() : null
-boot()
+// Kicked off before the boot sequence below reads the profile: a reset that
+// races the lobby would announce the identity it is about to delete.
+if (RESETTING) maybeFreshStart()
+
+const linkedRoom = !RESETTING && db.ready() ? adoptRoomLink() : null
+if (!RESETTING) boot()
 if (linkedRoom) {
   window.location.hash = `#/thread/${linkedRoom}`
 } else if (!window.location.hash || window.location.hash.startsWith('#r=')) {

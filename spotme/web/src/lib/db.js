@@ -29,6 +29,28 @@ const DEFAULT_SETTINGS = {
                         // only counts activity newer than this
 }
 
+/**
+ * Erase everything this browser holds for this identity slot.
+ *
+ * Lives here because this module owns the key names, and a half-wipe is worse
+ * than none: a surviving room store against a fresh profile id resurrects
+ * conversations the new profile was never part of.
+ *
+ * Scoped to one `?id=` slot so resetting one test identity leaves the other
+ * intact. Room keys for other slots carry an extra `:` segment after the
+ * prefix, which is what distinguishes them — room ids are bare hex.
+ */
+export function wipeDevice () {
+  const doomed = []
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i)
+    if (!key || !key.startsWith('spotme:')) continue
+    if (key === KEY || key === 'spotme:me' || key === 'spotme:demo-seeded') { doomed.push(key); continue }
+    if (key.startsWith(ROOM_PREFIX) && !key.slice(ROOM_PREFIX.length).includes(':')) doomed.push(key)
+  }
+  doomed.forEach((key) => localStorage.removeItem(key))
+}
+
 function randomHex (bytes = 8) {
   const buf = new Uint8Array(bytes)
   crypto.getRandomValues(buf)
@@ -86,6 +108,10 @@ function createDb () {
         avatar: null,
         translit: true,
         autoTranslate: true,
+        // Proof this device owns its username claim. Local-only: it is never
+        // put in an announcement or a request (both list their fields
+        // explicitly) and the registry stores only its digest.
+        claimSecret: randomHex(16),
         ...state.profile,
         ...patch
       }
