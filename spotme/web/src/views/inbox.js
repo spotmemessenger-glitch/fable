@@ -360,7 +360,7 @@ export function render (root, ctx) {
       try {
         const roomId = lobby.request(peer, text, 'meet')
         close()
-        ctx.toast(`Request sent to @${match.username}`)
+        ctx.toast(`Sending request to @${match.username}…`)
         ctx.openThread(roomId)
       } catch {
         sending = false
@@ -667,7 +667,7 @@ export function render (root, ctx) {
     const arch = el('div', { class: 'swipeArch', html: ICON.archBox, 'aria-hidden': 'true' })
 
     const preview = convo.pending
-      ? el('span', { class: 'pv pend', text: 'Request sent - waiting' })
+      ? el('span', { class: 'pv pend', text: convo.delivered ? 'Request delivered - waiting' : 'Sending request...' })
       : el('span', {
           class: 'pv',
           text: convo.last ? `${convo.last.fromMe ? 'You: ' : ''}${convo.last.text}` : 'No messages yet'

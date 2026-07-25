@@ -670,7 +670,12 @@ export function render (root, ctx, roomId) {
     } else if (c.kind === 'demo') {
       text = 'online · demo'
     } else if (c.pending) {
-      text = 'Request pending — they have not accepted yet'
+      // Three different situations used to wear one label, which made a lost
+      // request indistinguishable from an unanswered one. `delivered` is set
+      // only by their device acknowledging receipt.
+      text = c.delivered
+        ? 'Request delivered — waiting for them to accept'
+        : 'Delivering request… (they need the app open)'
     } else if (conn.peerCount > 0 || lobby.peers().some((x) => x.id === c.peer?.id)) {
       // Connected to this room, or visible in the app-wide lobby: online.
       text = 'Online'
@@ -1991,7 +1996,7 @@ export function render (root, ctx, roomId) {
     const c = db.convo(roomId) || convo
     let text
     if (c.kind === 'demo') text = 'online · demo'
-    else if (c.pending) text = 'Request pending'
+    else if (c.pending) text = c.delivered ? 'Request delivered' : 'Sending request…'
     else if (conn.peerCount > 0 || lobby.peers().some((x) => x.id === c.peer?.id)) text = 'Online'
     else if (c.peerSeen) text = `Last seen ${fmtDay(c.peerSeen)}`
     else text = 'Offline'

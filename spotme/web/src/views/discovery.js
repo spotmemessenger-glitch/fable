@@ -586,7 +586,7 @@ export function render (root, ctx) {
     if (existing) { ctx.openThread(existing.roomId); return }
     try {
       const roomId = lobby.request(p, WAVE, 'nearby')
-      ctx.toast('Request sent')
+      ctx.toast('Sending request…')
       ctx.openThread(roomId)
     } catch { ctx.toast('Could not send the request') }
   }
@@ -598,7 +598,7 @@ export function render (root, ctx) {
       try {
         const roomId = lobby.request(p, input.value.trim(), 'nearby')
         closeOverlay()
-        ctx.toast('Request sent')
+        ctx.toast('Sending request…')
         ctx.openThread(roomId)
       } catch { ctx.toast('Could not send the request') }
     }
@@ -637,7 +637,7 @@ export function render (root, ctx) {
       ])]
     } else if (convo.pending) {
       actions = [el('div', {
-        class: 'plang', style: 'margin-top:14px', text: 'Request sent — waiting'
+        class: 'plang', style: 'margin-top:14px', text: 'Sending request — keep the app open'
       })]
     } else {
       actions = [
