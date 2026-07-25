@@ -9,9 +9,22 @@
   -->
   <meta name="viewport"
         content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1" />
-  <meta name="theme-color" content="#ffffff" />
+  <!-- Teal, not white: on Android the theme colour paints the status bar, and
+       white made the bar vanish into the header. -->
+  <meta name="theme-color" content="#1b8a9d" />
   <meta name="description" content="Spot Me — meet people nearby, chat in any language. Peer-to-peer: no accounts, no servers." />
+
+  <!-- Installable. Without a manifest the app can be bookmarked but never
+       installed: no icon, no name, and the browser chrome stays on screen. -->
+  <link rel="manifest" href="/manifest.webmanifest" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <!-- iOS ignores the manifest entirely and reads these instead. -->
+  <meta name="apple-mobile-web-app-title" content="Spot Me" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+  <link rel="icon" href="/icon.svg" type="image/svg+xml" />
+  <link rel="icon" href="/icon-192.png" sizes="192x192" type="image/png" />
   <title>Spot Me</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
