@@ -26,18 +26,45 @@ function scrollerAt (node) {
   return null
 }
 
+/**
+ * How long the cache clean-out gets before we reload anyway.
+ *
+ * It used to get forever, and that is how "Refreshing…" stuck on screen: the
+ * revalidating fetch below can hang indefinitely on a mobile link, and a hang
+ * is not an error, so nothing threw, nothing caught, and the reload behind it
+ * simply never ran. Clearing caches is an optimisation; reloading is the
+ * promise made to whoever pulled. Never let the optimisation outrank it.
+ */
+const CLEANUP_MS = 2500
+
+/** Longer than the cleanup plus a slow reload — a last resort, not a race. */
+const RELOAD_WATCHDOG_MS = 8000
+
 /** Drop caches and service workers so the reload cannot serve old code. */
+async function clearStaleCode () {
+  if ('caches' in window) {
+    const keys = await caches.keys()
+    await Promise.all(keys.map((k) => caches.delete(k)))
+  }
+  const regs = await navigator.serviceWorker?.getRegistrations?.()
+  if (regs?.length) await Promise.all(regs.map((r) => r.unregister()))
+  // Re-fetch the entry document bypassing the HTTP cache, so the reload picks
+  // up new asset hashes instead of revalidating its way back to the old ones.
+  const stop = new AbortController()
+  const bail = setTimeout(() => stop.abort(), CLEANUP_MS)
+  try {
+    await fetch(location.pathname, { cache: 'reload', signal: stop.signal })
+  } finally {
+    clearTimeout(bail)
+  }
+}
+
 async function hardReload () {
   try {
-    if ('caches' in window) {
-      const keys = await caches.keys()
-      await Promise.all(keys.map((k) => caches.delete(k)))
-    }
-    const regs = await navigator.serviceWorker?.getRegistrations?.()
-    if (regs?.length) await Promise.all(regs.map((r) => r.unregister()))
-    // Re-fetch the entry document bypassing the HTTP cache, so the reload
-    // below picks up the new asset hashes instead of revalidating the old ones.
-    await fetch(location.pathname, { cache: 'reload' })
+    await Promise.race([
+      clearStaleCode(),
+      new Promise((resolve) => setTimeout(resolve, CLEANUP_MS))
+    ])
   } catch { /* a plain reload is still better than nothing */ }
   location.reload()
 }
@@ -105,6 +132,16 @@ export function attachPullRefresh (host) {
       spinner.classList.add('spinning')
       label.textContent = 'Refreshing…'
       hardReload()
+      // If the reload lands, this page is gone and the timer with it. If it
+      // does not — for any reason, not only the one already fixed — give the
+      // screen back rather than leaving a spinner that means nothing. A stuck
+      // indicator reads as a frozen app.
+      setTimeout(() => {
+        if (!busy) return
+        busy = false
+        spinner.classList.remove('spinning')
+        reset()
+      }, RELOAD_WATCHDOG_MS)
       return
     }
     reset()
