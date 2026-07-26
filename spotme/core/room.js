@@ -73,6 +73,8 @@ async function apply (nodes, view, base) {
 class Room {
   #base
   #identity
+  #signalExt = null
+  #signalListeners = new Set()
 
   constructor (base, identity) {
     this.#base = base
@@ -257,6 +259,39 @@ class Room {
 
   async close () {
     await this.#base.close()
+  }
+
+  /**
+   * Broadcast an ephemeral signal (typing, read receipts) to every currently
+   * connected peer. Deliberately NOT an op: typing/read state is a fact about
+   * a live connection, not history, and must never be logged forever in an
+   * append-only view. A signal sent while nobody is connected is simply lost
+   * — that is correct, not a bug.
+   *
+   * Registered on the view core (not a writer-only core) so a read-only peer
+   * — who has no writer core yet — can still send a read receipt.
+   */
+  sendSignal (data) {
+    this.#ensureSignalExtension().broadcast(data)
+  }
+
+  /** Subscribe to signals from any peer. Returns an unsubscribe function. */
+  onSignal (handler) {
+    this.#ensureSignalExtension()
+    this.#signalListeners.add(handler)
+    return () => this.#signalListeners.delete(handler)
+  }
+
+  #ensureSignalExtension () {
+    if (!this.#signalExt) {
+      this.#signalExt = this.#base.view.registerExtension('spotme-signal', {
+        encoding: 'json',
+        onmessage: (message) => {
+          for (const handler of this.#signalListeners) handler(message)
+        }
+      })
+    }
+    return this.#signalExt
   }
 
   #assertWritable (action) {
