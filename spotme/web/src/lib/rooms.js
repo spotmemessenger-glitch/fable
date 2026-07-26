@@ -52,6 +52,11 @@ function inertNet () {
 
 const connections = new Map()   // roomId -> conn
 
+/* How long a freshly joined room is left alone before "no peers" is allowed to
+ * mean "dead". Finding anyone over public trackers took ~25s when measured, so
+ * a shorter window would tear down rooms that were still handshaking. */
+const REJOIN_GRACE_MS = 45_000
+
 // Debug/test handle (same spirit as window.__lobby): lets automated tests
 // drive sends without the file picker. Carries no secrets beyond what the
 // user's own console already has access to.
@@ -378,12 +383,38 @@ function createConnection (convo) {
 }
 
 export const rooms = {
-  /** Connect (idempotent). Returns the connection, or null without a convo. */
+  /**
+   * Connect (idempotent). Returns the connection, or null without a convo.
+   *
+   * A cached connection whose WebRTC died stays in this map forever, and
+   * handing that corpse back is why a stuck chat never recovered: leaving the
+   * chat does not leave the room (by design — the connection should survive
+   * navigation), so reopening found the same dead object and nothing ever
+   * rejoined. Only a full page reload cleared it.
+   *
+   * Rebuilding is deliberately conservative, because "no peers" is ALSO what a
+   * perfectly healthy room looks like when the other person is simply offline,
+   * and tearing that down on sight would spam the trackers with rejoins:
+   *   - only here, on an explicit open — never on a timer;
+   *   - only when the room currently holds no peers;
+   *   - only after a grace window, since a fresh join legitimately takes
+   *     tens of seconds to find anyone over public trackers.
+   */
   ensure (roomId) {
-    if (connections.has(roomId)) return connections.get(roomId)
+    const existing = connections.get(roomId)
+    if (existing) {
+      const settling = Date.now() - (existing.openedAt || 0) < REJOIN_GRACE_MS
+      if (settling || existing.net.peerCount() > 0) return existing
+      // Past the grace window with nobody connected. It may be alive and
+      // merely lonely, but a dead one never heals itself, and rejoining is
+      // also how we find a peer who has since come back.
+      try { existing.net.leave() } catch { /* already gone */ }
+      connections.delete(roomId)
+    }
     const convo = db.convo(roomId)
     if (!convo) return null
     const conn = createConnection(convo)
+    conn.openedAt = Date.now()
     connections.set(roomId, conn)
     return conn
   },
