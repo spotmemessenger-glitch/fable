@@ -17,10 +17,18 @@
  * and the room to meet in. Nobody else's requests pass through your inbox —
  * it is addressed to exactly one id, not filtered client-side out of a firehose.
  *
- * CONSENT IS UNCHANGED. A knock creates a pending request on the recipient's
- * side, exactly like before — nothing connects, nothing is added as a contact,
- * until they explicitly Accept. This module only changes how the invite
- * physically travels, not who gets to talk to whom without asking.
+ * NO PERMISSION GATE (owner decision 2026-07-26): a knock used to create a
+ * pending request that sat on the recipient's side until they explicitly hit
+ * Accept — which meant a chat only ever went live if both people were online
+ * at the same moment AND one of them remembered to tap Accept. In practice
+ * that left conversations stuck forever on "Sending request…" /
+ * "Delivering request… (they need the app open)" even when both phones were
+ * open and reachable. reach() and the knock handler below both open the
+ * conversation immediately on their own side — there is no pending state to
+ * get stuck in. The knock's only remaining job is delivery: getting your
+ * profile and the room secret to the other device so ITS copy of the chat
+ * can open too, which still requires them to be online at some overlapping
+ * moment (see below) but needs no action from them once they are.
  *
  * WHAT THIS DOES NOT SOLVE
  *
@@ -38,8 +46,8 @@ import { rooms } from './rooms.js'
 import { pushNote } from './notify.js'
 
 const APP_ID = 'io.ysnapai.spotme'
-const HEARTBEAT_MS = 25_000
-const OUTBOX_TTL_MS = 10 * 60_000
+const HEARTBEAT_MS = 10_000
+const OUTBOX_TTL_MS = 24 * 60 * 60_000   // 24 hours — was 10 min, which silently abandoned most requests
 
 /** Stable, non-cryptographic string hash — enough to derive a room id/secret
  * both sides can compute independently, never to protect anything. */
@@ -109,38 +117,42 @@ function createReach () {
       const receipt = () => {
         safe(knockAck.send({ fromId: db.profile().id }, meta?.peerId ? { target: meta.peerId } : undefined))
       }
-      // Already a conversation (accepted earlier, or the sender re-knocking
-      // before they heard back) — just re-ack, nothing new to show.
+      // Already have this conversation (we opened it too, or they are
+      // re-knocking before hearing our ack) — just re-ack, nothing new to open.
       if (db.convo(payload.roomId)) { receipt(); return }
-      const added = db.addRequest({
-        fromId: payload.from.id,
-        name: payload.from.name || 'Unknown',
-        avatar: payload.from.avatar || null,
-        lang: payload.from.lang || 'en',
-        text: String(payload.text || '').slice(0, 300),
-        roomId: payload.roomId,
-        secret: payload.secret,
-        mode: payload.mode || 'meet'
+      db.upsertConvo({
+        roomId: payload.roomId, secret: payload.secret, kind: 'dm', mode: payload.mode || 'meet',
+        peer: {
+          id: payload.from.id, name: payload.from.name || 'Unknown',
+          avatar: payload.from.avatar || null, lang: payload.from.lang || 'en'
+        },
+        title: payload.from.name || 'Unknown',
+        last: { text: String(payload.text || '').slice(0, 300) || 'Chat started', ts: Date.now(), fromMe: false }
       })
+      db.addContact({
+        id: payload.from.id, name: payload.from.name || 'Unknown',
+        avatar: payload.from.avatar || null, lang: payload.from.lang || 'en'
+      })
+      rooms.ensure(payload.roomId)
       receipt()
-      if (added) {
-        pushNote(`${payload.from.name || 'Someone'} sent a chat request`,
-          String(payload.text || 'wants to chat').slice(0, 120), `req:${payload.from.id}`)
-        notify()
-      }
+      pushNote(`${payload.from.name || 'Someone'} started a chat with you`,
+        String(payload.text || 'Say hi').slice(0, 120), `chat:${payload.from.id}`)
+      notify()
     }
 
     room.onPeerJoin = (peerId) => flushOutbox(peerId)
     room.onPeerLeave = () => {}
 
     /**
-     * Closing the app must not abandon a request that never got through.
-     * Any conversation still `pending` in the local store was started by US
-     * (accept() clears pending immediately on the receiving side), so it is
-     * unambiguously an outbound debt still owed — reopen its outbox entry.
+     * Closing the app must not abandon a hello that never got through. Any
+     * conversation WE opened (`initiated`) that has not been acked yet is an
+     * outbound debt still owed — reopen its outbox entry so delivery keeps
+     * trying. Conversations opened because a knock arrived need no outbox at
+     * all: the knock already reached us, and the recipient's own convo went
+     * live on our first receipt of it.
      */
     for (const convo of db.convos()) {
-      if (convo.pending && !convo.delivered && convo.peer?.id) {
+      if (convo.initiated && !convo.delivered && convo.peer?.id) {
         openOutbox(convo.peer, {
           from: { id: me.id, name: me.name, avatar: me.avatar, lang: me.lang },
           roomId: convo.roomId, secret: convo.secret,
@@ -175,7 +187,7 @@ function createReach () {
     for (const [peerId, entry] of outbox) {
       if (Date.now() - entry.first > OUTBOX_TTL_MS) { closeOutboxEntry(peerId); continue }
       const convo = db.convo(entry.payload.roomId)
-      if (!convo?.pending) { closeOutboxEntry(peerId); continue }
+      if (!convo || convo.delivered) { closeOutboxEntry(peerId); continue }
       const live = entry.room.getPeers ? entry.room.getPeers() : {}
       if (!joinedPeerId && Object.keys(live).length === 0) continue
       safe(entry.knockAction.send(entry.payload, joinedPeerId ? { target: joinedPeerId } : undefined))
@@ -206,29 +218,31 @@ function createReach () {
   }
 
   /**
-   * Reach someone directly by id. Creates the pending conversation locally —
-   * same as the old flow — and joins THEIR inbox to deliver the knock.
+   * Reach someone directly by id: opens the conversation on THIS device right
+   * away — no waiting on the other person — and joins THEIR inbox to deliver
+   * the knock so their copy opens too, whenever they are next online.
    *
-   * Also joins the destination room immediately: the moment they accept and
-   * arrive there, rooms.js's own onPeers handler flips pending → false. No
-   * separate "accepted" signal is needed; peer presence in that specific room
-   * already means consent, exactly as it does for an established chat.
+   * `initiated`/`delivered` are this module's own bookkeeping, not a
+   * permission gate: they only decide whether flushOutbox() above still owes
+   * this peer a delivery attempt. A convo we did not open ourselves (or one
+   * already acked) is never re-sent.
    */
   function reach (peer, text, mode = 'meet') {
     const me = db.profile()
     const { roomId, secret } = directRoom(me.id, peer.id)
     const existing = db.convo(roomId)
-    if (existing && !existing.pending) return roomId   // already chatting
+    if (existing && (!existing.initiated || existing.delivered)) return roomId
 
     if (!existing) {
       db.upsertConvo({
-        roomId, secret, kind: 'dm', mode,
+        roomId, secret, kind: 'dm', mode, initiated: true, delivered: false,
         peer: { id: peer.id, name: peer.name, avatar: peer.avatar || null, lang: peer.lang || 'en' },
-        title: peer.name, pending: true, delivered: false,
-        last: { text: text || 'Request sent', ts: Date.now(), fromMe: true }
+        title: peer.name,
+        last: { text: text || 'Chat started', ts: Date.now(), fromMe: true }
       })
+      db.addContact({ id: peer.id, name: peer.name, avatar: peer.avatar || null, lang: peer.lang || 'en' })
     }
-    rooms.ensure(roomId)   // ready the instant they accept
+    rooms.ensure(roomId)
 
     const payload = {
       from: { id: me.id, name: me.name, avatar: me.avatar, lang: me.lang },
@@ -239,39 +253,10 @@ function createReach () {
     return roomId
   }
 
-  /** Accept an incoming request: identical semantics to before. */
-  function accept (request_) {
-    db.upsertConvo({
-      roomId: request_.roomId, secret: request_.secret, kind: 'dm', mode: request_.mode,
-      peer: { id: request_.fromId, name: request_.name, avatar: request_.avatar, lang: request_.lang },
-      title: request_.name, pending: false,
-      last: { text: request_.text || 'Request accepted', ts: Date.now(), fromMe: false }
-    })
-    db.addContact({ id: request_.fromId, name: request_.name, avatar: request_.avatar, lang: request_.lang })
-    db.removeRequest(request_.fromId)
-    rooms.ensure(request_.roomId)
-  }
-
-  function decline (request_) {
-    db.removeRequest(request_.fromId)
-    // Best-effort: tell them so their side does not sit pending forever.
-    // Same honesty as before — they must be online to hear it.
-    if (!relayReady) return
-    const room = joinRoom({ appId: APP_ID, password: 'spotme-inbox', rtcConfig: RTC_CONFIG }, inboxRoomId(request_.fromId))
-    const declineOut = room.makeAction('decline')
-    room.onPeerJoin = (peerId) => {
-      safe(declineOut.send({ roomId: request_.roomId }, { target: peerId }))
-      setTimeout(() => { try { room.leave() } catch { /* already gone */ } }, 2000)
-    }
-    setTimeout(() => { try { room.leave() } catch { /* already gone */ } }, 15_000)
-  }
-
   return {
     joinInbox,
     resume,
     reach,
-    accept,
-    decline,
     subscribe (fn) { subscribers.add(fn); return () => subscribers.delete(fn) },
     stop () {
       if (heartbeat) clearInterval(heartbeat)
