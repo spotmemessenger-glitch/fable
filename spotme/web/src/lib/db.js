@@ -2,8 +2,8 @@
  * Spot Me — app-level state.
  *
  * One persistent record for everything above a single conversation: who I am,
- * which conversations exist, pending requests, contacts and settings. Message
- * history itself lives in the per-room store (store.js) keyed by room id.
+ * which conversations exist, contacts and settings. Message history itself
+ * lives in the per-room store (store.js) keyed by room id.
  *
  * Multi-tab testing: two tabs share localStorage, which would make them the
  * same person. `?id=<suffix>` namespaces the whole record so one browser can
@@ -67,7 +67,6 @@ function load () {
       return {
         profile: s.profile || null,
         convos: s.convos || {},
-        requests: s.requests || {},
         contacts: s.contacts || {},
         blocked: s.blocked || {},
         settings: { ...DEFAULT_SETTINGS, ...(s.settings || {}) }
@@ -77,7 +76,6 @@ function load () {
   return {
     profile: null,
     convos: {},
-    requests: {},
     contacts: {},
     blocked: {},
     settings: { ...DEFAULT_SETTINGS }
@@ -130,14 +128,18 @@ function createDb () {
     /**
      * convo: { roomId, secret, kind:'dm'|'group'|'demo', mode:'meet'|'nearby'|'bluetooth',
      *          peer:{id,name,avatar,lang}, title, created, archived, unread,
-     *          last:{text,ts,fromMe}, pending,
+     *          last:{text,ts,fromMe}, initiated, delivered,
      *          msgTtl }  — disappearing-message mode in seconds (0/absent = off);
      *                      set by 'timer' control messages from either side.
+     *                      initiated/delivered are reach.js's own bookkeeping
+     *                      for whether the opening hello still needs resending —
+     *                      chats are live the instant either side reaches out,
+     *                      there is no separate accept step.
      */
     upsertConvo (convo) {
       const existing = state.convos[convo.roomId] || {}
       state.convos[convo.roomId] = {
-        created: Date.now(), archived: false, unread: 0, last: null, pending: false,
+        created: Date.now(), archived: false, unread: 0, last: null,
         ...existing, ...convo
       }
       commit()
@@ -161,9 +163,6 @@ function createDb () {
       const convo = state.convos[roomId]
       if (!convo) return
       convo.last = { text: String(text).slice(0, 120), ts: ts || Date.now(), fromMe: Boolean(fromMe) }
-      // Only a message FROM the peer proves they accepted — my own sends must
-      // not clear the pending gate.
-      if (!fromMe) convo.pending = false
       if (!fromMe && roomId !== openRoomId) convo.unread = (convo.unread || 0) + 1
       commit()
     },
@@ -189,23 +188,6 @@ function createDb () {
     totalUnread: () => Object.values(state.convos)
       .reduce((sum, c) => sum + (c.archived ? 0 : (c.unread || 0)), 0),
 
-    /* ------------------------------------------------------------ requests */
-    requests: () => Object.values(state.requests).sort((a, b) => b.ts - a.ts),
-
-    /** request: { fromId, name, avatar, lang, text, roomId, secret, mode, ts } */
-    addRequest (req) {
-      if (!req?.fromId || state.blocked[req.fromId]) return false
-      // A repeat request from the same person replaces, never stacks.
-      state.requests[req.fromId] = { ts: Date.now(), ...req }
-      commit()
-      return true
-    },
-
-    removeRequest (fromId) {
-      delete state.requests[fromId]
-      commit()
-    },
-
     /* ------------------------------------------------------------ contacts */
     contacts: () => Object.values(state.contacts)
       .sort((a, b) => a.name.localeCompare(b.name)),
@@ -221,7 +203,6 @@ function createDb () {
     /* -------------------------------------------------------------- blocks */
     block (id, name) {
       state.blocked[id] = { id, name: name || '', ts: Date.now() }
-      delete state.requests[id]
       commit()
     },
     unblock (id) { delete state.blocked[id]; commit() },

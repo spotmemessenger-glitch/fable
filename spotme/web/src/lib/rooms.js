@@ -284,23 +284,10 @@ function createConnection (convo) {
       if (count > 0 || conn.peerCount > 0) {
         db.upsertConvo({ roomId: convo.roomId, peerSeen: Date.now() })
       }
-      /**
-       * Their presence in THIS room is proof they accepted: nobody else knows
-       * its id and secret. The lobby's 'acc' signal is a single best-effort
-       * message that is simply lost if the two are not connected there at that
-       * instant — which left the requester stuck on "waiting" even after the
-       * other person had accepted and was sitting in the room.
-       */
-      if (count > 0) {
-        if (db.convo(convo.roomId)?.pending) {
-          db.upsertConvo({ roomId: convo.roomId, pending: false })
-        }
-        /* Every successful connection files them as a contact, not just the
-         * one that cleared a pending flag. Connecting IS the introduction, so
-         * being asked to request someone a second time — after having already
-         * talked to them — is the app forgetting a person it has met. */
-        if (convo.peer?.id && convo.kind !== 'group') db.addContact(convo.peer)
-      }
+      /* Every successful connection files them as a contact — reach.js already
+       * does this the moment a chat opens, but this is the safety net for
+       * conversations that started some other way (a shared room link). */
+      if (count > 0 && convo.peer?.id && convo.kind !== 'group') db.addContact(convo.peer)
       conn.peerCount = count
       emit({ type: 'peers', count })
     },

@@ -30,24 +30,42 @@
  * can open too, which still requires them to be online at some overlapping
  * moment (see below) but needs no action from them once they are.
  *
- * WHAT THIS DOES NOT SOLVE
+ * WHAT THIS DOES NOT SOLVE (mostly — see the relay below)
  *
  * Two people still both have to be online at some overlapping moment for a
- * knock to cross — that is P2P, not a bug in this file. It DOES make that
- * moment easier to catch: a personal inbox is far less crowded than one
- * global room carrying every Spot Me user's traffic, and resume() below
- * recovers immediately when a backgrounded tab comes back instead of waiting
- * on a heartbeat that may itself have been suspended.
+ * knock to cross P2P — that is inherent to P2P, not a bug in this file. It
+ * DOES make that moment easier to catch: a personal inbox is far less
+ * crowded than one global room carrying every Spot Me user's traffic, and
+ * resume() below recovers immediately when a backgrounded tab comes back
+ * instead of waiting on a heartbeat that may itself have been suspended.
+ *
+ * THE RELAY (owner decision 2026-07-26): P2P alone still loses a knock if
+ * the SENDER goes offline before the recipient ever comes online — nothing
+ * durable held it, so there was nothing left to retry. reach() now also
+ * persists the same knock payload to a tiny server relay (api/knock.js,
+ * backed by the Upstash Redis already used for push — see that file for
+ * why), best-effort and non-blocking. The recipient's device checks the
+ * relay on boot and on regaining focus, feeds anything found through the
+ * exact same receiveKnock() path a live P2P knock uses, then acks it. The
+ * relay only ever holds the OPENING knock, never anything exchanged after
+ * the chat is live — everything past that stays P2P-only, unchanged.
  */
 import { joinRoom } from '@trystero-p2p/torrent'
 import { RTC_CONFIG, readyRTC } from '../net.js'
 import { db } from './db.js'
 import { rooms } from './rooms.js'
 import { pushNote } from './notify.js'
+import { pokePeer } from './push.js'
 
 const APP_ID = 'io.ysnapai.spotme'
 const HEARTBEAT_MS = 10_000
 const OUTBOX_TTL_MS = 24 * 60 * 60_000   // 24 hours — was 10 min, which silently abandoned most requests
+
+/** Same origin-detection every other api/* caller in this app uses. */
+const API_ORIGIN = (location.hostname === 'localhost' || /^[\d.:[\]]+$/.test(location.hostname))
+  ? 'https://spotme-messenger.vercel.app'
+  : ''
+const KNOCK_ENDPOINT = `${API_ORIGIN}/api/knock`
 
 /** Stable, non-cryptographic string hash — enough to derive a room id/secret
  * both sides can compute independently, never to protect anything. */
@@ -95,6 +113,75 @@ function createReach () {
 
   const outbox = new Map()   // peerId -> { room, payload, knockAction, first }
 
+  /**
+   * Open the conversation a knock describes, whichever transport it arrived
+   * over — a live P2P message or a server-relay fetch. Idempotent: a room we
+   * already hold is a safe no-op, so callers never need to dedupe first.
+   * Returns 'invalid' | 'blocked' | 'duplicate' | 'created' so a caller can
+   * decide what needs an ack and what does not.
+   */
+  function receiveKnock (payload) {
+    if (!payload?.from?.id || !payload.roomId || !payload.secret) return 'invalid'
+    if (db.isBlocked(payload.from.id)) return 'blocked'
+    if (db.convo(payload.roomId)) return 'duplicate'
+    db.upsertConvo({
+      roomId: payload.roomId, secret: payload.secret, kind: 'dm', mode: payload.mode || 'meet',
+      peer: {
+        id: payload.from.id, name: payload.from.name || 'Unknown',
+        avatar: payload.from.avatar || null, lang: payload.from.lang || 'en'
+      },
+      title: payload.from.name || 'Unknown',
+      last: { text: String(payload.text || '').slice(0, 300) || 'Chat started', ts: Date.now(), fromMe: false }
+    })
+    db.addContact({
+      id: payload.from.id, name: payload.from.name || 'Unknown',
+      avatar: payload.from.avatar || null, lang: payload.from.lang || 'en'
+    })
+    rooms.ensure(payload.roomId)
+    pushNote(`${payload.from.name || 'Someone'} started a chat with you`,
+      String(payload.text || 'Say hi').slice(0, 120), `chat:${payload.from.id}`)
+    notify()
+    return 'created'
+  }
+
+  /**
+   * Best-effort backup for a knock reach() just sent P2P: hand the same
+   * payload to the server relay so it survives us going offline before the
+   * recipient ever comes online. Never blocks or throws — P2P delivery above
+   * is still the primary path, this only covers its one blind spot.
+   */
+  function relayStore (toId, payload) {
+    safe(fetch(KNOCK_ENDPOINT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'store', toId, knock: payload })
+    }))
+  }
+
+  /**
+   * Pull anything the relay is holding for us, open each one exactly like a
+   * live knock would, then ack (delete) what we fetched so it is not handed
+   * back again next time. Called on boot and on regaining foreground.
+   */
+  async function checkRelay () {
+    const me = db.profile()
+    if (!me?.id) return
+    let knocks
+    try {
+      const res = await fetch(`${KNOCK_ENDPOINT}?userId=${encodeURIComponent(me.id)}`)
+      if (!res.ok) return
+      const data = await res.json()
+      knocks = Array.isArray(data?.knocks) ? data.knocks : []
+    } catch { return }
+    if (!knocks.length) return
+    for (const payload of knocks) receiveKnock(payload)
+    safe(fetch(KNOCK_ENDPOINT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'ack', userId: me.id, roomIds: knocks.map((k) => k.roomId) })
+    }))
+  }
+
   /** My own inbox: joined once at boot, left only by explicit teardown. */
   function joinInbox () {
     if (inbox || !db.ready()) return
@@ -108,36 +195,13 @@ function createReach () {
     knockAck = room.makeAction('knockAck')
 
     knock.onMessage = (payload, meta) => {
-      if (!payload?.from?.id || !payload.roomId || !payload.secret) return
-      if (db.isBlocked(payload.from.id)) return
+      const status = receiveKnock(payload)
+      if (status === 'invalid' || status === 'blocked') return
       // The ack must self-identify as US (the one who just received the
       // knock), not echo back the sender's own id — otherwise the sender's
       // `ack.fromId !== peer.id` check can never match and "delivered" would
       // never fire no matter how many times the knock lands.
-      const receipt = () => {
-        safe(knockAck.send({ fromId: db.profile().id }, meta?.peerId ? { target: meta.peerId } : undefined))
-      }
-      // Already have this conversation (we opened it too, or they are
-      // re-knocking before hearing our ack) — just re-ack, nothing new to open.
-      if (db.convo(payload.roomId)) { receipt(); return }
-      db.upsertConvo({
-        roomId: payload.roomId, secret: payload.secret, kind: 'dm', mode: payload.mode || 'meet',
-        peer: {
-          id: payload.from.id, name: payload.from.name || 'Unknown',
-          avatar: payload.from.avatar || null, lang: payload.from.lang || 'en'
-        },
-        title: payload.from.name || 'Unknown',
-        last: { text: String(payload.text || '').slice(0, 300) || 'Chat started', ts: Date.now(), fromMe: false }
-      })
-      db.addContact({
-        id: payload.from.id, name: payload.from.name || 'Unknown',
-        avatar: payload.from.avatar || null, lang: payload.from.lang || 'en'
-      })
-      rooms.ensure(payload.roomId)
-      receipt()
-      pushNote(`${payload.from.name || 'Someone'} started a chat with you`,
-        String(payload.text || 'Say hi').slice(0, 120), `chat:${payload.from.id}`)
-      notify()
+      safe(knockAck.send({ fromId: db.profile().id }, meta?.peerId ? { target: meta.peerId } : undefined))
     }
 
     room.onPeerJoin = (peerId) => flushOutbox(peerId)
@@ -164,6 +228,7 @@ function createReach () {
     lastTick = Date.now()
     heartbeat = setInterval(() => { flushOutbox(); lastTick = Date.now() }, HEARTBEAT_MS)
     window.__reach = { inbox, outbox }
+    checkRelay()
   }
 
   /**
@@ -181,6 +246,7 @@ function createReach () {
       return
     }
     flushOutbox()
+    checkRelay()
   }
 
   function flushOutbox (joinedPeerId = null) {
@@ -248,6 +314,10 @@ function createReach () {
       from: { id: me.id, name: me.name, avatar: me.avatar, lang: me.lang },
       roomId, secret, text: String(text || '').slice(0, 300), mode
     }
+    // Both are plain HTTP, independent of WebRTC/TURN readiness — no reason
+    // to make them wait behind the relayReady gate below.
+    relayStore(peer.id, payload)
+    pokePeer(peer.id)
     if (!relayReady) { readyRTC().then(() => { relayReady = true; reach(peer, text, mode) }); return roomId }
     openOutbox(peer, payload)
     return roomId

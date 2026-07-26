@@ -13,10 +13,16 @@
  * being lost again — silently, which is what made the original bug so
  * expensive to diagnose.
  *
- * The transport is faked (no DHT, no WebRTC) so this is fast and
- * deterministic, but db.js is the REAL module — the outbox consults the
- * conversation record to decide what is still owed, and a fake db would let
- * those two drift apart without failing anything.
+ * Steps 8-10 cover the later addition: api/knock.js, a server relay so a
+ * knock survives the SENDER going offline, not just the recipient being
+ * briefly unreachable. reach() must persist to it on send; checkRelay()
+ * (wired into resume()) must pick up anything left there and clear it.
+ *
+ * The transport is faked (no DHT, no WebRTC, no real HTTP) so this is fast
+ * and deterministic, but db.js and push.js are the REAL modules — only the
+ * network boundary (fetch) is faked, backed by an in-memory store standing
+ * in for api/knock.js's Redis-backed one. Faking db.js or the relay's own
+ * logic would let them drift apart from what ships without failing anything.
  *
  *   npm test        (from spotme/web)
  */
@@ -26,7 +32,8 @@ const SRC = new URL('../src/', import.meta.url).href
 
 /* --------------------------------------------------------- browser shim */
 /* db.js namespaces its storage key off ?id=, so the suffix picks the slot. */
-globalThis.window = { location: { href: 'http://localhost/?id=test' } }
+globalThis.location = { hostname: 'localhost', href: 'http://localhost/?id=test' }
+globalThis.window = { location: globalThis.location }
 const mem = new Map()
 globalThis.localStorage = {
   get length () { return mem.size },
@@ -83,6 +90,41 @@ mock.module(`${SRC}lib/notify.js`, {
   namedExports: { pushNote: () => {} }
 })
 
+/* --------------------------------------------------- fake knock/push relay */
+/* Real reach.js, real push.js (pokePeer) — only the network boundary (fetch)
+ * is faked, backed by an in-memory store standing in for api/knock.js's
+ * Upstash-backed one. Same reasoning as the db.js note above: faking the
+ * server logic itself would let this drift from what api/knock.js actually
+ * does without failing anything. */
+const relayData = new Map()   // roomId -> { toId, knock }
+const pushPokes = []          // toUserId values pokePeer() asked the server to notify
+
+globalThis.fetch = async (url, opts = {}) => {
+  const { pathname, searchParams } = new URL(url)
+  const body = opts.body ? JSON.parse(opts.body) : null
+
+  if (pathname === '/api/knock') {
+    if (!opts.method || opts.method === 'GET') {
+      const userId = searchParams.get('userId')
+      const knocks = [...relayData.values()].filter((e) => e.toId === userId).map((e) => e.knock)
+      return { ok: true, json: async () => ({ knocks }) }
+    }
+    if (body?.action === 'store') {
+      relayData.set(body.knock.roomId, { toId: body.toId, knock: body.knock })
+      return { ok: true, json: async () => ({ ok: true }) }
+    }
+    if (body?.action === 'ack') {
+      for (const roomId of body.roomIds) relayData.delete(roomId)
+      return { ok: true, json: async () => ({ ok: true }) }
+    }
+  }
+  if (pathname === '/api/push') {
+    if (body?.action === 'notify') pushPokes.push(body.toUserId)
+    return { ok: true, json: async () => ({ ok: true }) }
+  }
+  return { ok: true, json: async () => ({}) }
+}
+
 const { reach } = await import(`${SRC}lib/reach.js`)
 const { db } = await import(`${SRC}lib/db.js`)
 
@@ -112,13 +154,17 @@ async function main () {
   myInboxId = [...roomsById.keys()][0]
 
   /* ------------------------------------------------------------------ 1 */
-  /* An unmeshed inbox is the exact condition the old bug mistook for
-   * success. The request must be RECORDED but not considered delivered. */
+  /* No accept gate: the conversation opens on OUR side the instant reach()
+   * is called, contact and all — delivery to Bob is a separate concern from
+   * whether we can already see the chat. An unmeshed inbox is the exact
+   * condition the old bug mistook for success, so the knock itself must not
+   * be considered delivered yet even though the convo already exists. */
   const roomId = reach.reach(BOB, 'hey')
   await tick()
 
   const convo = db.convo(roomId)
-  check('reach records a pending conversation', convo?.pending === true)
+  check('reach opens the conversation immediately, not as a pending request', convo?.kind === 'dm' && convo?.pending === undefined)
+  check('reach adds the peer as a contact immediately', db.contacts().some((c) => c.id === BOB.id))
   check('reach is not marked delivered into an unmeshed inbox', !convo?.delivered)
   const knockRoom = bobInbox()
   check('nothing is sent into an unmeshed inbox', knockRoom.actions.knock.sends.length === 0)
@@ -150,8 +196,8 @@ async function main () {
   check('the outbox room is left once acknowledged', knockRoom.left === true)
 
   /* ------------------------------------------------------------------ 5 */
-  /* Closing the app must not abandon a request that never got through:
-   * pending + undelivered conversations reopen their outbox on next boot. */
+  /* Closing the app must not abandon a hello that never got through:
+   * initiated + undelivered conversations reopen their outbox on next boot. */
   const stale = 'stale-room-id'
   db.upsertConvo({
     roomId: stale,
@@ -160,7 +206,7 @@ async function main () {
     mode: 'nearby',
     peer: { id: 'carol-id', name: 'Carol', avatar: null, lang: 'en' },
     title: 'Carol',
-    pending: true,
+    initiated: true,
     delivered: false,
     last: { text: 'still owed', ts: Date.now(), fromMe: true }
   })
@@ -205,18 +251,62 @@ async function main () {
     lastAck?.payload?.fromId === db.profile().id)
 
   /* ------------------------------------------------------------------ 7 */
-  /* Accept must never be needed for the sender's own pending → delivered
-   * transition (that is rooms.js's job once the peer actually joins), but it
-   * must still turn an incoming request into a real, non-pending contact. */
-  const DAVE_REQUEST = {
-    fromId: 'dave-id', name: 'Dave', avatar: null, lang: 'en',
-    text: 'hi', roomId: 'dave-room', secret: 'dave-secret', mode: 'meet'
-  }
-  reach.accept(DAVE_REQUEST)
-  check('accepting creates a non-pending conversation',
-    db.convo('dave-room')?.pending === false)
-  check('accepting adds the sender as a contact',
+  /* There is no separate accept step: a first-time knock from someone new
+   * must open a live conversation and file them as a contact on receipt,
+   * with no action required from us. */
+  myInboxRoom.actions.knock.onMessage({
+    from: { id: 'dave-id', name: 'Dave' },
+    roomId: 'dave-room',
+    secret: 'dave-secret',
+    text: 'hi',
+    mode: 'meet'
+  }, { peerId: 'dave-transport-1' })
+  await tick()
+  check('an incoming knock opens the conversation with no accept step',
+    db.convo('dave-room')?.kind === 'dm')
+  check('an incoming knock adds the sender as a contact',
     db.contacts().some((c) => c.id === 'dave-id'))
+
+  /* ------------------------------------------------------------------ 8 */
+  /* reach() must ALSO persist to the server relay and poke the recipient's
+   * push subscription — not only attempt P2P — so the knock survives us
+   * going offline before the recipient ever comes online. */
+  const ERIN = { id: 'erin-id', name: 'Erin', username: 'erin', avatar: null, lang: 'en' }
+  const erinRoomId = reach.reach(ERIN, 'hey erin')
+  await tick()
+  const relayed = relayData.get(erinRoomId)
+  check('reach() persists the knock to the relay', relayed?.toId === ERIN.id)
+  check('the relayed knock names us as the sender', relayed?.knock?.from?.id === db.profile().id)
+  check('the relayed knock carries our message', relayed?.knock?.text === 'hey erin')
+  check('reach() pokes the recipient to wake their device', pushPokes.includes(ERIN.id))
+
+  /* ------------------------------------------------------------------ 9 */
+  /* The other half: a knock someone left in the relay while WE were offline
+   * must be picked up — same as a live P2P knock — the next time we check
+   * (boot, or here, regaining foreground), then cleared from the relay. */
+  relayData.set('frank-room', {
+    toId: db.profile().id,
+    knock: {
+      from: { id: 'frank-id', name: 'Frank', avatar: null, lang: 'en' },
+      roomId: 'frank-room', secret: 'frank-secret', text: 'left this while you were away', mode: 'meet'
+    }
+  })
+  reach.resume()
+  await tick()
+  check('a knock left in the relay opens the conversation on resume()',
+    db.convo('frank-room')?.peer?.id === 'frank-id')
+  check('a relay-delivered knock adds the sender as a contact',
+    db.contacts().some((c) => c.id === 'frank-id'))
+  check('a relay-delivered knock is acked (removed from the relay)',
+    !relayData.has('frank-room'))
+
+  /* ------------------------------------------------------------------ 10 */
+  /* Checking again must not blow up or duplicate — the relay is empty now,
+   * and receiveKnock()'s own dedupe covers the case where it is not. */
+  reach.resume()
+  await tick()
+  check('checking an empty relay again is a no-op, not an error',
+    db.convo('frank-room')?.peer?.id === 'frank-id')
 
   /* -------------------------------------------------------------- report */
   console.log('========================================')

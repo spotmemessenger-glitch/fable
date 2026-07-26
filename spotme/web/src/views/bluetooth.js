@@ -5,9 +5,8 @@
  * what makes Bluetooth chat actually work today. One tap runs an 8-second
  * sweep that reveals everyone currently in the discovery lobby, nearest
  * first, staggered radar-style as glowing blips on the scope and rows in the
- * list. Tapping a person routes through the normal request → accept gate with
- * mode 'bluetooth', so the receiver sees it in Requests with the Bluetooth
- * chip and the chat files under the Bluetooth inbox tab.
+ * list. Tapping a person opens a chat with them directly (mode 'bluetooth' —
+ * no approval step), and the chat files under the Bluetooth inbox tab.
  *
  * Where Web Bluetooth exists, a ghost button additionally opens the browser's
  * real device chooser; picked devices are listed informationally only (name +
@@ -151,15 +150,14 @@ export function render (root, ctx) {
     const existing = db.convos().find((c) => c.mode === 'bluetooth' && c.peer?.id === person.id)
     if (existing) { ctx.openThread(existing.roomId); return }
     actionSheet([{
-      label: 'Send request',
+      label: 'Start chat',
       fn () {
         try {
-          const roomId = reach.reach(person, 'Bluetooth chat request', 'bluetooth')
-          ctx.toast('Request sent')
+          const roomId = reach.reach(person, 'Hi! Found you over Bluetooth scan.', 'bluetooth')
           ctx.openThread(roomId)
-        } catch { ctx.toast('Could not send that request') }
+        } catch { ctx.toast('Could not start that chat') }
       }
-    }], `Send Bluetooth chat request to ${person.name || 'this person'}?`)
+    }], `Start a Bluetooth chat with ${person.name || 'this person'}?`)
   }
 
   function personRow (person, live, index) {

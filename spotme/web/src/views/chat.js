@@ -600,7 +600,6 @@ export function render (root, ctx, roomId) {
   micBtn.addEventListener('click', () => {
     if (recording) { stopRecording(); return }
     if (input.value.trim()) { sendText(); return }
-    if (guardPending()) return
     viewOncePick = false
     startEarlyActivity('photo')
     cameraInput.click()
@@ -669,13 +668,6 @@ export function render (root, ctx, roomId) {
       statusTimer = later(updateStatus, t.until - Date.now() + 60)
     } else if (c.kind === 'demo') {
       text = 'online · demo'
-    } else if (c.pending) {
-      // Three different situations used to wear one label, which made a lost
-      // request indistinguishable from an unanswered one. `delivered` is set
-      // only by their device acknowledging receipt.
-      text = c.delivered
-        ? 'Request delivered — waiting for them to accept'
-        : 'Delivering request… (they need the app open)'
     } else if (conn.peerCount > 0 || lobby.peers().some((x) => x.id === c.peer?.id)) {
       // Connected to this room, or visible in the app-wide lobby: online.
       text = 'Online'
@@ -691,7 +683,7 @@ export function render (root, ctx, roomId) {
     }
     statusEl.textContent = text
     statusEl.classList.toggle('typing', typing)
-    input.placeholder = pendingLocked() ? 'Waiting for them to accept…' : 'Type a message…'
+    input.placeholder = 'Type a message…'
   }
 
   /* ------------------------------------------------------- translation */
@@ -2003,7 +1995,6 @@ export function render (root, ctx, roomId) {
     const c = db.convo(roomId) || convo
     let text
     if (c.kind === 'demo') text = 'online · demo'
-    else if (c.pending) text = c.delivered ? 'Request delivered' : 'Sending request…'
     else if (conn.peerCount > 0 || lobby.peers().some((x) => x.id === c.peer?.id)) text = 'Online'
     else if (c.peerSeen) text = `Last seen ${fmtDay(c.peerSeen)}`
     else text = 'Offline'
@@ -2425,24 +2416,6 @@ export function render (root, ctx, roomId) {
     return m
   }
 
-  /**
-   * The request gate: while the convo is pending, the requester gets exactly
-   * ONE message (their hello). Everything after that pops the waiting notice
-   * until the other person accepts. Their accept (or first reply) unlocks it;
-   * their reject removes this conversation entirely.
-   */
-  function pendingLocked () {
-    const c = db.convo(roomId)
-    if (!c?.pending) return false
-    return conn.store.list().some((m) => m.from === myId)
-  }
-
-  function guardPending () {
-    if (!pendingLocked()) return false
-    ctx.toast('Waiting for them to accept your request')
-    return true
-  }
-
   function dispatchSend (partial) {
     // Timer-messages mode: every outgoing text carries the per-chat ttl.
     const msgTtl = db.convo(roomId)?.msgTtl || 0
@@ -2463,7 +2436,6 @@ export function render (root, ctx, roomId) {
 
   function sendText () {
     if (sendBusy) return
-    if (guardPending()) return
     const raw = input.value.trim()
     if (!raw) return
     const { mode, langTo } = composeState()
@@ -2537,7 +2509,6 @@ export function render (root, ctx, roomId) {
    * Committing sends a control message through the normal path; rooms.js
    * flips convo.msgTtl on BOTH sides when it lands. */
   function openTimerSheet () {
-    if (guardPending()) return
     const cur = db.convo(roomId)?.msgTtl || 0
     const idx = Math.max(0, TIMER_OPTIONS.findIndex((o) => o.secs === cur))
     const hint = el('div', { class: 'phint' })
@@ -2618,7 +2589,6 @@ export function render (root, ctx, roomId) {
   /** WhatsApp-reference location sheet: one-shot pin behind an explicit
    * confirm, or a live share with a duration. Nothing sends on open. */
   function openLocationSheet () {
-    if (guardPending()) return
     if (root.querySelector('.loc-back')) return
     const back = el('div', { class: 'at-back loc-back' })
     const close = () => back.remove()
@@ -2711,7 +2681,6 @@ export function render (root, ctx, roomId) {
   /** Premium attach sheet (WhatsApp reference): a grid of white circular
    * tiles, four per row, each with a coloured icon and an 11px label. */
   function openAttach () {
-    if (guardPending()) return
     if (root.querySelector('.at-back')) return
     const back = el('div', { class: 'at-back' })
     const close = () => back.remove()
@@ -2750,7 +2719,6 @@ export function render (root, ctx, roomId) {
   /** Send any attachment with a live progress ring on the bubble, plus the
    * Telegram-style peer activity ping ('sending a photo…') while in flight. */
   function sendAttachmentWithUI (partial) {
-    if (guardPending()) { stopEarlyActivity(); return }
     stopEarlyActivity(true)   // handoff — the in-flight signalling below continues it
     if (replyTarget) { partial.replyTo = replyTarget.id; clearReply() }
     const actKind = partial.kind === 'image'
@@ -3137,7 +3105,6 @@ export function render (root, ctx, roomId) {
 
   async function startRecording () {
     if (recording || recStarting || pendingClip) return
-    if (guardPending()) return
     if (!navigator.mediaDevices?.getUserMedia) {
       ctx.toast('Recording is not supported here — it needs HTTPS and a modern browser')
       return
@@ -3278,7 +3245,6 @@ export function render (root, ctx, roomId) {
    */
   async function sendVoice (trSel, sendBtn, cancelBtn) {
     if (!pendingClip) return
-    if (guardPending()) return
     const lang = trSel?.value || ''
     if (!lang) {
       const clip = pendingClip

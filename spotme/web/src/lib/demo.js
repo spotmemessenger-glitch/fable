@@ -131,8 +131,8 @@ export function demoNet (convo, store, hooks = {}) {
 }
 
 /**
- * First-run seeding: one incoming request so the Requests strip is alive.
- * Runs once per identity namespace; accepting it creates a demo conversation.
+ * First-run seeding: one already-open demo conversation so Chats is never
+ * empty on a fresh install. Runs once per identity namespace.
  */
 export function seedDemo (db) {
   const FLAG = 'spotme:demo-seeded'
@@ -141,14 +141,14 @@ export function seedDemo (db) {
     localStorage.setItem(FLAG, '1')
   } catch { return }
   const sophia = DEMO_PEOPLE[0]
-  db.addRequest({
-    fromId: sophia.id,
-    name: sophia.name,
-    avatar: sophia.avatar,
-    lang: sophia.lang,
-    text: 'こんにちは！近くにいるみたいですね。',
+  const text = 'こんにちは！近くにいるみたいですね。'
+  db.upsertConvo({
     roomId: `demo-${randomHex(6)}`,
     secret: randomHex(8),
-    mode: 'nearby'
+    kind: 'demo',
+    mode: 'nearby',
+    peer: { id: sophia.id, name: sophia.name, avatar: sophia.avatar, lang: sophia.lang },
+    title: sophia.name,
+    last: { text, ts: Date.now(), fromMe: false }
   })
 }

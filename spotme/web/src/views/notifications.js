@@ -1,24 +1,19 @@
 /**
  * Spot Me — Notifications screen (#/notifications). The one place every kind
- * of activity lands: chat requests from any section (with a where-from chip
- * and inline Accept/Reject), conversations carrying fresh unread, and active
- * people nearby right now. Every section head shows a live count; "See all"
- * jumps to the full screen. The shell owns the bottom nav — its bell badge is
- * the same three numbers as one count.
+ * of activity lands: conversations carrying fresh unread, and active people
+ * nearby right now (tap Say hi to open a chat with them immediately — there
+ * is no request/accept step). Every section head shows a live count;
+ * "See all" jumps to the full screen. The shell owns the bottom nav — its
+ * bell badge is the same numbers as one count.
  */
 import './notifications.css'
 import { db } from '../lib/db.js'
 import { lobby, distanceM, fmtDistance } from '../lib/discovery.js'
 import { reach } from '../lib/reach.js'
-import { rooms } from '../lib/rooms.js'
 import { notifyState, enableNotify } from '../lib/notify.js'
 import { el, clear, avatar, fmtDay } from '../lib/ui.js'
 
-const REQUEST_ROWS = 4           // request rows shown before "See all"
 const NEARBY_ROWS = 6            // active-nearby rows shown before "See all"
-
-/** Where a request came from — same wording as the Requests screen. */
-const MODE_LABEL = { meet: 'General', nearby: 'Nearby', bluetooth: 'Bluetooth' }
 
 const ICON = {
   chevron: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>',
@@ -43,23 +38,11 @@ export function render (root, ctx) {
   const bodyEl = el('div', { class: 'scroll-y nbody' })
   root.appendChild(bodyEl)
 
-  function acceptRequest (request) {
-    try {
-      reach.accept(request)
-      rooms.ensure(request.roomId)
-      ctx.openThread(request.roomId)
-    } catch { ctx.toast('Could not accept that request') }
-  }
-
-  function declineRequest (request) {
-    try { reach.decline(request) } catch { ctx.toast('Could not reject that request') }
-  }
-
   function sayHi (peer) {
     try {
-      reach.reach(peer, 'Nearby chat request', 'nearby')
-      ctx.toast(`Request sent to ${peer.name || 'them'}`)
-    } catch { ctx.toast('Could not send that request') }
+      const roomId = reach.reach(peer, 'Hi! Nearby on Spot Me.', 'nearby')
+      ctx.openThread(roomId)
+    } catch { ctx.toast('Could not start that chat') }
   }
 
   function sectionHead (key, label, count, navPath) {
@@ -72,23 +55,6 @@ export function render (root, ctx) {
         class: 'nsAll', type: 'button', html: 'See all ' + ICON.chevron,
         onclick: () => ctx.nav(navPath)
       })
-    ])
-  }
-
-  function buildRequestRow (request, online, index) {
-    return el('div', { class: 'nreq', style: `animation-delay:${Math.min(index, 8) * 32}ms` }, [
-      avatar(request, 46, { dot: online.has(request.fromId) }),
-      el('div', { class: 'nw' }, [
-        el('div', { class: 'nrq1' }, [
-          el('b', { text: request.name }),
-          el('span', { class: 'nsrc', 'data-mode': request.mode || 'meet', text: MODE_LABEL[request.mode] || 'General' })
-        ]),
-        el('span', { text: request.text || 'wants to chat' })
-      ]),
-      el('div', { class: 'nacts' }, [
-        el('button', { class: 'pill ok', type: 'button', text: 'Accept', onclick: () => acceptRequest(request) }),
-        el('button', { class: 'pill no', type: 'button', text: 'Reject', onclick: () => declineRequest(request) })
-      ])
     ])
   }
 
@@ -137,7 +103,6 @@ export function render (root, ctx) {
 
   function draw () {
     clear(bodyEl)
-    const requests = db.requests()
     const chats = newChats()
     const nearby = lobby.strangers()
 
@@ -150,29 +115,21 @@ export function render (root, ctx) {
         el('span', { class: 'nic', html: ICON.bell }),
         el('span', { class: 'nw' }, [
           el('b', { text: 'Turn on device notifications' }),
-          el('span', { text: 'Requests, new messages and people nearby — alerted even from a background tab.' })
+          el('span', { text: 'New messages and people nearby — alerted even from a background tab.' })
         ])
       ]))
     }
 
-    if (!requests.length && !chats.length && !nearby.length) {
+    if (!chats.length && !nearby.length) {
       bodyEl.appendChild(el('div', { class: 'nempty' }, [
         el('div', { class: 'nic', html: ICON.bell }),
         el('b', { text: 'You are all caught up' }),
-        el('span', { text: 'Chat requests, fresh messages and active people nearby land here the moment they arrive.' })
+        el('span', { text: 'Fresh messages and active people nearby land here the moment they arrive.' })
       ]))
       return
     }
 
     const online = new Set(lobby.peers().map((p) => p.id))
-
-    if (requests.length) {
-      const section = el('div', { class: 'nsec' },
-        [sectionHead('req', 'Requests', requests.length, '#/requests')])
-      requests.slice(0, REQUEST_ROWS)
-        .forEach((request, i) => section.appendChild(buildRequestRow(request, online, i)))
-      bodyEl.appendChild(section)
-    }
 
     if (chats.length) {
       const section = el('div', { class: 'nsec' },

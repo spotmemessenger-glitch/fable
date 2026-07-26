@@ -587,9 +587,8 @@ export function render (root, ctx) {
     if (existing) { ctx.openThread(existing.roomId); return }
     try {
       const roomId = reach.reach(p, WAVE, 'nearby')
-      ctx.toast('Sending request…')
       ctx.openThread(roomId)
-    } catch { ctx.toast('Could not send the request') }
+    } catch { ctx.toast('Could not start that chat') }
   }
 
   function openRequestSheet (p) {
@@ -599,9 +598,8 @@ export function render (root, ctx) {
       try {
         const roomId = reach.reach(p, input.value.trim(), 'nearby')
         closeOverlay()
-        ctx.toast('Sending request…')
         ctx.openThread(roomId)
-      } catch { ctx.toast('Could not send the request') }
+      } catch { ctx.toast('Could not start that chat') }
     }
     input.addEventListener('keydown', (e) => { if (e.key === 'Enter') send() })
     overlay = el('div', { class: 'ov bottom' }, [
@@ -614,7 +612,7 @@ export function render (root, ctx) {
           ])
         ]),
         input,
-        el('button', { class: 'pill ok', type: 'button', text: 'Send request', onclick: send })
+        el('button', { class: 'pill ok', type: 'button', text: 'Start chat', onclick: send })
       ])
     ])
     overlay.addEventListener('click', (e) => { if (e.target === overlay) closeOverlay() })
@@ -627,8 +625,8 @@ export function render (root, ctx) {
   function openProfile (p) {
     closeOverlay()
     const dist = fmtDistance(p.dist)
-    // Already connected (or already asked)? Never offer Wave / say-hi again —
-    // the card states the relationship and opens the existing chat instead.
+    // Already chatting? Never offer Wave / say-hi again — the card states the
+    // relationship and opens the existing chat instead.
     const convo = findConvo(p.id)
     let actions
     if (!convo) {
@@ -636,10 +634,6 @@ export function render (root, ctx) {
         el('button', { class: 'wavebtn', type: 'button', text: `${WAVE} Wave`, onclick: () => sendWave(p) }),
         el('button', { class: 'pill ok', type: 'button', text: 'Message', onclick: () => startMessage(p) })
       ])]
-    } else if (convo.pending) {
-      actions = [el('div', {
-        class: 'plang', style: 'margin-top:14px', text: 'Sending request — keep the app open'
-      })]
     } else {
       actions = [
         el('div', { class: 'plang', style: 'margin-top:14px', text: 'Connected' }),
@@ -681,7 +675,7 @@ export function render (root, ctx) {
     const next = !db.settings().showOnMap
     db.setSettings({ showOnMap: next })
     try { lobby.announce() } catch { /* lobby not up yet */ }
-    if (!next) ctx.toast('You are hidden from the map. You can still send requests.')
+    if (!next) ctx.toast('You are hidden from the map. You can still message people.')
     paintToggle()
   }
 

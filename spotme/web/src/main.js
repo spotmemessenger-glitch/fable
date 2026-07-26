@@ -27,7 +27,6 @@ import * as bluetooth from './views/bluetooth.js'
 import * as profile from './views/profile.js'
 import * as contacts from './views/contacts.js'
 import * as groups from './views/groups.js'
-import * as requests from './views/requests.js'
 import * as notifications from './views/notifications.js'
 import * as stories from './views/stories.js'
 
@@ -46,7 +45,7 @@ const app = document.getElementById('app')
  * travel inside the build: bump this string, ship it, and the next load of
  * every device resets itself once.
  */
-const RESET_EPOCH = '2026-07-26-fresh-start'
+const RESET_EPOCH = '2026-07-26-direct-chat'
 const EPOCH_KEY = 'spotme:epoch'
 
 const resetOrdered = () => {
@@ -64,12 +63,6 @@ const NAV_ITEMS = [
     // rings moved off Home entirely.
     path: '#/stories', label: 'Stories',
     icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="8.4" stroke-dasharray="4.6 3.1"/><circle cx="12" cy="12" r="3.4"/></svg>'
-  },
-  {
-    // Same two-people icon, new job: friend requests, with a red badge the
-    // moment one arrives (Groups moved out of the bar per product decision).
-    path: '#/requests', label: 'Requests',
-    icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><circle cx="8.4" cy="9" r="3.1"/><circle cx="16.6" cy="10.2" r="2.4"/><path d="M2.6 19.4a5.8 5.8 0 0111.6 0"/><path d="M15 19.4a4.6 4.6 0 016.4-3.6"/></svg>'
   },
   {
     path: '#/discovery', label: 'Discovery',
@@ -95,7 +88,6 @@ const NAV_ITEMS = [
 /** Which nav tab lights up for each route. */
 const ACTIVE_TAB = {
   '#/contacts': '#/chat',       // unlisted screen; Chats stays lit
-  '#/requests': '#/requests',
   '#/discovery': '#/discovery',
   '#/bluetooth': '#/chat',      // a Home tab now, so Chats stays lit
   '#/chat': '#/chat',
@@ -132,22 +124,14 @@ function updateNav (route) {
   if (chatBtn && unread > 0) {
     chatBtn.appendChild(el('span', { class: 'pip', text: unread > 99 ? '99+' : String(unread) }))
   }
-  // RED badge on Requests the moment one arrives — no hunting inside tabs.
-  const reqBtn = navEl.querySelector('[data-path="#/requests"]')
-  reqBtn?.querySelector('.pip')?.remove()
-  const reqCount = db.requests().length
-  if (reqBtn && reqCount > 0) {
-    reqBtn.appendChild(el('span', { class: 'pip req', text: reqCount > 99 ? '99+' : String(reqCount) }))
-  }
   // RED badge on the bell — only what is NEW since Notifications was last
-  // closed (settings.notifSeenTs): fresh requests + non-archived convos whose
-  // unread activity is newer + people who first appeared after that moment.
-  // The Requests and Home pips above stay total counts on purpose.
+  // closed (settings.notifSeenTs): non-archived convos whose unread activity
+  // is newer + people who first appeared after that moment. The Home pip
+  // above stays a total count on purpose.
   const notifBtn = navEl.querySelector('[data-path="#/notifications"]')
   notifBtn?.querySelector('.pip')?.remove()
   const seen = db.settings().notifSeenTs || 0
-  const notifCount = db.requests().filter((r) => r.ts > seen).length +
-    db.convos().filter((c) => !c.archived && (c.unread || 0) > 0 && (c.last?.ts || 0) > seen).length +
+  const notifCount = db.convos().filter((c) => !c.archived && (c.unread || 0) > 0 && (c.last?.ts || 0) > seen).length +
     lobby.strangers().filter((p) => (p.firstSeen || 0) > seen).length
   if (notifBtn && notifCount > 0) {
     notifBtn.appendChild(el('span', { class: 'pip req', text: notifCount > 99 ? '99+' : String(notifCount) }))
@@ -161,7 +145,6 @@ const ROUTES = {
   '#/discovery': discovery,
   '#/contacts': contacts,
   '#/groups': groups,      // reachable by link; no longer in the bar
-  '#/requests': requests,
   '#/settings': profile,
   '#/notifications': notifications,
   '#/stories': stories,
@@ -509,8 +492,8 @@ document.addEventListener('visibilitychange', () => {
 })
 
 // Regaining foreground is the one moment worth reacting to immediately: a
-// locked phone can silently kill the lobby's connections, and a pending
-// friend request should not wait on a heartbeat timer to notice.
+// locked phone can silently kill the lobby's connections, and an undelivered
+// hello should not wait on a heartbeat timer to notice.
 document.addEventListener('visibilitychange', () => {
   if (!document.hidden) { lobby.resume(); reach.resume() }
 })

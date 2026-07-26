@@ -191,12 +191,11 @@ function createLobby () {
       .filter((p) => !db.isBlocked(p.id))
       .sort((a, b) => b.ts - a.ts),
 
-    /** Active non-ghost people who aren't already a chat or a pending
-     *  request — the "new people around you right now" feed. */
+    /** Active non-ghost people who aren't already a chat — the "new people
+     *  around you right now" feed. */
     strangers () {
       const known = new Set()
       for (const convo of db.convos()) if (convo.peer?.id) known.add(convo.peer.id)
-      for (const request_ of db.requests()) known.add(request_.fromId)
       return Array.from(peers.values())
         .filter((p) => !p.ghost && !db.isBlocked(p.id) && !known.has(p.id))
         .sort((a, b) => b.ts - a.ts)

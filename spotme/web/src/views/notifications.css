@@ -96,15 +96,6 @@
   font-size: 11px; font-weight: 800;
   display: inline-flex; align-items: center; justify-content: center;
 }
-.v-notif .nrq1 { display: flex; align-items: center; gap: 7px; min-width: 0; }
-.v-notif .nrq1 b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.v-notif .nsrc {
-  flex: none; font-size: 9.5px; font-weight: 800; letter-spacing: .05em;
-  text-transform: uppercase; padding: 2px 7px; border-radius: 8px;
-  color: #fff; background: var(--blue);
-}
-.v-notif .nsrc[data-mode="nearby"] { background: var(--green); }
-.v-notif .nsrc[data-mode="bluetooth"] { background: var(--mesh); }
 .v-notif .nenable {
   display: flex; align-items: center; gap: 12px; width: 100%;
   margin: 0 0 14px; padding: 12px 14px; border: 0; border-radius: 16px;

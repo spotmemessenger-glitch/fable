@@ -33,7 +33,6 @@ const REGISTRY_API = (location.hostname === 'localhost' || /^[\d.:[\]]+$/.test(l
 const ICON = {
   plus: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>',
   search: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M20.5 20.5l-4-4" stroke-linecap="round"/></svg>',
-  chevron: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>',
   back: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>',
   trash: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6M10 11v6M14 11v6"/></svg>',
   archBox: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="5" rx="1"/><path d="M5 9v9a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V9M10 13h4"/></svg>',
@@ -69,12 +68,6 @@ function tabOf (convo) {
   return 'chats'                       // 'meet' (incl. groups) and anything unlabelled
 }
 
-function reqTabOf (request) {
-  if (request.mode === 'nearby') return 'nearby'
-  if (request.mode === 'bluetooth') return 'bt'
-  return 'chats'                       // 'meet' and anything unlabelled
-}
-
 /** "@yuv" / "yuv" → "yuv" when it looks like a username, else null. */
 function usernameQuery (raw) {
   const q = raw.trim().replace(/^@/, '').toLowerCase()
@@ -98,7 +91,6 @@ export function render (root, ctx) {
   let tab = 'chats'
   let query = ''
   let archivedMode = false        // list shows ONLY archived chats while true
-  let sheetOpen = false
   let newChatEl = null            // backdrop of the New chat sheet while open
   let openSwipe = null            // {row, del} — the one row with Delete revealed
   let pressTimer = null
@@ -108,29 +100,6 @@ export function render (root, ctx) {
   let dropOpen = false
 
   /* ------------------------------------------------------------- actions */
-
-  function acceptRequest (request) {
-    try {
-      reach.accept(request)
-      rooms.ensure(request.roomId)
-      ctx.openThread(request.roomId)
-    } catch { ctx.toast('Could not accept that request') }
-  }
-
-  /** Requests for the active tab: Chats, Nearby and Bluetooth each carry
-   * their own Accept/Reject strip (owner decision). */
-  function visibleRequests () {
-    // Same rule as the list: Chats shows every pending request, the other
-    // tabs narrow to their own kind.
-    return db.requests().filter((request) => tab === 'chats' || reqTabOf(request) === tab)
-  }
-
-  function actOnNewest (ok) {
-    const request = visibleRequests()[0]
-    if (!request) return
-    if (ok) acceptRequest(request)
-    else reach.decline(request)
-  }
 
   function openPersonChat (person) {
     const convo = db.convos().find((c) => c.peer?.id === person.id)
@@ -333,13 +302,13 @@ export function render (root, ctx) {
   }
 
   /**
-   * Ask before sending, and let them write the first line.
+   * Let them write the first line before the chat opens.
    *
-   * Tapping a search result used to fire a request instantly with a canned
+   * Tapping a search result used to fire a message instantly with a canned
    * "Hi! Found you by username" — so merely looking someone up messaged them,
    * and the person on the other end got a greeting nobody wrote. The text
-   * rides with the request and is what the recipient reads while deciding, so
-   * it is the one thing worth typing.
+   * typed here is what both sides see as the first message once the chat
+   * opens (immediately, on both devices — no approval step).
    */
   function openRequestSheet (match) {
     const who = match.name || match.username
@@ -365,11 +334,10 @@ export function render (root, ctx) {
       try {
         const roomId = reach.reach(peer, text, 'meet')
         close()
-        ctx.toast(`Sending request to @${match.username}…`)
         ctx.openThread(roomId)
       } catch {
         sending = false
-        ctx.toast('Could not send that request')
+        ctx.toast('Could not start that chat')
       }
     }
 
@@ -385,11 +353,11 @@ export function render (root, ctx) {
           el('span', { class: 'requn', text: '@' + match.username })
         ])
       ]),
-      el('p', { class: 'reqhint', text: 'They see this message with your request.' }),
+      el('p', { class: 'reqhint', text: 'This opens the chat and sends them your first message.' }),
       input,
       el('div', { class: 'reqbtns' }, [
         el('button', { class: 'reqcancel', type: 'button', text: 'Cancel', onclick: close }),
-        el('button', { class: 'reqsend', type: 'button', text: 'Send request', onclick: send })
+        el('button', { class: 'reqsend', type: 'button', text: 'Start chat', onclick: send })
       ])
     ]))
     root.appendChild(back)
@@ -462,7 +430,6 @@ export function render (root, ctx) {
     archivedMode = on
     archHead.style.display = on ? '' : 'none'
     tabsEl.style.display = on ? 'none' : ''
-    renderReqbar()
     renderList()
   }
 
@@ -471,8 +438,6 @@ export function render (root, ctx) {
     for (const b of tabsEl.querySelectorAll('.tb')) {
       b.setAttribute('aria-selected', String(b.dataset.t === tab))
     }
-    renderReqbar()
-    renderSheet()
     renderList()
   }
 
@@ -503,22 +468,6 @@ export function render (root, ctx) {
       badge.style.display = count > 0 ? '' : 'none'
     }
   }
-
-  const reqStack = el('div', { class: 'stack' })
-  const reqCount = el('b')
-  const reqPrev = el('span', { class: 'rpv' })
-  const reqbar = el('div', { class: 'reqbar' }, [
-    reqStack,
-    el('div', { class: 'rtx' }, [
-      reqCount,
-      reqPrev,
-      el('button', { class: 'seeall', type: 'button', html: 'See all ' + ICON.chevron, onclick: () => openSheet() })
-    ]),
-    el('div', { class: 'rb' }, [
-      el('button', { class: 'pill ok', type: 'button', text: 'Accept', onclick: () => actOnNewest(true) }),
-      el('button', { class: 'pill no', type: 'button', text: 'Reject', onclick: () => actOnNewest(false) })
-    ])
-  ])
 
   const chatsHead = el('h3', { class: 'h2', text: 'Chats' })
   const listEl = el('div')
@@ -551,61 +500,6 @@ export function render (root, ctx) {
     if (scroll.scrollTop <= 0 && event.deltaY < 0) revealArchived()
   }, { passive: true })
 
-  const sheetCount = el('span', { class: 'c' })
-  const sheetTitle = el('h2', { text: 'Requests' })
-  const sheetBody = el('div', { class: 'shB' })
-  const sheet = el('div', { class: 'sheet' }, [
-    el('div', { class: 'shT' }, [
-      el('button', { class: 'gh', type: 'button', 'aria-label': 'Back', html: ICON.back, onclick: () => closeSheet() }),
-      sheetTitle,
-      sheetCount
-    ]),
-    el('p', { class: 'shN', text: 'Anyone can send one request. They cannot message you again until you accept.' }),
-    sheetBody
-  ])
-
-  function openSheet () { sheetOpen = true; sheet.classList.add('open') }
-  function closeSheet () { sheetOpen = false; sheet.classList.remove('open') }
-
-  /* ------------------------------------------------------------- requests */
-
-  function renderReqbar () {
-    const requests = visibleRequests()
-    const show = requests.length && !archivedMode
-    reqbar.style.display = show ? '' : 'none'
-    if (!show) return
-    clear(reqStack)
-    for (const request of requests.slice(0, 2)) reqStack.appendChild(avatar(request, 32))
-    reqCount.textContent = `${requests.length} chat request${requests.length === 1 ? '' : 's'}`
-    reqPrev.textContent = `${requests[0].name}: ${requests[0].text || 'wants to chat'}`
-  }
-
-  function renderSheet () {
-    const requests = visibleRequests()
-    sheetTitle.textContent = tab === 'nearby' ? 'Nearby requests'
-      : tab === 'bt' ? 'Bluetooth requests' : 'Chat requests'
-    sheetCount.textContent = `${requests.length} pending`
-    clear(sheetBody)
-    if (!requests.length) {
-      if (sheetOpen) closeSheet()
-      sheetBody.appendChild(el('div', { class: 'empty', text: 'No pending requests.' }))
-      return
-    }
-    requests.forEach((request, i) => {
-      sheetBody.appendChild(el('div', { class: 'req', style: `animation-delay:${i * 32}ms` }, [
-        avatar(request, 44),
-        el('div', { class: 'w' }, [
-          el('b', { text: request.name }),
-          el('span', { text: request.text || 'wants to chat' })
-        ]),
-        el('div', { class: 'rb' }, [
-          el('button', { class: 'pill ok', type: 'button', text: 'Accept', onclick: () => acceptRequest(request) }),
-          el('button', { class: 'pill no', type: 'button', text: 'Reject', onclick: () => reach.decline(request) })
-        ])
-      ]))
-    })
-  }
-
   /* ------------------------------------------------------------ chat list */
 
   function matchesQuery (convo) {
@@ -622,10 +516,6 @@ export function render (root, ctx) {
   }
 
   function matches (convo) {
-    // An unaccepted outgoing reach has nothing to show yet — it appears here
-    // the moment the other person accepts, not before. No more "Sending
-    // request..." rows sitting in Chats.
-    if (convo.pending) return false
     if (!convoVisible(convo)) return false
     return tab === 'chats' ? true : tabOf(convo) === tab
   }
@@ -675,12 +565,10 @@ export function render (root, ctx) {
     })
     const arch = el('div', { class: 'swipeArch', html: ICON.archBox, 'aria-hidden': 'true' })
 
-    const preview = convo.pending
-      ? el('span', { class: 'pv pend', text: convo.delivered ? 'Request delivered - waiting' : 'Sending request...' })
-      : el('span', {
-          class: 'pv',
-          text: convo.last ? `${convo.last.fromMe ? 'You: ' : ''}${convo.last.text}` : 'No messages yet'
-        })
+    const preview = el('span', {
+      class: 'pv',
+      text: convo.last ? `${convo.last.fromMe ? 'You: ' : ''}${convo.last.text}` : 'No messages yet'
+    })
 
     const row = el('div', {
       class: 'row' + (unread > 0 ? ' unread' : ''),
@@ -805,8 +693,6 @@ export function render (root, ctx) {
     clear(meBtn)
     meBtn.appendChild(avatar(db.profile() || {}, 34))
     renderTabCounts()
-    renderReqbar()
-    renderSheet()
     renderList()
     if (dropOpen) renderDrop()      // keep presence dots in the dropdown live
   }
@@ -815,10 +701,8 @@ export function render (root, ctx) {
   root.appendChild(searchWell)
   root.appendChild(archRow)
   root.appendChild(tabsEl)
-  root.appendChild(reqbar)
   root.appendChild(archHead)
   root.appendChild(scroll)
-  root.appendChild(sheet)
 
   update()
 
