@@ -1,17 +1,10 @@
 "use client";
 
-import { useRef, useSyncExternalStore } from "react";
-import {
-  motion,
-  useAnimationFrame,
-  useInView,
-  useMotionValue,
-  useReducedMotion,
-  useTransform,
-} from "framer-motion";
+import { useEffect, useRef, useState } from "react";
+import { motion } from "framer-motion";
 import { cn } from "@/lib/cn";
+import { EASE, fadeRise, viewportOnce } from "@/lib/motion";
 import { Section, SectionHeading } from "@/components/ui/section";
-import { Reveal } from "@/components/ui/reveal";
 
 /* ------------------------------------------------------------------ data */
 
@@ -99,31 +92,13 @@ const TESTIMONIALS: Testimonial[] = RAW_TESTIMONIALS.map((testimonial, i) => ({
   chip: CHIP_HUES[i % CHIP_HUES.length],
 }));
 
-const COLUMN_DURATIONS = [38, 46, 42] as const;
-
-const VERTICAL_MASK: React.CSSProperties = {
-  maskImage: "linear-gradient(to bottom, transparent, black 12%, black 88%, transparent)",
-  WebkitMaskImage: "linear-gradient(to bottom, transparent, black 12%, black 88%, transparent)",
-};
-
-/* ------------------------------------------------------------------ hooks */
-
-const DESKTOP_QUERY = "(min-width: 768px)";
-
-function subscribeToDesktop(onChange: () => void): () => void {
-  const mql = window.matchMedia(DESKTOP_QUERY);
-  mql.addEventListener("change", onChange);
-  return () => mql.removeEventListener("change", onChange);
-}
-
-/** True on md+ viewports; false on the server and below 768px. */
-function useIsDesktop(): boolean {
-  return useSyncExternalStore(
-    subscribeToDesktop,
-    () => window.matchMedia(DESKTOP_QUERY).matches,
-    () => false,
-  );
-}
+/* Two cards per column. Desktop shows all three columns (6 reviews); tablet
+   and mobile collapse to the first column only (2 reviews). */
+const COLUMNS: Testimonial[][] = [
+  TESTIMONIALS.slice(0, 2),
+  TESTIMONIALS.slice(2, 4),
+  TESTIMONIALS.slice(4, 6),
+];
 
 /* ------------------------------------------------------------------ card */
 
@@ -136,17 +111,60 @@ function initialsOf(name: string): string {
 }
 
 function TestimonialCard({ testimonial }: { testimonial: Testimonial }) {
+  const [expanded, setExpanded] = useState(false);
+  /** True only when the collapsed quote is actually truncated — the trigger
+      is hidden otherwise so short quotes never show a pointless "Read more". */
+  const [truncated, setTruncated] = useState(false);
+  const quoteRef = useRef<HTMLQuoteElement>(null);
+
+  useEffect(() => {
+    const el = quoteRef.current;
+    if (!el || expanded) return; // clamp is off while expanded — nothing to measure
+    const measure = () => setTruncated(el.scrollHeight > el.clientHeight + 1);
+    measure();
+    /* On first page load the mount measurement runs before the web fonts
+       finish swapping, when the quote still fits in 3 lines — re-measure once
+       fonts settle so the reflow that pushes it to 4 lines is caught. */
+    document.fonts?.ready.then(measure).catch(() => {});
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, [expanded]);
+
+  const showToggle = truncated || expanded;
+
   return (
     <figure
       className={cn(
-        "rounded-card border border-hairline bg-surface p-6 shadow-soft",
+        /* Fixed height while collapsed gives every card the same footprint;
+           expanding drops to auto so only the opened card grows. mt-auto pins
+           the caption to the bottom edge regardless of quote length. */
+        "flex flex-col rounded-card border border-hairline bg-surface p-5 shadow-soft",
+        !expanded && "h-[12rem]",
         testimonial.accent && "border-accent/20 bg-accent/[0.04]",
       )}
     >
-      <blockquote className="text-[15px] leading-relaxed text-ink-soft">
+      <blockquote
+        ref={quoteRef}
+        className={cn(
+          "text-[15px] leading-relaxed text-ink-soft",
+          !expanded && "line-clamp-3",
+        )}
+      >
         {testimonial.quote}
       </blockquote>
-      <figcaption className="mt-5 flex items-center gap-3">
+
+      {showToggle ? (
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          aria-expanded={expanded}
+          className="mt-2 cursor-pointer self-start text-[13px] font-medium text-accent-deep underline-offset-4 transition-colors duration-200 hover:text-accent hover:underline"
+        >
+          {expanded ? "Read less" : "Read more"}
+        </button>
+      ) : null}
+
+      <figcaption className="mt-auto flex items-center gap-3 pt-4">
         <span
           aria-hidden
           className={cn(
@@ -165,94 +183,11 @@ function TestimonialCard({ testimonial }: { testimonial: Testimonial }) {
   );
 }
 
-/* ------------------------------------------------------------------ marquee column */
-
-function MarqueeColumn({
-  items,
-  duration,
-  reversed = false,
-  active = true,
-}: {
-  items: Testimonial[];
-  duration: number;
-  reversed?: boolean;
-  /** False while the section is offscreen — freezes the frame loop. */
-  active?: boolean;
-}) {
-  const reduce = useReducedMotion();
-  const paused = useRef(false);
-  /** Progress through one loop period, in percent of track height: 0 → 50. */
-  const progress = useMotionValue(0);
-  const y = useTransform(progress, (v) => `${-v}%`);
-
-  useAnimationFrame((_, delta) => {
-    if (reduce || !active || paused.current) return;
-    const step = (delta / 1000) * (50 / duration);
-    let next = progress.get() + (reversed ? -step : step);
-    next = ((next % 50) + 50) % 50;
-    progress.set(next);
-  });
-
-  if (reduce) {
-    return (
-      <div className="flex h-[560px] flex-col gap-4 overflow-hidden" style={VERTICAL_MASK}>
-        {items.map((testimonial) => (
-          <TestimonialCard key={testimonial.name} testimonial={testimonial} />
-        ))}
-      </div>
-    );
-  }
-
-  return (
-    <div
-      className="h-[560px] overflow-hidden"
-      style={VERTICAL_MASK}
-      onMouseEnter={() => {
-        paused.current = true;
-      }}
-      onMouseLeave={() => {
-        paused.current = false;
-      }}
-      onFocus={() => {
-        paused.current = true;
-      }}
-      onBlur={(e) => {
-        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
-          paused.current = false;
-        }
-      }}
-    >
-      {/* Content duplicated once; translating by -50% of the track = one seamless period. */}
-      <motion.div style={{ y }} className="flex flex-col">
-        {[...items, ...items].map((testimonial, i) => (
-          <div
-            key={`${testimonial.name}-${i}`}
-            className="pb-4"
-            aria-hidden={i >= items.length || undefined}
-          >
-            <TestimonialCard testimonial={testimonial} />
-          </div>
-        ))}
-      </motion.div>
-    </div>
-  );
-}
-
 /* ------------------------------------------------------------------ section */
 
 export default function Testimonials() {
-  const isDesktop = useIsDesktop();
-  const gridRef = useRef<HTMLDivElement>(null);
-  const inView = useInView(gridRef);
-
-  const columns: Testimonial[][] = [
-    TESTIMONIALS.slice(0, 3),
-    TESTIMONIALS.slice(3, 6),
-    TESTIMONIALS.slice(6, 9),
-  ];
-
   return (
-    <Section id="testimonials" tone="canvas">
+    <Section id="testimonials" tone="canvas" className="md:!py-24">
       <div className="shell">
         <SectionHeading
           eyebrow="Loved worldwide"
@@ -264,28 +199,41 @@ export default function Testimonials() {
           }
         />
 
-        {/* Desktop — three vertical marquee columns (not rendered below md) */}
-        <Reveal className="hidden md:block">
-          <div ref={gridRef} className="hidden md:grid md:grid-cols-3 md:gap-4">
-            {isDesktop &&
-              columns.map((column, i) => (
-                <MarqueeColumn
-                  key={i}
-                  items={column}
-                  duration={COLUMN_DURATIONS[i]}
-                  reversed={i === 1}
-                  active={inView}
-                />
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+          {COLUMNS.map((column, c) => (
+            <div
+              key={c}
+              className={cn(
+                "flex flex-col gap-4",
+                /* Only the first column is shown below md — 2 reviews on
+                   tablet/mobile, all 6 on desktop. */
+                c > 0 && "hidden md:flex",
+              )}
+            >
+              {column.map((testimonial, row) => (
+                /* Per-card entrance mirrors the site's Reveal (fade + rise +
+                   un-blur), swept diagonally by index. `layout` eases the
+                   height change when a card expands and slides the card below
+                   it down instead of snapping — both gated by the global
+                   MotionConfig reducedMotion="user". */
+                <motion.div
+                  key={testimonial.name}
+                  layout
+                  variants={fadeRise}
+                  initial="hidden"
+                  whileInView="visible"
+                  viewport={viewportOnce}
+                  transition={{
+                    duration: 0.8,
+                    ease: EASE,
+                    delay: (c * 2 + row) * 0.06,
+                    layout: { duration: 0.42, ease: EASE },
+                  }}
+                >
+                  <TestimonialCard testimonial={testimonial} />
+                </motion.div>
               ))}
-          </div>
-        </Reveal>
-
-        {/* Mobile — first three quotes, static */}
-        <div className="flex flex-col gap-4 md:hidden">
-          {TESTIMONIALS.slice(0, 3).map((testimonial, i) => (
-            <Reveal key={testimonial.name} delay={i * 0.08}>
-              <TestimonialCard testimonial={testimonial} />
-            </Reveal>
+            </div>
           ))}
         </div>
       </div>

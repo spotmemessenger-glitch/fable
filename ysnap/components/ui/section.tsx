@@ -23,7 +23,11 @@ export function Section({
     <section
       id={id}
       className={cn(
-        "relative scroll-mt-24 py-24 md:py-36",
+        /* py-14 on phones, not py-24: 96px top + 96px bottom put ~190px of
+           dead space between every section — roughly a quarter of a phone
+           screen, ten times over, which is what made the mobile page read as
+           scattered rather than composed. Desktop keeps its generous py-36. */
+        "relative scroll-mt-24 py-14 md:py-36",
         /* translucent so the fixed site-wide mesh ghosts through white bands */
         tone === "surface" && "bg-surface/85",
         className,
@@ -51,7 +55,9 @@ export function SectionHeading({
   return (
     <Reveal
       className={cn(
-        "mb-14 flex flex-col gap-5 md:mb-20",
+        /* Tighter heading→content gap on phones for the same reason as the
+           section padding above; desktop keeps mb-20. */
+        "mb-9 flex flex-col gap-4 md:mb-20 md:gap-5",
         centered ? "items-center text-center" : "items-start text-left",
         className,
       )}

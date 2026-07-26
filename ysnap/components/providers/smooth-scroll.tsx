@@ -18,26 +18,44 @@ import { MotionConfig } from "framer-motion";
  */
 export default function SmoothScroll({ children }: { children: ReactNode }) {
   useEffect(() => {
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    /* Always open on the first section (hero). "auto" scroll restoration was
+       dropping refreshes mid-page (into the demo). Manual restoration alone
+       isn't enough on iOS Safari, which restores scroll from the back/forward
+       cache regardless — so we ALSO force the top on `pageshow` (fires on every
+       load AND on bfcache restore). Runs for everyone, motion or not. */
+    if ("scrollRestoration" in history) history.scrollRestoration = "manual";
 
-    gsap.registerPlugin(ScrollTrigger);
+    let lenis: Lenis | null = null;
+    const toTop = () => {
+      window.scrollTo(0, 0);
+      lenis?.scrollTo(0, { immediate: true });
+    };
+    toTop();
+    window.addEventListener("pageshow", toTop);
 
-    const lenis = new Lenis({
-      duration: 1.15,
-      easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
-      touchMultiplier: 1.5,
-      anchors: true,
-    });
+    let raf: ((time: number) => void) | null = null;
+    if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      gsap.registerPlugin(ScrollTrigger);
 
-    lenis.on("scroll", ScrollTrigger.update);
+      lenis = new Lenis({
+        duration: 1.15,
+        easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
+        touchMultiplier: 1.5,
+        anchors: true,
+      });
+      lenis.scrollTo(0, { immediate: true });
+      lenis.on("scroll", ScrollTrigger.update);
 
-    const raf = (time: number) => lenis.raf(time * 1000);
-    gsap.ticker.add(raf);
-    gsap.ticker.lagSmoothing(0);
+      const tick = (time: number) => lenis!.raf(time * 1000);
+      raf = tick;
+      gsap.ticker.add(tick);
+      gsap.ticker.lagSmoothing(0);
+    }
 
     return () => {
-      gsap.ticker.remove(raf);
-      lenis.destroy();
+      window.removeEventListener("pageshow", toTop);
+      if (raf) gsap.ticker.remove(raf);
+      lenis?.destroy();
     };
   }, []);
 

@@ -60,7 +60,10 @@ export default function Transliteration() {
   return (
     <Section id="transliteration" tone="surface">
       <div className="shell">
-        <div className="grid items-center gap-16 lg:grid-cols-2">
+        {/* grid-cols-1: without it, the implicit single column below lg
+            sizes to its widest child's content width instead of the
+            viewport, and overflow-x:clip silently truncates the rest. */}
+        <div className="grid grid-cols-1 items-center gap-8 lg:grid-cols-2 lg:gap-16">
           {/* ------------------------------------------------ copy column */}
           <div className="lg:order-last">
             <SectionHeading

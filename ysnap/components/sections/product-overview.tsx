@@ -452,7 +452,7 @@ export default function ProductOverview() {
 
           <OverviewCard
             href="#camera"
-            ariaLabel="AI Camera — 12 modes. Jump to the camera section."
+            ariaLabel="AI Camera — 16 modes. Jump to the camera section."
             delay={0.16}
             parallaxY={drift ? driftCamera : undefined}
             glow="16 179 163"
@@ -460,11 +460,14 @@ export default function ProductOverview() {
             <div className="flex flex-1 flex-col justify-center">
               <CameraViewfinder />
             </div>
-            <CardFooter title="AI Camera" meta="12 modes" />
+            <CardFooter title="AI Camera" meta="16 modes" />
           </OverviewCard>
 
           <OverviewCard
             href="#camera"
+            /* Must describe the chips that actually render (MODE_CHIPS), not the
+               full mode roster — naming modes with no matching chip promises
+               screen-reader users content that isn't on the card. */
             ariaLabel="Understands your world — camera modes for coins, plants, food, math, landmarks and animals. Jump to the camera section."
             className="md:col-span-2"
             delay={0.24}

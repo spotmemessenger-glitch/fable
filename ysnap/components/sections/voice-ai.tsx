@@ -347,6 +347,13 @@ export default function VoiceAI() {
           description="Clone your voice from a short sample, then speak and listen in 120+ languages. Natural text to speech, precise speech to text, and 30+ accents that sound local."
         />
 
+        <Reveal className="mx-auto -mt-6 mb-10 max-w-3xl text-center md:-mt-8 md:mb-12">
+          <p className="text-[15px] font-medium text-ink-soft">
+            Your voice, in every language —{" "}
+            <span className="text-gradient">the first clone is free</span>, no card required.
+          </p>
+        </Reveal>
+
         {/* ------------------------------------------------ voice console */}
         <Reveal className="relative mx-auto max-w-3xl">
           <div

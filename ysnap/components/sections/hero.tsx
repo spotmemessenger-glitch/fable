@@ -12,7 +12,9 @@ import { Magnetic } from "@/components/ui/magnetic";
 import { GlobeIcon, PlayIcon } from "@/components/ui/icons";
 import TextRipple from "@/components/ui/text-ripple";
 import { HeroOrnaments } from "@/components/ui/hero-ornaments";
-import HeroDevice from "@/components/ui/hero-device";
+import HeroDevice3D from "@/components/ui/hero-device-3d";
+import { YsnapMark } from "@/components/ui/ysnap-mark";
+import HeroDancer from "@/components/ui/hero-dancer";
 
 /* ------------------------------------------------------------------ icons */
 
@@ -185,13 +187,34 @@ export default function Hero() {
       };
 
   return (
-    /* no local mesh / opaque bg here — the fixed site-wide MeshBackground
-       (app/layout.tsx) shows through; body supplies the canvas color */
+    /* The site-wide fixed MeshBackground (app/layout.tsx) still shows through
+       everywhere else; this section alone gets an extra colour wash so the
+       "home" hero reads closer to a vivid teal→blue→violet reference the
+       user liked, without recolouring the mesh underneath every other
+       section on the site. */
     <section
       ref={sectionRef}
       id="hero"
       className="noise relative min-h-svh overflow-hidden pb-0 pt-28 md:pt-44"
     >
+      {/* teal → blue → violet wash, reusing the existing spectrum tokens
+          rather than introducing new colours. Kept soft (blurred, moderate
+          alpha) so the ink-black headline stays legible on top of it. */}
+      {/* z-0, not a negative index: as the first DOM child it already paints
+          below every later sibling at their own z-[1]/[5]/[7]/[10] layers —
+          a negative z-index here escaped the section's compositing layer
+          entirely in testing and rendered as good as invisible. */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 z-0"
+        style={{
+          background:
+            "radial-gradient(70% 60% at 12% 8%, rgb(16 179 163 / 0.85) 0%, rgb(16 179 163 / 0.4) 35%, transparent 78%), " +
+            "radial-gradient(65% 55% at 50% -4%, rgb(76 125 255 / 0.8) 0%, rgb(76 125 255 / 0.38) 35%, transparent 75%), " +
+            "radial-gradient(68% 65% at 94% 22%, rgb(110 110 247 / 0.85) 0%, rgb(124 92 240 / 0.4) 35%, transparent 78%)",
+        }}
+      />
+
       {/* ultra-faint dot grid, masked toward the center */}
       <div
         aria-hidden
@@ -220,6 +243,22 @@ export default function Hero() {
           className="flex w-full flex-col items-center"
           style={reduce ? undefined : { y: copyY, opacity: copyOpacity }}
         >
+        {/* Brand mark, silver. The hero wash behind it is teal→blue→violet,
+            so the standard blue glyph would sink into its own background —
+            brushed steel keeps it legible and lets the drop shadow carry the
+            edge. Lands first, before the eyebrow. */}
+        <motion.div
+          initial={{ opacity: 0, y: 12, scale: 0.94 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          transition={{ duration: 0.75, ease: EASE }}
+          className="mb-5 md:mb-6"
+        >
+          <YsnapMark
+            tone="silver"
+            className="h-16 w-16 drop-shadow-[0_6px_18px_rgb(15_28_60_/_0.28)] md:h-20 md:w-20"
+          />
+        </motion.div>
+
         {/* eyebrow pill */}
         <motion.div
           initial={{ opacity: 0, y: 14 }}
@@ -292,6 +331,13 @@ export default function Hero() {
         </motion.div>
         </motion.div>
 
+        {/* Dancing model + its music toggle.
+            Phones: sits in the flow right here, between the CTAs and the
+            device below — there is no free space to float it into on a 375px
+            screen. md+: lifts out to the right of the copy, where the hero
+            has room, and stops taking up vertical space. */}
+        <HeroDancer className="relative z-[8] mt-8 h-[250px] w-[200px] sm:h-[280px] sm:w-[225px] md:absolute md:right-[1%] md:top-[34%] md:mt-0 md:h-[290px] md:w-[220px] lg:right-[3%] lg:top-[32%] lg:h-[330px] lg:w-[250px]" />
+
         {/* scroll cue — fades out first as the departure begins */}
         <motion.div style={reduce ? undefined : { opacity: cueOpacity }}>
         <motion.div
@@ -323,7 +369,10 @@ export default function Hero() {
         initial={{ opacity: 0, y: 44 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 1.1, ease: EASE, delay: 1.05 }}
-        className="relative z-[5] mx-auto mt-10 h-[580px] w-full max-w-5xl sm:mt-8 sm:h-[620px] md:mt-4 md:h-[680px]"
+        /* 580px of device on a ~700px phone screen pushed everything below it
+           a full screen further down; 460px still reads as a hero device
+           without eating the whole viewport. */
+        className="relative z-[5] mx-auto mt-6 h-[460px] w-full max-w-5xl sm:mt-8 sm:h-[620px] md:mt-4 md:h-[680px]"
       >
         {/* inner wrapper carries the departure lag (y/scale) so it composes
             with — rather than collides with — the entrance y on the outer element */}
@@ -332,7 +381,7 @@ export default function Hero() {
           style={reduce ? undefined : { y: visualY, scale: visualScale }}
         >
           <div className="absolute inset-0">
-            <HeroDevice />
+            <HeroDevice3D />
           </div>
 
           <div className="pointer-events-none absolute inset-0 z-20">

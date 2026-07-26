@@ -16,14 +16,15 @@ const SPECTRUM: ReadonlyArray<readonly [number, number, number]> = [
   [96, 201, 141], //  green  #34b871
 ];
 
-/* Pastelized blue-indigo family for the site-wide backdrop:
-   #4C7DFF, #6E8CFF, #6E6EF7, #90B4FF, #3B69E0. */
+/* Light-blue family for the site-wide backdrop — deliberately airy (sky/ice
+   tones rather than saturated indigo) so the mesh sits quietly behind content
+   instead of competing with it. */
 const BLUE: ReadonlyArray<readonly [number, number, number]> = [
-  [124, 156, 255], // #4c7dff
-  [149, 171, 255], // #6e8cff
-  [146, 146, 250], // #6e6ef7
-  [174, 200, 255], // #90b4ff
-  [112, 145, 232], // #3b69e0
+  [125, 200, 245], // sky
+  [150, 214, 250], // light sky
+  [110, 180, 238], // cornflower
+  [180, 226, 252], // ice
+  [96, 165, 226], // deeper sky
 ];
 
 /* Polished-gold family: bright highlight tones through to deep antique gold,
@@ -37,8 +38,8 @@ const GOLD: ReadonlyArray<readonly [number, number, number]> = [
 ];
 
 const INK: readonly [number, number, number] = [11, 12, 14];
-/* blue-gray link base for the blue palette — rgb(76 125 255) at low alpha */
-const BLUE_LINK: readonly [number, number, number] = [76, 125, 255];
+/* light-blue link base — lifted well off ink so wires read as pale sky */
+const BLUE_LINK: readonly [number, number, number] = [116, 186, 236];
 /* warm alloy line base for the gold palette */
 const GOLD_LINK: readonly [number, number, number] = [186, 152, 76];
 
@@ -55,8 +56,16 @@ const PULSE_COLORS: ReadonlyArray<readonly [number, number, number]> = [
   [249, 115, 22], //  amber-orange
 ];
 
-const PULSE_COUNT = 24; // concurrent packets in flight
+const PULSE_COUNT = 24; // concurrent packets in flight (gold: dense traffic)
+/* The light-blue backdrop keeps the same "data travelling the wires" idea but
+   at a fraction of the traffic and speed, so it reads as a calm current rather
+   than a busy switchboard. */
+const PULSE_COUNT_CALM = 7;
 const PULSE_TAIL = 0.2; // fraction of the link drawn as a comet tail
+
+/** Packet speed range (progress/sec) per palette. Calm is ~1/3 of gold. */
+const pulseSpeed = (calm: boolean) =>
+  calm ? 0.09 + Math.random() * 0.11 : 0.25 + Math.random() * 0.45;
 
 /* drift-blob radial gradients per palette */
 const BLOBS: Record<"spectrum" | "blue" | "gold", readonly [string, string, string]> = {
@@ -65,10 +74,11 @@ const BLOBS: Record<"spectrum" | "blue" | "gold", readonly [string, string, stri
     "radial-gradient(closest-side, rgb(16 179 163 / 0.07), rgb(52 184 113 / 0.05), transparent 72%)",
     "radial-gradient(closest-side, rgb(255 107 94 / 0.07), rgb(245 158 11 / 0.05), transparent 72%)",
   ],
+  /* airy sky wash — keeps the page high-key, never a heavy indigo cast */
   blue: [
-    "radial-gradient(closest-side, rgb(76 125 255 / 0.09), rgb(110 140 255 / 0.07), transparent 72%)",
-    "radial-gradient(closest-side, rgb(110 110 247 / 0.08), rgb(59 105 224 / 0.06), transparent 72%)",
-    "radial-gradient(closest-side, rgb(64 158 210 / 0.07), rgb(76 125 255 / 0.06), transparent 72%)",
+    "radial-gradient(closest-side, rgb(125 200 245 / 0.10), rgb(168 219 250 / 0.07), transparent 72%)",
+    "radial-gradient(closest-side, rgb(110 180 238 / 0.08), rgb(140 206 246 / 0.06), transparent 72%)",
+    "radial-gradient(closest-side, rgb(96 165 226 / 0.07), rgb(180 226 252 / 0.06), transparent 72%)",
   ],
   /* warm studio bounce — keeps the white background high-key, never yellow */
   gold: [
@@ -165,6 +175,11 @@ export default function MeshBackground({
     const baseAlphaFloor = palette === "gold" ? 0.15 : palette === "blue" ? 0.05 : 0.04;
     const hotAlphaMax = palette === "gold" ? 0.55 : palette === "blue" ? 0.26 : 0.25;
     const metallic = palette === "gold";
+    /* blue keeps the travelling-packet idea, but calm: fewer, slower, and
+       drawn in the palette's own light-blue tones rather than the full
+       multi-hue set (which is what made the gold backdrop read as noisy). */
+    const calm = palette === "blue";
+    const pulsing = metallic || calm;
 
     const count = Math.max(8, Math.round(density));
     const nodes: MeshNode[] = Array.from({ length: count }, (_, i) => ({
@@ -172,8 +187,10 @@ export default function MeshBackground({
       by: Math.random(),
       ampX: 14 + Math.random() * 26,
       ampY: 14 + Math.random() * 26,
-      spX: 0.08 + Math.random() * 0.12,
-      spY: 0.08 + Math.random() * 0.12,
+      /* drift rate rad/s — deliberately unhurried so the lattice breathes
+         rather than shimmers */
+      spX: 0.035 + Math.random() * 0.05,
+      spY: 0.035 + Math.random() * 0.05,
       phX: Math.random() * Math.PI * 2,
       phY: Math.random() * Math.PI * 2,
       ox: 0,
@@ -207,12 +224,16 @@ export default function MeshBackground({
     let pairCount = 0;
 
     type Pulse = { i: number; j: number; t: number; sp: number; c: number };
-    const pulses: Pulse[] = Array.from({ length: metallic ? PULSE_COUNT : 0 }, () => ({
+    const pulseCount = metallic ? PULSE_COUNT : calm ? PULSE_COUNT_CALM : 0;
+    /* calm traffic stays inside the light-blue family so it tints rather than
+       flashes; gold keeps the full multi-hue packet set */
+    const pulsePalette = calm ? BLUE : PULSE_COLORS;
+    const pulses: Pulse[] = Array.from({ length: pulseCount }, () => ({
       i: 0,
       j: 0,
       t: 1, // start expired so they stagger in as links appear
-      sp: 0.25 + Math.random() * 0.45,
-      c: Math.floor(Math.random() * PULSE_COLORS.length),
+      sp: pulseSpeed(calm),
+      c: Math.floor(Math.random() * pulsePalette.length),
     }));
 
     /** Re-seat a packet on a random live wire. */
@@ -222,8 +243,8 @@ export default function MeshBackground({
       p.i = pairs[k * 2];
       p.j = pairs[k * 2 + 1];
       p.t = 0;
-      p.sp = 0.25 + Math.random() * 0.45;
-      p.c = Math.floor(Math.random() * PULSE_COLORS.length);
+      p.sp = pulseSpeed(calm);
+      p.c = Math.floor(Math.random() * pulsePalette.length);
     };
 
     /* time accumulator (seconds) so pausing never causes a jump */
@@ -397,7 +418,7 @@ export default function MeshBackground({
       /* data transmissions — coloured packets running the gold wires, each a
          comet head with a fading tail. The node under the cursor becomes a
          bright emitter, so interaction visibly injects traffic into the mesh. */
-      if (metallic && pairCount > 0) {
+      if (pulsing && pairCount > 0) {
         ctx.lineCap = "round";
         for (const p of pulses) {
           if (p.t >= 1) {
@@ -408,7 +429,7 @@ export default function MeshBackground({
           const a = nodes[p.i];
           const b = nodes[p.j];
           if (!a || !b) continue;
-          const col = PULSE_COLORS[p.c];
+          const col = pulsePalette[p.c];
           const head = Math.min(1, p.t);
           const tail = Math.max(0, head - PULSE_TAIL);
           const hx = a.x + (b.x - a.x) * head;
@@ -417,32 +438,42 @@ export default function MeshBackground({
           const ty = a.y + (b.y - a.y) * tail;
           /* brightness eases in and out so packets never pop at the wire ends */
           const fade = Math.sin(Math.PI * head);
+          /* calm traffic is dimmer and smaller — a current under the surface
+             rather than sparks across it */
+          const gain = calm ? 0.45 : 1;
 
           const grad = ctx.createLinearGradient(tx, ty, hx, hy);
           grad.addColorStop(0, `rgba(${col[0]},${col[1]},${col[2]},0)`);
-          grad.addColorStop(1, `rgba(${col[0]},${col[1]},${col[2]},${(0.85 * fade).toFixed(3)})`);
+          grad.addColorStop(
+            1,
+            `rgba(${col[0]},${col[1]},${col[2]},${(0.85 * fade * gain).toFixed(3)})`,
+          );
           ctx.strokeStyle = grad;
-          ctx.lineWidth = 2.4;
+          ctx.lineWidth = calm ? 1.6 : 2.4;
           ctx.beginPath();
           ctx.moveTo(tx, ty);
           ctx.lineTo(hx, hy);
           ctx.stroke();
 
           /* soft coloured bloom so each packet reads as a light source */
-          const bloom = ctx.createRadialGradient(hx, hy, 0, hx, hy, 9);
-          bloom.addColorStop(0, `rgba(${col[0]},${col[1]},${col[2]},${(0.45 * fade).toFixed(3)})`);
+          const br = calm ? 6 : 9;
+          const bloom = ctx.createRadialGradient(hx, hy, 0, hx, hy, br);
+          bloom.addColorStop(
+            0,
+            `rgba(${col[0]},${col[1]},${col[2]},${(0.45 * fade * gain).toFixed(3)})`,
+          );
           bloom.addColorStop(1, `rgba(${col[0]},${col[1]},${col[2]},0)`);
           ctx.fillStyle = bloom;
           ctx.beginPath();
-          ctx.arc(hx, hy, 9, 0, Math.PI * 2);
+          ctx.arc(hx, hy, br, 0, Math.PI * 2);
           ctx.fill();
 
           /* white-hot core keeps the hue readable at 2px on white */
-          ctx.fillStyle = `rgba(${col[0]},${col[1]},${col[2]},${fade.toFixed(3)})`;
-          ctx.shadowColor = `rgba(${col[0]},${col[1]},${col[2]},0.95)`;
-          ctx.shadowBlur = 12;
+          ctx.fillStyle = `rgba(${col[0]},${col[1]},${col[2]},${(fade * (calm ? 0.7 : 1)).toFixed(3)})`;
+          ctx.shadowColor = `rgba(${col[0]},${col[1]},${col[2]},${calm ? 0.5 : 0.95})`;
+          ctx.shadowBlur = calm ? 7 : 12;
           ctx.beginPath();
-          ctx.arc(hx, hy, 2.6, 0, Math.PI * 2);
+          ctx.arc(hx, hy, calm ? 1.7 : 2.6, 0, Math.PI * 2);
           ctx.fill();
           ctx.shadowBlur = 0;
         }
@@ -611,23 +642,23 @@ export default function MeshBackground({
       <div
         className="animate-floaty absolute -right-40 -top-44 h-[640px] w-[640px] rounded-full blur-3xl"
         style={{
-          animationDuration: "19s",
+          animationDuration: "38s",
           background: BLOBS[palette][0],
         }}
       />
       <div
         className="animate-floaty absolute -left-56 top-[26%] h-[560px] w-[560px] rounded-full blur-3xl"
         style={{
-          animationDuration: "24s",
-          animationDelay: "-6s",
+          animationDuration: "48s",
+          animationDelay: "-12s",
           background: BLOBS[palette][1],
         }}
       />
       <div
         className="animate-floaty absolute -bottom-52 left-[28%] h-[620px] w-[620px] rounded-full blur-3xl"
         style={{
-          animationDuration: "28s",
-          animationDelay: "-11s",
+          animationDuration: "56s",
+          animationDelay: "-22s",
           background: BLOBS[palette][2],
         }}
       />

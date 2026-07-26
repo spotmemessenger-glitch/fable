@@ -1,9 +1,10 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { motion, useReducedMotion, type Variants } from "framer-motion";
+import { motion } from "framer-motion";
 import { Section, SectionHeading } from "@/components/ui/section";
-import { EASE, fadeRise, stagger, scaleIn, viewportOnce } from "@/lib/motion";
+import { fadeRise, stagger, scaleIn, viewportOnce } from "@/lib/motion";
+import PrivacyShield3D from "@/components/ui/privacy-shield-3d";
 
 /* ------------------------------------------------------------------ data */
 
@@ -75,123 +76,30 @@ const ROWS: PrivacyRow[] = [
   },
 ];
 
-const SHIELD_PATH =
-  "M60 10c14.5 7.6 29.4 12.4 45 14.4V60c0 30.4-17 53.6-45 65.6C32 113.6 15 90.4 15 60V24.4C30.6 22.4 45.5 17.6 60 10Z";
-
-/* ------------------------------------------------------------------ shield */
-
-function ShieldVisual() {
-  const reduce = useReducedMotion();
-
-  const shieldDraw: Variants = reduce
-    ? {
-        hidden: { opacity: 0 },
-        visible: { opacity: 1, transition: { duration: 0.4, ease: EASE } },
-      }
-    : {
-        hidden: { pathLength: 0, opacity: 0 },
-        visible: {
-          pathLength: 1,
-          opacity: 1,
-          transition: {
-            pathLength: { duration: 1.5, ease: EASE },
-            opacity: { duration: 0.35, ease: EASE },
-          },
-        },
-      };
-
-  const shieldFill: Variants = {
-    hidden: { opacity: 0 },
-    visible: {
-      opacity: 1,
-      transition: { delay: reduce ? 0 : 1.2, duration: 0.8, ease: EASE },
-    },
-  };
-
-  const lockGroup: Variants = reduce
-    ? {
-        hidden: { opacity: 0 },
-        visible: { opacity: 1, transition: { duration: 0.4, ease: EASE } },
-      }
-    : {
-        hidden: { opacity: 0, scale: 0.7, rotate: -8 },
-        visible: {
-          opacity: 1,
-          scale: 1,
-          rotate: 0,
-          transition: { delay: 1.35, type: "spring", stiffness: 260, damping: 20 },
-        },
-      };
-
-  /** The shackle drops the last couple of pixels — the "click" of the lock closing. */
-  const shackle: Variants = reduce
-    ? { hidden: {}, visible: {} }
-    : {
-        hidden: { y: -2.5 },
-        visible: {
-          y: 0,
-          transition: { delay: 1.75, type: "spring", stiffness: 640, damping: 16 },
-        },
-      };
-
-  return (
-    <motion.svg
-      viewBox="0 0 120 136"
-      className="relative mx-auto h-auto w-52 text-ink md:w-60"
-      fill="none"
-      initial="hidden"
-      whileInView="visible"
-      viewport={{ once: true, amount: 0.4 }}
-      aria-hidden
-    >
-      <motion.path d={SHIELD_PATH} variants={shieldFill} fill="rgb(76 125 255 / 0.05)" />
-      <motion.path
-        d={SHIELD_PATH}
-        variants={shieldDraw}
-        stroke="currentColor"
-        strokeWidth={2}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <motion.g
-        variants={lockGroup}
-        style={{ transformBox: "fill-box", transformOrigin: "center" }}
-      >
-        <motion.path
-          variants={shackle}
-          d="M53.5 66v-6.5a6.5 6.5 0 0 1 13 0V66"
-          stroke="currentColor"
-          strokeWidth={2}
-          strokeLinecap="round"
-        />
-        <rect
-          x="47.5"
-          y="66"
-          width="25"
-          height="19"
-          rx="5"
-          stroke="currentColor"
-          strokeWidth={2}
-        />
-        <circle cx="60" cy="75.5" r="2.2" fill="currentColor" />
-      </motion.g>
-    </motion.svg>
-  );
-}
-
 /* ------------------------------------------------------------------ section */
 
 export default function Privacy() {
   return (
     <Section id="privacy" tone="canvas">
       <div className="shell">
-        <div className="grid items-center gap-14 lg:grid-cols-2 lg:gap-20">
+        {/* grid-cols-1: without it, the implicit single column below lg
+            sizes to its widest child's content width instead of the
+            viewport, and overflow-x:clip silently truncates the rest. */}
+        <div className="grid grid-cols-1 items-center gap-8 lg:grid-cols-2 lg:gap-20">
           {/* Left — copy */}
           <div>
             <SectionHeading
               align="left"
               eyebrow="Privacy"
-              title="Private by design."
+              title={
+                <>
+                  Private{" "}
+                  {/* violet→red, matching the shield's threat-defence palette */}
+                  <span className="bg-[linear-gradient(90deg,#7b5cff,#ff3b47)] bg-clip-text text-transparent">
+                    by design.
+                  </span>
+                </>
+              }
               description="Your conversations, photos and voice belong to you. On-device processing where possible, encryption everywhere else."
               className="mb-10 md:mb-12"
             />
@@ -240,7 +148,7 @@ export default function Privacy() {
                       "radial-gradient(closest-side, rgb(110 110 247 / 0.06), transparent)",
                   }}
                 />
-                <ShieldVisual />
+                <PrivacyShield3D />
               </div>
               <figcaption className="mt-6 flex justify-center">
                 <span className="inline-flex items-center rounded-full border border-hairline bg-surface px-4 py-1.5 text-xs font-medium tracking-wide text-faint shadow-soft">

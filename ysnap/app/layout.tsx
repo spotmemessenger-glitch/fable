@@ -5,6 +5,8 @@ import SmoothScroll from "@/components/providers/smooth-scroll";
 import Navbar from "@/components/layout/navbar";
 import Footer from "@/components/layout/footer";
 import MeshBackground from "@/components/ui/mesh-background";
+import AmbientGlyphs from "@/components/ui/ambient-glyphs";
+import SupportAgent from "@/components/support/support-agent";
 import { site } from "@/lib/site";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter", display: "swap" });
@@ -78,9 +80,21 @@ const jsonLd = {
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en" className={`${inter.variable} ${geist.variable}`}>
+      {/* Resource hints — React 19 hoists <link> rendered anywhere in the tree
+          into <head>. Matters most on the Hostinger static mirror, where the
+          support agent's first request is a cross-origin hop to the
+          Vercel-hosted API; warming the DNS/TLS connection ahead of that
+          click shaves real time off the first reply. */}
+      <link rel="preconnect" href="https://ysnap.vercel.app" crossOrigin="anonymous" />
+      <link rel="dns-prefetch" href="https://cdn.jsdelivr.net" />
       <body className="bg-canvas text-ink" id="top">
-        {/* site-wide interactive blue mesh backdrop — fixed, pointer-events-none */}
-        <MeshBackground palette="gold" fixed density={76} />
+        {/* site-wide interactive mesh backdrop — fixed, pointer-events-none.
+            Light-blue; density is the fullness dial (42 read as empty, 76 as
+            noisy — 58 fills the page while links stay legible). */}
+        <MeshBackground palette="blue" fixed density={58} />
+        {/* faint multilingual letters, numerals and flag chips drifting over
+            the mesh — the "world of languages" ambience behind the content */}
+        <AmbientGlyphs />
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
@@ -93,9 +107,15 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         </a>
         <SmoothScroll>
           <Navbar />
-          <main id="content">{children}</main>
+          {/* overflow-x-clip (X only, keeps Y visible so the hero device can still
+              break the fold) contains the sections' decorative overflow WITHOUT
+              clipping the body-level fixed backdrops — unlike html overflow-clip,
+              which hid them on iOS. */}
+          <main id="content" className="overflow-x-clip">{children}</main>
           <Footer />
         </SmoothScroll>
+        {/* floating AI support assistant — brain/voice via server-side API routes */}
+        <SupportAgent />
       </body>
     </html>
   );

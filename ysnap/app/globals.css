@@ -57,6 +57,10 @@ html {
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
   scroll-behavior: smooth;
+  /* NOTE: do NOT put overflow-x: clip/hidden here — on iOS Safari it clips the
+     position:fixed backdrops (MeshBackground, AmbientGlyphs) and the page reads
+     as a plain site with no graphics. Horizontal-scroll clipping lives on
+     <main> instead (see layout.tsx), which leaves fixed layers untouched. */
 }
 
 body {
@@ -175,13 +179,35 @@ p { text-wrap: pretty; }
   0%, 100% { transform: translateY(0); }
   50% { transform: translateY(-12px); }
 }
-.animate-floaty { animation: floaty 7s ease-in-out infinite; }
+.animate-floaty { animation: floaty 12s ease-in-out infinite; }
+
+/* ambient multilingual glyphs drifting behind the page — three variants so a
+   field of them never falls into visible lockstep. Transform/opacity only, so
+   each element stays on the compositor. */
+@keyframes glyph-drift-a {
+  0%   { transform: translate3d(0, 12px, 0) rotate(-4deg); opacity: 0; }
+  18%  { opacity: var(--glyph-opacity, 0.09); }
+  82%  { opacity: var(--glyph-opacity, 0.09); }
+  100% { transform: translate3d(14px, -34px, 0) rotate(3deg); opacity: 0; }
+}
+@keyframes glyph-drift-b {
+  0%   { transform: translate3d(0, 18px, 0) rotate(5deg); opacity: 0; }
+  22%  { opacity: var(--glyph-opacity, 0.09); }
+  78%  { opacity: var(--glyph-opacity, 0.09); }
+  100% { transform: translate3d(-16px, -28px, 0) rotate(-4deg); opacity: 0; }
+}
+@keyframes glyph-drift-c {
+  0%   { transform: translate3d(-8px, 8px, 0) rotate(0deg); opacity: 0; }
+  20%  { opacity: var(--glyph-opacity, 0.09); }
+  80%  { opacity: var(--glyph-opacity, 0.09); }
+  100% { transform: translate3d(10px, -30px, 0) rotate(6deg); opacity: 0; }
+}
 
 @keyframes pulse-ring {
   0% { transform: scale(1); opacity: 0.5; }
   100% { transform: scale(1.9); opacity: 0; }
 }
-.animate-pulse-ring { animation: pulse-ring 2.4s var(--ease-out-expo) infinite; }
+.animate-pulse-ring { animation: pulse-ring 4s var(--ease-out-expo) infinite; }
 
 /* living soundwave bars inside the hero speech-bubble ornament */
 @keyframes soundwave {
@@ -190,7 +216,7 @@ p { text-wrap: pretty; }
 }
 .animate-soundwave {
   transform-origin: bottom;
-  animation: soundwave 1.15s ease-in-out infinite;
+  animation: soundwave 1.9s ease-in-out infinite;
 }
 
 /* accessibility: honour reduced motion everywhere, including CSS keyframes */

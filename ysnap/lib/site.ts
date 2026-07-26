@@ -5,7 +5,7 @@ export const site = {
   tagline: "One AI. Every Language. Every Vision.",
   description:
     "YSNAP combines AI Translation, Voice Intelligence, Computer Vision and AI Recognition into one beautifully designed experience.",
-  url: "https://ysnap.app",
+  url: "https://ysnapai.com",
   appStoreUrl: "#download",
   googlePlayUrl: "#download",
 } as const;
@@ -52,8 +52,9 @@ export const footerColumns = [
   {
     title: "Legal",
     links: [
-      { label: "Privacy", href: "#privacy" },
-      { label: "Terms", href: "#" },
+      { label: "Privacy Policy", href: "/privacy-policy" },
+      { label: "Terms & Conditions", href: "/terms" },
+      { label: "EULA", href: "/eula" },
       { label: "Security", href: "#privacy" },
     ],
   },

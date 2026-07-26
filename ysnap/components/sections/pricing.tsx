@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { cn } from "@/lib/cn";
 import { EASE, fadeRise, stagger, viewportOnce, spring } from "@/lib/motion";
@@ -28,9 +28,10 @@ const TIERS: Tier[] = [
     price: { monthly: "$0", annual: "$0" },
     cadence: { monthly: "free forever", annual: "free forever" },
     features: [
-      "25 translations per day",
-      "10 camera scans per day",
+      "10 translations per day",
+      "5 camera scans per day",
       "Standard voices",
+      "1 free voice clone — try it once",
       "40 languages",
     ],
     cta: { label: "Download free", href: "#download" },
@@ -38,15 +39,15 @@ const TIERS: Tier[] = [
   {
     name: "Pro",
     blurb: "The full YSNAP experience",
-    price: { monthly: "$9.99", annual: "$6.67" },
+    price: { monthly: "$11.99", annual: "$6.67" },
     cadence: {
       monthly: "per month, billed monthly",
       annual: "per month, billed annually ($79.99/yr)",
     },
     features: [
       "Unlimited translation",
-      "All 12 camera modes",
-      "Voice cloning",
+      "All 16 camera modes",
+      "Voice cloning — up to 3 voices",
       "120+ languages",
       "Offline packs",
       "Priority processing",
@@ -59,10 +60,22 @@ const TIERS: Tier[] = [
     blurb: "For crews that work worldwide",
     price: { monthly: "$19.99", annual: "$19.99" },
     cadence: { monthly: "per user, per month", annual: "per user, per month" },
-    features: ["Everything in Pro", "Shared glossaries", "Admin console", "SSO"],
+    features: [
+      "Everything in Pro",
+      "Voice cloning — up to 10 voices per user",
+      "Shared glossaries",
+      "Admin console",
+      "SSO",
+    ],
     cta: { label: "Contact sales", href: "#" },
   },
 ];
+
+/* Free clone marketing lines — placed at the two spots the product decision
+   turns on: the Starter card leads with the feeling of hearing your own
+   voice, the Pro CTA carries that desire for more clones into the upgrade. */
+const STARTER_CLONE_TAG = "Clone your voice once — free.";
+const PRO_CLONE_NUDGE = "Loved your free clone? Pro gives you up to 3.";
 
 const BILLING_OPTIONS: { value: Billing; label: string }[] = [
   { value: "monthly", label: "Monthly" },
@@ -72,6 +85,19 @@ const BILLING_OPTIONS: { value: Billing; label: string }[] = [
 export default function Pricing() {
   const [billing, setBilling] = useState<Billing>("annual");
   const reduce = useReducedMotion();
+  const trackRef = useRef<HTMLDivElement>(null);
+
+  /* Below md the three cards used to stack one-below-the-other — tall on a
+     phone. They now sit in a snap-scrolling row instead; these arrows step
+     one card at a time so the layout still reads as a deliberate sequence,
+     not just "scroll and hope". */
+  const scrollByCard = (dir: 1 | -1) => {
+    const el = trackRef.current;
+    if (!el) return;
+    const card = el.firstElementChild as HTMLElement | null;
+    const step = (card?.offsetWidth ?? el.clientWidth * 0.85) + 24; // + gap-6
+    el.scrollBy({ left: step * dir, behavior: reduce ? "auto" : "smooth" });
+  };
 
   return (
     <Section id="pricing" tone="surface">
@@ -88,7 +114,7 @@ export default function Pricing() {
         />
 
         {/* Billing period toggle */}
-        <Reveal className="mb-12 flex justify-center md:mb-16">
+        <Reveal className="mb-7 flex justify-center md:mb-16">
           <div
             role="group"
             aria-label="Billing period"
@@ -120,7 +146,7 @@ export default function Pricing() {
                     {option.label}
                     {option.value === "annual" ? (
                       <span className="rounded-full bg-accent/10 px-2 py-0.5 text-[10px] font-semibold tracking-wide text-accent-deep">
-                        Save 33%
+                        Save 44%
                       </span>
                     ) : null}
                   </span>
@@ -130,13 +156,42 @@ export default function Pricing() {
           </div>
         </Reveal>
 
-        {/* Tier cards */}
+        {/* Step arrows — mobile/tablet only. The three cards used to stack
+            one-below-the-other below md; they now sit in a snap-scrolling
+            row, and these advance it one card at a time so it reads as a
+            deliberate sequence rather than "just scroll and hope". */}
+        <div className="mb-5 flex justify-center gap-2.5 md:hidden">
+          <button
+            type="button"
+            onClick={() => scrollByCard(-1)}
+            aria-label="Previous plan"
+            className="grid h-9 w-9 cursor-pointer place-items-center rounded-full border border-hairline bg-surface text-ink-soft shadow-soft transition-colors hover:border-[#dcdcdc] hover:text-ink"
+          >
+            <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+              <path d="M15 6l-6 6 6 6" />
+            </svg>
+          </button>
+          <button
+            type="button"
+            onClick={() => scrollByCard(1)}
+            aria-label="Next plan"
+            className="grid h-9 w-9 cursor-pointer place-items-center rounded-full border border-hairline bg-surface text-ink-soft shadow-soft transition-colors hover:border-[#dcdcdc] hover:text-ink"
+          >
+            <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+              <path d="M9 6l6 6-6 6" />
+            </svg>
+          </button>
+        </div>
+
+        {/* Tier cards — snap-scrolling row below md (each card ~85vw so the
+            next peeks in as a hint), the original 3-column grid from md up. */}
         <motion.div
+          ref={trackRef}
           variants={stagger(0, 0.08)}
           initial="hidden"
           whileInView="visible"
           viewport={viewportOnce}
-          className="mx-auto grid max-w-5xl grid-cols-1 items-stretch gap-6 md:grid-cols-3"
+          className="mx-auto flex max-w-5xl snap-x snap-mandatory items-stretch gap-6 overflow-x-auto px-6 pb-2 [scrollbar-width:none] md:grid md:grid-cols-3 md:overflow-visible md:px-0 md:pb-0 md:[scrollbar-width:auto] [&::-webkit-scrollbar]:hidden"
         >
           {TIERS.map((tier) => (
             <motion.div
@@ -153,7 +208,7 @@ export default function Pricing() {
                     }
               }
               className={cn(
-                "group relative flex flex-col rounded-card p-8",
+                "group relative flex w-[85%] shrink-0 snap-center flex-col rounded-card p-8 md:w-auto",
                 tier.featured
                   ? "bg-ink text-white shadow-pop lg:-translate-y-3"
                   : "border border-hairline bg-surface shadow-soft transition-all duration-300 hover:-translate-y-1 hover:shadow-lift",
@@ -211,6 +266,12 @@ export default function Pricing() {
                   {tier.blurb}
                 </p>
 
+                {tier.name === "Starter" ? (
+                  <span className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-accent/10 px-2.5 py-1 text-[11px] font-semibold text-accent-deep">
+                    {STARTER_CLONE_TAG}
+                  </span>
+                ) : null}
+
                 <div className="mt-8">
                   <AnimatePresence mode="popLayout" initial={false}>
                     <motion.div
@@ -261,6 +322,9 @@ export default function Pricing() {
               </div>
 
               <div className="relative mt-auto pt-10">
+                {tier.name === "Pro" ? (
+                  <p className="mb-3 text-center text-[13px] text-white/60">{PRO_CLONE_NUDGE}</p>
+                ) : null}
                 <ButtonLink
                   href={tier.cta.href}
                   variant={tier.featured ? "primary" : "secondary"}

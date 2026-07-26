@@ -183,7 +183,7 @@ export default function DownloadCTA() {
             }}
           />
 
-          <div className="relative grid items-center gap-14 lg:grid-cols-[1.2fr_1fr] lg:gap-12">
+          <div className="relative grid grid-cols-1 items-center gap-8 lg:grid-cols-[1.2fr_1fr] lg:gap-12">
             {/* Left: copy, badges, email capture */}
             <div>
               <Reveal>
