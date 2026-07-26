@@ -1,0 +1,48 @@
+# YSNAP static export — Hostinger/Apache performance config.
+# Every directive is wrapped in <IfModule> so a host without a given module
+# just skips that block instead of 500ing the whole site.
+
+# ------------------------------------------------------------------ compression
+<IfModule mod_deflate.c>
+  AddOutputFilterByType DEFLATE text/html text/css text/plain text/xml text/javascript
+  AddOutputFilterByType DEFLATE application/javascript application/x-javascript
+  AddOutputFilterByType DEFLATE application/json application/xml application/rss+xml
+  AddOutputFilterByType DEFLATE image/svg+xml font/ttf font/otf application/font-woff application/font-woff2
+</IfModule>
+<IfModule mod_brotli.c>
+  AddOutputFilterByType BROTLI_COMPRESS text/html text/css text/plain text/xml text/javascript
+  AddOutputFilterByType BROTLI_COMPRESS application/javascript application/json image/svg+xml
+</IfModule>
+
+# ------------------------------------------------------------------ caching
+<IfModule mod_expires.c>
+  ExpiresActive On
+  # Next.js content-hashes everything under /_next/static — safe to cache for a year.
+  <FilesMatch "\.(?:js|css|woff2?)$">
+    ExpiresDefault "access plus 1 year"
+  </FilesMatch>
+  <FilesMatch "\.(?:jpe?g|png|gif|webp|avif|svg|ico)$">
+    ExpiresDefault "access plus 30 days"
+  </FilesMatch>
+  # HTML/JSON can change on every deploy — keep it short so updates show up.
+  <FilesMatch "\.(?:html|json)$">
+    ExpiresDefault "access plus 10 minutes"
+  </FilesMatch>
+</IfModule>
+<IfModule mod_headers.c>
+  <FilesMatch "\.(?:js|css|woff2?)$">
+    Header set Cache-Control "public, max-age=31536000, immutable"
+  </FilesMatch>
+  # Defense-in-depth headers — cheap to set, no functional cost.
+  Header set X-Content-Type-Options "nosniff"
+  Header set Referrer-Policy "strict-origin-when-cross-origin"
+</IfModule>
+
+# ------------------------------------------------------------------ misc
+<IfModule mod_mime.c>
+  AddType application/font-woff2 .woff2
+</IfModule>
+
+# Next's trailingSlash export writes each route as a folder with its own
+# index.html (e.g. /terms/index.html) — Apache serves that by default with
+# no rewrite needed, so nothing else is required here.

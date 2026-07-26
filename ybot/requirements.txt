@@ -1,0 +1,9 @@
+# Ybot — Phase 1 dependencies
+anthropic>=0.69          # LLM brain (computer-use tool)
+mss>=9.0                 # fast, DPI-aware screen capture
+pillow>=10.0             # image resize / PNG encode
+pyautogui>=0.9.54        # mouse + keyboard synthesis
+pywinauto>=0.6.9         # Windows UI Automation (element targeting, active-window info)
+pyperclip>=1.9           # clipboard (copy/paste)
+keyboard>=0.13.5         # global kill-switch hotkey
+python-dotenv>=1.0       # load ANTHROPIC_API_KEY from .env

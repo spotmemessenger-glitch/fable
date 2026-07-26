@@ -1,0 +1,633 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Spot Me Competitive Analysis</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0f1419;
+            color: #e0e0e0;
+            padding: 20px;
+            line-height: 1.6;
+        }
+        .container { max-width: 1200px; margin: 0 auto; }
+        h1 { font-size: 28px; margin-bottom: 8px; color: #fff; }
+        .subtitle { font-size: 14px; color: #888; margin-bottom: 30px; }
+
+        /* Tabs */
+        .tabs { display: flex; gap: 12px; margin-bottom: 24px; border-bottom: 1px solid #333; }
+        .tab { padding: 12px 20px; cursor: pointer; border: none; background: none; color: #888; font-size: 14px; border-bottom: 3px solid transparent; }
+        .tab.active { color: #00a8ff; border-bottom-color: #00a8ff; }
+        .tab:hover { color: #fff; }
+
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        /* Cards */
+        .card { background: #1a1f28; border: 1px solid #333; border-radius: 8px; padding: 20px; margin-bottom: 16px; }
+        .card h3 { font-size: 16px; margin-bottom: 12px; color: #fff; }
+
+        /* Critical gaps */
+        .gaps-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
+        .gap { background: #2a1a1a; border-left: 4px solid #ff4444; padding: 16px; border-radius: 4px; }
+        .gap.high { border-left-color: #ff4444; }
+        .gap.medium { border-left-color: #ffaa00; background: #2a2015; }
+        .gap-title { font-weight: 600; color: #fff; margin-bottom: 4px; }
+        .gap-desc { font-size: 13px; color: #999; margin-bottom: 8px; }
+        .gap-impact { font-size: 12px; color: #ff8888; }
+
+        /* Features table */
+        .features-scroll { overflow-x: auto; }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+            background: #1a1f28;
+        }
+        thead {
+            background: #252d38;
+            position: sticky;
+            top: 0;
+        }
+        th {
+            padding: 12px 8px;
+            text-align: left;
+            font-weight: 600;
+            color: #fff;
+            border-bottom: 1px solid #333;
+        }
+        td {
+            padding: 10px 8px;
+            border-bottom: 1px solid #2a2f38;
+        }
+        tr:hover { background: #1f2630; }
+
+        .feature-name { font-weight: 500; color: #fff; }
+        .check { color: #4ade80; }
+        .cross { color: #ff4444; }
+        .partial { color: #ffaa00; }
+        .unknown { color: #666; }
+
+        /* Positioning matrix */
+        .matrix-container {
+            position: relative;
+            width: 100%;
+            height: 400px;
+            background: #1a1f28;
+            border: 1px solid #333;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            overflow: hidden;
+        }
+        .matrix-bg {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            grid-template-rows: 1fr 1fr;
+        }
+        .quadrant { border: 1px dashed #444; display: flex; align-items: center; justify-content: center; color: #555; font-size: 12px; }
+        .axis {
+            position: absolute;
+            background: #444;
+        }
+        .axis-x { width: 100%; height: 1px; top: 50%; }
+        .axis-y { width: 1px; height: 100%; left: 50%; }
+        .axis-label {
+            position: absolute;
+            font-size: 12px;
+            color: #888;
+            font-weight: 600;
+        }
+        .axis-label.x-top { bottom: 10px; right: 10px; }
+        .axis-label.x-bottom { top: 10px; right: 10px; }
+        .axis-label.y-left { left: 10px; top: 10px; }
+        .axis-label.y-right { right: 10px; bottom: 10px; }
+
+        .player {
+            position: absolute;
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .player:hover { transform: scale(1.1); }
+        .player.spotme { background: #00a8ff; color: #000; }
+        .player.whatsapp { background: #25d366; color: #000; }
+        .player.signal { background: #3a76f0; color: #fff; }
+        .player.telegram { background: #0088cc; color: #fff; }
+        .player.beeper { background: #9933ff; color: #fff; }
+        .player.grindr { background: #ff5c00; color: #fff; }
+
+        /* Threat timeline */
+        .timeline { position: relative; padding: 20px 0 20px 40px; }
+        .timeline::before {
+            content: '';
+            position: absolute;
+            left: 10px;
+            top: 0;
+            bottom: 0;
+            width: 2px;
+            background: #444;
+        }
+        .timeline-item {
+            position: relative;
+            margin-bottom: 20px;
+            padding-bottom: 16px;
+            border-bottom: 1px dashed #333;
+        }
+        .timeline-item::before {
+            content: '';
+            position: absolute;
+            left: -32px;
+            top: 2px;
+            width: 12px;
+            height: 12px;
+            background: #00a8ff;
+            border-radius: 50%;
+            border: 3px solid #1a1f28;
+        }
+        .timeline-marker { font-size: 12px; color: #888; font-weight: 600; }
+        .timeline-event { color: #fff; margin: 4px 0; }
+        .timeline-desc { font-size: 13px; color: #999; margin-top: 4px; }
+
+        /* SWOT */
+        .swot-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+        .swot-section { background: #1a1f28; border: 1px solid #333; border-radius: 8px; padding: 16px; }
+        .swot-title { font-weight: 600; margin-bottom: 12px; font-size: 14px; }
+        .swot-strengths .swot-title { color: #4ade80; }
+        .swot-weaknesses .swot-title { color: #ff4444; }
+        .swot-opportunities .swot-title { color: #00a8ff; }
+        .swot-threats .swot-title { color: #ffaa00; }
+        .swot-item { font-size: 13px; margin-bottom: 8px; line-height: 1.4; }
+        .swot-item::before { display: inline-block; width: 16px; margin-right: 8px; }
+        .swot-strengths .swot-item::before { content: '✓'; color: #4ade80; }
+        .swot-weaknesses .swot-item::before { content: '✗'; color: #ff4444; }
+        .swot-opportunities .swot-item::before { content: '→'; color: #00a8ff; }
+        .swot-threats .swot-item::before { content: '⚠'; color: #ffaa00; }
+
+        /* Verdict */
+        .verdict { background: #1a2a1a; border-left: 4px solid #4ade80; padding: 16px; border-radius: 4px; margin-bottom: 16px; }
+        .verdict.caution { background: #2a2015; border-left-color: #ffaa00; }
+        .verdict h4 { color: #fff; margin-bottom: 8px; }
+        .verdict-desc { font-size: 13px; color: #ccc; }
+
+        @media (max-width: 768px) {
+            .swot-grid { grid-template-columns: 1fr; }
+            .gaps-grid { grid-template-columns: 1fr; }
+            .matrix-container { height: 300px; }
+            .player { width: 50px; height: 50px; font-size: 11px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Spot Me Competitive Analysis</h1>
+        <p class="subtitle">Feature parity, gaps, and market positioning vs WhatsApp, Signal, Telegram, Beeper, Grindr</p>
+
+        <div class="tabs">
+            <button class="tab active" onclick="switchTab('gaps')">Critical Gaps</button>
+            <button class="tab" onclick="switchTab('features')">Feature Matrix</button>
+            <button class="tab" onclick="switchTab('positioning')">Positioning</button>
+            <button class="tab" onclick="switchTab('threats')">Competitive Threats</button>
+            <button class="tab" onclick="switchTab('swot')">SWOT</button>
+            <button class="tab" onclick="switchTab('verdict')">Verdict</button>
+        </div>
+
+        <!-- GAPS TAB -->
+        <div id="gaps" class="tab-content active">
+            <div class="card">
+                <h3>🔴 Blocking Issues (Fix before launch)</h3>
+                <div class="gaps-grid">
+                    <div class="gap high">
+                        <div class="gap-title">No Desktop App</div>
+                        <div class="gap-desc">Windows/Mac native missing</div>
+                        <div class="gap-impact">Impact: 40% of messaging happens on desktop; power users switch to WhatsApp/Telegram</div>
+                    </div>
+                    <div class="gap high">
+                        <div class="gap-title">No Group Calls</div>
+                        <div class="gap-desc">Only 1-on-1 audio/video (if present)</div>
+                        <div class="gap-impact">Impact: Family/team coordination impossible; critical for retention</div>
+                    </div>
+                    <div class="gap high">
+                        <div class="gap-title">No Native iOS</div>
+                        <div class="gap-desc">iPhone users excluded</div>
+                        <div class="gap-impact">Impact: 30-40% of smartphone market unavailable</div>
+                    </div>
+                    <div class="gap medium">
+                        <div class="gap-title">Unclear Call Stack</div>
+                        <div class="gap-desc">Audio/video call status unknown</div>
+                        <div class="gap-impact">Impact: May be missing core communication feature</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <h3>🟠 High-Priority Gaps (3-4 weeks)</h3>
+                <div class="gaps-grid">
+                    <div class="gap medium">
+                        <div class="gap-title">No Message Search</div>
+                        <div class="gap-desc">Archive feature broken</div>
+                        <div class="gap-impact">Impact: Power users frustrated; no way to find old conversations</div>
+                    </div>
+                    <div class="gap medium">
+                        <div class="gap-title">No Sticker Packs</div>
+                        <div class="gap-desc">Limited emoji/expression options</div>
+                        <div class="gap-impact">Impact: Lower UX polish; less fun than competitors</div>
+                    </div>
+                    <div class="gap medium">
+                        <div class="gap-title">No Screen Share</div>
+                        <div class="gap-desc">Tech support/collaboration broken</div>
+                        <div class="gap-impact">Impact: Professional use cases blocked</div>
+                    </div>
+                    <div class="gap medium">
+                        <div class="gap-title">No Channels</div>
+                        <div class="gap-desc">Telegram's strong feature missing</div>
+                        <div class="gap-impact">Impact: Influencer/brand outreach impossible</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- FEATURES TAB -->
+        <div id="features" class="tab-content">
+            <div class="card">
+                <h3>Feature Parity Matrix (Key Features)</h3>
+                <div class="features-scroll">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th style="width: 25%;">Feature</th>
+                                <th style="width: 12%;">Spot Me</th>
+                                <th style="width: 12%;">WhatsApp</th>
+                                <th style="width: 12%;">Signal</th>
+                                <th style="width: 12%;">Telegram</th>
+                                <th style="width: 12%;">Beeper</th>
+                                <th style="width: 15%;">Notes</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td class="feature-name">Core Messaging</td>
+                                <td class="check">✓</td>
+                                <td class="check">✓</td>
+                                <td class="check">✓</td>
+                                <td class="check">✓</td>
+                                <td class="check">✓</td>
+                                <td>All support text chat</td>
+                            </tr>
+                            <tr>
+                                <td class="feature-name">Message Search</td>
+                                <td class="unknown">?</td>
+                                <td class="check">✓</td>
+                                <td class="check">✓</td>
+                                <td class="check">✓</td>
+                                <td class="check">✓</td>
+                                <td>Spot Me status unclear</td>
+                            </tr>
+                            <tr>
+                                <td class="feature-name">Audio/Video Calls</td>
+                                <td class="unknown">?</td>
+                                <td class="check">✓</td>
+                                <td class="check">✓</td>
+                                <td class="cross">✗</td>
+                                <td class="check">✓</td>
+                                <td>Telegram doesn't have calls</td>
+                            </tr>
+                            <tr>
+                                <td class="feature-name">Group Calls</td>
+                                <td class="cross">✗</td>
+                                <td class="check">✓ 8+</td>
+                                <td class="check">✓ 5+</td>
+                                <td class="cross">✗</td>
+                                <td class="check">✓</td>
+                                <td><strong>CRITICAL GAP</strong></td>
+                            </tr>
+                            <tr>
+                                <td class="feature-name">Screen Share</td>
+                                <td class="cross">✗</td>
+                                <td class="check">✓</td>
+                                <td class="check">✓</td>
+                                <td class="cross">✗</td>
+                                <td class="partial">⚠</td>
+                                <td>Professional use case</td>
+                            </tr>
+                            <tr>
+                                <td class="feature-name">E2E Encryption</td>
+                                <td class="check">✓</td>
+                                <td class="check">✓</td>
+                                <td class="check">✓</td>
+                                <td class="check">✓</td>
+                                <td class="check">✓</td>
+                                <td>Spot Me advantage</td>
+                            </tr>
+                            <tr>
+                                <td class="feature-name">Translation</td>
+                                <td class="check">✓ ~100</td>
+                                <td class="cross">✗</td>
+                                <td class="cross">✗</td>
+                                <td class="cross">✗</td>
+                                <td class="check">✓ ~100</td>
+                                <td><strong>Spot Me + Beeper only</strong></td>
+                            </tr>
+                            <tr>
+                                <td class="feature-name">Transliteration (Indic)</td>
+                                <td class="check">✓</td>
+                                <td class="cross">✗</td>
+                                <td class="cross">✗</td>
+                                <td class="cross">✗</td>
+                                <td class="cross">✗</td>
+                                <td><strong>UNIQUE to Spot Me</strong></td>
+                            </tr>
+                            <tr>
+                                <td class="feature-name">Cloned Voice Messages</td>
+                                <td class="check">✓</td>
+                                <td class="cross">✗</td>
+                                <td class="cross">✗</td>
+                                <td class="cross">✗</td>
+                                <td class="cross">✗</td>
+                                <td><strong>UNIQUE to Spot Me</strong></td>
+                            </tr>
+                            <tr>
+                                <td class="feature-name">Proximity/Map</td>
+                                <td class="check">✓</td>
+                                <td class="cross">✗</td>
+                                <td class="cross">✗</td>
+                                <td class="cross">✗</td>
+                                <td class="cross">✗</td>
+                                <td><strong>UNIQUE to Spot Me</strong></td>
+                            </tr>
+                            <tr>
+                                <td class="feature-name">Desktop Native App</td>
+                                <td class="cross">✗</td>
+                                <td class="check">✓</td>
+                                <td class="check">✓</td>
+                                <td class="check">✓</td>
+                                <td class="check">✓</td>
+                                <td><strong>CRITICAL GAP</strong></td>
+                            </tr>
+                            <tr>
+                                <td class="feature-name">Channels</td>
+                                <td class="cross">✗</td>
+                                <td class="cross">✗</td>
+                                <td class="cross">✗</td>
+                                <td class="check">✓ Strong</td>
+                                <td class="cross">✗</td>
+                                <td>Telegram's advantage</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- POSITIONING TAB -->
+        <div id="positioning" class="tab-content">
+            <div class="card">
+                <h3>Market Positioning Matrix</h3>
+                <p style="font-size: 13px; color: #999; margin-bottom: 16px;">Y-axis: Privacy-first → Mass Market | X-axis: Location/Social → Text-first</p>
+                <div class="matrix-container">
+                    <div class="matrix-bg">
+                        <div class="quadrant">Privacy + Local</div>
+                        <div class="quadrant">Privacy + Text</div>
+                        <div class="quadrant">Mass + Local</div>
+                        <div class="quadrant">Mass + Text</div>
+                    </div>
+                    <div class="axis axis-x"></div>
+                    <div class="axis axis-y"></div>
+                    <div class="axis-label x-top">← Text-first | Location →</div>
+                    <div class="axis-label y-left">← Mass Market | Privacy →</div>
+
+                    <!-- Positioning (adjusted for quadrants) -->
+                    <div class="player spotme" style="left: 25%; top: 30%; transform: translateX(-50%) translateY(-50%);" title="Spot Me: Privacy + Location">Spot Me</div>
+                    <div class="player whatsapp" style="left: 75%; top: 80%; transform: translateX(-50%) translateY(-50%);" title="WhatsApp: Mass + Text">WhatsApp</div>
+                    <div class="player signal" style="left: 35%; top: 20%; transform: translateX(-50%) translateY(-50%);" title="Signal: Privacy + Text">Signal</div>
+                    <div class="player telegram" style="left: 65%; top: 35%; transform: translateX(-50%) translateY(-50%);" title="Telegram: Mass + Location">Telegram</div>
+                    <div class="player beeper" style="left: 55%; top: 45%; transform: translateX(-50%) translateY(-50%);" title="Beeper: Bridging">Beeper</div>
+                    <div class="player grindr" style="left: 20%; top: 75%; transform: translateX(-50%) translateY(-50%);" title="Grindr: Location + Dating">Grindr</div>
+                </div>
+            </div>
+
+            <div class="card">
+                <h3>Unique Intersection</h3>
+                <p><strong style="color: #00a8ff;">Spot Me = Privacy-first + Location-based</strong></p>
+                <p style="font-size: 13px; color: #999; margin-top: 8px;">No direct competitor owns this quadrant. Nearest players:</p>
+                <ul style="margin-top: 12px; padding-left: 20px; font-size: 13px;">
+                    <li><strong>Signal</strong> owns Privacy, but no location features</li>
+                    <li><strong>Grindr</strong> owns Location, but less privacy-focused + dating app</li>
+                    <li><strong>Telegram</strong> bridges both, but privacy model weaker than Signal/Spot Me</li>
+                </ul>
+            </div>
+
+            <div class="card">
+                <h3>Market Opportunity</h3>
+                <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin-top: 12px;">
+                    <div style="background: #1a2a1a; padding: 12px; border-radius: 4px;">
+                        <div style="color: #4ade80; font-weight: 600; margin-bottom: 4px;">TAM</div>
+                        <div style="font-size: 13px;">~50M users (privacy paranoids + Indian multilinguals + location enthusiasts)</div>
+                    </div>
+                    <div style="background: #1a2a1a; padding: 12px; border-radius: 4px;">
+                        <div style="color: #4ade80; font-weight: 600; margin-bottom: 4px;">Beachhead</div>
+                        <div style="font-size: 13px;">10K-100K in NYC, SF, London, or Delhi</div>
+                    </div>
+                    <div style="background: #1a2a1a; padding: 12px; border-radius: 4px;">
+                        <div style="color: #4ade80; font-weight: 600; margin-bottom: 4px;">Mature Scale</div>
+                        <div style="font-size: 13px;">5-10M users (never WhatsApp's 2B)</div>
+                    </div>
+                    <div style="background: #1a2a1a; padding: 12px; border-radius: 4px;">
+                        <div style="color: #4ade80; font-weight: 600; margin-bottom: 4px;">Pricing</div>
+                        <div style="font-size: 13px;">$50M-$500M independent revenue OR exit to Telegram/Signal</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- THREATS TAB -->
+        <div id="threats" class="tab-content">
+            <div class="card">
+                <h3>Competitive Response Timeline</h3>
+                <div class="timeline">
+                    <div class="timeline-item">
+                        <div class="timeline-marker">Q2 2027 (6 months)</div>
+                        <div class="timeline-event">Telegram launches Proximity Mapping</div>
+                        <div class="timeline-desc">4-6 week build + existing 500M users = instant competition. Likelihood: 85%</div>
+                    </div>
+                    <div class="timeline-item">
+                        <div class="timeline-marker">Q3 2027 (9 months)</div>
+                        <div class="timeline-event">Telegram adds Transliteration (Indic)</div>
+                        <div class="timeline-desc">2-4 week build, leverages existing translation stack. Likelihood: 70%</div>
+                    </div>
+                    <div class="timeline-item">
+                        <div class="timeline-marker">Q3 2027 (9 months)</div>
+                        <div class="timeline-event">WhatsApp Location Radar (Stories)</div>
+                        <div class="timeline-desc">6-8 week build, integrates with 2B user base. Likelihood: 60%</div>
+                    </div>
+                    <div class="timeline-item">
+                        <div class="timeline-marker">Q4 2027 (12 months)</div>
+                        <div class="timeline-event">Grindr improves Chat Encryption</div>
+                        <div class="timeline-desc">Already have proximity; 2-3 weeks to add E2E. Likelihood: 90%</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <h3>⏰ Time to Market is Critical</h3>
+                <p style="font-size: 13px; color: #999;">Spot Me has <strong>~18 months</strong> before Telegram clones proximity mapping.</p>
+                <p style="font-size: 13px; color: #999; margin-top: 8px;"><strong>Action:</strong> Scale to 50K+ users before Q2 2027, or face commoditization.</p>
+            </div>
+        </div>
+
+        <!-- SWOT TAB -->
+        <div id="swot" class="tab-content">
+            <div class="swot-grid">
+                <div class="swot-section swot-strengths">
+                    <div class="swot-title">Strengths</div>
+                    <div class="swot-item">Proximity P2P + Holepunch (unique architecture)</div>
+                    <div class="swot-item">Transliteration (underserved Indian market)</div>
+                    <div class="swot-item">Privacy-first messaging (no ads, no harvesting)</div>
+                    <div class="swot-item">Cloned voice messages (personalization)</div>
+                    <div class="swot-item">AR features (translate, calorie camera)</div>
+                </div>
+
+                <div class="swot-section swot-weaknesses">
+                    <div class="swot-title">Weaknesses</div>
+                    <div class="swot-item">No desktop app (40% of messaging market)</div>
+                    <div class="swot-item">No group calls (critical feature gap)</div>
+                    <div class="swot-item">No iOS app (30-40% smartphone market)</div>
+                    <div class="swot-item">Location-dependent network effect</div>
+                    <div class="swot-item">Unclear call stack (audio/video status?)</div>
+                    <div class="swot-item">No channels or communities</div>
+                    <div class="swot-item">Unknown monetization strategy</div>
+                </div>
+
+                <div class="swot-section swot-opportunities">
+                    <div class="swot-title">Opportunities</div>
+                    <div class="swot-item">Indian market (1.5B+ people, underserved)</div>
+                    <div class="swot-item">Privacy trend (post-Snowden, post-Cambridge Analytica)</div>
+                    <div class="swot-item">Creator economy (voice cloning, AR features)</div>
+                    <div class="swot-item">Location-based dating alternative (vs Grindr)</div>
+                    <div class="swot-item">University seeding (quick critical mass)</div>
+                    <div class="swot-item">Remote work coordination (async + proximity)</div>
+                </div>
+
+                <div class="swot-section swot-threats">
+                    <div class="swot-title">Threats</div>
+                    <div class="swot-item">Telegram adds proximity in 18 months</div>
+                    <div class="swot-item">WhatsApp launches location radar</div>
+                    <div class="swot-item">Grindr improves chat encryption</div>
+                    <div class="swot-item">Users have 1-2 apps max (lock-in)</div>
+                    <div class="swot-item">Network effect cliff if <5K users/city</div>
+                    <div class="swot-item">Deepfake regulation (voice cloning)</div>
+                    <div class="swot-item">P2P reliability concerns (no backend SLA)</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- VERDICT TAB -->
+        <div id="verdict" class="tab-content">
+            <div class="verdict">
+                <h4>Spot Me is NOT a WhatsApp Competitor</h4>
+                <div class="verdict-desc">It's a privacy-conscious, location-first alternative in a niche that Telegram and Grindr both want to own.</div>
+            </div>
+
+            <div class="verdict caution">
+                <h4>⏰ Critical Timeline: 18 Months to Differentiation</h4>
+                <div class="verdict-desc">Telegram will copy proximity + translation by Q2 2027. Spot Me must reach 50K+ users and 5+ cities before then, or face commoditization.</div>
+            </div>
+
+            <div class="card">
+                <h3>Go/No-Go Decision</h3>
+                <table style="width: 100%; margin-top: 12px;">
+                    <tbody>
+                        <tr>
+                            <td style="color: #4ade80; font-weight: 600; padding: 8px;">Unique value prop</td>
+                            <td style="text-align: right; padding: 8px;">✓ Strong (proximity)</td>
+                        </tr>
+                        <tr style="background: #1f2630;">
+                            <td style="color: #ffaa00; font-weight: 600; padding: 8px;">Network effect readiness</td>
+                            <td style="text-align: right; padding: 8px;">⚠ Weak (location-dependent)</td>
+                        </tr>
+                        <tr>
+                            <td style="color: #ffaa00; font-weight: 600; padding: 8px;">Feature completeness</td>
+                            <td style="text-align: right; padding: 8px;">⚠ Missing calls/desktop/iOS</td>
+                        </tr>
+                        <tr style="background: #1f2630;">
+                            <td style="color: #4ade80; font-weight: 600; padding: 8px;">Market timing</td>
+                            <td style="text-align: right; padding: 8px;">✓ Good (privacy trend)</td>
+                        </tr>
+                        <tr>
+                            <td style="color: #ffaa00; font-weight: 600; padding: 8px;">Competitive threat</td>
+                            <td style="text-align: right; padding: 8px;">⚠ Telegram will copy</td>
+                        </tr>
+                        <tr style="background: #1f2630;">
+                            <td style="color: #ff4444; font-weight: 600; padding: 8px;">Revenue model</td>
+                            <td style="text-align: right; padding: 8px;">✗ Unclear</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="card">
+                <h3>Recommended Strategy</h3>
+                <h4 style="color: #00a8ff; margin-top: 16px;">Phase 1: Establish Beachhead (Q3-Q4 2026)</h4>
+                <ul style="font-size: 13px; margin-top: 8px; padding-left: 20px; color: #ccc;">
+                    <li>Fix critical gaps: <strong>iOS app + Desktop web + Group calls</strong> (6-8 weeks)</li>
+                    <li>Launch in 1-2 cities (NYC, SF, London, or Delhi)</li>
+                    <li>Target 5K-10K users per city via university/influencer seeding</li>
+                    <li>Messaging: "Find friends nearby, without the dating awkwardness"</li>
+                </ul>
+
+                <h4 style="color: #00a8ff; margin-top: 16px;">Phase 2: Expand Networks (Q1-Q2 2027)</h4>
+                <ul style="font-size: 13px; margin-top: 8px; padding-left: 20px; color: #ccc;">
+                    <li>Expand to 5-10 cities with proven model</li>
+                    <li>Add sticker packs + emoji customization (UX polish)</li>
+                    <li>Launch desktop native app (Windows/Mac)</li>
+                    <li>Reach 50K+ MAU before Telegram copies proximity</li>
+                </ul>
+
+                <h4 style="color: #00a8ff; margin-top: 16px;">Phase 3: Monetization (Q3+ 2027)</h4>
+                <ul style="font-size: 13px; margin-top: 8px; padding-left: 20px; color: #ccc;">
+                    <li>Premium tier: Custom voice clones ($5/month)</li>
+                    <li>Emoji packs: Paid sticker sets ($0.99)</li>
+                    <li>Enterprise: Team messaging for SMBs</li>
+                    <li>Non-intrusive ads in map discovery</li>
+                </ul>
+            </div>
+
+            <div class="verdict">
+                <h4>Final Verdict: ✓ CONDITIONAL GO</h4>
+                <div class="verdict-desc">
+                    Proceed IF you can ship iOS + desktop + group calls by Q4 2026, and reach 10K users in one beachhead city.
+                    <br><br>
+                    Pivot IF you can't hit 5K users in 6 months, or competitors ship proximity in H1 2027.
+                    <br><br>
+                    Realistic outcome: $50M-$500M independent revenue OR acquihire by Telegram/Signal.
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function switchTab(tabName) {
+            const contents = document.querySelectorAll('.tab-content');
+            const tabs = document.querySelectorAll('.tab');
+
+            contents.forEach(c => c.classList.remove('active'));
+            tabs.forEach(t => t.classList.remove('active'));
+
+            document.getElementById(tabName).classList.add('active');
+            event.target.classList.add('active');
+        }
+    </script>
+</body>
+</html>

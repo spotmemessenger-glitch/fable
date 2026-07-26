@@ -1,0 +1,36 @@
+{
+  "cash": 35.3168574054453,
+  "realized": -5.852393436142036,
+  "positions": {
+    "BQDTXj9bvYRY9hksEmnXVMxsPu5VwFDW3bwiXpiDpump": {
+      "mint": "BQDTXj9bvYRY9hksEmnXVMxsPu5VwFDW3bwiXpiDpump",
+      "symbol": "Sagawa",
+      "cost_usd": 3.102087755179292,
+      "tokens": 222914.22681271078,
+      "entry": 1.391606e-05,
+      "stop": 1.02525e-05,
+      "take_profit": 2.1872e-05,
+      "high": 1.96e-05
+    },
+    "ukHH6c7mMyiWCf1b9pnWe25TSpkDDt3H5pQZgZ74J82": {
+      "mint": "ukHH6c7mMyiWCf1b9pnWe25TSpkDDt3H5pQZgZ74J82",
+      "symbol": "BOME",
+      "cost_usd": 3.043310057883639,
+      "tokens": 6778.909466081373,
+      "entry": 0.000448938,
+      "stop": 0.00033075,
+      "take_profit": 0.0007056,
+      "high": 0.0004498
+    },
+    "GBDW5Mkc9bAnG6Ctmfdw4aPeWeDdCqf6FcunfRwdpump": {
+      "mint": "GBDW5Mkc9bAnG6Ctmfdw4aPeWeDdCqf6FcunfRwdpump",
+      "symbol": "\u515c\u798f",
+      "cost_usd": 2.6853513453497206,
+      "tokens": 96483.89505900811,
+      "entry": 2.783212e-05,
+      "stop": 2.0505e-05,
+      "take_profit": 4.3744e-05,
+      "high": 2.783212e-05
+    }
+  }
+}

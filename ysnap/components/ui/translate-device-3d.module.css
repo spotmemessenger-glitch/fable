@@ -1,0 +1,607 @@
+/* Live-translate 3D phone — deep-blue titanium, CSS preserve-3d build.
+   Same slice construction as the hero device; the screen runs the live
+   translation chat, and language chips orbit the stage in 3D before flying
+   into the viewfinder to become messages. */
+
+.scene {
+  position: relative;
+  width: 700px;
+  height: 820px;
+  perspective: 1500px;
+  perspective-origin: 50% 42%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.stage {
+  position: relative;
+  width: 540px;
+  height: 780px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: grab;
+  transform-style: preserve-3d;
+  touch-action: pan-y;
+}
+.stage:active {
+  cursor: grabbing;
+}
+.ph {
+  position: relative;
+  width: 312px;
+  height: 692px;
+  transform-style: preserve-3d;
+}
+.layer {
+  position: absolute;
+  inset: 0;
+  border-radius: 54px;
+}
+.slice {
+  background: linear-gradient(160deg, #2c5c9a, #1d4278 55%, #122c52);
+}
+.edge {
+  background: linear-gradient(160deg, #6ea3e8, #2e5f9e 40%, #173a68 80%);
+  box-shadow: inset 0 0 14px rgb(8 25 55 / 0.6);
+}
+
+/* ---------------------------------------------------------------- front */
+.front {
+  transform: translateZ(17.5px);
+  background: linear-gradient(160deg, #8fbcf4, #2e5f9e 30%, #173a68);
+  padding: 4px;
+  box-shadow: inset 0 0 6px rgb(200 225 255 / 0.7);
+}
+.bez {
+  width: 100%;
+  height: 100%;
+  border-radius: 50px;
+  background: #07080c;
+  padding: 8px;
+  position: relative;
+}
+.screen {
+  width: 100%;
+  height: 100%;
+  border-radius: 43px;
+  background: #fbfcfe;
+  overflow: hidden;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  color: #101418;
+}
+.island {
+  position: absolute;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 96px;
+  height: 27px;
+  border-radius: 15px;
+  background: #000;
+  z-index: 30;
+}
+.island::after {
+  content: "";
+  position: absolute;
+  right: 9px;
+  top: 7.5px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #25304a, #000 65%);
+}
+.sheen {
+  position: absolute;
+  inset: 0;
+  z-index: 40;
+  pointer-events: none;
+  border-radius: 43px;
+  background: linear-gradient(
+    115deg,
+    transparent 30%,
+    rgb(255 255 255 / 0.35) 44%,
+    rgb(255 255 255 / 0.05) 56%,
+    transparent 70%
+  );
+  background-size: 280% 100%;
+  animation: sheen 7s ease-in-out infinite;
+}
+@keyframes sheen {
+  0%,
+  100% {
+    background-position: 110% 0;
+  }
+  50% {
+    background-position: -10% 0;
+  }
+}
+
+/* Brand mark at the head of the translate screen. Sized generously for a
+   ~312px-wide device so it survives the scale-down on phones, where the
+   whole scene renders at roughly 45%. */
+.brandMark {
+  flex: none;
+  display: block;
+  width: 40px;
+  height: 40px;
+  margin: 42px auto 0;
+  filter: drop-shadow(0 4px 10px rgb(24 74 190 / 0.28));
+}
+.brand {
+  flex: none;
+  margin-top: 7px;
+  text-align: center;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 2.5px;
+  color: #aab3c6;
+  text-transform: uppercase;
+}
+.brand b {
+  color: #5b8ef7;
+}
+.pill {
+  flex: none;
+  align-self: center;
+  margin-top: 8px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid #dfe6f2;
+  background: #f2f5fb;
+  border-radius: 14px;
+  padding: 5px 14px;
+  font-size: 11.5px;
+  font-weight: 800;
+  color: #3c465c;
+  box-shadow: 0 2px 8px rgb(40 60 110 / 0.06);
+}
+.arr {
+  color: #5b8ef7;
+  animation: arr 1.6s ease-in-out infinite;
+}
+@keyframes arr {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  50% {
+    transform: translateX(3px);
+  }
+}
+
+/* ----------------------------------------------------------------- chat */
+.chat {
+  flex: 1;
+  overflow: hidden;
+  padding: 14px 14px 4px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.det {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 9.5px;
+  color: #8a93a6;
+  font-weight: 600;
+  animation: pop 0.4s both;
+}
+.det i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex: none;
+}
+.bub {
+  max-width: 86%;
+  border-radius: 16px;
+  padding: 9px 13px;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.4;
+  animation: pop 0.5s cubic-bezier(0.2, 1.2, 0.3, 1) both;
+  position: relative;
+}
+.bubIn {
+  align-self: flex-start;
+  background: #f1f3f9;
+  color: #2a3040;
+  border-bottom-left-radius: 6px;
+  box-shadow: 0 2px 8px rgb(40 60 110 / 0.07);
+}
+.bubOut {
+  align-self: flex-end;
+  background: #111318;
+  color: #fff;
+  border-bottom-right-radius: 6px;
+  box-shadow: 0 6px 16px rgb(10 15 30 / 0.35);
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+.spk {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: rgb(255 255 255 / 0.14);
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.spk svg {
+  width: 11px;
+  height: 11px;
+  fill: #fff;
+}
+.meta {
+  align-self: flex-end;
+  font-size: 9px;
+  color: #a7aebf;
+  font-weight: 600;
+  margin-top: -3px;
+  animation: pop 0.4s both;
+}
+@keyframes pop {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.listen {
+  align-self: center;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 6px 0 4px;
+  border: 1px solid #dbe6fb;
+  background: #eef4ff;
+  border-radius: 16px;
+  padding: 7px 16px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #4d7ef0;
+  animation: pop 0.4s both;
+}
+.listen svg {
+  width: 12px;
+  height: 12px;
+  stroke: #4d7ef0;
+}
+.dts {
+  display: flex;
+  gap: 3px;
+}
+.dts i {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: #4d7ef0;
+  animation: ld 1.1s infinite;
+}
+.dts i:nth-child(2) {
+  animation-delay: 0.18s;
+}
+.dts i:nth-child(3) {
+  animation-delay: 0.36s;
+}
+@keyframes ld {
+  0%,
+  100% {
+    opacity: 0.25;
+    transform: translateY(0);
+  }
+  50% {
+    opacity: 1;
+    transform: translateY(-3px);
+  }
+}
+
+/* input */
+.foot {
+  flex: none;
+  margin: 6px 12px 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.field {
+  flex: 1;
+  height: 40px;
+  border-radius: 21px;
+  background: #f1f3f9;
+  display: flex;
+  align-items: center;
+  padding: 0 15px;
+  font-size: 12.5px;
+  color: #9aa2b5;
+  box-shadow: inset 0 0 0 1px #e6eaf3;
+}
+.caret {
+  width: 1.5px;
+  height: 15px;
+  background: #4d7ef0;
+  margin-left: 2px;
+  animation: pu 1s infinite;
+}
+@keyframes pu {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+.micb {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #111318;
+  box-shadow: 0 5px 14px rgb(10 15 30 / 0.35);
+}
+.micb svg {
+  width: 16px;
+  height: 16px;
+  stroke: #fff;
+}
+.hbar {
+  flex: none;
+  height: 15px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.hbar i {
+  width: 118px;
+  height: 4.5px;
+  border-radius: 3px;
+  background: #0c0e14;
+  opacity: 0.85;
+}
+
+/* ------------------------------------------------------------------ back */
+.backFace {
+  transform: translateZ(-17.5px) rotateY(180deg);
+  background: linear-gradient(160deg, #4d82c4 0%, #2b5a97 35%, #1b4177 75%, #123059 100%);
+  padding: 5px;
+  box-shadow: inset 0 0 30px rgb(160 200 255 / 0.3);
+}
+.glass {
+  width: 100%;
+  height: 100%;
+  border-radius: 50px;
+  position: relative;
+  overflow: hidden;
+  background:
+    radial-gradient(120% 90% at 30% 8%, rgb(255 255 255 / 0.22), transparent 45%),
+    linear-gradient(160deg, #3b6cb0 0%, #2a5490 45%, #1a3a6b 100%);
+}
+.plateau {
+  position: absolute;
+  top: 16px;
+  left: 14px;
+  right: 14px;
+  height: 150px;
+  border-radius: 34px;
+  background: linear-gradient(160deg, #28517e, #1a3a63 70%, #122c4e);
+  box-shadow:
+    inset 0 2px 8px rgb(180 215 255 / 0.3),
+    inset 0 -6px 14px rgb(5 20 45 / 0.5),
+    0 8px 20px rgb(10 30 60 / 0.4);
+}
+.lens {
+  position: absolute;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 32% 30%, #54617a 0%, #1c2230 38%, #080b12 70%);
+  box-shadow:
+    0 0 0 5px #16375e,
+    0 0 0 7px rgb(170 205 255 / 0.3),
+    inset 0 3px 8px rgb(255 255 255 / 0.16),
+    0 6px 14px rgb(5 15 35 / 0.6);
+}
+.lens::before {
+  content: "";
+  position: absolute;
+  inset: 14px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 32%, #39445c, #04070d 65%);
+  box-shadow: inset 0 0 0 2px rgb(130 170 240 / 0.25);
+}
+.lens::after {
+  content: "";
+  position: absolute;
+  top: 16px;
+  left: 18px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: radial-gradient(circle, #bcd6ff, transparent 70%);
+  opacity: 0.8;
+}
+.l1 {
+  top: 12px;
+  left: 16px;
+}
+.l2 {
+  top: 78px;
+  left: 16px;
+}
+.l3 {
+  top: 45px;
+  left: 96px;
+}
+.dotf {
+  position: absolute;
+  border-radius: 50%;
+}
+.flash {
+  top: 26px;
+  right: 30px;
+  width: 26px;
+  height: 26px;
+  background: radial-gradient(circle at 40% 35%, #fff7e0, #e5c76d 60%, #977c2c);
+  box-shadow: 0 0 0 3px #143257;
+}
+.lidar {
+  top: 92px;
+  right: 30px;
+  width: 20px;
+  height: 20px;
+  background: radial-gradient(circle, #0b0e14 30%, #242c3c);
+}
+.micd {
+  top: 66px;
+  right: 36px;
+  width: 5px;
+  height: 5px;
+  background: #0a1c36;
+}
+.blogo {
+  position: absolute;
+  left: 50%;
+  top: 56%;
+  transform: translateX(-50%);
+  text-align: center;
+}
+.yl {
+  font-size: 26px;
+  font-weight: 900;
+  letter-spacing: 2px;
+  color: rgb(255 255 255 / 0.92);
+}
+.yl b {
+  color: #bcd6ff;
+}
+.bsub {
+  font-size: 9px;
+  letter-spacing: 3.5px;
+  color: rgb(225 238 255 / 0.7);
+  margin-top: 3px;
+}
+.imprint {
+  position: absolute;
+  bottom: 26px;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-size: 8px;
+  letter-spacing: 1.6px;
+  color: rgb(225 238 255 / 0.55);
+}
+
+.btn {
+  position: absolute;
+  background: linear-gradient(90deg, #6ea3e8, #173a68);
+  border-radius: 3px;
+  box-shadow: 0 0 3px rgb(8 25 55 / 0.6);
+}
+.bAct {
+  left: -3.5px;
+  top: 150px;
+  width: 4px;
+  height: 26px;
+}
+.bV1 {
+  left: -3.5px;
+  top: 196px;
+  width: 4px;
+  height: 46px;
+}
+.bV2 {
+  left: -3.5px;
+  top: 252px;
+  width: 4px;
+  height: 46px;
+}
+.bPwr {
+  right: -3.5px;
+  top: 210px;
+  width: 4px;
+  height: 72px;
+}
+.bCam {
+  right: -3.5px;
+  top: 330px;
+  width: 4px;
+  height: 40px;
+  border-radius: 2px;
+}
+
+.shadow {
+  position: absolute;
+  bottom: -34px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 430px;
+  height: 56px;
+  border-radius: 50%;
+  background: radial-gradient(ellipse, rgb(25 40 80 / 0.3), transparent 65%);
+  filter: blur(7px);
+}
+
+/* ------------------------------------------- floating language chips */
+.lchip {
+  position: absolute;
+  z-index: 15;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  white-space: nowrap;
+  background: #ffffff;
+  border-radius: 22px;
+  padding: 9px 16px;
+  font-size: 14px;
+  font-weight: 700;
+  color: #232a3a;
+  box-shadow:
+    0 10px 26px rgb(40 60 110 / 0.16),
+    0 2px 6px rgb(40 60 110 / 0.1);
+  transition: opacity 0.5s;
+  will-change: transform;
+}
+.lchip i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex: none;
+}
+.fly {
+  transition:
+    transform 1.05s cubic-bezier(0.5, -0.1, 0.7, 1),
+    opacity 1.05s;
+  z-index: 16;
+}
+.hid {
+  opacity: 0;
+  transition: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sheen,
+  .arr,
+  .caret,
+  .dts i,
+  .det,
+  .bub,
+  .meta,
+  .listen {
+    animation: none;
+  }
+}

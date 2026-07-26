@@ -13,6 +13,8 @@ import { compressImage, recordVoice, AVATAR_EDGE, AVATAR_QUALITY } from '../lib/
 import { cloneVoice, deleteClone, dataURLToBlob } from '../lib/voice.js'
 import { openCrop } from '../lib/crop.js'
 import { el, clear, avatar, actionSheet } from '../lib/ui.js'
+import { notifyState, enableNotify, chime, notifyBlockedReason } from '../lib/notify.js'
+import { subscribePush } from '../lib/push.js'
 
 /* ------------------------------------------------------------- icons */
 
@@ -769,6 +771,67 @@ export function render (root, ctx) {
     el('span', { class: 'chev', html: I.chev })
   ])
 
+  /**
+   * System notifications need permission, and the browser only grants it from
+   * a real click — so this is a row the user presses, not something the app
+   * can arrange on their behalf at boot.
+   */
+  const notifVal = el('span', { class: 'val' })
+  const notifRow = el('button', {
+    class: 'row', type: 'button', onclick: askNotify
+  }, [
+    el('span', { class: 'ri', html: I.checks }),
+    el('span', { class: 'rl' }, [
+      el('b', { text: 'Show notifications' }),
+      el('span', {
+        class: 'sub',
+        text: "In your phone's notification tray when the app is in the background."
+      })
+    ]),
+    notifVal,
+    el('span', { class: 'chev', html: I.chev })
+  ])
+
+  function paintNotify () {
+    const state = notifyState()
+    notifVal.textContent = state === 'granted' ? 'On'
+      : state === 'denied' ? 'Blocked in browser'
+      // On iPhone this is not a dead end, so it must not read like one.
+      : state === 'unsupported'
+        ? (notifyBlockedReason() === 'ios-needs-install' ? 'Add to Home Screen' : 'Not supported')
+        : 'Tap to allow'
+  }
+  paintNotify()
+
+  async function askNotify () {
+    const state = notifyState()
+    if (state === 'denied') {
+      // Only the browser's own site settings can undo this; saying so beats a
+      // button that silently does nothing every time it is pressed.
+      ctx.toast('Notifications are blocked for this site — allow them in your browser settings')
+      return
+    }
+    if (state === 'unsupported') {
+      ctx.toast(notifyBlockedReason() === 'ios-needs-install'
+        // The exact gesture, because iOS offers no prompt and no explanation.
+        ? 'On iPhone: tap Share, then Add to Home Screen, and open Spot Me from there'
+        : 'This browser cannot show notifications')
+      return
+    }
+    await enableNotify()
+    paintNotify()
+    if (notifyState() !== 'granted') return
+    chime()
+    // Permission alone only covers a phone with the app still running. The
+    // subscription is what lets a closed one be woken, so it is claimed here
+    // rather than behind a second toggle nobody would find.
+    const push = await subscribePush()
+    notifVal.textContent = push.ok ? 'On · closed-app alerts' : 'On'
+    if (!push.ok && push.reason === 'not-configured') {
+      ctx.toast('Alerts on. Waking a fully closed app is not switched on for this build yet.')
+    }
+  }
+
   function openLastSeenSheet () {
     const current = db.settings().lastSeen || 'everyone'
     actionSheet(
@@ -914,6 +977,23 @@ export function render (root, ctx) {
       'Hides your chats when you switch apps.',
       () => db.settings().appBlur !== false,
       (on) => db.setSettings({ appBlur: on })),
+
+    el('div', { class: 'sec', text: 'Notifications' }),
+    notifRow,
+    toggleRow(I.speaker, 'Alert sound',
+      'A short tone when a message arrives in a chat you are not reading.',
+      () => db.settings().sound !== false,
+      // Play it on the way on, so the choice is audible rather than abstract.
+      (on) => { db.setSettings({ sound: on }); if (on) chime() }),
+    toggleRow(I.blur, 'Vibrate', 'Where the device supports it.',
+      () => db.settings().vibrate !== false,
+      (on) => db.setSettings({ vibrate: on })),
+    el('div', {
+      class: 'note',
+      text: 'Alerts need Spot Me open in a tab. Messages travel straight between '
+        + 'devices, so with the app fully closed there is no connection and nothing '
+        + 'to announce — unlike apps whose servers hold your messages for you.'
+    }),
 
     el('div', { class: 'sec', text: 'Language & translation' }),
     langRow,

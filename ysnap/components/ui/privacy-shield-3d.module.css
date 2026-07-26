@@ -1,0 +1,378 @@
+/* Privacy shield — CSS preserve-3d extrusion. Twelve stacked clip-path
+   slices give the shield real thickness; a glass inner face holds the
+   padlock, a force-field dome breathes around it, and badges orbit in 3D. */
+
+/* Fills its card. Positioning lives here rather than in a Tailwind utility —
+   a module class and a utility class have equal specificity, and this sheet
+   loads last, so `.stage { position }` would silently beat `absolute`. */
+.stage {
+  position: absolute;
+  inset: 0;
+  perspective: 1100px;
+  perspective-origin: 50% 42%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transform-style: preserve-3d;
+  touch-action: pan-y; /* vertical page scroll survives on touch */
+  /* packets are spawned just outside the frame and fly inward — clip them so
+     they can never extend the page's scroll width */
+  overflow: hidden;
+}
+
+.dome {
+  position: absolute;
+  width: 300px;
+  height: 300px;
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 3;
+  background: radial-gradient(
+    circle,
+    transparent 58%,
+    rgb(123 92 255 / 0.06) 72%,
+    rgb(79 141 255 / 0.12) 84%,
+    transparent 92%
+  );
+  animation: dome 4s ease-in-out infinite;
+  transition: background 0.25s;
+}
+/* flashes red for a beat as a packet is deflected */
+.domeHit {
+  background: radial-gradient(
+    circle,
+    transparent 58%,
+    rgb(255 59 71 / 0.1) 72%,
+    rgb(255 59 71 / 0.18) 84%,
+    transparent 92%
+  );
+}
+@keyframes dome {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.8;
+  }
+  50% {
+    transform: scale(1.04);
+    opacity: 1;
+  }
+}
+
+.shieldWrap {
+  position: relative;
+  width: 210px;
+  height: 244px;
+  transform-style: preserve-3d;
+  z-index: 5;
+}
+/* shared shield silhouette */
+.sh {
+  position: absolute;
+  inset: 0;
+  clip-path: polygon(
+    50% 2.5%, 38% 7%, 26% 10%, 14% 11.5%, 13% 22%, 13.5% 34%, 15.5% 46%,
+    19% 58%, 24.5% 68%, 31.5% 77%, 39.5% 85.5%, 46% 91.5%, 50% 95%,
+    54% 91.5%, 60.5% 85.5%, 68.5% 77%, 75.5% 68%, 81% 58%, 84.5% 46%,
+    86.5% 34%, 87% 22%, 86% 11.5%, 74% 10%, 62% 7%, 50% 2.5%
+  );
+}
+.body {
+  background: linear-gradient(160deg, #2a3040, #171c28 60%, #10141d);
+}
+.face {
+  background: linear-gradient(160deg, #252b3a, #14181f 65%, #0e1119);
+}
+.inner {
+  position: absolute;
+  inset: 0;
+  transform: translateZ(13.5px) scale(0.885);
+  clip-path: polygon(
+    50% 2.5%, 38% 7%, 26% 10%, 14% 11.5%, 13% 22%, 13.5% 34%, 15.5% 46%,
+    19% 58%, 24.5% 68%, 31.5% 77%, 39.5% 85.5%, 46% 91.5%, 50% 95%,
+    54% 91.5%, 60.5% 85.5%, 68.5% 77%, 75.5% 68%, 81% 58%, 84.5% 46%,
+    86.5% 34%, 87% 22%, 86% 11.5%, 74% 10%, 62% 7%, 50% 2.5%
+  );
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  background:
+    radial-gradient(85% 60% at 50% 26%, rgb(255 255 255 / 0.95), rgb(238 244 255 / 0.9) 55%, rgb(222 232 250 / 0.92) 100%),
+    linear-gradient(160deg, #f4f8ff, #e3ecfb);
+}
+/* red/orange crest band across the shield's shoulders */
+.inner::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, #ff3b47, #ff7a2e);
+  opacity: 0.92;
+  clip-path: polygon(
+    50% 2.5%, 38% 7%, 26% 10%, 14% 11.5%, 13.9% 25%, 50% 20%, 86.1% 25%,
+    86% 11.5%, 74% 10%, 62% 7%, 50% 2.5%
+  );
+  z-index: 1;
+}
+.inner::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(115deg, transparent 35%, rgb(255 255 255 / 0.65) 47%, transparent 60%);
+  background-size: 260% 100%;
+  animation: shsheen 5.5s ease-in-out infinite;
+  z-index: 2;
+}
+@keyframes shsheen {
+  0%,
+  100% {
+    background-position: 115% 0;
+  }
+  50% {
+    background-position: -15% 0;
+  }
+}
+
+.scanBeam {
+  position: absolute;
+  left: 6%;
+  right: 6%;
+  height: 30px;
+  z-index: 6;
+  pointer-events: none;
+  opacity: 0;
+  background: linear-gradient(
+    to bottom,
+    transparent,
+    rgb(255 59 71 / 0.26),
+    rgb(123 92 255 / 0.28),
+    transparent
+  );
+  filter: blur(2px);
+}
+
+/* padlock */
+.lock {
+  position: relative;
+  width: 74px;
+  height: 82px;
+  z-index: 7;
+}
+.shackle {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  top: 0;
+  width: 44px;
+  height: 39px;
+  border: 8px solid #14181f;
+  border-bottom: none;
+  border-radius: 22px 22px 0 0;
+  transition: top 0.3s cubic-bezier(0.4, 1.6, 0.5, 1);
+}
+.lockOpen .shackle {
+  top: -11px;
+}
+.lockBody {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 49px;
+  border-radius: 12px;
+  background: #14181f;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 10px 22px rgb(20 25 40 / 0.35);
+}
+.keyhole {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #ff3b47;
+  box-shadow: 0 0 8px rgb(255 59 71 / 0.8);
+  animation: blink 3s infinite;
+}
+@keyframes blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.3;
+  }
+}
+.lockRip {
+  position: absolute;
+  left: 50%;
+  top: 60%;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 2px solid rgb(255 59 71 / 0.7);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  animation: lrip 0.9s ease-out forwards;
+}
+@keyframes lrip {
+  to {
+    width: 170px;
+    height: 170px;
+    opacity: 0;
+  }
+}
+
+.shadow {
+  position: absolute;
+  bottom: 10%;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 210px;
+  height: 30px;
+  border-radius: 50%;
+  background: radial-gradient(ellipse, rgb(30 45 90 / 0.22), transparent 65%);
+  filter: blur(6px);
+  z-index: 1;
+}
+
+/* orbiting badges */
+.badge {
+  position: absolute;
+  left: 50%;
+  top: 52%;
+  z-index: 8;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: #fff;
+  border: 1px solid #e4e9f4;
+  border-radius: 20px;
+  padding: 6px 12px;
+  font-size: 10.5px;
+  font-weight: 800;
+  color: #2a3245;
+  white-space: nowrap;
+  box-shadow: 0 10px 24px rgb(35 55 110 / 0.13);
+  will-change: transform;
+  transform: translate(-50%, -50%);
+}
+.badge i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex: none;
+}
+/* narrower cards get tighter badges, buying orbit room before the
+   measure() fallback has to hide them entirely */
+@media (max-width: 640px) {
+  .badge {
+    font-size: 9px;
+    padding: 5px 9px;
+    gap: 5px;
+  }
+  .badge i {
+    width: 6px;
+    height: 6px;
+  }
+  .counter,
+  .toast {
+    font-size: 9px;
+    padding: 5px 9px;
+  }
+}
+
+/* deflected packets */
+.pkt {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  z-index: 2;
+  pointer-events: none;
+  box-shadow: 0 0 12px rgb(255 59 71 / 0.65);
+}
+.rip {
+  position: absolute;
+  border-radius: 50%;
+  border: 2px solid rgb(255 59 71 / 0.6);
+  pointer-events: none;
+  z-index: 3;
+  animation: rip 1s ease-out forwards;
+}
+@keyframes rip {
+  from {
+    width: 12px;
+    height: 12px;
+    opacity: 1;
+  }
+  to {
+    width: 100px;
+    height: 100px;
+    opacity: 0;
+  }
+}
+
+/* status chips inside the card */
+.counter {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 10px;
+  font-weight: 700;
+  color: #5a6478;
+  background: #fff;
+  border: 1px solid #e2e8f4;
+  border-radius: 18px;
+  padding: 6px 12px;
+  box-shadow: 0 6px 16px rgb(35 55 110 / 0.08);
+  z-index: 30;
+  letter-spacing: 0.04em;
+}
+.counter i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #ff3b47;
+  box-shadow: 0 0 8px #ff3b47;
+  animation: blink 1.6s infinite;
+}
+.counter b {
+  color: #ff3b47;
+  font-variant-numeric: tabular-nums;
+}
+.toast {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  z-index: 30;
+  font-size: 10px;
+  font-weight: 800;
+  color: #1d7a4f;
+  background: #e9f9f1;
+  border: 1px solid #c2ecd8;
+  border-radius: 18px;
+  padding: 6px 12px;
+  opacity: 0;
+  transform: translateY(-6px);
+  transition: 0.45s;
+}
+.toastShow {
+  opacity: 1;
+  transform: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dome,
+  .inner::after,
+  .keyhole,
+  .counter i {
+    animation: none;
+  }
+}

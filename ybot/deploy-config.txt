@@ -1,0 +1,23 @@
+# ybot Server Engineer — fill this in, then double-click  Deploy-Server.bat
+# Lines starting with #  are ignored.  Do NOT put spaces around the = sign.
+# ---------------------------------------------------------------------------
+
+# --- Your server (from AWS EC2 or Hostinger VPS) ---
+# The public IP address (or hostname) of the server you launched:
+SSH_HOST=
+
+# The login user.  AWS Ubuntu = ubuntu  |  AWS Amazon Linux = ec2-user  |  Hostinger = root
+SSH_USER=ubuntu
+
+# Full path to your private key file (the .pem AWS gave you). Example:
+SSH_KEY=C:\Users\yuv\Downloads\your-key.pem
+
+# Port (leave 22 unless you changed it):
+SSH_PORT=22
+
+# ONLY if your host uses a password instead of a key: put it here and leave SSH_KEY blank.
+SSH_PASSWORD=
+
+# --- What you want done (plain English) ---
+# If your ysnap code is on GitHub, paste the repo URL right into this sentence.
+GOAL=Install Node.js and nginx and deploy the ysnap Next.js app (repo: <paste GitHub URL here, or tell me you will provide the files>). Run it as a service behind nginx on port 80, make it restart automatically on reboot, and tell me the public URL when it is live.

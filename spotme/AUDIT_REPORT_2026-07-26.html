@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Spot Me Messenger — Technical Audit Report 2026-07-26</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  line-height: 1.6;
+  color: #1a1a1a;
+  background: #fff;
+  padding: 40px;
+  max-width: 900px;
+  margin: 0 auto;
+}
+@media (max-width: 768px) {
+  body { padding: 20px; }
+}
+@media print {
+  body { padding: 0; background: white; }
+  .page-break { page-break-before: always; }
+  h1, h2 { page-break-after: avoid; }
+  table { page-break-inside: avoid; }
+}
+
+h1 {
+  font-size: 32px;
+  font-weight: 700;
+  margin: 0 0 8px 0;
+  color: #000;
+}
+.subtitle {
+  font-size: 14px;
+  color: #666;
+  margin-bottom: 24px;
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.health-badge {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 4px;
+  font-weight: 500;
+  font-size: 13px;
+}
+.health-medium { background: #fef3c7; color: #92400e; }
+
+h2 {
+  font-size: 22px;
+  font-weight: 600;
+  margin: 32px 0 16px 0;
+  border-bottom: 2px solid #f0f0f0;
+  padding-bottom: 8px;
+  color: #000;
+}
+h3 {
+  font-size: 16px;
+  font-weight: 600;
+  margin: 20px 0 12px 0;
+  color: #222;
+}
+h4 {
+  font-size: 14px;
+  font-weight: 600;
+  margin: 16px 0 8px 0;
+  color: #333;
+}
+
+p {
+  margin: 12px 0;
+  color: #444;
+}
+ul, ol {
+  margin: 12px 0 12px 20px;
+  color: #444;
+}
+li {
+  margin: 6px 0;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 16px 0;
+  font-size: 14px;
+}
+table th {
+  background: #f9f9f9;
+  padding: 10px;
+  text-align: left;
+  font-weight: 600;
+  border-bottom: 2px solid #e0e0e0;
+  color: #000;
+}
+table td {
+  padding: 10px;
+  border-bottom: 1px solid #e8e8e8;
+  color: #333;
+}
+table tr:hover {
+  background: #fafafa;
+}
+
+code {
+  background: #f5f5f5;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-family: "SF Mono", Monaco, Consolas, monospace;
+  font-size: 13px;
+  color: #d63384;
+}
+
+.metric-card {
+  display: inline-block;
+  background: #f9f9f9;
+  padding: 16px;
+  border-radius: 6px;
+  border: 1px solid #e0e0e0;
+  margin: 8px 8px 8px 0;
+  min-width: 140px;
+  text-align: center;
+}
+.metric-card-label {
+  font-size: 12px;
+  color: #666;
+  text-transform: uppercase;
+  font-weight: 500;
+}
+.metric-card-value {
+  font-size: 24px;
+  font-weight: 700;
+  color: #000;
+  margin-top: 4px;
+}
+
+.finding {
+  background: #fffbf0;
+  border-left: 4px solid #d97706;
+  padding: 16px;
+  margin: 16px 0;
+  border-radius: 4px;
+}
+.finding-critical {
+  background: #fef2f2;
+  border-left-color: #dc2626;
+}
+.finding-high {
+  background: #fef3c7;
+  border-left-color: #f59e0b;
+}
+.finding-label {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: #d97706;
+  margin-bottom: 4px;
+}
+.finding-critical .finding-label { color: #dc2626; }
+.finding-high .finding-label { color: #f59e0b; }
+
+.status-good { color: #059669; font-weight: 600; }
+.status-warning { color: #d97706; font-weight: 600; }
+.status-critical { color: #dc2626; font-weight: 600; }
+
+.footer {
+  margin-top: 40px;
+  padding-top: 20px;
+  border-top: 1px solid #e0e0e0;
+  font-size: 12px;
+  color: #666;
+}
+</style>
+</head>
+<body>
+
+<h1>SPOT ME MESSENGER</h1>
+<p style="font-size: 24px; color: #666; margin-bottom: 8px;">Technical Audit Report</p>
+
+<div class="subtitle">
+  <span><strong>Date:</strong> 2026-07-26</span>
+  <span><strong>Status:</strong> <span class="health-badge health-medium">🟡 MEDIUM</span></span>
+  <span><strong>Auditor:</strong> Claude Code</span>
+</div>
+
+---
+
+<h2>Executive Summary</h2>
+
+<p><strong>Health Rating:</strong> <span class="health-badge health-medium">🟡 MEDIUM</span></p>
+
+<p>Spot Me has achieved <strong>60% of production-ready features</strong> with a fully working P2P core, live web app on Vercel, and native Android APK. However, five critical blockers prevent store release: legal compliance, unverified relay rates, technical debt, privacy leaks, and missing iOS support. <strong>Video media causes silent chat history loss</strong>—the highest-severity bug.</p>
+
+<div style="margin: 20px 0;">
+  <div class="metric-card">
+    <div class="metric-card-label">Features</div>
+    <div class="metric-card-value">60%</div>
+  </div>
+  <div class="metric-card">
+    <div class="metric-card-label">Core Tests</div>
+    <div class="metric-card-value">34/34 ✅</div>
+  </div>
+  <div class="metric-card">
+    <div class="metric-card-label">E2E Coverage</div>
+    <div class="metric-card-value">0%</div>
+  </div>
+  <div class="metric-card">
+    <div class="metric-card-label">Ship Timeline</div>
+    <div class="metric-card-value">4–6 wks</div>
+  </div>
+</div>
+
+<h3>Top 5 Blockers</h3>
+
+<ol style="list-style: none; padding: 0;">
+  <li style="margin: 12px 0;">
+    <span class="status-critical">🔴 CRITICAL: Video causes silent data loss</span> — 40 MB video breaks localStorage, destroying entire conversation history with no error signal
+  </li>
+  <li style="margin: 12px 0;">
+    <span class="status-critical">🔴 CRITICAL: Relay rate unverified</span> — ~10% NAT assumption never tested on real cross-network devices; could swing costs €24K–€300K/year
+  </li>
+  <li style="margin: 12px 0;">
+    <span class="status-warning">🟡 HIGH: iOS impossible on web</span> — iPhone user has zero offline recovery, zero cross-device sync
+  </li>
+  <li style="margin: 12px 0;">
+    <span class="status-warning">🟡 HIGH: Legal documents are drafts</span> — Terms/Privacy/EULA need counsel review; 7 regulatory decisions pending
+  </li>
+  <li style="margin: 12px 0;">
+    <span class="status-warning">🟡 HIGH: Test coverage unmeasured</span> — Core tests exist (34/34) but E2E coverage on web/mobile/scaling is 0%
+  </li>
+</ol>
+
+<h3>Top 5 Quick Wins</h3>
+
+<ol style="list-style: none; padding: 0;">
+  <li style="margin: 12px 0;"><strong>Fix video localStorage overflow</strong> (1h) — Prevents data loss</li>
+  <li style="margin: 12px 0;"><strong>Remove dead code</strong> (30 min) — 7 functions in translate.js</li>
+  <li style="margin: 12px 0;"><strong>Add Sentry error tracking</strong> (8h) — Essential for production observability</li>
+  <li style="margin: 12px 0;"><strong>Measure relay rate</strong> (6h) — Real devices validate 10% cost assumption</li>
+  <li style="margin: 12px 0;"><strong>Split chat.js</strong> (40h) — 3732 lines → 5 modules (&lt;500 each)</li>
+</ol>
+
+---
+
+<h2>Critical Findings</h2>
+
+<div class="finding finding-critical">
+  <div class="finding-label">CRITICAL: Video Persistence Bug</div>
+  <p><strong>Impact:</strong> Data loss (entire chat history vanishes) | <strong>Root Cause:</strong> Unbounded media in localStorage</p>
+  <p>One 40 MB video + backlog → localStorage quota exceeded → error silently swallowed → entire room stops persisting → chat vanishes on refresh.</p>
+  <p><strong>Fix:</strong> Remove media data before persist (store.js:stripDerived) | <strong>Timeline:</strong> 1 day</p>
+</div>
+
+<div class="finding finding-critical">
+  <div class="finding-label">CRITICAL: Relay Rate Unverified</div>
+  <p><strong>Impact:</strong> 10× cost swing (€24K–€300K/year) | <strong>Root Cause:</strong> Theory, never measured on real devices</p>
+  <p>All tests ran on localhost. Real NAT environment (mobile data ↔ broadband) unknown.</p>
+  <p><strong>Fix:</strong> Cross-network hole-punch test on carrier-grade NAT | <strong>Timeline:</strong> 4–6 hours</p>
+</div>
+
+<div class="finding finding-high">
+  <div class="finding-label">HIGH: Biometric Data to Vendor (GDPR/BIPA Violation)</div>
+  <p>Voice cloning sends unencrypted audio to ElevenLabs. This is Article 9 special-category data (GDPR) and biometric data (Illinois BIPA: $1,000–$5,000 per violation).</p>
+  <p><strong>Fix:</strong> Explicit consent modal + Privacy Policy update | <strong>Timeline:</strong> 4 hours</p>
+</div>
+
+<div class="finding finding-high">
+  <div class="finding-label">HIGH: Translation Pipeline — 7 Open Issues</div>
+  <p>Language detection gaps, UI deadlocks, stale caches, privacy leaks (persistent cache), unbounded API fan-out, edge cases (script detection), dead code.</p>
+  <p><strong>Fix:</strong> Prioritize: privacy leak → language detection → deadlock → cache invalidation | <strong>Timeline:</strong> 14 hours</p>
+</div>
+
+<div class="finding finding-high">
+  <div class="finding-label">HIGH: No Error Tracking in Production</div>
+  <p>Live app at spotme-messenger.vercel.app has zero observability: no Sentry, no Datadog, no custom logging. Production issues invisible until user reports.</p>
+  <p><strong>Fix:</strong> Install Sentry + wire error boundaries | <strong>Timeline:</strong> 8 hours</p>
+</div>
+
+---
+
+<h2>By Dimension</h2>
+
+<h3>1. Security & Threat Modeling</h3>
+
+<table>
+  <tr><th>Finding</th><th>Severity</th><th>Status</th></tr>
+  <tr><td>Plaintext audio to ElevenLabs</td><td><span class="status-critical">CRITICAL</span></td><td>Needs consent modal</td></tr>
+  <tr><td>Metadata leak to relay (who talks to whom)</td><td>MEDIUM</td><td>Accepted (Signal model)</td></tr>
+  <tr><td>localStorage encryption: NONE</td><td>MEDIUM</td><td>Keys derivable from profile seed</td></tr>
+  <tr><td>No rate limiting on /api/username</td><td>MEDIUM</td><td>Blob quota-gated, no client throttle</td></tr>
+  <tr><td>No input validation on profile.name</td><td>MEDIUM</td><td>Server accepts 65K+ chars</td></tr>
+</table>
+
+<p><strong>Risk Level: MEDIUM</strong> — No SQL injection, XSS, or auth bypass. Biometric leak is fixable with consent modal.</p>
+
+<h3>2. Code Quality</h3>
+
+<p><strong>Coverage:</strong> 3% instrumented | <strong>Target:</strong> 70% before store submission</p>
+
+<table>
+  <tr><th>Category</th><th>Status</th><th>Detail</th></tr>
+  <tr><td>Core tests</td><td>✅ 34/34</td><td>room, identity, swarm all passing</td></tr>
+  <tr><td>E2E tests</td><td>❌ 0</td><td>Zero integration tests</td></tr>
+  <tr><td>Web app tests</td><td>❌ 0</td><td>12,187 lines of JS, untested</td></tr>
+  <tr><td>API tests</td><td>❌ 0</td><td>4 handlers untested</td></tr>
+</table>
+
+<p><strong>Top Issues:</strong> chat.js (3732 lines, O(n) renders), store.js (media overflow), translate.js (7 issues), no error boundaries, dead code.</p>
+
+<h3>3. Performance</h3>
+
+<table>
+  <tr><th>Bottleneck</th><th>Current</th><th>Target</th><th>Gain</th></tr>
+  <tr><td>Video transfer</td><td>27s</td><td>5s</td><td>5×</td></tr>
+  <tr><td>Translation latency</td><td>375–690ms</td><td>150ms</td><td>2.5×</td></tr>
+  <tr><td>Photo list O(n) render</td><td>slow</td><td>virtual scroll</td><td>10×</td></tr>
+  <tr><td>Trystero join</td><td>5.1s</td><td>&lt;1s</td><td>5×</td></tr>
+  <tr><td>localStorage restore</td><td>2s</td><td>&lt;100ms</td><td>20×</td></tr>
+</table>
+
+<h3>4. Mobile Compatibility</h3>
+
+<p><strong>iOS:</strong> ❌ Web-only (no Mac for builds) | <strong>Android:</strong> ✅ APK generated (untested on real device)</p>
+
+<h3>5. Backend & Scalability</h3>
+
+<p><strong>1M Users — Feasible?</strong> ✅ YES (if relay &lt;15%)</p>
+
+<table>
+  <tr><th>Service</th><th>Cost/Year</th></tr>
+  <tr><td>Relay nodes (2–3 Hetzner)</td><td>€96–144</td></tr>
+  <tr><td>Media egress (R2)</td><td>€0</td></tr>
+  <tr><td>APIs (Google/Azure/EL)</td><td>€0–2,400</td></tr>
+  <tr><td>Voice cloning (10% adoption)</td><td>£20–40K</td></tr>
+  <tr><td><strong>Total</strong></td><td><strong>€2–4K + voice revenue</strong></td></tr>
+</table>
+
+<h3>6. UI/UX</h3>
+
+<p><strong>Issues:</strong> Video hang (20s), offline indicator missing, translation ON + transliteration ON deadlock, large history slow.</p>
+
+<p><strong>Accessibility:</strong> No ARIA labels, color-only cues, no keyboard nav, untested touch targets.</p>
+
+<h3>7. Competitive Analysis</h3>
+
+<p><strong>Unique:</strong> Transliteration (Indic languages), 24-word recovery mnemonic, paid voice cloning, P2P cost advantage.</p>
+
+<p><strong>Gaps:</strong> iOS native, offline delivery (relay pending), groups unlisted, calls untested.</p>
+
+<p><strong>Position:</strong> Niche in Indic markets (India, diaspora). Privacy + transliteration strong; reach/maturity weak.</p>
+
+<h3>8. Cost Analysis</h3>
+
+<p><strong>Current:</strong> €21/month (€252/year) | <strong>1M Users:</strong> €2–4K/year ops + voice revenue</p>
+
+<p><strong>Savings:</strong> Use R2 instead of AWS (€300/mo → €30/mo); keep Google free tier (1M/day); defer self-hosted voice model.</p>
+
+<h3>9. Infrastructure Dashboard</h3>
+
+<p><strong>Missing:</strong> Error tracking (Sentry), uptime monitoring (Uptime.com), metrics aggregation, relay node deployment.</p>
+
+---
+
+<h2>Recommendations</h2>
+
+<h3>This Week</h3>
+<ul>
+  <li>Fix video localStorage overflow (store.js)</li>
+  <li>Add Sentry + error boundaries</li>
+  <li>Consent modal for voice cloning</li>
+  <li>Remove dead code (7 functions)</li>
+</ul>
+
+<h3>This Sprint (2 Weeks)</h3>
+<ul>
+  <li>Measure relay rate on real devices (mobile ↔ broadband)</li>
+  <li>Add 6 E2E tests (onboarding → message → translate)</li>
+  <li>Profile Android APK on real phone</li>
+</ul>
+
+<h3>This Month (30 Days)</h3>
+<ul>
+  <li>Refactor chat.js (5 modules, &lt;500 lines each)</li>
+  <li>Transcode video before send</li>
+  <li>Deploy relay node (Hetzner CX11)</li>
+  <li>Legal counsel review</li>
+</ul>
+
+<h3>Blocking Release</h3>
+<ul>
+  <li><span class="status-critical">CRITICAL:</span> Video fix (data loss)</li>
+  <li><span class="status-critical">CRITICAL:</span> Legal documents (consent, jurisdiction)</li>
+  <li><span class="status-warning">HIGH:</span> iOS native OR web-only positioning</li>
+  <li><span class="status-warning">HIGH:</span> Real-device Android testing</li>
+  <li><span class="status-warning">HIGH:</span> Relay rate measurement (cost validation)</li>
+</ul>
+
+---
+
+<h2>Final Verdict</h2>
+
+<p><strong>Spot Me is 60% production-ready</strong> with a strong P2P core, working web app, and novel transliteration feature. <strong>Blockers are process, not technical:</strong> legal (pending decisions), measurement (relay rate), and QA (E2E tests, real-device mobile).</p>
+
+<p><strong>Ship timeline: 4–6 weeks</strong> if legal moves in parallel.</p>
+
+<p><strong>Cost at 1M users: €2–4K/year</strong> (outstanding value). Voice cloning monetizes at 10K+ users and covers itself at scale.</p>
+
+<p><strong>Highest leverage:</strong> Fix video bug (1 hour) removes single point of total data loss.</p>
+
+<p><strong>Highest risk:</strong> 10% relay assumption is unverified; cross-network test is cheap and critical.</p>
+
+---
+
+<div class="footer">
+<p><strong>Report Generated:</strong> 2026-07-26 | <strong>Auditors Deployed:</strong> 15 specialists | <strong>Status:</strong> ✅ Complete</p>
+<p style="margin-top: 12px; color: #999;">For detailed code findings, appendices, and full cost calculations, see AUDIT_2026-07-26.md in the spotme directory.</p>
+</div>
+
+</body>
+</html>

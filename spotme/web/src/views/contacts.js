@@ -7,6 +7,7 @@
 import './contacts.css'
 import { db, randomHex } from '../lib/db.js'
 import { lobby } from '../lib/discovery.js'
+import { reach } from '../lib/reach.js'
 import { rooms } from '../lib/rooms.js'
 /** Demo accounts are gone from the product; old stored ones stay filtered out. */
 const isDemo = (id) => typeof id === 'string' && id.startsWith('demo-')
@@ -75,7 +76,7 @@ export function render (root, ctx) {
         label: 'Send chat request',
         fn () {
           try {
-            const roomId = lobby.request(live, 'Hi again!', 'meet')
+            const roomId = reach.reach(live, 'Hi again!', 'meet')
             ctx.openThread(roomId)
           } catch { ctx.toast('Could not send the request') }
         }

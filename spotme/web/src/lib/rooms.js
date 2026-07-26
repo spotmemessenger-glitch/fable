@@ -12,11 +12,53 @@
 import { createNet, randomId } from '../net.js'
 import { createStore } from '../store.js'
 import { db, ROOM_PREFIX } from './db.js'
-import { pushNote } from './notify.js'
+import { alertMessage } from './notify.js'
+import { pokePeer } from './push.js'
 
 /** Attachments bigger than this never ride the history backlog — the bytes
  * are lazily fetched on demand instead, so reconnects stay instant. */
 const DETACH_BYTES = 4096
+
+/**
+ * How much of an attachment travels in one transport send.
+ *
+ * THIS IS THE FIX FOR "everything stops after a photo". Handing the transport
+ * a whole multi-megabyte photo produced two failures at once:
+ *
+ *   - It writes ~16KB chunks in a loop, pausing only when the data channel's
+ *     buffer is full, and gives up on that pause after ten seconds — by
+ *     BREAKING OUT of the loop and resolving the send as though it finished.
+ *     The sender saw "Sent"; the receiver held a pile of chunks missing their
+ *     terminator and showed nothing. On a relayed mobile link a large photo
+ *     hit that timeout nearly every time.
+ *   - Every room with the same peer shares ONE data channel, so while those
+ *     chunks were queued nothing else got through: text, read receipts and
+ *     presence all sat behind the photo, which is why the chat looked dead and
+ *     the header fell back to "Last seen".
+ *
+ * Slicing bounds both. Each slice drains well inside the ten-second window,
+ * and between slices the channel empties, so ordinary messages interleave with
+ * a transfer instead of queueing behind it.
+ */
+const SLICE_BYTES = 128 * 1024
+
+/** How long to wait for the receiver to confirm a whole attachment landed. */
+const ACK_TIMEOUT_MS = 90_000
+
+/** Half-received attachments are dropped rather than held forever. */
+const ASSEMBLY_TTL_MS = 5 * 60_000
+
+function concatSlices (slices) {
+  const total = slices.reduce((sum, s) => sum + s.byteLength, 0)
+  const out = new Uint8Array(total)
+  let at = 0
+  for (const slice of slices) { out.set(slice, at); at += slice.byteLength }
+  return out
+}
+
+const toBytes = (payload) => payload instanceof Uint8Array
+  ? payload
+  : new Uint8Array(payload instanceof ArrayBuffer ? payload : payload.buffer)
 
 function dataURLToBuffer (dataURL) {
   const comma = dataURL.indexOf(',')
@@ -44,9 +86,10 @@ function inertNet () {
     sendMessage: noop, sendReaction: noop, sendProfile: noop, sendDelete: noop,
     sendTyping: noop, sendRead: noop, sendSeen: noop, sendCall: noop, sendLocup: noop,
     sendBinary: () => Promise.resolve(),
+    sendBinAck: noop,
     fetchFrom: () => Promise.resolve(null),
     addStream: noop, removeStream: noop, replaceTrack: noop,
-    peerIds: () => [], peerCount: () => 0, leave: noop
+    peerIds: () => [], peerCount: () => 0, livePeerIds: () => [], leave: noop
   }
 }
 
@@ -91,6 +134,8 @@ function createConnection (convo) {
   const listeners = new Set()
   const seenByPeer = new Set()   // my view-once messages the peer has opened
   const timers = new Map()       // message id -> ttl timer
+  const assembling = new Map()   // message id -> partially received attachment
+  const pendingAcks = new Map()  // message id -> {resolve, reject, timer}
 
   const conn = {
     roomId: convo.roomId,
@@ -134,8 +179,15 @@ function createConnection (convo) {
     db.bump(convo.roomId, { text: preview(message), ts: message.ts, fromMe: false })
     applyTimerControl(convo.roomId, message)
     scheduleTtl(message)
-    pushNote(convo.title || convo.peer?.name || 'New message', preview(message),
-      `msg:${convo.roomId}`, { throttleMs: 15_000 })
+    // The record is re-read rather than closed over: a chat muted after this
+    // connection was built must go quiet immediately, not on next reload.
+    const current = db.convo(convo.roomId)
+    alertMessage({
+      roomId: convo.roomId,
+      title: current?.title || current?.peer?.name || convo.peer?.name || 'New message',
+      body: preview(message),
+      muted: Boolean(current?.muted)
+    })
     emit({ type: 'message', message })
   }
 
@@ -252,20 +304,74 @@ function createConnection (convo) {
       conn.peerCount = count
       emit({ type: 'peers', count })
     },
-    /** Attachment bytes arrived; envelope rides in metadata. */
+    /**
+     * One slice of an attachment arrived. The envelope rides on slice 0; every
+     * slice carries {id, seq, total} so the pieces can be put back together and,
+     * more importantly, so a transfer that stops early is DETECTABLE rather than
+     * silently indistinguishable from one that finished.
+     */
     onBinary (payload, context) {
       const meta = context?.metadata
       if (!meta?.id) return
-      const message = { ...meta, data: bufferToDataURL(payload, meta.mime || 'application/octet-stream') }
+      sweepAssemblies()
+      const total = meta.total || 1
+      const seq = meta.seq || 0
+      let entry = assembling.get(meta.id)
+      if (!entry) {
+        entry = { envelope: null, slices: new Array(total), have: 0, total }
+        assembling.set(meta.id, entry)
+      }
+      entry.expires = Date.now() + ASSEMBLY_TTL_MS
+      if (seq === 0) entry.envelope = meta
+      if (seq < entry.total && !entry.slices[seq]) {
+        entry.slices[seq] = toBytes(payload)
+        entry.have++
+      }
+      if (entry.have < entry.total || !entry.envelope) return
+      assembling.delete(meta.id)
+
+      const envelope = entry.envelope
+      const message = {
+        ...envelope,
+        data: bufferToDataURL(concatSlices(entry.slices), envelope.mime || 'application/octet-stream')
+      }
       delete message.mime
+      delete message.seq
+      delete message.total
+      // Tell the sender it truly landed, before anything below can throw —
+      // their "Sent" indicator is waiting on exactly this.
+      conn.net.sendBinAck({ id: envelope.id })
       if (store.add(message)) {
-        emit({ type: 'rxdone', id: meta.id })
+        emit({ type: 'rxdone', id: envelope.id })
         onIncoming(message)
+      } else {
+        // The history backlog already delivered this envelope without its
+        // bytes. Adding is refused for a known id, so fill in the bytes
+        // instead — otherwise a photo that has now fully arrived would sit
+        // there as "tap to load" forever.
+        store.patch(envelope.id, { data: message.data, detached: false })
+        emit({ type: 'rxdone', id: envelope.id })
       }
     },
     onBinaryProgress (progress, context) {
       const meta = context?.metadata
-      if (meta?.id) emit({ type: 'rxprogress', id: meta.id, progress, meta })
+      if (!meta?.id) return
+      const total = meta.total || 1
+      const seq = meta.seq || 0
+      emit({
+        type: 'rxprogress',
+        id: meta.id,
+        progress: Math.min((seq + progress) / total, 1),
+        meta
+      })
+    },
+    /** The receiver has the whole attachment — the send is genuinely done. */
+    onBinAck (payload) {
+      const waiter = payload?.id && pendingAcks.get(payload.id)
+      if (!waiter) return
+      pendingAcks.delete(payload.id)
+      clearTimeout(waiter.timer)
+      waiter.resolve()
     },
     /** A peer asks for bytes we hold (lazy fetch of detached attachments). */
     onFetch (data) {
@@ -311,6 +417,51 @@ function createConnection (convo) {
       if (conn.call.local) conn.call.state = 'active'
       emit({ type: 'call' })
     }
+  }
+
+  function sweepAssemblies () {
+    const now = Date.now()
+    for (const [id, entry] of assembling) {
+      if (entry.expires <= now) assembling.delete(id)
+    }
+  }
+
+  /** Resolves when the peer confirms the attachment; rejects on the deadline. */
+  function awaitAck (id) {
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        pendingAcks.delete(id)
+        reject(new Error('The attachment did not reach them'))
+      }, ACK_TIMEOUT_MS)
+      pendingAcks.set(id, { resolve, reject, timer })
+    })
+  }
+
+  /**
+   * Push an attachment slice by slice, then wait for the receipt.
+   *
+   * Awaiting each slice is what keeps the shared data channel usable: the next
+   * one is not queued until the last has drained, so text messages sent during
+   * a transfer are not stuck behind megabytes of photo.
+   */
+  conn.deliverAttachment = async function (message, buffer, mime, onProgress) {
+    const total = Math.max(1, Math.ceil(buffer.byteLength / SLICE_BYTES))
+    const envelope = { ...message, data: null, mime }
+    for (let seq = 0; seq < total; seq++) {
+      if (conn.net.livePeerIds().length === 0) throw new Error('They went offline mid-transfer')
+      const slice = buffer.slice(seq * SLICE_BYTES, (seq + 1) * SLICE_BYTES)
+      const metadata = seq === 0
+        ? { ...envelope, seq, total }
+        : { id: message.id, seq, total }
+      await conn.net.sendBinary(slice, {
+        metadata,
+        // Cap below 1: the transfer is not done until the receipt arrives.
+        onProgress: (pr) => onProgress?.(Math.min((seq + pr) / total, 0.99))
+      })
+    }
+    await awaitAck(message.id)
+    store.patch(message.id, { delivered: true, failed: false })
+    onProgress?.(1)
   }
 
   function teardownCall (notifyPeer = true) {
@@ -362,11 +513,12 @@ function createConnection (convo) {
     return track ? !track.enabled : false
   }
 
-  if (convo.kind === 'demo' || String(convo.peer?.id || '').startsWith('demo-')) {
+  const isDemo = convo.kind === 'demo' || String(convo.peer?.id || '').startsWith('demo-')
+
+  function joinNet () {
     // Demo accounts are gone from the product; old stored ones stay readable
     // but never touch the network.
-    conn.net = inertNet()
-  } else {
+    if (isDemo) { conn.net = inertNet(); return }
     // History backlog: never offer opened view-once photos, and strip heavy
     // attachment bytes (they'd re-ship megabytes on every reconnect — the
     // receiver lazily fetches bytes on tap instead).
@@ -378,8 +530,45 @@ function createConnection (convo) {
           : m)))
   }
 
+  /**
+   * Rejoin the room WITHOUT replacing this object.
+   *
+   * An open chat takes its connection once, on mount, and subscribes to it.
+   * Swapping in a freshly built one therefore left the visible chat holding a
+   * corpse — listening to an emitter nothing would ever emit on again, and
+   * writing through a second store instance aimed at the same storage key.
+   * Only the transport is disposable; the store, the listeners and the call
+   * state belong to the conversation and must survive a reconnect.
+   */
+  conn.rejoin = function () {
+    try { conn.net.leave() } catch { /* already gone */ }
+    joinNet()
+    conn.openedAt = Date.now()
+    conn.peerCount = 0
+    emit({ type: 'peers', count: 0 })
+  }
+
+  joinNet()
   sweepExpired()
   return conn
+}
+
+/**
+ * Nobody on the other end — ask the push service to wake their phone.
+ *
+ * This is the ONLY thing that can raise an alert on a closed device, because
+ * no server is told a message exists. The sender noticing "there is nobody
+ * here" is the entire trigger.
+ *
+ * Groups are skipped: waking a room of twenty needs a fan-out the rate limiter
+ * is not shaped for, and getting it wrong means twenty phones buzzing per
+ * message. One-to-one is where the value is; groups can follow deliberately.
+ */
+function wakeIfUnreachable (conn, roomId) {
+  if (conn.net.livePeerIds().length > 0) return
+  const convo = db.convo(roomId)
+  if (!convo || convo.kind === 'group') return
+  pokePeer(convo.peer?.id)
 }
 
 export const rooms = {
@@ -403,13 +592,18 @@ export const rooms = {
   ensure (roomId) {
     const existing = connections.get(roomId)
     if (existing) {
-      const settling = Date.now() - (existing.openedAt || 0) < REJOIN_GRACE_MS
-      if (settling || existing.net.peerCount() > 0) return existing
+      // Health, not headcount. A peer whose connection has already failed is
+      // still listed as present until the transport gives up on it, so asking
+      // "are there peers?" kept handing back a room that could not carry a
+      // byte — the state a chat lands in when a transfer kills the channel.
+      if (existing.net.livePeerIds().length > 0) return existing
+      if (Date.now() - (existing.openedAt || 0) < REJOIN_GRACE_MS) return existing
       // Past the grace window with nobody connected. It may be alive and
       // merely lonely, but a dead one never heals itself, and rejoining is
-      // also how we find a peer who has since come back.
-      try { existing.net.leave() } catch { /* already gone */ }
-      connections.delete(roomId)
+      // also how we find a peer who has since come back. The object stays put
+      // so an open chat keeps receiving; only its transport is replaced.
+      existing.rejoin()
+      return existing
     }
     const convo = db.convo(roomId)
     if (!convo) return null
@@ -445,6 +639,7 @@ export const rooms = {
     }
     conn.store.add(message)
     conn.net.sendMessage(message)
+    wakeIfUnreachable(conn, roomId)
     db.bump(roomId, { text: preview(message), ts: message.ts, fromMe: true })
     applyTimerControl(roomId, message)
     if (message.ttl) {
@@ -474,30 +669,46 @@ export const rooms = {
       ...partial
     }
     conn.store.add(message)
+    wakeIfUnreachable(conn, roomId)
     db.bump(roomId, { text: preview(message), ts: message.ts, fromMe: true })
     const { buffer, mime } = dataURLToBuffer(message.data)
-    const metadata = { ...message, data: null, mime }
-    try {
-      const sending = conn.net.sendBinary(buffer, {
-        metadata,
-        onProgress: (pr) => onProgress?.(Math.min(pr, 0.99))
+    // Deliberately not awaited: the caller needs the message back now so the
+    // bubble appears immediately, while the bytes go out in the background.
+    // Progress ends at 1 only once the receiver confirms, and at -1 if it
+    // never does — a photo that quietly went nowhere must not read as "Sent".
+    Promise.resolve()
+      .then(() => conn.deliverAttachment(message, buffer, mime, onProgress))
+      .catch(() => {
+        conn.store.patch(message.id, { delivered: false, failed: true })
+        onProgress?.(-1)
       })
-      if (sending?.then) sending.then(() => onProgress?.(1)).catch(() => onProgress?.(-1))
-      else onProgress?.(1)
-    } catch { onProgress?.(-1) }
     if (message.ttl) setTimeout(() => conn.store.remove(message.id), message.ttl * 1000)
     return message
   },
 
-  /** Pull detached attachment bytes from whoever is online and holds them. */
+  /**
+   * Pull detached attachment bytes from whoever is online and holds them.
+   *
+   * Asking only the first peer and giving up was wrong twice over: a group may
+   * have several people holding the bytes, and the first id listed can belong
+   * to a connection that has already died, in which case the request used to
+   * hang with no deadline and the button sat on "Loading…" forever.
+   */
   async fetchAttachment (roomId, id) {
     const conn = this.ensure(roomId)
     if (!conn) throw new Error('Conversation not found')
-    const peer = conn.net.peerIds?.()[0]
-    if (!peer) throw new Error('They are offline — media transfers while you are both online')
+    const peers = conn.net.livePeerIds()
+    if (peers.length === 0) throw new Error('They are offline — media transfers while you are both online')
     const m = conn.store.list().find((x) => x.id === id)
-    const bytes = await conn.net.fetchFrom({ id }, { target: peer })
-    if (!bytes) throw new Error('No longer available')
+    let bytes = null
+    let lastError = null
+    for (const peer of peers) {
+      try {
+        bytes = await conn.net.fetchFrom({ id }, { target: peer })
+        if (bytes) break
+      } catch (error) { lastError = error }
+    }
+    if (!bytes) throw new Error(lastError ? 'That transfer did not complete — try again' : 'No longer available')
     const dataURL = bufferToDataURL(bytes, m?.mime || 'image/jpeg')
     conn.store.patch(id, { data: dataURL, detached: false })
     return dataURL

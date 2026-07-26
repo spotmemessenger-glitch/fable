@@ -1,0 +1,22 @@
+{
+ "id": "20260724-152104-cded74afae",
+ "ts": "2026-07-24T09:51:04Z",
+ "source": "main",
+ "exc_type": "RuntimeError",
+ "exc_msg": "SYNTHETIC TEST CRASH: crash-bridge end-to-end verification, not a real bug",
+ "fingerprint": "cded74afae",
+ "python": "3.14.6",
+ "platform": "Windows-10-10.0.19045-SP0",
+ "argv": [
+  "-c"
+ ],
+ "cwd": "C:\\Users\\yuv\\fable\\ybot",
+ "keys_present": {
+  "ANTHROPIC_API_KEY": false,
+  "OLLAMA_API_KEY": false,
+  "ELEVENLABS_API_KEY": false,
+  "OPERATOR_PROVIDER": false,
+  "OPERATOR_MODEL": false,
+  "OPERATOR_OLLAMA_MODEL": false
+ }
+}

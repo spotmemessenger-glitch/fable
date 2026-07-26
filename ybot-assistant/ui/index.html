@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="style.css" />
+  <title>Ybot</title>
+</head>
+<body>
+  <div id="app">
+    <div id="titlebar">
+      <button id="menubtn" title="Menu">&#9776;</button>
+      <span class="dot"></span>
+      <span class="brand">YBOT</span>
+      <button id="refresh" title="Refresh (clear conversation)">&#8635;</button>
+      <button id="pin" class="on" title="Always on top: ON">&#128204;</button>
+      <button id="min" title="Minimise">&#8211;</button>
+      <button id="close" title="Close">&times;</button>
+    </div>
+
+    <div id="mainmenu" class="hidden">
+      <div class="mrow" data-act="new">🆕 New chat</div>
+      <div class="mrow" data-act="refresh">↻ Refresh</div>
+      <div class="mrow theme">
+        <span>🌗 Dark / Light</span>
+        <button id="themetoggle" class="switch" title="Toggle theme"><span class="knob"></span></button>
+      </div>
+      <div class="mrow has-sub">
+        <span>🧑 3D Model</span><span class="caret">▸</span>
+        <div id="modelsub" class="submenu"></div>
+      </div>
+      <div class="msep"></div>
+      <div class="mrow danger" data-act="exit">⏻ Exit</div>
+    </div>
+
+    <div id="controls">
+      <span class="lbl">Permission</span>
+      <select id="mode" title="How Ybot handles actions">
+        <option value="bypass">Autonomous &mdash; no asking</option>
+        <option value="ask">Ask before each action</option>
+      </select>
+    </div>
+    <div id="controls">
+      <span class="lbl">Speed</span>
+      <select id="speed" title="Fast = quicker per step (Sonnet). Smart = deep reasoning (Opus). Fable = most capable.">
+        <option value="fast">Fast &mdash; snappier</option>
+        <option value="smart">Smart &mdash; more careful</option>
+        <option value="fable">Fable &mdash; most capable</option>
+      </select>
+    </div>
+
+    <!-- Avatar area. Phase B replaces this with the Three.js 3D model. -->
+    <div id="avatar">
+      <div id="orb"></div>
+    </div>
+
+    <div id="greeting">Yes boss &mdash; what&rsquo;s on your mind today?</div>
+
+    <div id="log" aria-live="polite"></div>
+
+    <div id="caption" class="hidden"></div>
+    <div id="attachments"></div>
+    <div id="composer">
+      <textarea id="input" rows="2" placeholder="Type a command, “remember that…”, “java: sort a list”, “3d: a gear”, or use the mic…" autocomplete="off"></textarea>
+      <div id="composer-actions">
+        <button id="plus" title="Add files, connectors">+</button>
+        <button id="mic" title="Voice: click to auto-listen">&#127908;</button>
+        <button id="wake" title="Hey Bot — hands-free wake word (say &ldquo;hey bot&rdquo;)">&#128066;</button>
+        <button id="voice" title="Pause/resume Ybot's voice (mute when idle)">&#128266;</button>
+        <span class="spacer"></span>
+        <button id="stop" class="hidden" title="Stop the current task">&#9632;</button>
+        <button id="send">Go</button>
+      </div>
+    </div>
+    <div id="plusmenu" class="hidden">
+      <button data-act="files">&#128206; Add files or photos</button>
+      <button data-act="connectors">&#128268; Connectors &amp; plugins</button>
+    </div>
+    <div id="ctxmenu" class="hidden">
+      <button data-act="paste">&#128203; Paste</button>
+      <button data-act="copy">Copy</button>
+      <button data-act="selectall">Select all</button>
+    </div>
+
+    <div id="statusbar"><span id="state">starting&hellip;</span></div>
+
+    <div id="approval" class="hidden">
+      <div class="card">
+        <div class="ttl">Allow this action?</div>
+        <div id="approval-reason" class="reason"></div>
+        <div class="btns">
+          <button id="deny">Deny</button>
+          <button id="allow">Allow</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+    }
+  }
+  </script>
+  <script type="module" src="avatar.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

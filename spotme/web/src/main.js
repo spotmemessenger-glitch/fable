@@ -9,6 +9,7 @@
 import './tokens.css'
 import { db, wipeDevice } from './lib/db.js'
 import { lobby } from './lib/discovery.js'
+import { reach } from './lib/reach.js'
 import { rooms } from './lib/rooms.js'
 import { readyRTC } from './net.js'
 import { attachPullRefresh } from './lib/pullrefresh.js'
@@ -16,6 +17,8 @@ import { el, clear, toast, avatar } from './lib/ui.js'
 import { compressImage, shrinkDataURL, AVATAR_EDGE, AVATAR_QUALITY } from './lib/media.js'
 import { openCrop } from './lib/crop.js'
 import { readLink } from './net.js'
+import { primeAudio, startNotifier } from './lib/notify.js'
+import { subscribePush } from './lib/push.js'
 
 import * as inbox from './views/inbox.js'
 import * as discovery from './views/discovery.js'
@@ -458,6 +461,17 @@ function boot () {
   if (!db.ready()) return
   healOversizedAvatar()
   /**
+   * Unlock audio on the first touch or key, whatever it was for.
+   *
+   * Browsers refuse to start an AudioContext until the user has interacted
+   * with the page, and a message can land before they have deliberately done
+   * anything sound-related. Without this the very first alert — the one that
+   * matters most — would arrive silently.
+   */
+  for (const event of ['pointerdown', 'keydown']) {
+    window.addEventListener(event, primeAudio, { once: true, passive: true })
+  }
+  /**
    * Relay credentials FIRST. Trystero reads the connection config once, at
    * join time, so a conversation that joins before the relay arrives is stuck
    * on a direct-only path for its whole lifetime — which on Indian mobile
@@ -468,6 +482,7 @@ function boot () {
   readyRTC().then(() => {
     rooms.connectAll()
     lobby.start()
+    reach.joinInbox()
   })
 }
 
@@ -493,11 +508,35 @@ document.addEventListener('visibilitychange', () => {
   app.classList.toggle('privacy-blur', wanted)
 })
 
+// Regaining foreground is the one moment worth reacting to immediately: a
+// locked phone can silently kill the lobby's connections, and a pending
+// friend request should not wait on a heartbeat timer to notice.
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) { lobby.resume(); reach.resume() }
+})
+
 window.addEventListener('hashchange', render)
 
 // Kicked off before the boot sequence below reads the profile: a reset that
 // races the lobby would announce the identity it is about to delete.
 if (RESETTING) maybeFreshStart()
+
+/* Deliberately outside boot(), which stands down until onboarding is complete.
+ * The worker is what puts alerts in the phone's notification tray, and it takes
+ * a moment to activate — waiting for a finished profile would mean the first
+ * messages of a brand-new install fell back to a tab-bound notification. */
+if (!RESETTING) {
+  startNotifier().then(() => {
+    /* Re-claim the push subscription on every launch. Browsers drop them —
+     * on storage pressure, on a long absence, whenever the push service
+     * rotates an endpoint — and a stale endpoint fails silently, so a device
+     * that once enabled alerts would simply stop being wakeable and never say
+     * so. Existing subscriptions are reused, so this is cheap. */
+    if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+      subscribePush().catch(() => {})
+    }
+  })
+}
 
 const linkedRoom = !RESETTING && db.ready() ? adoptRoomLink() : null
 if (!RESETTING) boot()

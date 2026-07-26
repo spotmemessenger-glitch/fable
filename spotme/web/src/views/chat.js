@@ -1363,6 +1363,13 @@ export function render (root, ctx, roomId) {
   }
 
   function buildReadRow (m) {
+    // An attachment that never reached them must not claim it was sent. The
+    // in-flight ring already says so while the app is open, but that is gone
+    // after a reload — and a photo that silently went nowhere sitting there
+    // reading "Sent" is the whole complaint.
+    if (m.failed) {
+      return el('div', { class: 'readRow failed', html: IC.check1 }, ['Not delivered'])
+    }
     const read = conn.readUpTo >= m.ts
     return el('div', {
       class: 'readRow' + (read ? ' read' : ''),

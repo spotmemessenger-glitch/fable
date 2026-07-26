@@ -1,0 +1,9 @@
+ccxt>=4.4
+pandas>=2.2
+numpy>=1.26
+websockets>=12.0
+requests>=2.31
+solders>=0.21          # Solana keypair + transaction signing (meme wing)
+python-dotenv>=1.0     # reads .env so keys never live in code
+fastapi>=0.110         # the office bridge (office/server.py)
+uvicorn[standard]>=0.27

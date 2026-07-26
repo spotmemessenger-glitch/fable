@@ -1,0 +1,9 @@
+# virtualenv
+.venv/
+# runtime state — book, journal, scorecard, synthesized voice
+state/
+# secrets — the Solana signing key lives here, never in the repo
+.env
+# python cruft
+__pycache__/
+*.pyc

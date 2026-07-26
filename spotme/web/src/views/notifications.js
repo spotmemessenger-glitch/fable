@@ -9,6 +9,7 @@
 import './notifications.css'
 import { db } from '../lib/db.js'
 import { lobby, distanceM, fmtDistance } from '../lib/discovery.js'
+import { reach } from '../lib/reach.js'
 import { rooms } from '../lib/rooms.js'
 import { notifyState, enableNotify } from '../lib/notify.js'
 import { el, clear, avatar, fmtDay } from '../lib/ui.js'
@@ -44,19 +45,19 @@ export function render (root, ctx) {
 
   function acceptRequest (request) {
     try {
-      lobby.accept(request)
+      reach.accept(request)
       rooms.ensure(request.roomId)
       ctx.openThread(request.roomId)
     } catch { ctx.toast('Could not accept that request') }
   }
 
   function declineRequest (request) {
-    try { lobby.decline(request) } catch { ctx.toast('Could not reject that request') }
+    try { reach.decline(request) } catch { ctx.toast('Could not reject that request') }
   }
 
   function sayHi (peer) {
     try {
-      lobby.request(peer, 'Nearby chat request', 'nearby')
+      reach.reach(peer, 'Nearby chat request', 'nearby')
       ctx.toast(`Request sent to ${peer.name || 'them'}`)
     } catch { ctx.toast('Could not send that request') }
   }

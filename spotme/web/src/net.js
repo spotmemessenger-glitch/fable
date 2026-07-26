@@ -85,6 +85,12 @@ const APP_ID = 'io.ysnapai.spotme'
  */
 const HISTORY_LIMIT = 100
 
+/** Deadline for a lazy attachment fetch, generous enough for a slow relay. */
+const FETCH_TIMEOUT_MS = 45_000
+
+/** Connection states from which no byte will ever arrive again. */
+const DEAD_STATES = new Set(['failed', 'closed'])
+
 export { selfId }
 
 /**
@@ -113,6 +119,10 @@ export function createNet (roomId, secret, handlers, getHistory) {
   // base64 inside JSON. A third smaller on the wire, and both directions get
   // real progress callbacks, which "photo not sending" feedback demands.
   const bin = room.makeAction('bin')
+  // Receipt for a fully reassembled attachment. Without it "Sent" is a lie:
+  // the transport resolves its send promise once the bytes are QUEUED, so a
+  // transfer that died mid-flight still looked successful to the sender.
+  const binack = room.makeAction('binack')
   // Lazy fetch: history backlog carries attachment envelopes without bytes;
   // the receiver requests the bytes on demand from whoever holds them.
   const fetchAction = room.makeAction('fetch', {
@@ -141,6 +151,7 @@ export function createNet (roomId, secret, handlers, getHistory) {
   read.onMessage = (payload, meta) => handlers.onRead?.(payload, meta?.peerId)
   seen.onMessage = (payload, meta) => handlers.onSeen?.(payload, meta?.peerId)
   bin.onMessage = (payload, context) => handlers.onBinary?.(payload, context)
+  binack.onMessage = (payload, meta) => handlers.onBinAck?.(payload, meta?.peerId)
   bin.onReceiveProgress = (progress, context) => handlers.onBinaryProgress?.(progress, context)
   call.onMessage = (payload, meta) => handlers.onCall?.(payload, meta?.peerId)
   locup.onMessage = (payload, meta) => handlers.onLocup?.(payload, meta?.peerId)
@@ -188,8 +199,16 @@ export function createNet (roomId, secret, handlers, getHistory) {
     sendSeen: (data) => msgSafe(seen.send(data)),
     /** Binary with envelope metadata + progress. Returns the send promise. */
     sendBinary: (buffer, options) => bin.send(buffer, options),
-    /** Ask a specific peer for attachment bytes: ({id}, {target}) -> bytes. */
-    fetchFrom: (data, options) => fetchAction.request(data, options),
+    sendBinAck: (data, options) => msgSafe(binack.send(data, options)),
+    /**
+     * Ask a specific peer for attachment bytes: ({id}, {target}) -> bytes.
+     *
+     * ALWAYS pass a deadline. The request layer only arms a timer when one is
+     * given, so an unanswered request — a peer that vanished after the ask, or
+     * a reply lost mid-transfer — otherwise leaves a promise that never
+     * settles, and a "Loading…" that never becomes anything.
+     */
+    fetchFrom: (data, options) => fetchAction.request(data, { timeoutMs: FETCH_TIMEOUT_MS, ...options }),
     sendCall: (data, options) => msgSafe(call.send(data, options)),
     sendLocup: (data) => msgSafe(locup.send(data)),
     addStream: (stream, options) => room.addStream(stream, options),
@@ -197,6 +216,18 @@ export function createNet (roomId, secret, handlers, getHistory) {
     replaceTrack: (oldTrack, newTrack, options) => room.replaceTrack(oldTrack, newTrack, options),
     peerIds: () => Object.keys(room.getPeers()),
     peerCount: () => Object.keys(room.getPeers()).length,
+    /**
+     * Peers whose underlying connection is actually usable.
+     *
+     * getPeers() lists whoever was admitted to the room; it keeps listing a
+     * peer whose RTCPeerConnection has already failed, because the departure
+     * notice only arrives once the transport gives up. A room that looks
+     * populated but cannot carry a byte is exactly the state a stuck chat sits
+     * in, so presence and health have to be asked separately.
+     */
+    livePeerIds: () => Object.entries(room.getPeers())
+      .filter(([, pc]) => pc && !DEAD_STATES.has(pc.connectionState))
+      .map(([id]) => id),
     leave: () => room.leave()
   }
 }

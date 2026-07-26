@@ -10,6 +10,7 @@
 import './inbox.css'
 import { db, randomHex } from '../lib/db.js'
 import { lobby } from '../lib/discovery.js'
+import { reach } from '../lib/reach.js'
 import { rooms } from '../lib/rooms.js'
 import { el, clear, avatar, fmtDay, actionSheet } from '../lib/ui.js'
 
@@ -110,7 +111,7 @@ export function render (root, ctx) {
 
   function acceptRequest (request) {
     try {
-      lobby.accept(request)
+      reach.accept(request)
       rooms.ensure(request.roomId)
       ctx.openThread(request.roomId)
     } catch { ctx.toast('Could not accept that request') }
@@ -128,7 +129,7 @@ export function render (root, ctx) {
     const request = visibleRequests()[0]
     if (!request) return
     if (ok) acceptRequest(request)
-    else lobby.decline(request)
+    else reach.decline(request)
   }
 
   function openPersonChat (person) {
@@ -362,7 +363,7 @@ export function render (root, ctx) {
         { id: match.id, name: who, username: match.username, avatar: null, lang: 'en' }
       const text = input.value.trim().slice(0, 300) || 'Hi!'
       try {
-        const roomId = lobby.request(peer, text, 'meet')
+        const roomId = reach.reach(peer, text, 'meet')
         close()
         ctx.toast(`Sending request to @${match.username}…`)
         ctx.openThread(roomId)
@@ -599,7 +600,7 @@ export function render (root, ctx) {
         ]),
         el('div', { class: 'rb' }, [
           el('button', { class: 'pill ok', type: 'button', text: 'Accept', onclick: () => acceptRequest(request) }),
-          el('button', { class: 'pill no', type: 'button', text: 'Reject', onclick: () => lobby.decline(request) })
+          el('button', { class: 'pill no', type: 'button', text: 'Reject', onclick: () => reach.decline(request) })
         ])
       ]))
     })
@@ -621,6 +622,10 @@ export function render (root, ctx) {
   }
 
   function matches (convo) {
+    // An unaccepted outgoing reach has nothing to show yet — it appears here
+    // the moment the other person accepts, not before. No more "Sending
+    // request..." rows sitting in Chats.
+    if (convo.pending) return false
     if (!convoVisible(convo)) return false
     return tab === 'chats' ? true : tabOf(convo) === tab
   }

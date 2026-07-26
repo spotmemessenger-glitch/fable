@@ -1,0 +1,4 @@
+# Ybot Assistant — Phase A dependencies
+pywebview>=5.0     # always-on-top desktop window that hosts the web UI
+# Brain / hands / eyes are reused from ../ybot (anthropic, mss, pyautogui, pywinauto, ...).
+# Phase C adds ElevenLabs (voice); Phase B adds the Three.js 3D avatar (front-end only).

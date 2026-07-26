@@ -25,6 +25,8 @@ const DEFAULT_SETTINGS = {
   enterSends: true,
   lastSeen: 'everyone', // 'everyone' | 'contacts' | 'nobody' (cooperative)
   appBlur: true,        // blur the app-switcher preview
+  sound: true,          // alert tone on an incoming message
+  vibrate: true,        // haptic alongside the tone, where the device has one
   notifSeenTs: 0        // last time Notifications was closed — the bell badge
                         // only counts activity newer than this
 }
@@ -166,6 +168,9 @@ function createDb () {
       commit()
     },
 
+    /* Alerts consult this too: a message for the thread you are already
+     * reading must not ding, exactly as it does not count as unread. */
+    openRoom: () => openRoomId,
     setOpenRoom (roomId) {
       openRoomId = roomId
       if (roomId && state.convos[roomId]?.unread) {

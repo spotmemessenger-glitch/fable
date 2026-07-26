@@ -1,0 +1,4172 @@
+{
+  "label": "org.telegram.messenger",
+  "country": "us",
+  "pulledAt": "2026-07-24T15:18:24.193Z",
+  "apple": {
+    "meta": {
+      "store": "apple",
+      "id": "686449807",
+      "name": "Telegram Messenger",
+      "seller": "Telegram FZ-LLC",
+      "price": 0,
+      "currency": "USD",
+      "rating": 4.01056,
+      "ratingCount": 275609,
+      "ratingCountCurrentVersion": 275609,
+      "version": "12.9.2",
+      "lastUpdated": "2026-07-20T02:46:05Z",
+      "firstReleased": "2013-08-14T07:00:00Z",
+      "genres": [
+        "Social Networking",
+        "Productivity"
+      ],
+      "contentRating": "12+",
+      "screenshotCount": 7,
+      "description": "Pure instant messaging — simple, fast, secure, and synced across all your devices. One of the top 5 most downloaded apps in the world with over 1 billion active users.\n\nFAST: Telegram is the fastest messaging app on the market, connecting people via a unique, distributed network of data centers around the globe.\n\nSYNCED: You can access your messages from all your phones, tablets and computers at once. Telegram apps are standalone, so you don’t need to keep your phone connected. Start typing on one device and finish the message from another. Never lose your data again.\n\nUNLIMITED: You can send media and files, without any limits on their type and size. Your entire chat history will require no disk space on your device, and will be securely stored in the Telegram cloud for as long as you need it. \n\nSECURE: We made it our mission to provide the best security combined with ease of use. Everything on Telegram, including chats, groups, media, etc. is encrypted using a combination of 256-bit symmetric AES encryption, 2048-bit RSA encryption, and Diffie–Hellman secure key exchange. \n\n100% FREE & OPEN: Telegram has a fully documented and free API for developers, open source apps and verifiable builds to prove the app you download is built from the exact same source code that is published. \n\nPOWERFUL: You can create group chats with up to 200,000 members, share large videos, documents of any type (.DOCX, .MP3, .ZIP, etc.) up to 2 GB each, and even set up bots for specific tasks. Telegram is the perfect tool for hosting online communities and coordinating teamwork.\n\nRELIABLE: Built to deliver your messages using as little data as possible, Telegram is the most reliable messaging system ever made. It works even on the weakest mobile connections. \n\nFUN: Telegram has powerful photo and video editing tools, animated stickers and emoji, fully customizable themes to change the appearance of your app, and an open sticker/GIF platform to cater to all your expressive needs.\n\nSIMPLE: While providing an unprecedented array of features, we take great care to keep the interface clean. Telegram is so simple you already know how to use it.\n\nPRIVATE: We take your privacy seriously and will never give any third parties access to your data. You can delete any message you ever sent or received for both sides, at any time and without a trace. Telegram will never use your data to show you ads.\n\nFor those interested in maximum privacy, Telegram offers Secret Chats. Secret Chat messages can be programmed to self-destruct automatically from both participating devices. This way you can send all types of disappearing content — messages, photos, videos, and even files. Secret Chats use End-to-End Encryption to ensure that a message can only be read by its intended recipient.\n\nWe keep expanding the boundaries of what you can do with a messaging app. Don’t wait years for older messengers to catch up with Telegram — join the revolution today.\n\nTerms of Use: https://www.apple.com/legal/internet-services/itunes/dev/stdeula/",
+      "releaseNotes": "Bug fixes, minor improvements, and more.",
+      "url": "https://apps.apple.com/us/app/telegram-messenger/id686449807?uo=4"
+    },
+    "failures": [],
+    "reviews": [
+      {
+        "score": 5,
+        "title": "Best",
+        "text": "Best messenger in the world",
+        "version": "12.9.2",
+        "date": "2026-07-23T01:44:04-07:00"
+      },
+      {
+        "score": 1,
+        "title": "bog send the group image",
+        "text": "bog in send the group image",
+        "version": "12.9.2",
+        "date": "2026-07-22T22:59:37-07:00"
+      },
+      {
+        "score": 1,
+        "title": "Поддержка уровня 1звезда!!!!!",
+        "text": "ПОМОГИТЕ ВОССТАНОВИТЬ АККАУНТ!!! Я пишу уже в четвертый раз! Я не могу работать из-за вас!! У меня оплачен премиум! Почему вы игнорируете",
+        "version": "12.9.2",
+        "date": "2026-07-22T22:03:57-07:00"
+      },
+      {
+        "score": 1,
+        "title": "New update is bad",
+        "text": "New update is bad. “Select all” doesn’t work. It forces the new editor mode to make a text “quoted text”. It’s messing up the UI. Whoever you hired to fix telegram is breaking it and will make telegram obsolete and useless. It’s giving whatsapp nonsense.",
+        "version": "12.9.2",
+        "date": "2026-07-22T15:54:43-07:00"
+      },
+      {
+        "score": 1,
+        "title": "Need help! Hacked!",
+        "text": "Please contact me! I’ve tried to get in touch with you almost 100 times! I need access to my account!!!!!",
+        "version": "12.9.2",
+        "date": "2026-07-22T14:55:53-07:00"
+      },
+      {
+        "score": 1,
+        "title": "new update for iphone X",
+        "text": "The new Telegram update does not work properly on iPhone X. I have been forcibly logged out of the app twice, and each time I had to request a verification code via email just to regain access. Please release a new update to fix this issue.",
+        "version": "12.9.2",
+        "date": "2026-07-22T14:40:14-07:00"
+      },
+      {
+        "score": 3,
+        "title": "Crashes on ios",
+        "text": "It is an excellent app but not in ios.it crashes specialy when i use proxy.please fix it",
+        "version": "12.9.2",
+        "date": "2026-07-22T11:51:53-07:00"
+      },
+      {
+        "score": 1,
+        "title": "Don’t download",
+        "text": "Charges 2.00 to use .",
+        "version": "12.9.2",
+        "date": "2026-07-22T11:47:51-07:00"
+      },
+      {
+        "score": 2,
+        "title": "Scammers",
+        "text": "As soon as I opened the app people who scam just instantly texted me and asked me for my shipping address ofc I said no because that is not safe and I feel like this app needs to have more restrictions no scams no spam just instantly block them and report I am not satisfied.",
+        "version": "12.9.2",
+        "date": "2026-07-22T11:43:22-07:00"
+      },
+      {
+        "score": 1,
+        "title": "Disappointing",
+        "text": "I have been using Telegram for years. I had to change phones recently and opening Telegram on the new one now means I am being forced to pay for Premium without having ANY access to my account and I feel like I am being grifted. I would appreciate regaining access to my account and for your company to find another way to deal with whatever rising costs you claim my country imposes (WhatsApp and even lesser messaging apps are free). Do not piss me off. I can only hope this is a glitch.",
+        "version": "12.9.2",
+        "date": "2026-07-22T09:53:45-07:00"
+      },
+      {
+        "score": 5,
+        "title": "Guinée Conakry",
+        "text": "Pourquoi moi je n’ai plus accès à telegram. Pourtant j’ai un compte",
+        "version": "12.9.2",
+        "date": "2026-07-22T07:02:38-07:00"
+      },
+      {
+        "score": 3,
+        "title": "Usually crashes, dramatically",
+        "text": "Telegram is a great app, but after the last update it started crashing very often, no matter what exactly you are doing. It is pretty inconvenient when you need to type in a huge message and then everything just erases and you have to start over. It happens on IOS devices in particular. hope it will be fixed soon.",
+        "version": "12.9.2",
+        "date": "2026-07-22T06:34:54-07:00"
+      },
+      {
+        "score": 1,
+        "title": "Freeze",
+        "text": "Why would my account got freeze without any fraud",
+        "version": "12.9.2",
+        "date": "2026-07-22T05:19:12-07:00"
+      },
+      {
+        "score": 1,
+        "title": "Having to pay",
+        "text": "All of a sudden, I’m being told that I have to get premium service and to pay a fee every week.",
+        "version": "12.9.2",
+        "date": "2026-07-22T04:54:36-07:00"
+      },
+      {
+        "score": 5,
+        "title": "دوزخورماتوو",
+        "text": "دوزخورماتوو",
+        "version": "12.9.2",
+        "date": "2026-07-22T04:42:17-07:00"
+      },
+      {
+        "score": 1,
+        "title": "Unable to access the app",
+        "text": "I'm unable to access my Telegram, it keeps showing an SMS fee and there is no option to pay",
+        "version": "12.9.2",
+        "date": "2026-07-22T03:58:25-07:00"
+      },
+      {
+        "score": 1,
+        "title": "что-то сломалось",
+        "text": "в цитатах не даёт сделать перенос текста на след строку. разбивает цитату на куски! и ссылки вставлять в цитаты тоже не даёт",
+        "version": "12.9.2",
+        "date": "2026-07-22T03:17:57-07:00"
+      },
+      {
+        "score": 5,
+        "title": "account set up help-",
+        "text": "i wanted to set an account up with my number but the previous owner of my number already has an account set up. how do i reclaim my number and register with this number?",
+        "version": "12.9.2",
+        "date": "2026-07-22T02:34:07-07:00"
+      },
+      {
+        "score": 1,
+        "title": "I don’t have a title",
+        "text": "If you go to telegram, you will regret it. If you do anything to piss them off you will be restricted and they won’t tell and they won’t kill you by who and you cannot work with those bots. You have to work with them because the people that work there are ignorant.\nIf I’m not mistaken, it comes out of Dubai. That should tell you something. So if you’re thinking about going there, don’t there are so many better messaging chat rooms.",
+        "version": "12.9.2",
+        "date": "2026-07-21T23:33:11-07:00"
+      },
+      {
+        "score": 5,
+        "title": "Payment of registration",
+        "text": "Why is telegram asking me to pay money before I can receive otp code to activate my telegram account?",
+        "version": "12.9.2",
+        "date": "2026-07-21T17:31:38-07:00"
+      },
+      {
+        "score": 1,
+        "title": "I can’t even get into my account it asks me money which I don’t have 😩",
+        "text": "Why is that",
+        "version": "12.9.2",
+        "date": "2026-07-21T17:15:54-07:00"
+      },
+      {
+        "score": 5,
+        "title": "Eva luna Jackson",
+        "text": "@beyb680",
+        "version": "12.9.2",
+        "date": "2026-07-21T16:41:18-07:00"
+      },
+      {
+        "score": 1,
+        "title": "This app",
+        "text": "I have tried to sign in for 2 days using my email I have always used and I get a message that this email cannot be used tried 2 others same message!!! Where do you get help on this app? Have tried all emails to this app and no response!  \n\nI have used this app many times and have enjoyed it but dang this is frustrating 🤬",
+        "version": "12.9.2",
+        "date": "2026-07-21T16:24:50-07:00"
+      },
+      {
+        "score": 5,
+        "title": "Best app ever",
+        "text": "Best app ever!",
+        "version": "12.9.2",
+        "date": "2026-07-21T16:01:37-07:00"
+      },
+      {
+        "score": 5,
+        "title": ":3",
+        "text": "паша спасибо тебе, до конца жизни буду пользоваться тг несмотря на запреты",
+        "version": "12.9.2",
+        "date": "2026-07-21T15:49:09-07:00"
+      },
+      {
+        "score": 5,
+        "title": "Review",
+        "text": "They said I’ll have to pay before using the app.",
+        "version": "12.9.2",
+        "date": "2026-07-21T15:26:55-07:00"
+      },
+      {
+        "score": 2,
+        "title": "Fix the quotes!",
+        "text": "After the new update, it became impossible to use quotes!\n\nIf you want to highlight and make the text in the quote not in an extended format, then TG will make it so that each line will be in the quote, and not the whole text as before",
+        "version": "12.9.2",
+        "date": "2026-07-21T13:33:11-07:00"
+      },
+      {
+        "score": 1,
+        "title": "SMS FEEE",
+        "text": "WHY AM I STUCK ON THERE ???",
+        "version": "12.9.2",
+        "date": "2026-07-21T13:10:39-07:00"
+      },
+      {
+        "score": 5,
+        "title": "Telegram",
+        "text": "Easy to use, works across multiple devices, and offers strong privacy options. Overall, it’s a great choice for staying connected with friends, family, and communities.",
+        "version": "12.9.2",
+        "date": "2026-07-21T13:05:01-07:00"
+      },
+      {
+        "score": 1,
+        "title": "New update crashed",
+        "text": "The new update keeps crashing telegram.",
+        "version": "12.9.2",
+        "date": "2026-07-21T10:44:33-07:00"
+      },
+      {
+        "score": 5,
+        "title": "Telegram",
+        "text": "I live in the US but am originally from Ukraine. No one here uses this app, sadly everyone uses Snapchat but it’s the best one I have, I’m constantly messaging and chatting on here for hours. I can’t go a single day without spending at least three hours on it. I recommend that anyone not from Europe (specifically people from) Russia, Ukraine, and other Russian speaking countries, download and use it.",
+        "version": "12.9.2",
+        "date": "2026-07-21T10:39:21-07:00"
+      },
+      {
+        "score": 1,
+        "title": "Worst Messaging App",
+        "text": "I was hacked on my telegram account recently. I reinstalled telegram on my phone and they want to charge me $1.19 just to verify my phone number. \n\nJust stick to WhatsApp instead.",
+        "version": "12.9.2",
+        "date": "2026-07-21T08:08:27-07:00"
+      },
+      {
+        "score": 1,
+        "title": "Не скачивается",
+        "text": "Не скачивается",
+        "version": "12.9.2",
+        "date": "2026-07-21T07:17:50-07:00"
+      },
+      {
+        "score": 1,
+        "title": "You’re updates don’t fix anything it makes it worse",
+        "text": "You’re updates don’t fix anything it makes it worse \nFix your app and fix it properly",
+        "version": "12.9.2",
+        "date": "2026-07-21T06:47:00-07:00"
+      },
+      {
+        "score": 1,
+        "title": "A bunch of scammers",
+        "text": "You cannot block messages to contacts only. I had to move to WhatsApp because of a constant spam from strangers, and you have to pay for this option 🤡🤡🤡🤡",
+        "version": "12.9.2",
+        "date": "2026-07-21T01:44:33-07:00"
+      },
+      {
+        "score": 5,
+        "title": "Telegram, Messages",
+        "text": "Message on telegram and more 222 locate me",
+        "version": "12.9.2",
+        "date": "2026-07-20T20:05:12-07:00"
+      },
+      {
+        "score": 3,
+        "title": "Eve-24",
+        "text": "I love this app but to many strangers kept texting me and some people offered me to work and than after that they got mad at me and went rude to me for no reason I was on my doctors appointment and that person didn’t understand me so telegram you should do better I learned my lesson no accepting jobs from there so telegram do better",
+        "version": "12.9.2",
+        "date": "2026-07-20T18:52:47-07:00"
+      },
+      {
+        "score": 1,
+        "title": "Почему у меня не получается",
+        "text": "Пишет, Введите код\nМы отправили код через Telegram на другое устройство, где авторизован\n+7 960 355-88-80.?",
+        "version": "12.9.2",
+        "date": "2026-07-20T17:06:30-07:00"
+      },
+      {
+        "score": 3,
+        "title": "Постоянные проблемы",
+        "text": "Вечно плохо работает",
+        "version": "12.9.2",
+        "date": "2026-07-20T15:10:29-07:00"
+      },
+      {
+        "score": 1,
+        "title": "Should not be forced to pay",
+        "text": "Used to use the app a lot but now I can’t use it at all",
+        "version": "12.9.2",
+        "date": "2026-07-20T13:58:56-07:00"
+      },
+      {
+        "score": 5,
+        "title": "крут павл",
+        "text": "5",
+        "version": "12.9.2",
+        "date": "2026-07-20T13:22:28-07:00"
+      },
+      {
+        "score": 1,
+        "title": "Trash",
+        "text": "WAS A FREE APP now they’re trying to make you pay, what a trash app",
+        "version": "12.9.2",
+        "date": "2026-07-20T11:12:54-07:00"
+      },
+      {
+        "score": 4,
+        "title": "ليبيا",
+        "text": "تيلام",
+        "version": "12.9.2",
+        "date": "2026-07-20T10:46:53-07:00"
+      },
+      {
+        "score": 1,
+        "title": "Отвратительно",
+        "text": "Такое количество мелких ошибок у самого популярного мессенджера в мире это непростительно. Дуров дура",
+        "version": "12.9.2",
+        "date": "2026-07-20T06:30:17-07:00"
+      },
+      {
+        "score": 5,
+        "title": "POOR",
+        "text": "Ghost",
+        "version": "12.9.2",
+        "date": "2026-07-20T04:38:12-07:00"
+      },
+      {
+        "score": 5,
+        "title": "The best communication app and beyond",
+        "text": "I’m not sure why people are still using other platforms. This is the best.",
+        "version": "12.9.2",
+        "date": "2026-07-20T03:32:47-07:00"
+      },
+      {
+        "score": 5,
+        "title": "Павел, молодчина.",
+        "text": "Лучшее приложение. Продолжаю пользоваться и после блокировки )",
+        "version": "12.9.2",
+        "date": "2026-07-20T03:31:57-07:00"
+      },
+      {
+        "score": 1,
+        "title": "It forces you to pay",
+        "text": "It stops you at the SMS Fee page even if you try logging into an existing account.",
+        "version": "12.9.2",
+        "date": "2026-07-20T01:58:27-07:00"
+      },
+      {
+        "score": 5,
+        "title": "Павел вернись в Россию",
+        "text": "Пожалуйста",
+        "version": "12.9.2",
+        "date": "2026-07-20T00:48:44-07:00"
+      },
+      {
+        "score": 5,
+        "title": "I miss my conversations with Jennifer Aniston hurry up and Blast off",
+        "text": "Please hurry National Security Secret, the Ink Went like A Snake into my forefingeroff the Twenty Dollor bill and the pain was excrutiating. It’s as real as it gets Jason Richard Kirby",
+        "version": "12.9.1",
+        "date": "2026-07-19T19:33:33-07:00"
+      },
+      {
+        "score": 1,
+        "title": "Can’t install regular version at my device  iPhone 13",
+        "text": "It forces to buy premium versions and I don’t premium and also not a have option to pay . Any app developer like to help me out?",
+        "version": "12.9.1",
+        "date": "2026-07-19T16:55:25-07:00"
+      },
+      {
+        "score": 5,
+        "title": "Глюк сообщений",
+        "text": "Когда вы уже пофиксите на айфоне баг с «непрочитанными» сообщениями, которых нет?",
+        "version": "12.9.1",
+        "date": "2026-07-19T12:55:40-07:00"
+      },
+      {
+        "score": 5,
+        "title": "See i’m in telegramMessenger im over here. What else i have to do?for you.♥️",
+        "text": "Thanks for teaching mi this new technology.\nlove you 🥰",
+        "version": "12.9.1",
+        "date": "2026-07-19T12:18:55-07:00"
+      },
+      {
+        "score": 4,
+        "title": "Кружки",
+        "text": "Пофиксите уже неработающие кружки. Через раз не могу отправит, хотя камера работает. Исправляется только через время либо перезгразку телефона",
+        "version": "12.9.1",
+        "date": "2026-07-19T12:03:55-07:00"
+      },
+      {
+        "score": 4,
+        "title": "Oummatan Oummatan",
+        "text": "Poeptwqprr",
+        "version": "12.9.1",
+        "date": "2026-07-19T12:01:19-07:00"
+      },
+      {
+        "score": 3,
+        "title": "Too slow",
+        "text": "Half of the time the app takes more than 15-30 seconds or even more to show the latest chat in a thread.",
+        "version": "12.9.1",
+        "date": "2026-07-19T11:43:09-07:00"
+      },
+      {
+        "score": 1,
+        "title": "Оптимизация на айфон",
+        "text": "Спасибо за то что я в сотый раз не могу записать кружочек,потому что тг не вывозит настолько сложной задачи и вылетает",
+        "version": "12.9.1",
+        "date": "2026-07-19T11:27:08-07:00"
+      },
+      {
+        "score": 2,
+        "title": "разряжается телефон+нагревается",
+        "text": "из-за последнего обновления сильно тратится зарядка, также телефон быстро нагревается. аж невозможно в руках держать. исправьте пожалуйста🙏",
+        "version": "12.9.1",
+        "date": "2026-07-19T11:18:40-07:00"
+      },
+      {
+        "score": 1,
+        "title": "Long 'Updating…' delay every time I open the app",
+        "text": "I've been using Telegram for years, but for the last 3–4 months the app has become frustratingly slow to open. Every time I launch it after it's been closed for a while, it sits on \"Updating…\" for 20–60 seconds before anything works. New messages don't appear until it's finished, and I can't even change settings during that time.",
+        "version": "12.9.1",
+        "date": "2026-07-19T11:17:53-07:00"
+      },
+      {
+        "score": 2,
+        "title": "You",
+        "text": "You",
+        "version": "12.9.1",
+        "date": "2026-07-19T10:43:13-07:00"
+      },
+      {
+        "score": 1,
+        "title": "Fee",
+        "text": "All of a sudden you have to pay a fee when the app was working just fine without it literally an hour ago. I’m not paying your stupid fee.",
+        "version": "12.9.1",
+        "date": "2026-07-19T10:10:57-07:00"
+      },
+      {
+        "score": 3,
+        "title": "Fix video player",
+        "text": "It’s really laggy especially for longer videos, screen in play stops playing video in a minute if you leave the app. Would be great if it was something like YouTube in terms of smoothness?",
+        "version": "12.9.1",
+        "date": "2026-07-19T08:42:15-07:00"
+      },
+      {
+        "score": 1,
+        "title": "It's too difficult to use! Why can't I receive the verification code?",
+        "text": "It's too difficult to use! Why can't I receive the verification code?",
+        "version": "12.9.1",
+        "date": "2026-07-19T07:42:02-07:00"
+      },
+      {
+        "score": 4,
+        "title": "Premium Story Issue and Possible Bug",
+        "text": "Telegram is a great app, and I really enjoy using it.\n\nHowever, after updating the app to the latest version, I noticed what appears to be a bug. Previously, I could post Stories for free with this account, but now Telegram says that I need Telegram Premium to post a Story.\n\nThe strange part is that I have another Telegram account on the same iPhone and the same version of the app, and that account can still post Stories for free.\n\nThis makes me believe there may be a bug or an issue affecting only this account. Please check and fix this problem if possible.\n\nThank you for your support",
+        "version": "12.9.1",
+        "date": "2026-07-19T07:08:54-07:00"
+      },
+      {
+        "score": 1,
+        "title": "WTF IS THAT..!!",
+        "text": "Now we have to pay just for logging to our account.!!Telegram won’t let you login without paying Subscription , And it claimed That its For high SMS Fee",
+        "version": "12.9.1",
+        "date": "2026-07-19T04:35:41-07:00"
+      },
+      {
+        "score": 5,
+        "title": "A very good app",
+        "text": "Love it",
+        "version": "12.9.1",
+        "date": "2026-07-19T03:42:02-07:00"
+      },
+      {
+        "score": 1,
+        "title": "Email address can’t be used????",
+        "text": "Terrible product",
+        "version": "12.9.1",
+        "date": "2026-07-19T02:21:43-07:00"
+      },
+      {
+        "score": 1,
+        "title": "Не подключается",
+        "text": "Не приходят коды в смс или почтовый ящик, qr коды не распознаются, техподдержка мертвая",
+        "version": "12.9.1",
+        "date": "2026-07-18T22:16:33-07:00"
+      },
+      {
+        "score": 1,
+        "title": "Upset",
+        "text": "I have been getting harassed and bullied on telegram since July. I have sent out emails I have contacted the help center inside the help and have yet to hear anything back but my account as been frozen and restricted several times by the group of people stalking me from groups to groups harassing and bullying me and spreading lies about me. I have received death and rape threats and threats to leak my address. Year later nothing has been done. Also they are way to may kids on telegram. The fact the the age for this app starts at 13 is insane",
+        "version": "12.9.1",
+        "date": "2026-07-18T19:14:58-07:00"
+      },
+      {
+        "score": 1,
+        "title": "Sms fee scam (bangladesh)",
+        "text": "The app asking for sms fee even i never got sms from telegram which absurd and feels like a scam\n\nIf i dont get sms then why would i pay for sms",
+        "version": "12.9.1",
+        "date": "2026-07-18T19:09:04-07:00"
+      },
+      {
+        "score": 2,
+        "title": "Alright",
+        "text": "It’s and alright app for business and gaming groups but now it’s behind a pay wall which is just dumb",
+        "version": "12.9.1",
+        "date": "2026-07-18T18:23:36-07:00"
+      },
+      {
+        "score": 5,
+        "title": "Problem",
+        "text": "It’s been a week that I can’t login to my account, it says it sent the enter code th mo telegram account on my other device but I don’t have other devices please fix.",
+        "version": "12.9.1",
+        "date": "2026-07-18T18:06:01-07:00"
+      },
+      {
+        "score": 5,
+        "title": "лучший",
+        "text": "удобно пользоваться, а также безопасный.",
+        "version": "12.9.1",
+        "date": "2026-07-18T16:03:30-07:00"
+      },
+      {
+        "score": 4,
+        "title": "Bahman",
+        "text": "Kamandi",
+        "version": "12.9.1",
+        "date": "2026-07-18T15:04:48-07:00"
+      },
+      {
+        "score": 1,
+        "title": "I need solution",
+        "text": "I can’t open Telegram in my phone.First I see black and blank page then automatically quit. IOS version 26 beta (iPhone 11 )",
+        "version": "12.9.1",
+        "date": "2026-07-18T12:40:14-07:00"
+      },
+      {
+        "score": 1,
+        "title": "Последнее обновление 👎🏻",
+        "text": "Идея последнего обновления отличная, но оно таааак криво работает (((( Как откатить обратно?",
+        "version": "12.9.1",
+        "date": "2026-07-18T12:30:14-07:00"
+      },
+      {
+        "score": 1,
+        "title": "Scammers!!!!",
+        "text": "Telegram is such a scam site DO NOT USE THIS FOR ANY REASON!!! EUROPEAN FRAUDA USE THIS TO SCAM!!! Please be careful!!!!!",
+        "version": "12.9.1",
+        "date": "2026-07-18T11:00:34-07:00"
+      },
+      {
+        "score": 5,
+        "title": "Messages",
+        "text": "Always best to have more than one option to send messages.",
+        "version": "12.9.1",
+        "date": "2026-07-18T08:47:15-07:00"
+      },
+      {
+        "score": 1,
+        "title": "Doesn’t work",
+        "text": "I legit can’t open messages I’ve tried so many different things it just straight up won’t open messages",
+        "version": "12.9.1",
+        "date": "2026-07-18T08:14:35-07:00"
+      },
+      {
+        "score": 1,
+        "title": "Неудобно",
+        "text": "Нельзя использовать премиум-эмодзи в цитировании. Это лишает возможности адекватного оформления постов.",
+        "version": "12.9.1",
+        "date": "2026-07-18T07:10:32-07:00"
+      },
+      {
+        "score": 5,
+        "title": "Паша Дуров продолжи",
+        "text": "В стакане",
+        "version": "12.9.1",
+        "date": "2026-07-18T06:13:23-07:00"
+      },
+      {
+        "score": 5,
+        "title": "可以",
+        "text": "可以",
+        "version": "12.9.1",
+        "date": "2026-07-18T04:21:59-07:00"
+      },
+      {
+        "score": 1,
+        "title": "Бан без объяснений",
+        "text": "Очень раздражает, когда банят без объяснения причин) я уже который день не могу дождаться снятия ограничений",
+        "version": "12.9.1",
+        "date": "2026-07-18T02:57:27-07:00"
+      },
+      {
+        "score": 1,
+        "title": "Constant Fraud",
+        "text": "telegram is full of cryptocurrency thieves and fake profiles cryptocurrency scams and worse I've been victim of it for three years and nobody's ever done anything I've even reported it to the feds",
+        "version": "12.9.1",
+        "date": "2026-07-18T02:41:18-07:00"
+      },
+      {
+        "score": 1,
+        "title": "Жалоба",
+        "text": "Не могу восстановить аккаунт свой . Пишу в поддержку 10 дней ! Ни одного ответа !",
+        "version": "12.9.1",
+        "date": "2026-07-18T02:24:59-07:00"
+      },
+      {
+        "score": 5,
+        "title": "👍",
+        "text": "💪🏿",
+        "version": "12.9.1",
+        "date": "2026-07-18T02:23:19-07:00"
+      },
+      {
+        "score": 1,
+        "title": "КАК МНЕ ВОЙТИ В АККАУНТ????",
+        "text": "случайно вышла с аккаунта, ввожу номер, пишет что код пришел на другое устройство, хотя у меня только 1 устройство, исправьте!!!!!",
+        "version": "12.9.1",
+        "date": "2026-07-18T01:46:26-07:00"
+      },
+      {
+        "score": 5,
+        "title": "Переподключение прокси",
+        "text": "дуров, добавь переподключение прокси на ios как на андроид🥺🙏🏻",
+        "version": "12.9.1",
+        "date": "2026-07-18T01:08:11-07:00"
+      },
+      {
+        "score": 5,
+        "title": "ممتاز",
+        "text": "ممتاز",
+        "version": "12.9.1",
+        "date": "2026-07-17T20:34:21-07:00"
+      },
+      {
+        "score": 1,
+        "title": "Too many bot accounts and contacts keep getting deleted",
+        "text": "This app constantly bombards me with bot accounts soliciting for intercourse. Admins refuse to do anything about these scams yet constantly ban legal shopping channels.",
+        "version": "12.9.1",
+        "date": "2026-07-17T18:00:25-07:00"
+      },
+      {
+        "score": 1,
+        "title": "статус",
+        "text": "хотя бы до 16 в месяц увеличитьте , ещё и гонит скоро удалю",
+        "version": "12.9.1",
+        "date": "2026-07-17T14:22:25-07:00"
+      },
+      {
+        "score": 1,
+        "title": "Почему Telegram не дает пароль",
+        "text": "Почему Telegram не дает пароль",
+        "version": "12.9.1",
+        "date": "2026-07-17T13:43:45-07:00"
+      },
+      {
+        "score": 5,
+        "title": "Good! But :",
+        "text": "Scrolling through chats on iPhone 13 is laggy",
+        "version": "12.9.1",
+        "date": "2026-07-17T11:23:33-07:00"
+      },
+      {
+        "score": 4,
+        "title": "Обновление",
+        "text": "С новым обновлением стало хуже! Многое испортилось, не могу нормально оформить текст",
+        "version": "12.9.1",
+        "date": "2026-07-17T11:05:17-07:00"
+      },
+      {
+        "score": 2,
+        "title": "Why Are You Removing Features?",
+        "text": "I don’t understand why, update after update, Telegram keeps removing features like the AI writing tools and message translation.\n\nAlso, ad images and videos are still being downloaded even though automatic downloads are turned off for both cellular data and Wi-Fi. On top of that, the app’s cache grows very quickly over time, and clearing the cache doesn’t seem to help.\n\nPlease fix these issues as soon as possible.",
+        "version": "12.9.1",
+        "date": "2026-07-17T10:27:26-07:00"
+      },
+      {
+        "score": 1,
+        "title": "Devs blocked me from buying stars",
+        "text": "Cant buy stars in my region .",
+        "version": "12.9.1",
+        "date": "2026-07-17T08:58:01-07:00"
+      },
+      {
+        "score": 5,
+        "title": "отзыв",
+        "text": "телега заебос, ток снизите пж цены на тгп",
+        "version": "12.9.1",
+        "date": "2026-07-17T01:15:32-07:00"
+      },
+      {
+        "score": 5,
+        "title": "я люблю Денджи",
+        "text": "💛👈🏻",
+        "version": "12.9.1",
+        "date": "2026-07-17T00:48:27-07:00"
+      },
+      {
+        "score": 1,
+        "title": "Doesn’t seem to be working free like before in iOS and android devices",
+        "text": "I would like to draw attention of telegram to fix the login issue,it say I need to pay to use telegram,I have tried on android sometimes it works but at other times it won’t login and tells me to pay!",
+        "version": "12.9.1",
+        "date": "2026-07-17T00:46:34-07:00"
+      },
+      {
+        "score": 1,
+        "title": "I’m very disappointed,  not worth downloading",
+        "text": "Now your app is totally useless very very useless imagine I have to use a telegram premium before I can transfer you even limit how much we can translate on your app I regret using your app, Nicegram is far better than you, you even add that stupid AI that translates words to another thing, your app is the most miserable app ever created \nBefore the telegram premium comes with auto translate now you even remove the auto translate after i paid for the premium version you’re mad 😡 very useless app you this fools even if we translate we can’t copy it we’ve to apply it before copying it. What a waste of time",
+        "version": "12.9.1",
+        "date": "2026-07-17T00:06:22-07:00"
+      },
+      {
+        "score": 1,
+        "title": "官方人品实在不行",
+        "text": "是86用户就收费呗就这样搞呗",
+        "version": "12.9.1",
+        "date": "2026-07-16T20:38:29-07:00"
+      },
+      {
+        "score": 5,
+        "title": "Паша, родненький, спаси нас…",
+        "text": "Гайки закручивают со всех сторон, у нас не то что свободы выбора нет, у нас уже и выбирать просто нечего: зарубежное - блокнули наши, наше - блокнули Apple. Впн и прокси уже отлетают, и банально прочитать хотя бы одно полученное сообщение не представляется возможным… ПАВЕЛ, СПАСИТЕ НАШИ ДУШИ",
+        "version": "12.9.1",
+        "date": "2026-07-16T18:21:53-07:00"
+      },
+      {
+        "score": 5,
+        "title": "SMS payment required",
+        "text": "I have been using Telegram for years now and it is the best but why do I have to pay for SMS?",
+        "version": "12.9.1",
+        "date": "2026-07-16T18:10:57-07:00"
+      },
+      {
+        "score": 1,
+        "title": "Yo",
+        "text": "Why asking email now that was only phone nimber",
+        "version": "12.9.1",
+        "date": "2026-07-16T16:18:55-07:00"
+      },
+      {
+        "score": 5,
+        "title": "TLG=ALL OF INTERNET",
+        "text": "❤️‍🔥",
+        "version": "12.9.1",
+        "date": "2026-07-16T14:30:27-07:00"
+      },
+      {
+        "score": 4,
+        "title": "кружки",
+        "text": "ДУРОООВ,пожалуйста сделай чтоб кружки были как в 18 после просто камера в кружках лагает…",
+        "version": "12.9.1",
+        "date": "2026-07-16T14:14:09-07:00"
+      },
+      {
+        "score": 5,
+        "title": "Nice app",
+        "text": "Everything 💯🫡🫶❤️",
+        "version": "12.9.1",
+        "date": "2026-07-16T13:48:23-07:00"
+      },
+      {
+        "score": 5,
+        "title": "✅",
+        "text": "Паша молодец",
+        "version": "12.9.1",
+        "date": "2026-07-16T12:52:31-07:00"
+      },
+      {
+        "score": 5,
+        "title": "отличное приложение",
+        "text": "приложение на высоте,узнала что с другого устройства мониторят мои переписки,удалила сеанс другого устройства и поставила облачный пароль,это гениально,спасибо за такое приложение 🙏",
+        "version": "12.9.1",
+        "date": "2026-07-16T11:26:05-07:00"
+      },
+      {
+        "score": 4,
+        "title": "лагающие кружки",
+        "text": "пожалуйста, пофиксите видео-кружки 🙏🏻🙏🏻 у меня айфон 17 и всё равно лагают как на древнем телефоне",
+        "version": "12.9.1",
+        "date": "2026-07-16T10:25:03-07:00"
+      },
+      {
+        "score": 5,
+        "title": "the best messenger ever",
+        "text": "thanks Paul Durov, u r coll guy",
+        "version": "12.9.1",
+        "date": "2026-07-16T07:04:35-07:00"
+      },
+      {
+        "score": 1,
+        "title": "Not safe",
+        "text": "Not a safe app for texting people. If you want a safe platform to communicate with, go for another platform. This app is terrible",
+        "version": "12.9.1",
+        "date": "2026-07-16T07:02:46-07:00"
+      },
+      {
+        "score": 5,
+        "title": "MMA",
+        "text": "Хороший надёжный месенжер сообщения загружаются быстро не лагает",
+        "version": "12.9.1",
+        "date": "2026-07-16T06:35:49-07:00"
+      },
+      {
+        "score": 1,
+        "title": "Sms free",
+        "text": "Sms free",
+        "version": "12.9.1",
+        "date": "2026-07-16T06:07:46-07:00"
+      },
+      {
+        "score": 1,
+        "title": "Kall",
+        "text": "Polniy kall",
+        "version": "12.9.1",
+        "date": "2026-07-16T01:39:38-07:00"
+      },
+      {
+        "score": 5,
+        "title": "Классно",
+        "text": "Самый любимый чат но надо обновить а у меня показывает не удалось повторите позже;(",
+        "version": "12.9.1",
+        "date": "2026-07-16T01:20:26-07:00"
+      },
+      {
+        "score": 3,
+        "title": "Chats not responsive",
+        "text": "The new app opens everything else, but the chats are not responsive, they don’t open at all, they’re not even loading new messages",
+        "version": "12.9.1",
+        "date": "2026-07-16T00:50:10-07:00"
+      },
+      {
+        "score": 1,
+        "title": "Worthless app",
+        "text": "Now charging a fee to use.",
+        "version": "12.9.1",
+        "date": "2026-07-15T21:45:21-07:00"
+      },
+      {
+        "score": 5,
+        "title": "Yosvani",
+        "text": "Yosvi124",
+        "version": "12.9.1",
+        "date": "2026-07-15T20:08:18-07:00"
+      },
+      {
+        "score": 1,
+        "title": "NOT FREE",
+        "text": "I’ve been using this app for years and now all the sudden it’s forcing me to get premium. No other option I either have to pay monthly or can’t use the app. F that and your app.",
+        "version": "12.9.1",
+        "date": "2026-07-15T18:26:21-07:00"
+      },
+      {
+        "score": 1,
+        "title": "Payment frustrations",
+        "text": "Introduction of payment before entry is nonsense update for me",
+        "version": "12.9.1",
+        "date": "2026-07-15T15:50:09-07:00"
+      },
+      {
+        "score": 4,
+        "title": "Приложение так то норм",
+        "text": "Когда выходит обновление я не могу пользоваться впном",
+        "version": "12.9.1",
+        "date": "2026-07-15T13:42:03-07:00"
+      },
+      {
+        "score": 2,
+        "title": "DUMB WRITING UPDATE IPHONE",
+        "text": "For your stupid new ui rollout I cannot fully quote entire essays \n\nIt will literally seperate each quote !",
+        "version": "12.9.1",
+        "date": "2026-07-15T12:46:30-07:00"
+      },
+      {
+        "score": 5,
+        "title": "Павел Дуров гейний",
+        "text": "Что-то там по умному",
+        "version": "12.9.1",
+        "date": "2026-07-15T10:57:14-07:00"
+      },
+      {
+        "score": 2,
+        "title": "PLEASE HELP ME 😩",
+        "text": "Я не могу зайти в телеграмм, он пишет что отправил код на другое устройство, где зарегистрирован номер HELP ME PLEASE😭😩💔",
+        "version": "12.9",
+        "date": "2026-07-15T09:53:47-07:00"
+      },
+      {
+        "score": 1,
+        "title": "Premium",
+        "text": "I have to pay to do anything pay to log in pay to add stories pay to chang profile pay  pay pay pay telegram is a consumer",
+        "version": "12.9",
+        "date": "2026-07-15T09:32:30-07:00"
+      },
+      {
+        "score": 5,
+        "title": "Perfect",
+        "text": "The best of best",
+        "version": "12.9",
+        "date": "2026-07-15T08:30:16-07:00"
+      },
+      {
+        "score": 3,
+        "title": "Inicio de sesión",
+        "text": "No me permite iniciar sesión y ya repetidas veces me ha pasado, que pongo mi número celular, no me manda a un código q le mandaron a mi número, si no que después de poner el número me pide mi cuenta de Apple o mi correo lo pongo CORRECTAMENTE, Y me sale SMS FREE y hace tiempo que no puedo entrar a telegram",
+        "version": "12.9",
+        "date": "2026-07-15T08:22:33-07:00"
+      },
+      {
+        "score": 1,
+        "title": "Garbage",
+        "text": "You shouldn’t be forcing people to pay an sms fee in order to use an app that never needed it until now",
+        "version": "12.9",
+        "date": "2026-07-15T06:25:29-07:00"
+      },
+      {
+        "score": 1,
+        "title": "The app doesn’t open.",
+        "text": "The app doesn’t open and after a while it goes back to main screen. This happens always. It should deserve even less than 1 star if it exists.",
+        "version": "12.9",
+        "date": "2026-07-15T04:50:46-07:00"
+      },
+      {
+        "score": 5,
+        "title": "About telegram",
+        "text": "I just want to try",
+        "version": "12.9",
+        "date": "2026-07-15T01:06:41-07:00"
+      },
+      {
+        "score": 5,
+        "title": "Abubakar",
+        "text": "Ali maslah",
+        "version": "12.9",
+        "date": "2026-07-15T00:03:47-07:00"
+      },
+      {
+        "score": 1,
+        "title": "Horrible app",
+        "text": "Horrible app",
+        "version": "12.9",
+        "date": "2026-07-14T20:23:54-07:00"
+      },
+      {
+        "score": 3,
+        "title": "главный минус",
+        "text": "нет поддержки от слова совсем",
+        "version": "12.9",
+        "date": "2026-07-14T17:31:33-07:00"
+      },
+      {
+        "score": 4,
+        "title": "Бесконечные соединения в звонках",
+        "text": "Бесконечные соединения в звонках",
+        "version": "12.9",
+        "date": "2026-07-14T16:43:01-07:00"
+      },
+      {
+        "score": 4,
+        "title": "Фотографии",
+        "text": "Уважаемый телеграм, я очень люблю ваше приложение, но пожалуйста сделайте так что бы когда ты переносишь фото по Airdrop в галерею телефона оно синхронизировалось с вашим приложением, потому что сейчас, у меня первыми фотографиями для отправки стоят фотографии из 2023 года, сам телеграм правильно определяет дату фотографии но почему-то он не переносит её в нужную часть галереи для отправки , пожалуйста сделайте с этим что нибудь это очень облегчит жизнь🙏",
+        "version": "12.9",
+        "date": "2026-07-14T16:34:02-07:00"
+      },
+      {
+        "score": 1,
+        "title": "Fees",
+        "text": "Telegram just started charging SMS fees for no particular reason not letting the customers know. I have decided to go to another platform for my messaging. These fees consist of going to telegram premium but they say it’s just for one week but then they continue to charge you all the time and if you do not pay for the telegram premium, you will not be able to get back onto the app. I wish I could give this app now a zero rating customer support said could not help good luck with this app",
+        "version": "12.9",
+        "date": "2026-07-14T16:16:13-07:00"
+      },
+      {
+        "score": 5,
+        "title": "This is great and will and I’m very happy!",
+        "text": "I’m very happy! 😊👍👏",
+        "version": "12.9",
+        "date": "2026-07-14T14:07:29-07:00"
+      },
+      {
+        "score": 2,
+        "title": "лаги",
+        "text": "после обновления телеграмм появилось множество лагов: например, не могу через список чатов открыть диалог с собеседником. тыкаю, но не заходит. на всех устройствах, это на связанно с поломкой телефона. также почему то отрубилась возможность дать доступ приложению к базовым функциям: аудио, видео, галлерея, контакты.. в настройках телефона просто нет ползунков.",
+        "version": "12.9",
+        "date": "2026-07-14T13:48:48-07:00"
+      },
+      {
+        "score": 5,
+        "title": "Best messenger",
+        "text": "I like telegram)",
+        "version": "12.9",
+        "date": "2026-07-14T12:47:49-07:00"
+      },
+      {
+        "score": 1,
+        "title": "Too many scams",
+        "text": "U do not understand how many scammers say to add them on telegram. U need to make it so it is easy to catch and report scammers so they don't try to scam on this app",
+        "version": "12.9",
+        "date": "2026-07-14T12:29:14-07:00"
+      },
+      {
+        "score": 1,
+        "title": "Smh",
+        "text": "They charging no longer free to use",
+        "version": "12.9",
+        "date": "2026-07-14T12:24:17-07:00"
+      },
+      {
+        "score": 5,
+        "title": "I love telegram",
+        "text": "Telegram is my all in one super app",
+        "version": "12.9",
+        "date": "2026-07-14T11:26:09-07:00"
+      },
+      {
+        "score": 1,
+        "title": "Always show “connecting” 🫠 terrible bug",
+        "text": "One week already and still cant use Telegram :) it just always in loading status :) I even saw the new message notifications but can’t read them when going inside Telegram",
+        "version": "12.9",
+        "date": "2026-07-14T10:20:51-07:00"
+      },
+      {
+        "score": 5,
+        "title": "топовый",
+        "text": "messenger",
+        "version": "12.9",
+        "date": "2026-07-14T07:59:13-07:00"
+      },
+      {
+        "score": 5,
+        "title": "Top",
+        "text": "Good job Pavel",
+        "version": "12.9",
+        "date": "2026-07-14T07:21:03-07:00"
+      },
+      {
+        "score": 1,
+        "title": "Ужас",
+        "text": "Сломала телефон, пришлось пользоваться временно телефоном брата. НЕВОЗМОЖНО банально зарегестрироваться в тг, сразу выдает ошибку, виснет. Как пользоваться приложением, если запрещено?",
+        "version": "12.8.1",
+        "date": "2026-07-14T02:13:20-07:00"
+      },
+      {
+        "score": 2,
+        "title": "Меня взломали",
+        "text": "Меня взломали и я не могу зайти в свой профиль, пишу в поддержку, мне не отвечают. Я переживаю за информацию, которая в телеграм и волнуюсь из-за того, что мошенники до сих пор пишут с моей учетки знакомым…",
+        "version": "12.8.1",
+        "date": "2026-07-13T23:38:14-07:00"
+      },
+      {
+        "score": 5,
+        "title": "Huffzbjjfc",
+        "text": "Huffzbjjfc",
+        "version": "12.8.1",
+        "date": "2026-07-13T21:27:23-07:00"
+      },
+      {
+        "score": 5,
+        "title": "Friend",
+        "text": "Hi Kevin",
+        "version": "12.8.1",
+        "date": "2026-07-13T20:52:40-07:00"
+      },
+      {
+        "score": 5,
+        "title": "To team support/ Low Performance on device",
+        "text": "Hello, I wanted to make a request to the good Telegram support team. Please add the previous theme or a theme similar to Android for iPhones 6/7/8/x series. The Liquid Glass iOS 26 theme puts a lot of pressure on these devices. The temperature goes up to 50 degrees and the phone suffers from long freezes and very unpleasant lags, making it practically impossible to use Telegram. I tested all the ways to reduce this drop, turning on battery saving, disabling the animations of the mobile itself, but they didn't even have an effect.",
+        "version": "12.8.1",
+        "date": "2026-07-13T15:22:37-07:00"
+      },
+      {
+        "score": 5,
+        "title": "DONT INSTAL",
+        "text": "So Basically I gave five star so people can see it \nWhen I  logged in to telegram I did my number my email and tube verification code correct then it’s came to my screen a trail for sms free for 1.19 dollar weekely plan I couldn’t  remove it to use telegram now it’s stuck like that",
+        "version": "12.8.1",
+        "date": "2026-07-13T14:56:15-07:00"
+      },
+      {
+        "score": 1,
+        "title": "Enforcing me to buy SMS Free",
+        "text": "Why on earth the app doesn’t let me in and forces me to buy “SMS Free”?? Since when it ENFORCES to get Telegram Premium for one week?? Really annoying and bad user experience",
+        "version": "12.8.1",
+        "date": "2026-07-13T13:37:05-07:00"
+      },
+      {
+        "score": 3,
+        "title": "Broken being belief",
+        "text": "App force quite itself before it opened every time. I have a 1/20 success rate",
+        "version": "12.8.1",
+        "date": "2026-07-13T11:48:27-07:00"
+      },
+      {
+        "score": 1,
+        "title": "Диер",
+        "text": "тех поддержка уже несколько дней не отвечает",
+        "version": "12.8.1",
+        "date": "2026-07-13T10:53:31-07:00"
+      },
+      {
+        "score": 2,
+        "title": "not getting notifs",
+        "text": "im not getting push notifs also quit telling everyone in ur contact list that u joined telegram its very invasive",
+        "version": "12.8.1",
+        "date": "2026-07-13T09:36:24-07:00"
+      },
+      {
+        "score": 5,
+        "title": "Telegram",
+        "text": "Имбовый мессенджер для общения всем рекомендую 🫠",
+        "version": "12.8.1",
+        "date": "2026-07-13T09:24:18-07:00"
+      },
+      {
+        "score": 1,
+        "title": "This app is getting worst everyday",
+        "text": "I open this app with my real number and i was talking to a friend of mine suddenly it was frozen i fill up everything that’s need to be filled yet i couldn’t use the telegram account anymore you people should stop wasting peoples time with your stupid app",
+        "version": "12.8.1",
+        "date": "2026-07-13T09:07:34-07:00"
+      },
+      {
+        "score": 1,
+        "title": "Charging 2 dollars just for an otp",
+        "text": "I never seen this kind of apps charging money to just to login via otp code..",
+        "version": "12.8.1",
+        "date": "2026-07-13T07:57:15-07:00"
+      },
+      {
+        "score": 3,
+        "title": "Crashing app",
+        "text": "App isn’t opening up might need an update",
+        "version": "12.8.1",
+        "date": "2026-07-13T07:11:33-07:00"
+      },
+      {
+        "score": 1,
+        "title": "Helpless",
+        "text": "Tell me that you need to pay to receive text messages in China. OK, I accept it, but the Apple ID can't pay, so I will change to Android. Android can't enter the step of receiving the verification code, so my account can no longer be used.",
+        "version": "12.8.1",
+        "date": "2026-07-13T05:51:43-07:00"
+      },
+      {
+        "score": 4,
+        "title": "Оптимизация",
+        "text": "После блокировок работоспособность приложения сильно испортилась. Айфон начинает раскаляться через 3-5 минут после использования тг. Кружки записываются с постоянными лагами и фризами. Телефоном невозможно пользоваться из-за его нагрева. Заметил проблему на 17 Pro Max, 16 Pro, 15 Pro Max и 15.",
+        "version": "12.8.1",
+        "date": "2026-07-13T05:40:55-07:00"
+      },
+      {
+        "score": 5,
+        "title": "best",
+        "text": "best",
+        "version": "12.8.1",
+        "date": "2026-07-13T02:53:11-07:00"
+      },
+      {
+        "score": 1,
+        "title": "garbage garbage garbage",
+        "text": "Garbage, garbage, garbage, garbage! iOS system-video stops halfway through playback, only sound plays. Can this issue be fixed???\n\nDéchet, déchet, déchet, déchet. Système iOS : la vidéo s'arrête net à mi-chemin, seulement le son est audible. Puis-je réparer ce problème ??",
+        "version": "12.8.1",
+        "date": "2026-07-13T02:49:27-07:00"
+      },
+      {
+        "score": 3,
+        "title": "It keeps saying my phone number is blocked",
+        "text": "I know my phone number is not blocked cause I use it all the time on every different app. This app is kinda bad. Is that on messaging? I heard but I can’t see cause it’s always saying that my phone number is blocked.",
+        "version": "12.8.1",
+        "date": "2026-07-13T02:09:55-07:00"
+      },
+      {
+        "score": 3,
+        "title": "Adult content",
+        "text": "Add a restriction for adult content. Otherwise a good app.",
+        "version": "12.8.1",
+        "date": "2026-07-12T22:17:43-07:00"
+      },
+      {
+        "score": 1,
+        "title": "Log In issues",
+        "text": "Log in method is worst . I can't log in using my phone number or email. I tried for 3 days . but i couldn't . Others things are good .",
+        "version": "12.8.1",
+        "date": "2026-07-12T21:02:20-07:00"
+      },
+      {
+        "score": 5,
+        "title": "Malcolm",
+        "text": "I can handle you Boo",
+        "version": "12.8.1",
+        "date": "2026-07-12T16:23:17-07:00"
+      },
+      {
+        "score": 1,
+        "title": "Force to subscribe",
+        "text": "They asked me to pay 1.29 dollars for sign in",
+        "version": "12.8.1",
+        "date": "2026-07-12T13:47:10-07:00"
+      },
+      {
+        "score": 1,
+        "title": "Illegal content",
+        "text": "There is to much illegal content",
+        "version": "12.8.1",
+        "date": "2026-07-12T12:04:20-07:00"
+      },
+      {
+        "score": 5,
+        "title": "Reese Witherspoon",
+        "text": "I’m 79 I’ve had a lot of fun watching .",
+        "version": "12.8.1",
+        "date": "2026-07-12T00:51:27-07:00"
+      },
+      {
+        "score": 2,
+        "title": "Bug",
+        "text": "Dear Telegram Team,\n\nI would like to suggest a feature that I believe would significantly improve Telegram’s usability.\n\nCurrently, when selecting messages in a chat, there is no “Select All” option. As a result, users who want to forward an entire conversation to Saved Messages or another chat must manually select every message, which becomes nearly impossible for long conversations containing thousands of messages.\n\nThis is not just a minor inconvenience—it is a major limitation for users who need to archive important conversations, migrate chats, organize information, or preserve message history within Telegram.\n\nAdding a simple “Select All” button during message selection would save users an enormous amount of time and greatly improve the overall experience. It would also make Telegram more practical for users who rely on it to store important conversations and documents.\n\nI sincerely hope you will consider adding this feature in a future update. Thank you for your continuous efforts to make Telegram one of the best messaging platforms.\n\nBest regards,\nA Telegram user",
+        "version": "12.8.1",
+        "date": "2026-07-11T23:38:29-07:00"
+      },
+      {
+        "score": 1,
+        "title": "Bad",
+        "text": "A breeding ground for easy deception, fraud and theft",
+        "version": "12.8.1",
+        "date": "2026-07-11T23:25:41-07:00"
+      },
+      {
+        "score": 1,
+        "title": "You Know",
+        "text": "👽",
+        "version": "12.8.1",
+        "date": "2026-07-11T18:47:08-07:00"
+      },
+      {
+        "score": 1,
+        "title": "No longer good",
+        "text": "I used to enjoy news articles but since it’s now just an advertisement. Trash",
+        "version": "12.8.1",
+        "date": "2026-07-11T18:16:26-07:00"
+      },
+      {
+        "score": 5,
+        "title": "Better then whatsapp",
+        "text": "This app is amazing. 5 star is less",
+        "version": "12.8.1",
+        "date": "2026-07-11T17:56:59-07:00"
+      },
+      {
+        "score": 1,
+        "title": "Telegram = data criminals",
+        "text": "The \"Delete Account\" feature is nonfunctional, meaning Telegram is disrespectful, unprofessional, and in violation of several laws. Here's the one-star review y'all earned.",
+        "version": "12.8.1",
+        "date": "2026-07-11T16:42:45-07:00"
+      },
+      {
+        "score": 1,
+        "title": "Invasive Trash!!!",
+        "text": "Piece of *insert expletive here* app put all of my contact info free and clear with access to my contacts for a scammer to get ahold of. Even after hopping through all the hoops to tell it “NO DON’T DO THAT!!!” If I could give this thing a negative star rating I would nuke it.\n\nShame on Apple for allowing such a breach of security in an app on their store.",
+        "version": "12.8.1",
+        "date": "2026-07-11T12:23:42-07:00"
+      },
+      {
+        "score": 2,
+        "title": "I just gotten this number and",
+        "text": "Just gotten this number and I’m blocked? How",
+        "version": "12.8.1",
+        "date": "2026-07-11T08:22:32-07:00"
+      },
+      {
+        "score": 1,
+        "title": "не доволен обновлениями",
+        "text": "очень странно что бывшим пользователям premium нельзя выкладывать истории а другим можно. это очень обидно и не хочется больше его покупать. \nтак же проблематично продавать NFT. нудно ждать много времени после покупки чтоб его продать.",
+        "version": "12.8.1",
+        "date": "2026-07-11T00:45:02-07:00"
+      },
+      {
+        "score": 5,
+        "title": "топчик",
+        "text": "классное приложение. Павел Дуров харош можно делать все что угодно в нем",
+        "version": "12.8.1",
+        "date": "2026-07-10T23:55:47-07:00"
+      },
+      {
+        "score": 5,
+        "title": "Cool",
+        "text": "Cool",
+        "version": "12.8.1",
+        "date": "2026-07-10T23:07:53-07:00"
+      },
+      {
+        "score": 1,
+        "title": "Full of scammers and bots. Not secure",
+        "text": "All scammers and bots . Can’t trust any body or anything on here. Not safe. Just like all of these apps NOT SECURE OR SAFE!",
+        "version": "12.8.1",
+        "date": "2026-07-10T20:26:13-07:00"
+      },
+      {
+        "score": 5,
+        "title": "Best app",
+        "text": "Best app so far !",
+        "version": "12.8.1",
+        "date": "2026-07-10T16:17:12-07:00"
+      },
+      {
+        "score": 5,
+        "title": "Marcela",
+        "text": "Güerito04*",
+        "version": "12.8.1",
+        "date": "2026-07-10T14:00:37-07:00"
+      },
+      {
+        "score": 4,
+        "title": "Always sell gifts",
+        "text": "Please make that the gifts can always be sold, and not 7 days after receipt.",
+        "version": "12.8.1",
+        "date": "2026-07-10T13:59:50-07:00"
+      },
+      {
+        "score": 3,
+        "title": "Payment",
+        "text": "Why can’t I get into my account after logging out? It’s asking for payment why?",
+        "version": "12.8.1",
+        "date": "2026-07-10T11:51:32-07:00"
+      },
+      {
+        "score": 1,
+        "title": "No response at all",
+        "text": "Tried reaching out to support via website, spambot & volunteer support. No response whatsoever, zilch!",
+        "version": "12.8.1",
+        "date": "2026-07-10T07:51:35-07:00"
+      },
+      {
+        "score": 1,
+        "title": "Garbage for Privacy",
+        "text": "Just wanted to check it out because I was curious, but this app notified contacts with the Telegram app. that I’d downloaded it immediately. I did not give it access to my own contacts. Fail. Deleted.",
+        "version": "12.8.1",
+        "date": "2026-07-10T06:33:46-07:00"
+      },
+      {
+        "score": 5,
+        "title": "Some one hacked into my account and i haven’t been able to use it for a couple of weeks now what do",
+        "text": "Help me fix my telegram pls",
+        "version": "12.8.1",
+        "date": "2026-07-10T03:47:53-07:00"
+      },
+      {
+        "score": 1,
+        "title": "为什么下载新版本接收不到验证码",
+        "text": "为什么下载新版本接收不到验证码",
+        "version": "12.8.1",
+        "date": "2026-07-10T02:57:59-07:00"
+      },
+      {
+        "score": 5,
+        "title": "Прокис для Apple Watch",
+        "text": "Приложение крутое все офигенно + круто работает на часах, но если можно добавте прокси на часы чтоб можно было пользоваться даже без телефона и без впн",
+        "version": "12.8.1",
+        "date": "2026-07-10T02:22:32-07:00"
+      },
+      {
+        "score": 1,
+        "title": "Down loads",
+        "text": "Too difficult to download too much information",
+        "version": "12.8.1",
+        "date": "2026-07-09T21:58:28-07:00"
+      },
+      {
+        "score": 3,
+        "title": "Black screen after update",
+        "text": "App is decent but since the latest update whenever I open the app it’s a black screen. On the rare occasion it actually doesn’t go black screen",
+        "version": "12.8.1",
+        "date": "2026-07-09T21:39:14-07:00"
+      },
+      {
+        "score": 1,
+        "title": "Unable to login",
+        "text": "I am not able to login to my telegram account in iPhone 17 pro max as it is forcing me to purchase the premium subscription",
+        "version": "12.8.1",
+        "date": "2026-07-09T18:19:21-07:00"
+      },
+      {
+        "score": 1,
+        "title": "Anti- privacy platform",
+        "text": "You can’t add contacts manually nor grant partial access. You have to give them your entire contact book or it’s useless.",
+        "version": "12.8.1",
+        "date": "2026-07-09T17:54:58-07:00"
+      },
+      {
+        "score": 3,
+        "title": "Опять что то на обновляли   …тел греетс прилично …при использовании тг",
+        "text": "В заголовке",
+        "version": "12.8.1",
+        "date": "2026-07-09T15:48:20-07:00"
+      },
+      {
+        "score": 3,
+        "title": "Нагрев телефона",
+        "text": "После последнего обновления, спустя 10-15 минут в месенжере, айфон раскаляется, пофиксите это уже пожалуйста",
+        "version": "12.8.1",
+        "date": "2026-07-09T15:09:38-07:00"
+      },
+      {
+        "score": 1,
+        "title": "Upload big files on iPhone sucks bad",
+        "text": "Upload big files on iPhone sucks bad and semi impossible .. it basically breaks and fails to do on the background.. \n\nThe main issue is when  telegram closes on iPhone and you open telegram again, the uploads shows failed to upload and won’t resume even if you choose try again..\n\nBasically have to cancel what failed to upload and upload from scratch instead of restart or resume",
+        "version": "12.8.1",
+        "date": "2026-07-09T11:51:14-07:00"
+      },
+      {
+        "score": 1,
+        "title": "Тг",
+        "text": "Почему-то написано что приложение заблокировано, просят пароль. Ввожу но говорят что неправильный. Как зайти в Telegram, помогите",
+        "version": "12.8.1",
+        "date": "2026-07-09T10:45:11-07:00"
+      }
+    ],
+    "analysis": {
+      "sampleSize": 200,
+      "scoreDistribution": {
+        "1": 91,
+        "2": 13,
+        "3": 17,
+        "4": 13,
+        "5": 66
+      },
+      "meanOfSample": 2.75,
+      "negativeShareOfSample": 52,
+      "buckets": [
+        {
+          "bucket": "onboarding",
+          "count": 25,
+          "pctOfSample": 12.5,
+          "negCount": 18,
+          "examples": [
+            {
+              "score": 1,
+              "text": "Please contact me! I’ve tried to get in touch with you almost 100 times! I need access to my account!!!!!"
+            },
+            {
+              "score": 1,
+              "text": "The new Telegram update does not work properly on iPhone X. I have been forcibly logged out of the app twice, and each time I had to request a verification code via email just to regain access. Please release a new update to fix this issue."
+            },
+            {
+              "score": 1,
+              "text": "I have been using Telegram for years. I had to change phones recently and opening Telegram on the new one now means I am being forced to pay for Premium without having ANY access to my account and I feel like I am being grifted. I would app"
+            }
+          ]
+        },
+        {
+          "bucket": "bugs-crashes",
+          "count": 11,
+          "pctOfSample": 5.5,
+          "negCount": 7,
+          "examples": [
+            {
+              "score": 1,
+              "text": "I have been using Telegram for years. I had to change phones recently and opening Telegram on the new one now means I am being forced to pay for Premium without having ANY access to my account and I feel like I am being grifted. I would app"
+            },
+            {
+              "score": 1,
+              "text": "Why would my account got freeze without any fraud"
+            },
+            {
+              "score": 1,
+              "text": "The new update keeps crashing telegram."
+            }
+          ]
+        },
+        {
+          "bucket": "feature-request",
+          "count": 11,
+          "pctOfSample": 5.5,
+          "negCount": 7,
+          "examples": [
+            {
+              "score": 2,
+              "text": "As soon as I opened the app people who scam just instantly texted me and asked me for my shipping address ofc I said no because that is not safe and I feel like this app needs to have more restrictions no scams no spam just instantly block "
+            },
+            {
+              "score": 1,
+              "text": "I would like to draw attention of telegram to fix the login issue,it say I need to pay to use telegram,I have tried on android sometimes it works but at other times it won’t login and tells me to pay!"
+            },
+            {
+              "score": 1,
+              "text": "Telegram just started charging SMS fees for no particular reason not letting the customers know. I have decided to go to another platform for my messaging. These fees consist of going to telegram premium but they say it’s just for one week "
+            }
+          ]
+        },
+        {
+          "bucket": "praise",
+          "count": 9,
+          "pctOfSample": 4.5,
+          "negCount": 0,
+          "examples": [
+            {
+              "score": 3,
+              "text": "It is an excellent app but not in ios.it crashes specialy when i use proxy.please fix it"
+            },
+            {
+              "score": 5,
+              "text": "Best app ever!"
+            },
+            {
+              "score": 3,
+              "text": "I love this app but to many strangers kept texting me and some people offered me to work and than after that they got mad at me and went rude to me for no reason I was on my doctors appointment and that person didn’t understand me so telegr"
+            }
+          ]
+        },
+        {
+          "bucket": "pricing-paywall",
+          "count": 7,
+          "pctOfSample": 3.5,
+          "negCount": 7,
+          "examples": [
+            {
+              "score": 2,
+              "text": "As soon as I opened the app people who scam just instantly texted me and asked me for my shipping address ofc I said no because that is not safe and I feel like this app needs to have more restrictions no scams no spam just instantly block "
+            },
+            {
+              "score": 1,
+              "text": "Now we have to pay just for logging to our account.!!Telegram won’t let you login without paying Subscription , And it claimed That its For high SMS Fee"
+            },
+            {
+              "score": 1,
+              "text": "The app asking for sms fee even i never got sms from telegram which absurd and feels like a scam\n\nIf i dont get sms then why would i pay for sms"
+            }
+          ]
+        },
+        {
+          "bucket": "performance",
+          "count": 5,
+          "pctOfSample": 2.5,
+          "negCount": 1,
+          "examples": [
+            {
+              "score": 1,
+              "text": "I've been using Telegram for years, but for the last 3–4 months the app has become frustratingly slow to open. Every time I launch it after it's been closed for a while, it sits on \"Updating…\" for 20–60 seconds before anything works. New me"
+            }
+          ]
+        },
+        {
+          "bucket": "ux-confusion",
+          "count": 3,
+          "pctOfSample": 1.5,
+          "negCount": 3,
+          "examples": [
+            {
+              "score": 1,
+              "text": "It's too difficult to use! Why can't I receive the verification code?"
+            },
+            {
+              "score": 1,
+              "text": "Why on earth the app doesn’t let me in and forces me to buy “SMS Free”?? Since when it ENFORCES to get Telegram Premium for one week?? Really annoying and bad user experience"
+            },
+            {
+              "score": 1,
+              "text": "Too difficult to download too much information"
+            }
+          ]
+        },
+        {
+          "bucket": "ads",
+          "count": 2,
+          "pctOfSample": 1,
+          "negCount": 2,
+          "examples": [
+            {
+              "score": 2,
+              "text": "I don’t understand why, update after update, Telegram keeps removing features like the AI writing tools and message translation.\n\nAlso, ad images and videos are still being downloaded even though automatic downloads are turned off for both "
+            },
+            {
+              "score": 1,
+              "text": "I used to enjoy news articles but since it’s now just an advertisement. Trash"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "google": {
+    "meta": {
+      "store": "google",
+      "id": "org.telegram.messenger",
+      "name": "Telegram",
+      "seller": "Telegram FZ-LLC",
+      "price": 0,
+      "currency": "USD",
+      "free": true,
+      "rating": 3.8585742,
+      "ratingCount": 17087489,
+      "reviewCount": 184332,
+      "installs": "1,000,000,000+",
+      "version": "VARY",
+      "lastUpdated": "2026-07-22T02:09:26.000Z",
+      "genre": "Communication",
+      "contentRating": "Mature 17+",
+      "adSupported": false,
+      "offersIAP": true,
+      "inAppProductPrice": "$0.31 - $289.99 per item",
+      "screenshotCount": 14,
+      "description": "Pure instant messaging — simple, fast, secure, and synced across all your devices. One of the top 5 most downloaded apps in the world with over 1 billion active users.\n\nFAST: Telegram is the fastest messaging app on the market, connecting people via a unique, distributed network of data centers around the globe.\n\nSYNCED: You can access your messages from all your phones, tablets and computers at once. Telegram apps are standalone, so you don’t need to keep your phone connected. Start typing on one device and finish the message from another. Never lose your data again.\n\nUNLIMITED: You can send media and files, without any limits on their type and size. Your entire chat history will require no disk space on your device, and will be securely stored in the Telegram cloud for as long as you need it. \n\nSECURE: We made it our mission to provide the best security combined with ease of use. Everything on Telegram, including chats, groups, media, etc. is encrypted using a combination of 256-bit symmetric AES encryption, 2048-bit RSA encryption, and Diffie–Hellman secure key exchange. \n\n100% FREE & OPEN: Telegram has a fully documented and free API for developers, open source apps and verifiable builds to prove the app you download is built from the exact same source code that is published. \n\nPOWERFUL: You can create group chats with up to 200,000 members, share large videos, documents of any type (.DOCX, .MP3, .ZIP, etc.) up to 2 GB each, and even set up bots for specific tasks. Telegram is the perfect tool for hosting online communities and coordinating teamwork.\n\nRELIABLE: Built to deliver your messages using as little data as possible, Telegram is the most reliable messaging system ever made. It works even on the weakest mobile connections. \n\nFUN: Telegram has powerful photo and video editing tools, animated stickers and emoji, fully customizable themes to change the appearance of your app, and an open sticker/GIF platform to cater to all your expressive needs.\n\nSIMPLE: While providing an unprecedented array of features, we take great care to keep the interface clean. Telegram is so simple you already know how to use it.\n\nPRIVATE: We take your privacy seriously and will never give any third parties access to your data. You can delete any message you ever sent or received for both sides, at any time and without a trace. Telegram will never use your data to show you ads.\n\nFor those interested in maximum privacy, Telegram offers Secret Chats. Secret Chat messages can be programmed to self-destruct automatically from both participating devices. This way you can send all types of disappearing content — messages, photos, videos, and even files. Secret Chats use End-to-End Encryption to ensure that a message can only be read by its intended recipient.\n\nWe keep expanding the boundaries of what you can do with a messaging app. Don’t wait years for older messengers to catch up with Telegram — join the revolution today.",
+      "url": "https://play.google.com/store/apps/details?id=org.telegram.messenger&hl=en&gl=us"
+    },
+    "failures": [],
+    "reviews": [
+      {
+        "score": 1,
+        "title": "",
+        "text": "আমি টেলিগ্রাম কে কোনোভাবেই পছন্দ করিনা,, নিয়ম - কানুন একটুও ভালো না,, বাজে একটা এপপ্স",
+        "version": "",
+        "date": "2026-07-23T15:13:59.648Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 1,
+        "title": "",
+        "text": "Bangladesh banglalink same SMS problem",
+        "version": "12.9.0",
+        "date": "2026-07-23T15:11:41.847Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 5,
+        "title": "",
+        "text": "nice",
+        "version": "12.9.0",
+        "date": "2026-07-23T15:09:43.882Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 1,
+        "title": "",
+        "text": "ну и как мне залогиниться, если ни смс, ни звонки не доходят? зачем вы убрали возможность логина через google?",
+        "version": "12.9.1",
+        "date": "2026-07-23T15:09:04.140Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 2,
+        "title": "",
+        "text": "i used to post stories for free, now it says i must have premium account to post stories! and volunteer support doesn't respond at all!!! what the hell dude?",
+        "version": "12.9.1",
+        "date": "2026-07-23T14:59:25.920Z",
+        "thumbsUp": 1
+      },
+      {
+        "score": 4,
+        "title": "",
+        "text": "Great app overall but man having a limit on GIFs only to pay just to double it is crazy work.",
+        "version": "12.7.3",
+        "date": "2026-07-23T14:56:27.864Z",
+        "thumbsUp": 1
+      },
+      {
+        "score": 1,
+        "title": "",
+        "text": "kntol pake bayar segala",
+        "version": "12.9.1",
+        "date": "2026-07-23T14:53:55.224Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 1,
+        "title": "",
+        "text": "it has turned to a payment app",
+        "version": "",
+        "date": "2026-07-23T14:51:07.188Z",
+        "thumbsUp": 1
+      },
+      {
+        "score": 5,
+        "title": "",
+        "text": "This app is suitable for chatting international friends and also it's optimize battery and uses less data",
+        "version": "12.9.0",
+        "date": "2026-07-23T14:43:49.500Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 1,
+        "title": "",
+        "text": "What a debacle! SMS FEE? Locking us out of the app because of that is not right. Do better telegram!",
+        "version": "12.9.1",
+        "date": "2026-07-23T14:34:37.416Z",
+        "thumbsUp": 1
+      },
+      {
+        "score": 5,
+        "title": "",
+        "text": "ممتاز",
+        "version": "12.4.1",
+        "date": "2026-07-23T14:30:35.693Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 5,
+        "title": "",
+        "text": "great 👍",
+        "version": "12.9.0",
+        "date": "2026-07-23T14:29:48.622Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 5,
+        "title": "",
+        "text": "i love this app",
+        "version": "12.9.1",
+        "date": "2026-07-23T14:27:42.665Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 5,
+        "title": "",
+        "text": "nice app s",
+        "version": "",
+        "date": "2026-07-23T14:25:04.239Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 5,
+        "title": "",
+        "text": "nice apps .. love to chat with anyone ❤",
+        "version": "",
+        "date": "2026-07-23T14:23:05.696Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 1,
+        "title": "",
+        "text": "this app constantly shows fake products ad , ads of betting or illegal apps, scam ads . This app should get banned",
+        "version": "",
+        "date": "2026-07-23T14:21:35.299Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 1,
+        "title": "",
+        "text": "Once you want to reinstall the app you have to pay asking for your card details. This is a scam at the moment.",
+        "version": "12.9.0",
+        "date": "2026-07-23T14:20:44.884Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 1,
+        "title": "",
+        "text": "এটেল সিম বাংলাদেশ কোড আসতেছে না কেন অনেক সমস্যা হচ্ছে",
+        "version": "",
+        "date": "2026-07-23T14:19:48.438Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 5,
+        "title": "",
+        "text": "good app i us all time",
+        "version": "12.9.1",
+        "date": "2026-07-23T14:18:51.648Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 5,
+        "title": "",
+        "text": "غیر از اینکه واسه خودش بعضی چت ها رو پاک میکنه هیچ مشکلی ندارههه عالی",
+        "version": "12.7.3",
+        "date": "2026-07-23T14:16:57.610Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 5,
+        "title": "",
+        "text": "\"Fast, secure, and packed with useful features. I especially like the cloud storage and smooth messaging experience.\"",
+        "version": "12.6.4",
+        "date": "2026-07-23T14:08:10.857Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 5,
+        "title": "",
+        "text": "good app",
+        "version": "11.3.3",
+        "date": "2026-07-23T14:04:01.541Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 5,
+        "title": "",
+        "text": "not sure app work",
+        "version": "12.9.1",
+        "date": "2026-07-23T14:03:19.860Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 5,
+        "title": "",
+        "text": "Fast messaging with lots of useful features. I like the clean interface..",
+        "version": "",
+        "date": "2026-07-23T14:02:39.234Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 1,
+        "title": "",
+        "text": "bangla dese garmeenphone cod prblem",
+        "version": "12.9.1",
+        "date": "2026-07-23T13:49:51.178Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 5,
+        "title": "",
+        "text": "User friendly",
+        "version": "",
+        "date": "2026-07-23T13:49:19.610Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 1,
+        "title": "",
+        "text": "আমি বাংলা দেশ থেকে বলি আমার এটেল সিম টেলি গাম কোন কোড আসছে প্লিজ হেল্প করেন😔😔😔",
+        "version": "12.9.1",
+        "date": "2026-07-23T13:43:16.260Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 5,
+        "title": "",
+        "text": "i like it’s app",
+        "version": "11.5.1",
+        "date": "2026-07-23T13:42:50.325Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 5,
+        "title": "",
+        "text": "nice app 👏",
+        "version": "",
+        "date": "2026-07-23T13:40:14.970Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 1,
+        "title": "",
+        "text": "why adding messaging fee it's a bad product",
+        "version": "12.9.1",
+        "date": "2026-07-23T13:37:08.264Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 5,
+        "title": "",
+        "text": "good",
+        "version": "",
+        "date": "2026-07-23T13:32:05.204Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 5,
+        "title": "",
+        "text": "good",
+        "version": "12.8.3",
+        "date": "2026-07-23T13:12:43.802Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 1,
+        "title": "",
+        "text": "I was hacked on the day I joined up. I do not share anything. also I am waiting on Telegram support to get back to me as I cannot even get into my account to delete it. whoever hacked me, changed email address",
+        "version": "",
+        "date": "2026-07-23T13:10:30.520Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 5,
+        "title": "",
+        "text": "স্যার টেলিগ্রাম আমার সমস্যা একাউন্ট লগই করতে পারছিত না। ভালো করে দেন স্যার",
+        "version": "12.9.1",
+        "date": "2026-07-23T13:09:29.585Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 1,
+        "title": "",
+        "text": "You'll get banned by their automatic system and their costumer service to try to fix it is non existent. I've been trying to get in contact with them for 5 months via all the support emails they provide in their different official channels to radio silence.",
+        "version": "12.9.1",
+        "date": "2026-07-23T13:02:33.616Z",
+        "thumbsUp": 1
+      },
+      {
+        "score": 5,
+        "title": "",
+        "text": "thank",
+        "version": "12.9.0",
+        "date": "2026-07-23T12:50:22.707Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 5,
+        "title": "",
+        "text": "goodd",
+        "version": "",
+        "date": "2026-07-23T12:45:58.178Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 5,
+        "title": "",
+        "text": "Amazing",
+        "version": "12.9.0",
+        "date": "2026-07-23T12:42:09.967Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 5,
+        "title": "",
+        "text": "very good",
+        "version": "12.9.1",
+        "date": "2026-07-23T12:41:53.933Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 1,
+        "title": "",
+        "text": "SCAME",
+        "version": "",
+        "date": "2026-07-23T12:33:13.389Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 1,
+        "title": "",
+        "text": "mere number kyon band kar diya",
+        "version": "12.9.1",
+        "date": "2026-07-23T12:14:45.338Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 4,
+        "title": "",
+        "text": "It's nice but u can't add new contacts",
+        "version": "",
+        "date": "2026-07-23T12:10:40.375Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 1,
+        "title": "",
+        "text": "Bangladesh geramin sim Login code SMs problem",
+        "version": "12.9.1",
+        "date": "2026-07-23T12:08:55.898Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 1,
+        "title": "",
+        "text": "broo!!! there is only sms feee I hate this appp",
+        "version": "",
+        "date": "2026-07-23T12:06:55.844Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 1,
+        "title": "",
+        "text": "many pictures and videos from my telegram downloaded on automatically on my phone without my notice and consent, what is all this? nonsense app 😒",
+        "version": "12.9.1",
+        "date": "2026-07-23T11:46:51.160Z",
+        "thumbsUp": 1
+      },
+      {
+        "score": 5,
+        "title": "",
+        "text": "👌🏻",
+        "version": "12.9.0",
+        "date": "2026-07-23T11:45:40.989Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 1,
+        "title": "",
+        "text": "my number per otp nahi aa raha",
+        "version": "",
+        "date": "2026-07-23T11:42:37.482Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 1,
+        "title": "",
+        "text": "No way to control data usage by ads on metered networks. Trash",
+        "version": "12.9.0",
+        "date": "2026-07-23T11:41:23.661Z",
+        "thumbsUp": 24
+      },
+      {
+        "score": 1,
+        "title": "",
+        "text": "fix the dumb servers..",
+        "version": "12.8.1",
+        "date": "2026-07-23T11:40:37.334Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 1,
+        "title": "",
+        "text": "remove the \"SMS fee\", it pisses me off",
+        "version": "12.9.1",
+        "date": "2026-07-23T11:29:30.237Z",
+        "thumbsUp": 1
+      },
+      {
+        "score": 1,
+        "title": "",
+        "text": "trying to log in but it keeps showing me to pay a sms fee....why?",
+        "version": "12.9.0",
+        "date": "2026-07-23T11:27:26.706Z",
+        "thumbsUp": 1
+      },
+      {
+        "score": 1,
+        "title": "",
+        "text": "why does this app always keep asking for confirmation code it's becoming horrible I can't even create account don't install this app guys its horrible",
+        "version": "",
+        "date": "2026-07-23T11:25:41.443Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 5,
+        "title": "",
+        "text": "how come a password is being linked into my telegram",
+        "version": "",
+        "date": "2026-07-23T11:23:25.920Z",
+        "thumbsUp": 1
+      },
+      {
+        "score": 5,
+        "title": "",
+        "text": "this is Best and fast app",
+        "version": "12.9.1",
+        "date": "2026-07-23T11:22:47.636Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 1,
+        "title": "",
+        "text": "i HATE THE NEW UI, Please give the option to switch it back to old version!",
+        "version": "12.9.1",
+        "date": "2026-07-23T11:17:53.430Z",
+        "thumbsUp": 1
+      },
+      {
+        "score": 1,
+        "title": "",
+        "text": "bad 😔",
+        "version": "",
+        "date": "2026-07-23T11:16:42.400Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 3,
+        "title": "",
+        "text": "Why can't I post a story? For people in Iran? It says only for Telegram Premium",
+        "version": "12.9.1",
+        "date": "2026-07-23T11:16:10.293Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 5,
+        "title": "",
+        "text": "not opening this app",
+        "version": "12.9.1",
+        "date": "2026-07-23T11:14:38.202Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 5,
+        "title": "",
+        "text": "Bangladesh robi sim login code sms porblem",
+        "version": "",
+        "date": "2026-07-23T11:09:45.280Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 1,
+        "title": "",
+        "text": "Bangladesh banglalink sim login code problem",
+        "version": "12.9.1",
+        "date": "2026-07-23T11:08:48.716Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 5,
+        "title": "",
+        "text": "Sangat pantas, selamat dan sesuai untuk komunikasi harian. Ciri saluran (channel) dan kumpulan sangat membantu.",
+        "version": "12.9.0",
+        "date": "2026-07-23T11:08:05.488Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 1,
+        "title": "",
+        "text": "FORGAT PASWORD CODE",
+        "version": "",
+        "date": "2026-07-23T11:03:22.661Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 2,
+        "title": "",
+        "text": "Very easy app",
+        "version": "",
+        "date": "2026-07-23T10:57:41.690Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 5,
+        "title": "",
+        "text": "I like the up😍🫶🏻",
+        "version": "",
+        "date": "2026-07-23T10:50:28.436Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 3,
+        "title": "",
+        "text": "this is so amazing",
+        "version": "12.9.1",
+        "date": "2026-07-23T10:49:32.721Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 5,
+        "title": "",
+        "text": "good",
+        "version": "",
+        "date": "2026-07-23T10:47:47.592Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 5,
+        "title": "",
+        "text": "very best",
+        "version": "12.7.3",
+        "date": "2026-07-23T10:44:44.940Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 5,
+        "title": "",
+        "text": "good",
+        "version": "",
+        "date": "2026-07-23T10:40:50.403Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 1,
+        "title": "",
+        "text": "verification code problem",
+        "version": "12.9.1",
+        "date": "2026-07-23T10:37:35.544Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 1,
+        "title": "",
+        "text": "scammer popular app, bear your own risk，telegram support team no care your review.. even you report scam or any threat, totally silent no response from telegram.. here ia black hole, black market. really just dont use this app. tell this for your own good. those people who using telegram, beware of them",
+        "version": "12.0.1",
+        "date": "2026-07-23T10:25:23.612Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 5,
+        "title": "",
+        "text": "good",
+        "version": "",
+        "date": "2026-07-23T10:22:10.280Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 1,
+        "title": "",
+        "text": "Bangladesh Grameen Sim Login code sms problem",
+        "version": "12.9.1",
+        "date": "2026-07-23T10:18:20.440Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 2,
+        "title": "",
+        "text": "KINDLY DO NOT ALLOW MESSAGE EDITING AFTER SENDING TO SOMEONE. ONLY ALLOW TO DELETE MESSAGE FOR ALL.",
+        "version": "12.9.0",
+        "date": "2026-07-23T10:16:45.338Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 1,
+        "title": "",
+        "text": "crash or freeze many times , many times did not connecting though good network",
+        "version": "12.9.1",
+        "date": "2026-07-23T10:16:40.416Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 1,
+        "title": "",
+        "text": "keeps telling me to check my messages on other device,yet I'm trying to sign up",
+        "version": "",
+        "date": "2026-07-23T10:10:28.900Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 5,
+        "title": "",
+        "text": "good",
+        "version": "7.2.1",
+        "date": "2026-07-23T10:09:50.801Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 1,
+        "title": "",
+        "text": "I found it difficult to use than ever now",
+        "version": "12.6.4",
+        "date": "2026-07-23T10:05:32.235Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 1,
+        "title": "",
+        "text": "просто так заставляет заново регестрироватся хотя до этого работало все",
+        "version": "12.9.1",
+        "date": "2026-07-23T10:00:00.656Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 1,
+        "title": "",
+        "text": "It didn't send me verification code when entering my number",
+        "version": "",
+        "date": "2026-07-23T09:59:50.789Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 5,
+        "title": "",
+        "text": "can you keep it private",
+        "version": "12.9.1",
+        "date": "2026-07-23T09:45:17.130Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 5,
+        "title": "",
+        "text": "I love it",
+        "version": "12.8.3",
+        "date": "2026-07-23T09:37:50.874Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 1,
+        "title": "",
+        "text": "i need pay more money to login",
+        "version": "12.6.4",
+        "date": "2026-07-23T09:30:19.302Z",
+        "thumbsUp": 1
+      },
+      {
+        "score": 1,
+        "title": "",
+        "text": "Telegram is indeed a great platform, but if you lose access to your account and attempt to log in again, it consistently prompts for an SMS fee, even though you've already added your email. It's unjust to have to pay just to regain access.",
+        "version": "12.9.1",
+        "date": "2026-07-23T09:29:36.992Z",
+        "thumbsUp": 1
+      },
+      {
+        "score": 5,
+        "title": "",
+        "text": "The best app, all time ❤️🫡",
+        "version": "12.4.0",
+        "date": "2026-07-23T09:28:32.994Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 5,
+        "title": "",
+        "text": "perfect for ever",
+        "version": "12.9.1",
+        "date": "2026-07-23T09:21:42.443Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 5,
+        "title": "",
+        "text": "telegram All the way its light weight to your battery & still powerful & smooth over WhatsApp app even in voice and video calls an group walkie talkies & subrooms in groups &also u can send msgs silently for example sending a msg at 3am to any1 without him getting a sound notification. u shld know in WhatsApp they run apis in bg of ur phone & collects intercepts ur phone & browser traffic without ur consent an selling urinfo for prying eyes & marketing an that's a waste of battery usage 4urPhone",
+        "version": "12.9.0",
+        "date": "2026-07-23T09:18:44.285Z",
+        "thumbsUp": 4
+      },
+      {
+        "score": 5,
+        "title": "",
+        "text": "good",
+        "version": "12.9.0",
+        "date": "2026-07-23T09:18:41.482Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 4,
+        "title": "",
+        "text": "Hello Telegram Team, Please consider adding Recipient Lists (or share groups) to the Forward/Share screen. Many users frequently forward messages to the same group of contacts. It would be much faster if we could create custom recipient lists (such as Family, Friends, Work) and select them directly from the Share menu instead of searching for each contact every time. This would make sharing content much faster and improve the user experience without affecting existing chats. Thank you",
+        "version": "",
+        "date": "2026-07-23T09:16:01.572Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 5,
+        "title": "",
+        "text": "Good app",
+        "version": "12.8.3",
+        "date": "2026-07-23T09:05:56.850Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 1,
+        "title": "",
+        "text": "telegram paralı mı oldu!",
+        "version": "12.9.1",
+        "date": "2026-07-23T09:05:38.415Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 1,
+        "title": "",
+        "text": "i can't to understand why yours a stupid maintain don to reply me ?",
+        "version": "12.8.3",
+        "date": "2026-07-23T09:02:21.974Z",
+        "thumbsUp": 1
+      },
+      {
+        "score": 1,
+        "title": "",
+        "text": "banned my number",
+        "version": "",
+        "date": "2026-07-23T08:59:51.187Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 5,
+        "title": "",
+        "text": "it's very useful",
+        "version": "",
+        "date": "2026-07-23T08:55:26.589Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 5,
+        "title": "",
+        "text": "EXCELLENT THANKS",
+        "version": "12.9.0",
+        "date": "2026-07-23T08:55:01.972Z",
+        "thumbsUp": 2
+      },
+      {
+        "score": 5,
+        "title": "",
+        "text": "nice",
+        "version": "12.8.3",
+        "date": "2026-07-23T08:54:45.268Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 3,
+        "title": "",
+        "text": "helpful for those who are disciplined",
+        "version": "11.13.2",
+        "date": "2026-07-23T08:51:46.719Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 1,
+        "title": "",
+        "text": "very weird apps, try to sign up put my number ,then the apps forced me to join premium with reason cost sms in my country high. very stupid apps, auto uninstalled 👎👎👎👎👎👎👎👎👎👎👎👎👎👎👎👎👎👎👎👎👎👎👎👎👎👎👎👎👎👎👎👎👎👎👎👎👎👎👎👎👎👎👎👎👎👎👎👎👎👎👎👎👎👎👎👎👎👎👎👎👎👎",
+        "version": "12.9.1",
+        "date": "2026-07-23T08:49:01.474Z",
+        "thumbsUp": 1
+      },
+      {
+        "score": 1,
+        "title": "",
+        "text": "trying to charge me for your app not happening. goodbye",
+        "version": "11.12.0",
+        "date": "2026-07-23T08:45:25.624Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 1,
+        "title": "",
+        "text": "Bangladesh airtel sim Login code sms prblem",
+        "version": "12.9.1",
+        "date": "2026-07-23T08:44:36.599Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 5,
+        "title": "",
+        "text": "nice",
+        "version": "",
+        "date": "2026-07-23T08:42:55.105Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 3,
+        "title": "",
+        "text": "it helps alot for work , entertainment and all",
+        "version": "12.9.0",
+        "date": "2026-07-23T08:40:02.138Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 1,
+        "title": "",
+        "text": "waste app",
+        "version": "12.9.1",
+        "date": "2026-07-23T08:39:14.679Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 5,
+        "title": "",
+        "text": "best",
+        "version": "12.8.3",
+        "date": "2026-07-23T08:33:03.666Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 5,
+        "title": "",
+        "text": "good",
+        "version": "12.9.0",
+        "date": "2026-07-23T08:21:11.712Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 1,
+        "title": "",
+        "text": "someone is using my id... I can't able to terminate that device",
+        "version": "12.9.1",
+        "date": "2026-07-23T08:11:39.836Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 5,
+        "title": "",
+        "text": "Fast, secure, and packed with feature-rich channels and groups! File sharing is super speedy with generous size limits, and cloud syncing across devices works flawlessly. Best messaging app hands down!",
+        "version": "12.9.0",
+        "date": "2026-07-23T08:08:04.660Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 4,
+        "title": "",
+        "text": "great",
+        "version": "11.5.3",
+        "date": "2026-07-23T08:02:57.608Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 1,
+        "title": "",
+        "text": "bad app worst one for texting",
+        "version": "12.9.0",
+        "date": "2026-07-23T08:02:13.902Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 5,
+        "title": "",
+        "text": "better",
+        "version": "",
+        "date": "2026-07-23T07:59:37.700Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 1,
+        "title": "",
+        "text": "most fraudent app ... and no developer will help you ..",
+        "version": "12.9.0",
+        "date": "2026-07-23T07:55:20.150Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 1,
+        "title": "",
+        "text": "anti-spam account was blocked for no reason, even though I was a loyal user.",
+        "version": "",
+        "date": "2026-07-23T07:52:15.928Z",
+        "thumbsUp": 1
+      },
+      {
+        "score": 5,
+        "title": "",
+        "text": "𝙰𝚠𝚎𝚜𝚘𝚖𝚎 𝙸 𝚕𝚘𝚟𝚎𝚍 𝚒𝚝",
+        "version": "12.9.0",
+        "date": "2026-07-23T07:49:50.580Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 1,
+        "title": "",
+        "text": "whey i chold pay 2$ for app thats not free anymore",
+        "version": "",
+        "date": "2026-07-23T07:48:45.489Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 5,
+        "title": "",
+        "text": "wow",
+        "version": "",
+        "date": "2026-07-23T07:40:57.416Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 3,
+        "title": "",
+        "text": "I wish there was protection for our personal photos on Telegram profiles, preventing anyone from saving them.",
+        "version": "12.9.1",
+        "date": "2026-07-23T07:37:50.286Z",
+        "thumbsUp": 1
+      },
+      {
+        "score": 5,
+        "title": "",
+        "text": "excellent",
+        "version": "12.8.3",
+        "date": "2026-07-23T07:37:35.812Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 4,
+        "title": "",
+        "text": "I enjoy to use this app",
+        "version": "12.8.3",
+        "date": "2026-07-23T07:34:43.260Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 1,
+        "title": "",
+        "text": "I would give this app 0 stars of I could. This app is for scammers, don't download it",
+        "version": "",
+        "date": "2026-07-23T07:31:41.100Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 1,
+        "title": "",
+        "text": "fake",
+        "version": "",
+        "date": "2026-07-23T07:11:40.450Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 3,
+        "title": "",
+        "text": "Bangladesh grameenphone telegram code problem SMS Plesse ki korbo",
+        "version": "",
+        "date": "2026-07-23T07:11:20.699Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 1,
+        "title": "",
+        "text": "telegram poblam",
+        "version": "",
+        "date": "2026-07-23T07:04:54.299Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 5,
+        "title": "",
+        "text": "\"Fast, secure, and reliable messaging app. I use it every day!\"",
+        "version": "12.9.0",
+        "date": "2026-07-23T06:59:39.422Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 5,
+        "title": "",
+        "text": "Excellent Very easy Used Communication App 👌 👍",
+        "version": "12.9.0",
+        "date": "2026-07-23T06:50:51.508Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 5,
+        "title": "",
+        "text": "best",
+        "version": "12.9.0",
+        "date": "2026-07-23T06:38:35.734Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 5,
+        "title": "",
+        "text": "awesome",
+        "version": "12.9.0",
+        "date": "2026-07-23T06:38:32.129Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 1,
+        "title": "",
+        "text": "had nothing but trouble with telegram the telegram the app wouldn't stay l was always losing the app on my page?",
+        "version": "",
+        "date": "2026-07-23T06:36:23.929Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 5,
+        "title": "",
+        "text": "thank you Pavel. best app ever",
+        "version": "",
+        "date": "2026-07-23T06:35:55.185Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 5,
+        "title": "",
+        "text": "nice!",
+        "version": "12.9.0",
+        "date": "2026-07-23T06:30:55.863Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 1,
+        "title": "",
+        "text": "very very useful app....saare papers isi per easy available hote hai....must be downloaded in every 🪳's phone",
+        "version": "",
+        "date": "2026-07-23T06:25:19.368Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 5,
+        "title": "",
+        "text": "the best apps ever",
+        "version": "12.9.0",
+        "date": "2026-07-23T06:13:25.452Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 1,
+        "title": "",
+        "text": "Bangladesh gramin sim login sms porblem",
+        "version": "",
+        "date": "2026-07-23T06:12:04.858Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 5,
+        "title": "",
+        "text": "😃",
+        "version": "",
+        "date": "2026-07-23T06:11:02.625Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 5,
+        "title": "",
+        "text": "excellent",
+        "version": "12.9.1",
+        "date": "2026-07-23T05:59:33.657Z",
+        "thumbsUp": 1
+      },
+      {
+        "score": 1,
+        "title": "",
+        "text": "BAKIT MAY SMS FEE? MAY GANON NA BA TALAGA????",
+        "version": "12.9.1",
+        "date": "2026-07-23T05:53:40.900Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 5,
+        "title": "",
+        "text": "Hehe nice",
+        "version": "12.8.3",
+        "date": "2026-07-23T05:50:46.860Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 5,
+        "title": "",
+        "text": "good",
+        "version": "12.8.3",
+        "date": "2026-07-23T05:44:46.539Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 5,
+        "title": "",
+        "text": "Nice👍",
+        "version": "12.9.0",
+        "date": "2026-07-23T05:39:41.887Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 5,
+        "title": "",
+        "text": "bu juda zor",
+        "version": "",
+        "date": "2026-07-23T05:34:49.924Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 1,
+        "title": "",
+        "text": "Facing a serious issue that I can't recover my last account. It shows a new account.",
+        "version": "12.5.1",
+        "date": "2026-07-23T05:23:06.457Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 5,
+        "title": "",
+        "text": "It is amazing",
+        "version": "12.7.3",
+        "date": "2026-07-23T05:22:23.118Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 5,
+        "title": "",
+        "text": "ရော်ရင်လည်းအပြည့်ရော်ပေးတာပါ",
+        "version": "12.9.0",
+        "date": "2026-07-23T05:21:29.130Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 4,
+        "title": "",
+        "text": "can't type read messages.Most apps locks",
+        "version": "12.9.1",
+        "date": "2026-07-23T05:15:25.335Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 5,
+        "title": "",
+        "text": "this app is just wow. you can find anything what you want here. just search it and grab it.",
+        "version": "",
+        "date": "2026-07-23T05:14:00.637Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 5,
+        "title": "",
+        "text": "thike hai",
+        "version": "",
+        "date": "2026-07-23T05:09:49.500Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 5,
+        "title": "",
+        "text": "king work 🤌🏻",
+        "version": "12.9.0",
+        "date": "2026-07-23T05:00:04.542Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 1,
+        "title": "",
+        "text": "Why do we need to pay for SMS Fee??",
+        "version": "",
+        "date": "2026-07-23T04:58:15.918Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 5,
+        "title": "",
+        "text": "🌟🌟🌟🌟🌟",
+        "version": "12.9.0",
+        "date": "2026-07-23T04:42:55.230Z",
+        "thumbsUp": 4
+      },
+      {
+        "score": 5,
+        "title": "",
+        "text": "fudu",
+        "version": "12.9.0",
+        "date": "2026-07-23T04:40:50.667Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 5,
+        "title": "",
+        "text": "super 👍👍 best app",
+        "version": "12.9.1",
+        "date": "2026-07-23T04:35:54.336Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 1,
+        "title": "",
+        "text": "টেলিগ্রামে কোড আসতেছে না কেন",
+        "version": "12.9.0",
+        "date": "2026-07-23T04:33:36.626Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 1,
+        "title": "",
+        "text": "I don't feel safe on it to many bad people on here that need to be locked up asking for adult pics and now they are teasing me if I don't send them money",
+        "version": "12.9.0",
+        "date": "2026-07-23T04:31:24.260Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 1,
+        "title": "",
+        "text": "whatsapp is better",
+        "version": "",
+        "date": "2026-07-23T04:21:19.193Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 1,
+        "title": "",
+        "text": "you have bugs in privacy and ban system",
+        "version": "12.9.1",
+        "date": "2026-07-23T04:18:48.904Z",
+        "thumbsUp": 1
+      },
+      {
+        "score": 1,
+        "title": "",
+        "text": "allow temp number for save massaging.",
+        "version": "",
+        "date": "2026-07-23T04:13:43.489Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 5,
+        "title": "",
+        "text": "good",
+        "version": "12.9.1",
+        "date": "2026-07-23T04:09:53.114Z",
+        "thumbsUp": 1
+      },
+      {
+        "score": 5,
+        "title": "",
+        "text": "My favorite app.",
+        "version": "12.9.0",
+        "date": "2026-07-23T04:07:26.677Z",
+        "thumbsUp": 1
+      },
+      {
+        "score": 5,
+        "title": "",
+        "text": "Telegram is fast, secure, and reliable. The group and channel features are excellent for communities and businesses. It’s lightweight yet powerful.",
+        "version": "12.9.0",
+        "date": "2026-07-23T04:03:42.191Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 5,
+        "title": "",
+        "text": "অনেক ভালো একটি অ্যাপ",
+        "version": "12.9.1",
+        "date": "2026-07-23T03:58:58.515Z",
+        "thumbsUp": 1
+      },
+      {
+        "score": 1,
+        "title": "",
+        "text": "this have is horrible app can get in you put your Gmail like just whatever you put in it LLC your premium that's messed up That's why I'm not in anymore",
+        "version": "12.8.2",
+        "date": "2026-07-23T03:56:29.204Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 1,
+        "title": "",
+        "text": "The most stupid app in the world...There are no rules.Number Gmail does not open with anything😡😡 I keep trying to open it but it won't open and I can't communicate with anyone.",
+        "version": "",
+        "date": "2026-07-23T03:48:17.442Z",
+        "thumbsUp": 1
+      },
+      {
+        "score": 5,
+        "title": "",
+        "text": "⭐️⭐️⭐️⭐️⭐️",
+        "version": "12.9.0",
+        "date": "2026-07-23T03:34:03.136Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 5,
+        "title": "",
+        "text": "suppr useful",
+        "version": "12.8.3",
+        "date": "2026-07-23T03:21:24.351Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 5,
+        "title": "",
+        "text": "please every site by English",
+        "version": "12.9.0",
+        "date": "2026-07-23T03:08:55.162Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 4,
+        "title": "",
+        "text": "even my email was valid and my number was registered unable to login my account please fix it thank you",
+        "version": "10.13.2",
+        "date": "2026-07-23T03:08:28.530Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 5,
+        "title": "",
+        "text": "excellent 👌",
+        "version": "",
+        "date": "2026-07-23T02:47:05.345Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 5,
+        "title": "",
+        "text": "world best app",
+        "version": "12.9.0",
+        "date": "2026-07-23T02:43:15.480Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 5,
+        "title": "",
+        "text": "please make it sms free in bangladesh!",
+        "version": "",
+        "date": "2026-07-23T02:35:30.792Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 4,
+        "title": "",
+        "text": "telegram anime dekhne ke liye bahut achcha hai sab kuchh achcha hai help karo sar pata nahin kya galti kiya hun agar maine koi account kya London kiya hai ya koi galti Kiya Hai To maaf kariye bataiye mujhe Kya nahin karna chahie galti Ho Gai Hai sar to bataiye account please mat kariye roll ka aavedan kiya ho to bataiye jo bhi galti Kiya bataiye",
+        "version": "12.9.0",
+        "date": "2026-07-23T02:25:44.934Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 5,
+        "title": "",
+        "text": "খুব ভাল",
+        "version": "",
+        "date": "2026-07-23T01:53:52.740Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 5,
+        "title": "",
+        "text": "good stuff yes",
+        "version": "12.9.0",
+        "date": "2026-07-23T01:52:23.165Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 1,
+        "title": "",
+        "text": "didnt get a code verification",
+        "version": "",
+        "date": "2026-07-23T01:19:50.566Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 1,
+        "title": "",
+        "text": "scammer app",
+        "version": "",
+        "date": "2026-07-23T01:19:07.455Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 1,
+        "title": "",
+        "text": "It is now asking for payment.",
+        "version": "12.9.0",
+        "date": "2026-07-23T01:15:50.361Z",
+        "thumbsUp": 1
+      },
+      {
+        "score": 1,
+        "title": "",
+        "text": "you have to pay to get a text to log in to your account",
+        "version": "12.9.0",
+        "date": "2026-07-23T00:26:29.571Z",
+        "thumbsUp": 1
+      },
+      {
+        "score": 1,
+        "title": "",
+        "text": "one of the worst apps I've ever used.",
+        "version": "",
+        "date": "2026-07-23T00:26:03.900Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 5,
+        "title": "",
+        "text": "আমার ফোন নাম্বার এ এই app টি খুলছে না",
+        "version": "",
+        "date": "2026-07-23T00:20:07.218Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 5,
+        "title": "",
+        "text": "good",
+        "version": "12.9.0",
+        "date": "2026-07-23T00:18:50.742Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 1,
+        "title": "",
+        "text": "West Bengal India sim login code sms problem not coming the telegram code",
+        "version": "12.9.0",
+        "date": "2026-07-23T00:07:30.266Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 1,
+        "title": "",
+        "text": "it won't send the code to me to open it and use?",
+        "version": "12.9.0",
+        "date": "2026-07-23T00:00:22.624Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 1,
+        "title": "",
+        "text": "التطبيق يحتوي على فيديوهات قتل غير مسموحه للاطفال تحت 18 سنه وقتل وتعذيب وفيديوهات فيديوهات اغتصاب قتل وتعذيب وداعش وارهاب",
+        "version": "12.9.0",
+        "date": "2026-07-22T23:27:47.425Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 3,
+        "title": "",
+        "text": "i cannot login on my telegram account, please help me!!!!, When i want to insert email, its said \"This email domain is not allowed\", also I'm cannot login with my Google account, AN_ERROR_OCCURED EMAIL_NOT_ALLOWED",
+        "version": "12.9.0",
+        "date": "2026-07-22T23:23:24.243Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 1,
+        "title": "",
+        "text": "can someone make an actual free messaging app.sad to see Telegram has gotten greedy like these big companies.",
+        "version": "12.6.4",
+        "date": "2026-07-22T22:53:16.459Z",
+        "thumbsUp": 1
+      },
+      {
+        "score": 4,
+        "title": "",
+        "text": "more updates please this is app 👍",
+        "version": "12.9.0",
+        "date": "2026-07-22T22:47:10.440Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 1,
+        "title": "",
+        "text": "for some reason it logged me out of all my devices and I can't get back in for about 2 days now. I replied to the email with more info",
+        "version": "12.9.0",
+        "date": "2026-07-22T22:46:18.835Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 5,
+        "title": "",
+        "text": "this app is the best I have used this year so far, the app is awesome",
+        "version": "",
+        "date": "2026-07-22T22:37:33.990Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 5,
+        "title": "",
+        "text": "👍",
+        "version": "12.9.0",
+        "date": "2026-07-22T22:20:54.216Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 1,
+        "title": "",
+        "text": "Useful for me, I love it",
+        "version": "12.0.1",
+        "date": "2026-07-22T22:17:53.176Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 1,
+        "title": "",
+        "text": "the app is good to use",
+        "version": "12.9.0",
+        "date": "2026-07-22T22:12:26.578Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 3,
+        "title": "",
+        "text": "fine app and",
+        "version": "12.9.0",
+        "date": "2026-07-22T22:10:40.110Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 5,
+        "title": "",
+        "text": "telegram app is good app",
+        "version": "12.9.0",
+        "date": "2026-07-22T22:09:41.863Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 3,
+        "title": "",
+        "text": "i can't verify my telegram at all they can't send me verification code",
+        "version": "12.9.0",
+        "date": "2026-07-22T22:05:41.130Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 5,
+        "title": "",
+        "text": "if I pass Indonesia number on my telegram just open it immediately",
+        "version": "12.9.0",
+        "date": "2026-07-22T22:05:31.630Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 1,
+        "title": "",
+        "text": "are they charging now for a log in?",
+        "version": "",
+        "date": "2026-07-22T21:48:48.113Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 5,
+        "title": "",
+        "text": "Good",
+        "version": "",
+        "date": "2026-07-22T21:37:18.627Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 3,
+        "title": "",
+        "text": "❤️",
+        "version": "12.9.0",
+        "date": "2026-07-22T21:36:58.536Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 1,
+        "title": "",
+        "text": "App is now completely unusable, demands that I add my email to my account yet refuses to accept my email... Update: Managed to get past the email issue by using an email account that wasn't Outlook, only to then have my account held for ransom... can't log in until I pay their BS \"SMS Verification\" fee...",
+        "version": "12.9.0",
+        "date": "2026-07-22T21:17:25.968Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 5,
+        "title": "",
+        "text": "very good 👍",
+        "version": "12.9.0",
+        "date": "2026-07-22T21:14:11.173Z",
+        "thumbsUp": 1
+      },
+      {
+        "score": 1,
+        "title": "",
+        "text": "un jeg ce cere bani înainte de prima conectare",
+        "version": "12.9.0",
+        "date": "2026-07-22T20:57:37.861Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 5,
+        "title": "",
+        "text": "soooo gooooodddd",
+        "version": "12.9.0",
+        "date": "2026-07-22T20:56:18.213Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 5,
+        "title": "",
+        "text": "helpful 🤠",
+        "version": "12.8.1",
+        "date": "2026-07-22T20:49:44.609Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 5,
+        "title": "",
+        "text": "best",
+        "version": "12.9.0",
+        "date": "2026-07-22T20:47:52.231Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 1,
+        "title": "",
+        "text": "Bangladesh Banglalink sim login code sms problem",
+        "version": "12.9.0",
+        "date": "2026-07-22T20:45:23.435Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 1,
+        "title": "",
+        "text": "বাংলা দেশের সিমের কট আসতে চেনা",
+        "version": "12.9.0",
+        "date": "2026-07-22T20:30:13.748Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 2,
+        "title": "",
+        "text": "I don't know why my id I can,t log in with OTP so I need to download this app from third party. If you gyz need authorization we have SIM card but why $ need for authorization it,s totally shameful",
+        "version": "12.5.0",
+        "date": "2026-07-22T20:21:47.315Z",
+        "thumbsUp": 1
+      },
+      {
+        "score": 1,
+        "title": "",
+        "text": "all scams on here",
+        "version": "",
+        "date": "2026-07-22T20:20:20.638Z",
+        "thumbsUp": 1
+      },
+      {
+        "score": 5,
+        "title": "",
+        "text": "but you people don't want me to message people I don't know why I'm deleting telegram if you people can let me to message my love one I can keep it",
+        "version": "12.9.0",
+        "date": "2026-07-22T20:18:45.310Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 1,
+        "title": "",
+        "text": "My account was hacked within about 6 months of having it. I reported it and was basically told \"sorry we can't help you\". So there is someone out there using my credentials and personal chats (NOT TO MENTION ALL OF MY UNIVERSITY CONTENT) to do whatever the hell they want with my info and signing people up for crypto scams and pornographic pages. 0/10, if I could give it 0 stars I would",
+        "version": "",
+        "date": "2026-07-22T20:15:30.320Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 1,
+        "title": "",
+        "text": "I deleted this app because of the (SMS Fee)",
+        "version": "12.9.0",
+        "date": "2026-07-22T20:14:44.410Z",
+        "thumbsUp": 2
+      },
+      {
+        "score": 5,
+        "title": "",
+        "text": "Good",
+        "version": "8.0.1",
+        "date": "2026-07-22T20:09:58.360Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 5,
+        "title": "",
+        "text": "nice",
+        "version": "12.0.1",
+        "date": "2026-07-22T20:03:02.897Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 1,
+        "title": "",
+        "text": "can't login freely",
+        "version": "9.4.2",
+        "date": "2026-07-22T19:58:19.524Z",
+        "thumbsUp": 1
+      },
+      {
+        "score": 5,
+        "title": "",
+        "text": "my experience with it is good,i like it because don't use more data",
+        "version": "12.9.0",
+        "date": "2026-07-22T19:55:52.314Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 5,
+        "title": "",
+        "text": "this best",
+        "version": "12.2.10",
+        "date": "2026-07-22T19:51:37.980Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 5,
+        "title": "",
+        "text": "very good",
+        "version": "",
+        "date": "2026-07-22T19:48:08.331Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 4,
+        "title": "",
+        "text": "ok",
+        "version": "12.9.0",
+        "date": "2026-07-22T19:43:19.130Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 5,
+        "title": "",
+        "text": "lots of great features. Easy to use.",
+        "version": "12.9.0",
+        "date": "2026-07-22T19:42:06.512Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 1,
+        "title": "",
+        "text": "code is not coming",
+        "version": "12.9.0",
+        "date": "2026-07-22T19:28:24.396Z",
+        "thumbsUp": 1
+      },
+      {
+        "score": 1,
+        "title": "",
+        "text": "Registration costs 1.5 €, better use Signal or any other app",
+        "version": "",
+        "date": "2026-07-22T19:25:23.980Z",
+        "thumbsUp": 1
+      },
+      {
+        "score": 5,
+        "title": "",
+        "text": "good",
+        "version": "",
+        "date": "2026-07-22T19:24:50.221Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 5,
+        "title": "",
+        "text": "good",
+        "version": "12.9.0",
+        "date": "2026-07-22T19:22:43.709Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 1,
+        "title": "",
+        "text": "As many people have already mentioned, the interface update is just awful. If you want to implement such radical changes to the UI, at least give people a choice, so those who prefer the old one can still switch back to it through the settings. Otherwise it's no surprise many people start using unofficial clients, even if it means compromising the security. Btw, you even use the old interface in your own official updates reviews, lol.",
+        "version": "12.9.0",
+        "date": "2026-07-22T19:15:40.581Z",
+        "thumbsUp": 1
+      },
+      {
+        "score": 5,
+        "title": "",
+        "text": "very good",
+        "version": "12.9.0",
+        "date": "2026-07-22T19:09:18.433Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 5,
+        "title": "",
+        "text": "user friendly",
+        "version": "",
+        "date": "2026-07-22T19:09:06.720Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 1,
+        "title": "",
+        "text": "nise good well",
+        "version": "12.9.0",
+        "date": "2026-07-22T19:04:33.983Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 2,
+        "title": "",
+        "text": "no clearty of voice and video call",
+        "version": "12.9.0",
+        "date": "2026-07-22T19:04:09.355Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 5,
+        "title": "",
+        "text": "good. my like",
+        "version": "12.9.0",
+        "date": "2026-07-22T18:59:46.386Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 5,
+        "title": "",
+        "text": "good",
+        "version": "12.9.0",
+        "date": "2026-07-22T18:56:20.930Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 1,
+        "title": "",
+        "text": "99.99% spam and scammers",
+        "version": "12.9.0",
+        "date": "2026-07-22T18:48:54.871Z",
+        "thumbsUp": 1
+      },
+      {
+        "score": 1,
+        "title": "",
+        "text": "Don't bother, you'll get auto banned by their system with no response from tech support. This is a known issue apartmently I had downloaded it last year but didn't use it much..On march of this year I reinstalled it because I needed it for multiple tasks. AND APPARENTLY I WAS BANNED!! I haven't used the app on over a year and even then i wasn't banned when I uninstalled it so WHAT COULD THEY HAVE POSSIBLY BANNED ME FOR??!! I have been e mailing support for almost 5 months now to radio silence",
+        "version": "",
+        "date": "2026-07-22T18:42:45.916Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 1,
+        "title": "",
+        "text": "Requires a fee to install on new device despite verifying my mail. If you cannot bother to use an existing device which is connected to Telegram to verify the install then I cannot bother to pay a fee for one week of 'premium' and then get a ton of ads. Good luck and good bye",
+        "version": "12.9.0",
+        "date": "2026-07-22T18:41:19.462Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 2,
+        "title": "",
+        "text": "not bad",
+        "version": "",
+        "date": "2026-07-22T18:40:41.908Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 1,
+        "title": "",
+        "text": "to many scams lost costs of money",
+        "version": "12.9.0",
+        "date": "2026-07-22T18:37:32.176Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 1,
+        "title": "",
+        "text": "its has been hacked by someone. its unable to login then how should i do the process tell by you.",
+        "version": "",
+        "date": "2026-07-22T18:15:26.646Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 1,
+        "title": "",
+        "text": "usefull app😡😡",
+        "version": "12.9.0",
+        "date": "2026-07-22T18:15:14.421Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 2,
+        "title": "",
+        "text": "can't download the app, wants my email and then wants me to pay for something. please fix it right away. its been 3 days now.",
+        "version": "",
+        "date": "2026-07-22T18:12:03.845Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 1,
+        "title": "",
+        "text": "Arab Emirates fibe sim cood problem",
+        "version": "",
+        "date": "2026-07-22T18:09:18.710Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 5,
+        "title": "",
+        "text": "cok gozak",
+        "version": "10.10.1",
+        "date": "2026-07-22T18:07:23.998Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 2,
+        "title": "",
+        "text": "​\"Telegram is becoming unsafe for children due to the unchecked growth of adult groups. Stricter moderation and robust age-restriction filters are urgently needed. Please look into this immediately.\"",
+        "version": "",
+        "date": "2026-07-22T18:05:57.905Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 5,
+        "title": "",
+        "text": "good",
+        "version": "12.9.0",
+        "date": "2026-07-22T18:04:31.566Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 1,
+        "title": "",
+        "text": "আমার গ্রামীন সিমে এসএমএস আসছে না",
+        "version": "12.9.0",
+        "date": "2026-07-22T18:01:28.323Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 1,
+        "title": "",
+        "text": "Love telegram, but the app constantly needs force closed/reopened on my z fold 6 or it just opens/loads \"blank\"",
+        "version": "12.9.0",
+        "date": "2026-07-22T17:57:49.296Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 1,
+        "title": "",
+        "text": "This app is plagued by walkers! Their channels are full of thirst traps and live show of their naked bodies. I hope this app gets banned forever. It allows easy access to walkers and destroys families!",
+        "version": "12.9.0",
+        "date": "2026-07-22T17:50:34.373Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 4,
+        "title": "",
+        "text": "icant share story anymore,after i update the app what should i do",
+        "version": "12.9.0",
+        "date": "2026-07-22T17:50:03.559Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 5,
+        "title": "",
+        "text": "perfect app",
+        "version": "12.4.1",
+        "date": "2026-07-22T17:45:18.934Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 1,
+        "title": "",
+        "text": "আমি টেলিগ্রাম কলতে পাতেছি না আমার থেকে কোড আসতে ছেন দয়া করে একটু দেখেন",
+        "version": "",
+        "date": "2026-07-22T17:44:52.102Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 5,
+        "title": "",
+        "text": "help otp",
+        "version": "12.9.0",
+        "date": "2026-07-22T17:41:19.726Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 5,
+        "title": "",
+        "text": "it a lie you want to scam me",
+        "version": "12.9.0",
+        "date": "2026-07-22T17:39:13.487Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 1,
+        "title": "",
+        "text": "too much add..s and west channel s",
+        "version": "12.9.0",
+        "date": "2026-07-22T17:38:28.382Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 5,
+        "title": "",
+        "text": "use it everyday I love it",
+        "version": "12.9.0",
+        "date": "2026-07-22T17:35:37.696Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 1,
+        "title": "",
+        "text": "why invalid email while it's correct?",
+        "version": "12.9.0",
+        "date": "2026-07-22T17:31:46.730Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 5,
+        "title": "",
+        "text": "rite",
+        "version": "",
+        "date": "2026-07-22T17:25:21.370Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 1,
+        "title": "",
+        "text": "why do I have to pay to open it this is so bad",
+        "version": "",
+        "date": "2026-07-22T17:24:51.236Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 5,
+        "title": "",
+        "text": "👍🏻",
+        "version": "12.9.0",
+        "date": "2026-07-22T17:19:59.670Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 1,
+        "title": "",
+        "text": "Till now I have not set a password for Telegram but it asks for a new password if I forget it, delete account, it is a waste in telegram, uninstall the telegram",
+        "version": "11.11.1",
+        "date": "2026-07-22T17:16:22.150Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 4,
+        "title": "",
+        "text": "restricting who can send you messages to \"My Contacts\" only—behind their paid Premium subscription. Forcing users to pay money just to stop strangers or spammers from messaging them is completely wrong. Privacy should be a fundamental right, not a paid luxury. Telegram needs to make this core feature free for everyone.",
+        "version": "12.7.2",
+        "date": "2026-07-22T17:14:10.226Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 5,
+        "title": "",
+        "text": "if I accidentally clear the history for both, is there any way to extract the deleted chat again?",
+        "version": "12.6.4",
+        "date": "2026-07-22T17:13:23.643Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 4,
+        "title": "",
+        "text": "nice",
+        "version": "12.9.0",
+        "date": "2026-07-22T17:06:25.560Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 3,
+        "title": "",
+        "text": "good app",
+        "version": "12.9.0",
+        "date": "2026-07-22T16:56:14.790Z",
+        "thumbsUp": 1
+      },
+      {
+        "score": 1,
+        "title": "",
+        "text": "me están pidiendo que pague para poder iniciar sesión porque no pueden enviar el código a mi número de teléfono. no me parece correcto",
+        "version": "12.2.10",
+        "date": "2026-07-22T16:54:13.620Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 5,
+        "title": "",
+        "text": "Perfect for All",
+        "version": "",
+        "date": "2026-07-22T16:53:43.327Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 1,
+        "title": "",
+        "text": "Bulok",
+        "version": "",
+        "date": "2026-07-22T16:45:56.788Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 5,
+        "title": "",
+        "text": "This is nice app",
+        "version": "12.2.6",
+        "date": "2026-07-22T16:43:21.760Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 1,
+        "title": "",
+        "text": "টেলিগ্রাম কোড যাচ্ছে না ঠিক করে দেন প্লিজ",
+        "version": "",
+        "date": "2026-07-22T16:42:03.378Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 1,
+        "title": "",
+        "text": "কোড আসছে না",
+        "version": "",
+        "date": "2026-07-22T16:41:53.465Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 5,
+        "title": "",
+        "text": "fast and helpful",
+        "version": "",
+        "date": "2026-07-22T16:40:23.845Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 3,
+        "title": "",
+        "text": "Hello, Please add the ability to edit messages sent a few days ago or in the past. Also, I am unable to post stories. The daily story feature is available to all Iranian users; I can post stories using my other account, but I cannot do so with my main account. Thank you for your time.",
+        "version": "12.9.0",
+        "date": "2026-07-22T16:39:05.185Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 5,
+        "title": "",
+        "text": "Id number log in hoi na",
+        "version": "12.9.0",
+        "date": "2026-07-22T16:35:00.500Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 5,
+        "title": "",
+        "text": "nice app 💯",
+        "version": "",
+        "date": "2026-07-22T16:23:55.144Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 5,
+        "title": "",
+        "text": "Telegram is one of the best, fastest, and most secure messaging apps available today. Its interface is very simple, and it is completely free with no ads.Key Advantages:High Security: Its secret chat and encryption system are extremely powerful.Cloud Storage: Sharing files does not consume your phone's memory.Large File Sharing: Any large file (2GB+) can be sent easily.Channels and Groups: The best platform for creating large communities and sharing information.",
+        "version": "",
+        "date": "2026-07-22T16:22:48.413Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 1,
+        "title": "",
+        "text": "i stopped using this app. because they started charging money just to login to the app, this app is trash",
+        "version": "12.9.0",
+        "date": "2026-07-22T16:13:31.618Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 2,
+        "title": "",
+        "text": "This application is mostly limited to chatting, it's bad",
+        "version": "",
+        "date": "2026-07-22T16:12:15.333Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 4,
+        "title": "",
+        "text": "This is good app 😊",
+        "version": "",
+        "date": "2026-07-22T16:04:13.988Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 1,
+        "title": "",
+        "text": "maksullinen",
+        "version": "12.9.0",
+        "date": "2026-07-22T16:01:43.129Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 1,
+        "title": "",
+        "text": "They said I should pay money for perium",
+        "version": "12.9.0",
+        "date": "2026-07-22T16:00:49.890Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 3,
+        "title": "",
+        "text": "Yha app bahut Accha Mai magar yha app Kabhi Kabhi hack ho jata hai jis SE dusaro ke pass link chali jati hai",
+        "version": "12.9.0",
+        "date": "2026-07-22T15:55:35.395Z",
+        "thumbsUp": 1
+      },
+      {
+        "score": 1,
+        "title": "",
+        "text": "Bangladesh Grameen phone sms Code problem",
+        "version": "12.9.0",
+        "date": "2026-07-22T15:50:02.496Z",
+        "thumbsUp": 1
+      },
+      {
+        "score": 1,
+        "title": "",
+        "text": "لماذا عندما احمل ملف يتم تحميله 3 مرات اريد ان يتم حل المشكلة",
+        "version": "12.6.4",
+        "date": "2026-07-22T15:50:01.570Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 4,
+        "title": "",
+        "text": "good 👍",
+        "version": "12.6.4",
+        "date": "2026-07-22T15:47:06.578Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 1,
+        "title": "",
+        "text": "my phone is android but I want tg ios background",
+        "version": "12.9.0",
+        "date": "2026-07-22T15:46:11.898Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 5,
+        "title": "",
+        "text": "good",
+        "version": "",
+        "date": "2026-07-22T15:40:44.155Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 4,
+        "title": "",
+        "text": "it's better than Telegram X",
+        "version": "",
+        "date": "2026-07-22T15:38:20.465Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 1,
+        "title": "",
+        "text": "the best app ever",
+        "version": "",
+        "date": "2026-07-22T15:34:11.982Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 5,
+        "title": "",
+        "text": "but I can't sign into my telegram",
+        "version": "",
+        "date": "2026-07-22T15:33:05.446Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 5,
+        "title": "",
+        "text": "👍 nice",
+        "version": "",
+        "date": "2026-07-22T15:28:21.970Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 1,
+        "title": "",
+        "text": "আমি টেলিগ্রামের পাসওয়ার্ড ভুলে গেছি এখন আবার কিভাবে খুলবো",
+        "version": "12.9.0",
+        "date": "2026-07-22T15:27:14.580Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 5,
+        "title": "",
+        "text": "thankyou so mach",
+        "version": "",
+        "date": "2026-07-22T15:26:05.901Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 1,
+        "title": "",
+        "text": "sucks",
+        "version": "",
+        "date": "2026-07-22T15:24:28.883Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 1,
+        "title": "",
+        "text": "Good 👍 app",
+        "version": "12.9.0",
+        "date": "2026-07-22T15:23:10.511Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 5,
+        "title": "",
+        "text": "all free",
+        "version": "12.9.0",
+        "date": "2026-07-22T15:20:49.995Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 2,
+        "title": "",
+        "text": "why you making us pay to use telegram now",
+        "version": "",
+        "date": "2026-07-22T15:20:25.713Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 4,
+        "title": "",
+        "text": "best",
+        "version": "12.9.0",
+        "date": "2026-07-22T15:18:42.801Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 4,
+        "title": "",
+        "text": "muy buena",
+        "version": "",
+        "date": "2026-07-22T15:18:36.455Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 5,
+        "title": "",
+        "text": "good 👍",
+        "version": "12.9.0",
+        "date": "2026-07-22T15:13:03.504Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 5,
+        "title": "",
+        "text": "best of students for use any online batch like PW",
+        "version": "",
+        "date": "2026-07-22T15:09:07.185Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 2,
+        "title": "",
+        "text": "The quiz bot in telegram is not working properly.",
+        "version": "12.9.0",
+        "date": "2026-07-22T15:08:55.935Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 1,
+        "title": "",
+        "text": "jor kore premium neyar mane ki?",
+        "version": "12.9.0",
+        "date": "2026-07-22T15:05:25.156Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 1,
+        "title": "",
+        "text": "what is that about only premium not free..? free before and now only for premium users..",
+        "version": "",
+        "date": "2026-07-22T15:04:55.732Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 1,
+        "title": "",
+        "text": "I tried to create an account on this app and I waited so long for the code to text or call me and still didn't get it No calls or text , so frustrating.",
+        "version": "",
+        "date": "2026-07-22T15:01:08.872Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 5,
+        "title": "",
+        "text": "আমার টেলিগ্রাম লগইন হচ্ছে না কার্ড পাইছি না প্লিজ হেল্প মি",
+        "version": "12.9.0",
+        "date": "2026-07-22T14:57:53.970Z",
+        "thumbsUp": 0
+      },
+      {
+        "score": 1,
+        "title": "",
+        "text": "Was good but now they want u to pay and with the issues signing in i am done using it i was on the other day and today they want me to pay fees no thank u",
+        "version": "",
+        "date": "2026-07-22T14:43:00.548Z",
+        "thumbsUp": 0
+      }
+    ],
+    "analysis": {
+      "sampleSize": 300,
+      "scoreDistribution": {
+        "1": 125,
+        "2": 11,
+        "3": 13,
+        "4": 18,
+        "5": 133
+      },
+      "meanOfSample": 3.08,
+      "negativeShareOfSample": 45.3,
+      "buckets": [
+        {
+          "bucket": "onboarding",
+          "count": 37,
+          "pctOfSample": 12.3,
+          "negCount": 30,
+          "examples": [
+            {
+              "score": 2,
+              "text": "i used to post stories for free, now it says i must have premium account to post stories! and volunteer support doesn't respond at all!!! what the hell dude?"
+            },
+            {
+              "score": 1,
+              "text": "I was hacked on the day I joined up. I do not share anything. also I am waiting on Telegram support to get back to me as I cannot even get into my account to delete it. whoever hacked me, changed email address"
+            },
+            {
+              "score": 1,
+              "text": "Bangladesh geramin sim Login code SMs problem"
+            }
+          ]
+        },
+        {
+          "bucket": "praise",
+          "count": 26,
+          "pctOfSample": 8.7,
+          "negCount": 3,
+          "examples": [
+            {
+              "score": 5,
+              "text": "i love this app"
+            },
+            {
+              "score": 5,
+              "text": "nice apps .. love to chat with anyone ❤"
+            },
+            {
+              "score": 5,
+              "text": "Amazing"
+            }
+          ]
+        },
+        {
+          "bucket": "feature-request",
+          "count": 6,
+          "pctOfSample": 2,
+          "negCount": 3,
+          "examples": [
+            {
+              "score": 1,
+              "text": "Why do we need to pay for SMS Fee??"
+            },
+            {
+              "score": 1,
+              "text": "I don't feel safe on it to many bad people on here that need to be locked up asking for adult pics and now they are teasing me if I don't send them money"
+            },
+            {
+              "score": 2,
+              "text": "I don't know why my id I can,t log in with OTP so I need to download this app from third party. If you gyz need authorization we have SIM card but why $ need for authorization it,s totally shameful"
+            }
+          ]
+        },
+        {
+          "bucket": "pricing-paywall",
+          "count": 5,
+          "pctOfSample": 1.7,
+          "negCount": 3,
+          "examples": [
+            {
+              "score": 1,
+              "text": "this app constantly shows fake products ad , ads of betting or illegal apps, scam ads . This app should get banned"
+            },
+            {
+              "score": 1,
+              "text": "Once you want to reinstall the app you have to pay asking for your card details. This is a scam at the moment."
+            },
+            {
+              "score": 1,
+              "text": "scammer popular app, bear your own risk，telegram support team no care your review.. even you report scam or any threat, totally silent no response from telegram.. here ia black hole, black market. really just dont use this app. tell this fo"
+            }
+          ]
+        },
+        {
+          "bucket": "ads",
+          "count": 4,
+          "pctOfSample": 1.3,
+          "negCount": 3,
+          "examples": [
+            {
+              "score": 1,
+              "text": "this app constantly shows fake products ad , ads of betting or illegal apps, scam ads . This app should get banned"
+            },
+            {
+              "score": 1,
+              "text": "No way to control data usage by ads on metered networks. Trash"
+            },
+            {
+              "score": 1,
+              "text": "Requires a fee to install on new device despite verifying my mail. If you cannot bother to use an existing device which is connected to Telegram to verify the install then I cannot bother to pay a fee for one week of 'premium' and then get "
+            }
+          ]
+        },
+        {
+          "bucket": "performance",
+          "count": 3,
+          "pctOfSample": 1,
+          "negCount": 0,
+          "examples": []
+        },
+        {
+          "bucket": "bugs-crashes",
+          "count": 2,
+          "pctOfSample": 0.7,
+          "negCount": 2,
+          "examples": [
+            {
+              "score": 1,
+              "text": "crash or freeze many times , many times did not connecting though good network"
+            },
+            {
+              "score": 2,
+              "text": "The quiz bot in telegram is not working properly."
+            }
+          ]
+        },
+        {
+          "bucket": "ux-confusion",
+          "count": 1,
+          "pctOfSample": 0.3,
+          "negCount": 1,
+          "examples": [
+            {
+              "score": 1,
+              "text": "I found it difficult to use than ever now"
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

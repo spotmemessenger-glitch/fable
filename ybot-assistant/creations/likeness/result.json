@@ -1,0 +1,13 @@
+{
+  "ok": true,
+  "errors": [],
+  "renders": [
+    "C:\\Users\\yuv\\fable\\ybot-assistant\\creations\\likeness\\renders\\front.png",
+    "C:\\Users\\yuv\\fable\\ybot-assistant\\creations\\likeness\\renders\\side.png",
+    "C:\\Users\\yuv\\fable\\ybot-assistant\\creations\\likeness\\renders\\back.png",
+    "C:\\Users\\yuv\\fable\\ybot-assistant\\creations\\likeness\\renders\\threeq.png",
+    "C:\\Users\\yuv\\fable\\ybot-assistant\\creations\\likeness\\renders\\head.png"
+  ],
+  "blend": "C:\\Users\\yuv\\fable\\ybot-assistant\\creations\\likeness\\model.blend",
+  "glb": "C:\\Users\\yuv\\fable\\ybot-assistant\\creations\\likeness\\model.glb"
+}

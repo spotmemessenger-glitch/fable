@@ -6,6 +6,7 @@
 import './requests.css'
 import { db } from '../lib/db.js'
 import { lobby } from '../lib/discovery.js'
+import { reach } from '../lib/reach.js'
 import { rooms } from '../lib/rooms.js'
 import { el, clear, avatar, fmtDay } from '../lib/ui.js'
 
@@ -22,7 +23,7 @@ export function render (root, ctx) {
   root.appendChild(listEl)
 
   function accept (request) {
-    lobby.accept(request)
+    reach.accept(request)
     rooms.ensure(request.roomId)
     ctx.toast(`${request.name} added to Contacts`)
     ctx.openThread(request.roomId)
@@ -54,7 +55,7 @@ export function render (root, ctx) {
           request.text ? el('div', { class: 'rtxt', text: request.text }) : null,
           el('div', { class: 'racts' }, [
             el('button', { class: 'pill ok', type: 'button', text: 'Accept', onclick: () => accept(request) }),
-            el('button', { class: 'pill no', type: 'button', text: 'Reject', onclick: () => lobby.decline(request) })
+            el('button', { class: 'pill no', type: 'button', text: 'Reject', onclick: () => reach.decline(request) })
           ])
         ])
       ]))

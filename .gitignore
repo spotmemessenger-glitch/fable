@@ -44,11 +44,41 @@ build/
 .pnpm-store/
 
 # ---------------------------------------------------------------
-# Nested repository — next16-claude-starter has its own .git and is
-# versioned independently. Tracking it here would create an embedded
-# repo that neither side can manage properly.
+# Nested repositories — each has its own .git and is versioned
+# independently (or is simply a clone of someone else's public repo).
+# Tracking any of these here would create an embedded repo neither side
+# can manage properly, and several are hundreds of MB to 2GB+ of cloned
+# model weights that have no business in a personal project history.
 # ---------------------------------------------------------------
 next16-claude-starter/
+agentic-os/
+legal-templates/privacy-policy-template/
+legal-templates/template-terms-of-service/
+legal-templates/termsfeed-legal-templates/
+AnimateDiff/
+ComfyUI/
+DynamiCrafter/
+LivePortrait/
+TripoSR/
+UniRig/
+Unique3D/
+Pillow/
+autobase/
+hello-pear-electron/
+hyperbee/
+hypercore/
+hyperdrive/
+hyperswarm/
+pear-runtime/
+obsidian-plugin/
+ollama-mcp/
+pyautogui/
+expo/
+ffmpeg/
+freellmapi/
+free-llm-api-resources/
+awesome-claude-code-toolkit/
+awesome-cursorrules/
 
 # ---------------------------------------------------------------
 # Agent tooling caches and generated state

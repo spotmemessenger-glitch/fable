@@ -12,6 +12,7 @@
 import './discovery.css'
 import { db } from '../lib/db.js'
 import { lobby, distanceM, fmtDistance } from '../lib/discovery.js'
+import { reach } from '../lib/reach.js'
 import { langName } from '../lib/translate.js'
 import { el, clear, avatar } from '../lib/ui.js'
 
@@ -585,7 +586,7 @@ export function render (root, ctx) {
     const existing = findConvo(p.id)
     if (existing) { ctx.openThread(existing.roomId); return }
     try {
-      const roomId = lobby.request(p, WAVE, 'nearby')
+      const roomId = reach.reach(p, WAVE, 'nearby')
       ctx.toast('Sending request…')
       ctx.openThread(roomId)
     } catch { ctx.toast('Could not send the request') }
@@ -596,7 +597,7 @@ export function render (root, ctx) {
     const input = el('input', { type: 'text', placeholder: 'Say hi — any language', maxlength: '300' })
     const send = () => {
       try {
-        const roomId = lobby.request(p, input.value.trim(), 'nearby')
+        const roomId = reach.reach(p, input.value.trim(), 'nearby')
         closeOverlay()
         ctx.toast('Sending request…')
         ctx.openThread(roomId)

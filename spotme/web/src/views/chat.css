@@ -214,6 +214,9 @@
 
 .v-chat .readRow svg { width: 14px; height: 9px; }
 .v-chat .readRow.read { color: var(--blue); }
+/* A transfer that never landed. Reads as a warning, not as a tick. */
+.v-chat .readRow.failed { color: var(--red); font-weight: 600; }
+.v-chat .readRow.failed svg { opacity: .55; }
 
 .v-chat .sys {
   align-self: center;

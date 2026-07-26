@@ -18,6 +18,7 @@
 import './bluetooth.css'
 import { db } from '../lib/db.js'
 import { lobby, distanceM, fmtDistance } from '../lib/discovery.js'
+import { reach } from '../lib/reach.js'
 import { el, clear, avatar, actionSheet } from '../lib/ui.js'
 
 const SCAN_MS = 8000               // one sweep window
@@ -153,7 +154,7 @@ export function render (root, ctx) {
       label: 'Send request',
       fn () {
         try {
-          const roomId = lobby.request(person, 'Bluetooth chat request', 'bluetooth')
+          const roomId = reach.reach(person, 'Bluetooth chat request', 'bluetooth')
           ctx.toast('Request sent')
           ctx.openThread(roomId)
         } catch { ctx.toast('Could not send that request') }

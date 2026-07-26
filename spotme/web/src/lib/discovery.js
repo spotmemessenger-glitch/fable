@@ -1,10 +1,10 @@
 /**
  * Spot Me — discovery lobby.
  *
- * One app-wide Trystero room every open client joins. It carries three things:
- * presence announcements (who is nearby, with COARSE position), chat requests,
- * and accept notifications. Actual conversations never travel here — each chat
- * is its own encrypted room whose secret is exchanged inside the request.
+ * One app-wide Trystero room every open client joins, carrying presence
+ * announcements only — who is nearby, with COARSE position. Chat requests no
+ * longer travel here: see reach.js, which addresses a request directly to one
+ * person's own inbox room instead of broadcasting it through this shared one.
  *
  * LOCATION HONESTY: positions are rounded to ~110 m and offset with a stable
  * per-person jitter before they ever leave the device. Distance readouts are
@@ -14,8 +14,7 @@
  */
 import { joinRoom } from '@trystero-p2p/torrent'
 import { RTC_CONFIG, readyRTC } from '../net.js'
-import { db, randomHex } from './db.js'
-import { rooms } from './rooms.js'
+import { db } from './db.js'
 import { pushNote } from './notify.js'
 
 const APP_ID = 'io.ysnapai.spotme'
@@ -29,12 +28,9 @@ function createLobby () {
   const subscribers = new Set()
   let room = null
   let hello = null
-  let req = null
-  let acc = null
-  let rej = null
-  let ack = null
   let heartbeat = null
   let position = null              // my coarse {lat, lon} or null
+  let lastTick = 0                 // last heartbeat time — a stale value means the tab was suspended
 
   function notify () { for (const fn of subscribers) fn() }
 
@@ -108,25 +104,6 @@ function createLobby () {
     room = joinRoom({ appId: APP_ID, password: LOBBY_PASS, rtcConfig: RTC_CONFIG }, LOBBY_ID)
 
     hello = room.makeAction('hello')
-    req = room.makeAction('req')
-    acc = room.makeAction('acc')
-    rej = room.makeAction('rej')
-    ack = room.makeAction('ack')
-
-    /**
-     * Delivery receipt. Without it "in flight", "delivered but unanswered"
-     * and "silently lost" all looked identical — which is why this bug was
-     * reported twice with nothing to go on.
-     */
-    ack.onMessage = (payload) => {
-      if (!payload?.roomId) return
-      outbox.delete(payload.roomId)
-      const convo = db.convo(payload.roomId)
-      if (convo && !convo.delivered) {
-        db.upsertConvo({ roomId: payload.roomId, delivered: true })
-        notify()
-      }
-    }
 
     hello.onMessage = (payload, meta) => {
       if (!payload?.id || payload.id === db.profile().id) return
@@ -147,74 +124,9 @@ function createLobby () {
       notify()
     }
 
-    req.onMessage = (payload, meta) => {
-      if (!payload?.from?.id || !payload.roomId || !payload.secret) return
-      /* Addressed requests let us broadcast safely — but the address may be
-       * STALE. A username lookup returns the id recorded when that name was
-       * claimed, and someone who reinstalled now has a different id. Matching
-       * the username as well means a re-registered friend still receives the
-       * request instead of it vanishing silently. */
-      const me = db.profile()
-      const addressed = Boolean(payload.to || payload.toUsername)
-      const forMe = (payload.to && payload.to === me.id) ||
-        (payload.toUsername && me.username && payload.toUsername === me.username)
-      if (addressed && !forMe) return
-      /* Ack FIRST, and ack duplicates too: the sender keeps re-sending until
-       * it hears back, so a swallowed duplicate must still answer. A request
-       * whose room we already hold was accepted earlier — same story. */
-      const receipt = () => {
-        if (ack) safe(ack.send({ roomId: payload.roomId }, meta?.peerId ? { target: meta.peerId } : undefined))
-      }
-      if (db.convo(payload.roomId)) { receipt(); return }
-      const added = db.addRequest({
-        fromId: payload.from.id,
-        name: payload.from.name || 'Unknown',
-        avatar: payload.from.avatar || null,
-        lang: payload.from.lang || 'en',
-        text: String(payload.text || '').slice(0, 300),
-        roomId: payload.roomId,
-        secret: payload.secret,
-        mode: payload.mode || 'meet'
-      })
-      receipt()
-      if (added) {
-        pushNote(`${payload.from.name || 'Someone'} sent a chat request`,
-          String(payload.text || 'wants to chat').slice(0, 120), `req:${payload.from.id}`)
-        notify()
-      }
-    }
-
-    acc.onMessage = (payload) => {
-      if (!payload?.roomId) return
-      outbox.delete(payload.roomId)
-      const convo = db.convo(payload.roomId)
-      if (convo?.pending) {
-        db.upsertConvo({ roomId: payload.roomId, pending: false })
-        db.addContact(convo.peer)
-      }
-      notify()
-    }
-
-    // Rejection means the profile disappears on the requester's side too —
-    // conversation, history, everything. Best-effort (they must be online to
-    // hear it); a missed signal just leaves the request looking pending.
-    rej.onMessage = (payload) => {
-      if (!payload?.roomId) return
-      outbox.delete(payload.roomId)
-      const convo = db.convo(payload.roomId)
-      if (convo?.pending) {
-        rooms.leave(payload.roomId)
-        db.removeConvo(payload.roomId)
-        notify()
-      }
-    }
-
     room.onPeerJoin = (peerId) => {
       // Introduce ourselves to the newcomer only; no full-room rebroadcast.
       safe(hello.send(myAnnouncement(), { target: peerId }))
-      // Every newcomer might be the person an outboxed request is for —
-      // addressed payloads make offering it to the wrong peer harmless.
-      flushOutbox(peerId)
     }
 
     room.onPeerLeave = (peerId) => {
@@ -227,22 +139,12 @@ function createLobby () {
     // Debug handle for live inspection; carries no secrets (lobby is public).
     window.__lobby = { room, peers }
 
-    /* Reload delivery duty from disk: any conversation still pending and
-     * unacknowledged goes back into the outbox, so closing the app does not
-     * abandon a request that never got through. */
-    for (const convo of db.convos()) {
-      if (convo.pending && !convo.delivered && convo.reqPayload) {
-        outbox.set(convo.roomId, {
-          payload: convo.reqPayload, peerId: convo.peer?.id, first: Date.now()
-        })
-      }
-    }
-
     announce()
     acquirePosition()
+    lastTick = Date.now()
     heartbeat = setInterval(() => {
       announce()
-      flushOutbox()
+      lastTick = Date.now()
       // Reap the silent — a phone that locked or lost signal.
       const cutoff = Date.now() - STALE_MS
       let dropped = false
@@ -254,111 +156,36 @@ function createLobby () {
   }
 
   /**
-   * Requests live in an outbox until the other side ACKNOWLEDGES them.
+   * Call when the tab regains foreground.
    *
-   * The previous version retried only while `req` did not exist — but `req`
-   * is created at boot, so every real request fired exactly once, into
-   * whatever peers happened to be connected at that instant. Trystero's send
-   * resolves successfully against an empty room, so a request sent before the
-   * lobby had meshed left the phone as zero bytes while the UI said "sent".
-   * That is the request the owner's friend never received.
+   * A phone that gets locked or backgrounded can have its WebRTC/tracker
+   * connections silently killed by the OS — iOS Safari is aggressive about
+   * this — while the setInterval heartbeat above also stops firing. start()'s
+   * own guard (`if (room) return`) would otherwise hand back that corpse
+   * forever, the same bug already fixed for chat rooms in rooms.js.
    *
-   * The outbox flushes on every peer join and every heartbeat, and only an
-   * ack (or an accept, a reject, or deleting the conversation) clears it.
-   * TTL-bounded per session so an unanswered request does not shout forever;
-   * rehydrated from pending conversations at start(), so reopening the app
-   * resumes delivery.
+   * A missed heartbeat is the tell: if ticks stopped landing on schedule, the
+   * whole page was very likely suspended, so the underlying connections are
+   * assumed dead and the lobby rejoins from scratch. Otherwise this just
+   * re-announces immediately rather than waiting for the next scheduled tick.
    */
-  const OUTBOX_TTL_MS = 10 * 60_000
-  const outbox = new Map()          // roomId -> { payload, peerId, first }
-
-  function flushOutbox (joinedPeerId = null) {
-    if (!req || !room) return
-    const live = room.getPeers ? room.getPeers() : {}
-    if (!joinedPeerId && Object.keys(live).length === 0) return
-    for (const [roomId, entry] of outbox) {
-      const convo = db.convo(roomId)
-      if (!convo || !convo.pending || convo.delivered ||
-          Date.now() - entry.first > OUTBOX_TTL_MS) {
-        outbox.delete(roomId)
-        continue
-      }
-      // Prefer the transport id we know for them, but only while it is still
-      // connected — a stale id targets nobody and sends nothing.
-      const known = peers.get(entry.peerId)?.peerId
-      const target = (known && live[known]) ? known : joinedPeerId
-      safe(req.send(entry.payload, target ? { target } : undefined))
+  function resume () {
+    if (!room) { start(); return }
+    const missed = lastTick && Date.now() - lastTick > HEARTBEAT_MS * 3
+    if (missed) {
+      try { room.leave() } catch { /* already gone */ }
+      room = null; hello = null
+      start()
+      return
     }
-  }
-
-  function deliverRequest (payload, peerId) {
-    outbox.set(payload.roomId, { payload, peerId, first: Date.now() })
-    if (!req) { start(); return }   // start() rehydrates; its flush follows
-    flushOutbox()
-  }
-
-  /** Send a chat request. Creates the room credentials and a pending convo. */
-  function request (peer, text, mode = 'nearby') {
-    const roomId = randomHex(8)
-    const secret = randomHex(16)
-    const p = db.profile()
-    const target = peers.get(peer.id)?.peerId
-    const payload = {
-      to: peer.id,
-      toUsername: peer.username || null,
-      from: { id: p.id, name: p.name, avatar: p.avatar, lang: p.lang },
-      roomId, secret, text: String(text || '').slice(0, 300), mode
-    }
-    /**
-     * Deliver as soon as the lobby can carry it. The conversation is recorded
-     * either way, so the request is never silently lost:
-     *  - targeted when we know their transport id, broadcast otherwise (peer
-     *    maps fill in slowly over public trackers, and a request must not fail
-     *    just because ours has not caught up);
-     *  - retried while the lobby is still joining. Waiting for relay
-     *    credentials means `req` can legitimately not exist yet, and tapping
-     *    send in that window used to throw.
-     */
-    // Convo first, then deliver: the outbox consults the convo to decide
-    // whether a request is still owed, so it must exist before the flush.
-    db.upsertConvo({
-      roomId, secret, kind: 'dm', mode,
-      peer: { id: peer.id, name: peer.name, avatar: peer.avatar || null, lang: peer.lang || 'en' },
-      title: peer.name, pending: true, delivered: false, reqPayload: payload,
-      last: { text: text || 'Request sent', ts: Date.now(), fromMe: true }
-    })
-    deliverRequest(payload, peer.id)
-    return roomId
-  }
-
-  /** Accept an incoming request: request → conversation + contact. */
-  function accept (request_) {
-    db.upsertConvo({
-      roomId: request_.roomId, secret: request_.secret, kind: 'dm', mode: request_.mode,
-      peer: { id: request_.fromId, name: request_.name, avatar: request_.avatar, lang: request_.lang },
-      title: request_.name, pending: false,
-      last: { text: request_.text || 'Request accepted', ts: Date.now(), fromMe: false }
-    })
-    db.addContact({ id: request_.fromId, name: request_.name, avatar: request_.avatar, lang: request_.lang })
-    db.removeRequest(request_.fromId)
-    const target = peers.get(request_.fromId)?.peerId
-    if (acc) safe(acc.send({ roomId: request_.roomId }, target ? { target } : undefined))
-  }
-
-  function decline (request_) {
-    db.removeRequest(request_.fromId)
-    // Tell the requester so their side removes the conversation entirely.
-    const target = peers.get(request_.fromId)?.peerId
-    if (rej) safe(rej.send({ roomId: request_.roomId }, target ? { target } : undefined))
+    announce()
   }
 
   return {
     start,
+    resume,
     announce,
     refreshPosition: acquirePosition,
-    request,
-    accept,
-    decline,
     /** Live peers, most recently seen first. Excludes blocked. */
     peers: () => Array.from(peers.values())
       .filter((p) => !db.isBlocked(p.id))

@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-slate-950 text-slate-100">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Aura Fit — Clean Fitness Tracking</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
+          },
+          colors: {
+            brand: {
+              50: '#f0fdf4',
+              100: '#dcfce7',
+              400: '#4ade80',
+              500: '#22c55e',
+              600: '#16a34a',
+              950: '#022c22',
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <!-- Google Fonts for premium typography -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    /* Premium scrollbar behavior and smooth tap transitions */
+    * {
+      font-family: 'Inter', sans-serif;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .no-scrollbar::-webkit-scrollbar {
+      display: none;
+    }
+    .no-scrollbar {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+  </style>
+</head>
+<body class="h-full antialiased selection:bg-brand-500 selection:text-slate-950 flex flex-col justify-between">
+
+  <!-- Active Session Global Banner (Hidden by default, triggered via JS) -->
+  <div id="active-session-banner" class="hidden sticky top-0 z-50 bg-brand-500 text-slate-950 px-4 py-2.5 shadow-lg transition-all duration-300">
+    <div class="max-w-6xl mx-auto flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <span class="relative flex h-3 w-3">
+          <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-slate-950 opacity-75"></span>
+          <span class="relative inline-flex rounded-full h-3 w-3 bg-slate-950"></span>
+        </span>
+        <p class="text-sm font-semibold tracking-wide">ACTIVE WORKOUT: <span id="session-workout-name">Lower Body Strength</span></p>
+      </div>
+      <div class="flex items-center gap-4">
+        <span id="session-timer" class="font-mono text-sm font-bold bg-slate-950 text-brand-400 px-2 py-0.5 rounded">00:00</span>
+        <button onclick="stopWorkout()" class="text-xs bg-slate-950 text-slate-100 px-3 py-1 rounded-md font-medium hover:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-400 active:scale-95 transition-all" aria-label="End active workout">
+          End
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Header Section -->
+  <header class="w-full border-b border-slate-900 bg-slate-950/80 backdrop-blur-md sticky top-0 z-40">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <!-- Logo -->
+        <div class="h-9 w-9 rounded-xl bg-gradient-to-tr from-brand-600 to-emerald-400 flex items-center justify-center shadow-md shadow-brand-500/10">
+          <svg class="w-5 h-5 text-slate-950 stroke-[2.5]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z" />
+          </svg>
+        </div>
+        <div>
+          <h1 class="text-base font-bold tracking-tight text-white leading-tight">Aura Fit</h1>
+          <p class="text-[10px] text-brand-400 uppercase tracking-widest font-semibold">Pro Level</p>
+        </div>
+      </div>
+
+      <!-- Quick Actions & User Profile -->
+      <div class="flex items-center gap-3">
+        <!-- Notification Button -->
+        <button class="relative p-2 text-slate-400 hover:text-white rounded-lg hover:bg-slate-900 transition-colors focus:outline-none focus:ring-2 focus:ring-brand-500" aria-label="Notifications">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+          </svg>
+          <span class="absolute top-1.5 right-1.5 block h-2 w-2 rounded-full bg-brand-500 ring-2 ring-slate-950"></span>
+        </button>
+
+        <!-- User Profile Avatar -->
+        <button class="flex items-center gap-2 p-1 pl-2 pr-3 rounded-full bg-slate-900 border border-slate-800 hover:border-slate-700 focus:outline-none focus:ring-2 focus:ring-brand-500 transition-all" aria-label="User Profile menu">
+          <img class="h-7 w-7 rounded-full object-cover border border-brand-500/30" src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=100&q=80" alt="Alex Rivera profile photo">
+          <span class="text-xs font-semibold text-slate-200 hidden sm:inline">Alex R.</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="flex-grow max-w-6xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+    
+    <!-- Hero Row: Welcome Message & Range Switcher -->
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+      <div>
+        <h2 class="text-xl sm:text-2xl font-bold text-white tracking-tight">Welcome back, Alex</h2>
+        <p class="text-sm text-slate-400 mt-1">You are doing fantastic today. Check your progress below.</p>
+      </div>
+      <!-- Date Display and Tab Selector -->
+      <div class="flex items-center bg-slate-900 border border-slate-800 p-1 rounded-xl self-start sm:self-auto">
+        <button id="tab-day" onclick="switchTab('day')" class="px-3.5 py-1.5 text-xs font-medium rounded-lg transition-all bg-brand-500 text-slate-950 shadow-sm" aria-current="page">Today</button>
+        <button id="tab-week" onclick="switchTab('week')" class="px-3.5 py-1.5 text-xs font-medium rounded-lg text-slate-400 hover:text-white transition-all">This Week</button>
+        <button id="tab-month" onclick="switchTab('month')" class="px-3.5 py-1.5 text-xs font-medium rounded-lg text-slate-400 hover:text-white transition-all">Month</button>
+      </div>
+    </div>
+
+    <!-- Overview Grid Layout (Responsive) -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+      
+      <!-- Column 1 & 2: Daily Rings & Daily Stats -->
+      <section class="lg:col-span-2 space-y-6">
+        
+        <!-- Big Rings & Quick Overview Card -->
+        <div class="bg-gradient-to-br from-slate-900/90 to-slate-950 border border-slate-800/80 rounded-2xl p-6 shadow-xl relative overflow-hidden group">
+          <div class="absolute -right-24 -top-24 w-64 h-64 bg-brand-500/5 rounded-full blur-3xl pointer-events-none"></div>
+          
+          <div class="flex flex-col md:flex-row items-center justify-between gap-6 relative z-10">
+            <!-- Left: Hero Radial Dial -->
+            <div class="flex items-center gap-6">
+              <div class="relative w-32 h-32 flex items-center justify-center">
+                <!-- SVG Dual Concentric Ring Design -->
+                <svg class="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
+                  <!-- Outer Ring (Move/Calories) -->
+                  <circle class="text-slate-800" stroke-width="7" stroke="currentColor" fill="transparent" r="40" cx="50" cy="50" />
+                  <circle id="ring-calories" class="text-rose-500 transition-all duration-700 ease-out" stroke-dasharray="251.2" stroke-dashoffset="62.8" stroke-width="7" stroke-linecap="round" stroke="currentColor" fill="transparent" r="40" cx="50" cy="50" />
+                  
+                  <!-- Middle Ring (Exercise/Min) -->
+                  <circle class="text-slate-800/60" stroke-width="7" stroke="currentColor" fill="transparent" r="30" cx="50" cy="50" />
+                  <circle id="ring-exercise" class="text-brand-400 transition-all duration-700 ease-out" stroke-dasharray="188.4" stroke-dashoffset="37.6" stroke-width="7" stroke-linecap="round" stroke="currentColor" fill="transparent" r="30" cx="50" cy="50" />
+
+                  <!-- Inner Ring (Stand/Hr) -->
+                  <circle class="text-slate-800/40" stroke-width="7" stroke="currentColor" fill="transparent" r="20" cx="50" cy="50" />
+                  <circle id="ring-stand" class="text-cyan-400 transition-all duration-700 ease-out" stroke-dasharray="125.6" stroke-dashoffset="31.4" stroke-width="7" stroke-linecap="round" stroke="currentColor" fill="transparent" r="20" cx="50" cy="50" />
+                </svg>
+                <!-- Central Text Percentage (Calorie focused) -->
+                <div class="absolute inset-0 flex flex-col items-center justify-center">
+                  <span class="text-2xl font-black text-white tracking-tight" id="hero-percentage">75%</span>
+                  <span class="text-[9px] text-slate-400 font-medium uppercase tracking-wider">Done</span>
+                </div>
+              </div>
+
+              <!-- Metrics Legends -->
+              <div class="space-y-3">
+                <div class="flex items-center gap-2">
+                  <span class="w-3 h-3 rounded bg-rose-500 block"></span>
+                  <div>
+                    <p class="text-xs text-slate-400 font-medium">Move Goal</p>
+                    <p class="text-sm font-bold text-white"><span id="metric-calories">450</span> / 600 <span class="text-xs text-slate-500 font-normal">kcal</span></p>
+                  </div>
+                </div>
+                <div class="flex items-center gap-2">
+                  <span class="w-3 h-3 rounded bg-brand-400 block"></span>
+                  <div>
+                    <p class="text-xs text-slate-400 font-medium">Exercise</p>
+                    <p class="text-sm font-bold text-white"><span id="metric-exercise">24</span> / 30 <span class="text-xs text-slate-500 font-normal">min</span></p>
+                  </div>
+                </div>
+                <div class="flex items-center gap-2">
+                  <span class="w-3 h-3 rounded bg-cyan-400 block"></span>
+                  <div>
+                    <p class="text-xs text-slate-400 font-medium">Stand</p>
+                    <p class="text-sm font-bold text-white"><span id="metric-stand">9</span> / 12 <span class="text-xs text-slate-500 font-normal">hr</span></p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Right: Performance Statement / Insight Card -->
+            <div class="border-t md:border-t-0 md:border-l border-slate-800 pt-6 md:pt-0 md:pl-8 flex-grow self-stretch flex flex-col justify-between">
+              <div>
+                <span class="text-[10px] bg-brand-950 text-brand-400 font-semibold px-2.5 py-1 rounded-md border border-brand-500/20 inline-block uppercase tracking-wider mb-2">Aura Coach Insight</span>
+                <p class="text-sm text-slate-200 leading-relaxed font-medium">
+                  You are tracking <span class="text-brand-400">12% higher</span> than your average Tuesday. An evening 15-minute mobility routine will complete all your target rings today!
+                </p>
+              </div>
+              <div class="mt-4 flex items-center justify-between">
+                <span class="text-xs text-slate-500">Last updated: Just now</span>
+                <button onclick="refreshMockStats()" class="text-xs font-semibold text-brand-400 hover:text-brand-500 inline-flex items-center gap-1 transition-all focus:outline-none focus:ring-1 focus:ring-brand-400 rounded" aria-label="Refresh stats">
+                  <svg class="w-3 h-3 animate-spin-hover" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M4 4v5h.582m15.356 2A8.001 8.001 0 1121.21 16H18.79M3.75 13.5A9 9 0 0116.5 4.5h2.25M3.75 13.5v5" />
+                  </svg>
+                  Sync Data
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 2x2 Clean Micro Metrics Grid -->
+        <div class="grid grid-cols-2 gap-4">
+          <!-- Card 1: Heart Rate -->
+          <article class="bg-slate-900 border border-slate-800 hover:border-slate-700/80 transition-all rounded-xl p-4 flex flex-col justify-between h-36">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Heart Rate</span>
+              <div class="p-1.5 bg-rose-500/10 rounded-lg text-rose-500">
+                <svg class="w-5 h-5 animate-pulse" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+                </svg>
+              </div>
+            </div>
+            <div>
+              <span class="text-3xl font-extrabold text-white tracking-tight" id="live-heart-rate">72</span>
+              <span class="text-xs font-semibold text-slate-400 ml-1">BPM</span>
+              <div class="flex items-center gap-1.5 mt-2">
+                <span class="w-1.5 h-1.5 bg-emerald-500 rounded-full"></span>
+                <p class="text-xs text-slate-400">Resting 58 BPM average</p>
+              </div>
+            </div>
+          </article>
+
+          <!-- Card 2: Interactive Water Intake -->
+          <article class="bg-slate-900 border border-slate-800 hover:border-slate-700/80 transition-all rounded-xl p-4 flex flex-col justify-between h-36">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Hydration</span>
+              <div class="p-1.5 bg-cyan-500/10 rounded-lg text-cyan-400">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
+                </svg>
+              </div>
+            </div>
+            <div>
+              <div class="flex items-baseline gap-1">
+                <span class="text-3xl font-extrabold text-white tracking-tight" id="current-water-value">1.4</span>
+                <span class="text-xs font-semibold text-slate-400">/ 2.5 L</span>
+              </div>
+              
+              <!-- Mini Progress Bar -->
+              <div class="w-full bg-slate-800 h-1.5 rounded-full mt-2.5 overflow-hidden">
+                <div id="water-progress-bar" class="bg-cyan-400 h-full rounded-full transition-all duration-300" style="width: 56%"></div>
+              </div>
+
+              <!-- Quick Log Button -->
+              <div class="flex justify-between items-center mt-2">
+                <span class="text-[10px] text-slate-500">Target 2.5L</span>
+                <button onclick="addWater()" class="text-[10px] bg-cyan-400/10 hover:bg-cyan-400/20 active:scale-95 text-cyan-400 border border-cyan-400/20 font-bold px-2 py-0.5 rounded-md

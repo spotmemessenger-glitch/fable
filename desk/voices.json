@@ -1,0 +1,27 @@
+{
+  "_comment": "Paste ElevenLabs voice IDs into voice_id. Empty voice_id = that seat stays silent (text only); the desk still runs. IMPORTANT: an ID copied from the ElevenLabs Voice Library does NOT work until you open that voice and click 'Add to my voices' — until then the API returns voice_not_found.",
+  "_multilingual": "Every seat is multilingual. language 'auto' makes the seat answer in whatever language you spoke to it in. Pin a seat with an ISO-639-1 code (en, ta, hi, es, ja, ar, de, fr, zh, pt, ru, ko, id, tr...). All cast voices below are fine-tuned on eleven_turbo_v2_5 AND eleven_multilingual_v2, so they carry other languages cleanly.",
+  "_model": "eleven_turbo_v2_5 covers 32 languages at low latency, which is what a trading desk needs. Override globally with DESK_TTS_MODEL=eleven_multilingual_v2 for higher fidelity at roughly 2x the latency.",
+  "_status": "All 15 seats cast and verified against the account on 2026-07-24. To recast a seat, drop a different (already 'Added to my voices') id into its voice_id.",
+
+  "HELM":      { "voice_name": "Jarvis",                          "voice_id": "wDsJlOXPqcvIUKdLXjDs", "language": "auto", "stability": 0.45, "similarity_boost": 0.75, "speed": 1.00 },
+
+  "TIDE":      { "voice_name": "Pete - Unhurried and Casual",     "voice_id": "ChO6kqkVouUn0s7HMunx", "language": "auto", "stability": 0.70, "similarity_boost": 0.70, "speed": 0.90 },
+  "KRAKEN":    { "voice_name": "Well Spoken English Man",         "voice_id": "cwo4ramDmreHdb4b1Jxz", "language": "auto", "stability": 0.55, "similarity_boost": 0.75, "speed": 0.96 },
+  "COIL":      { "voice_name": "Ivanna - Upbeat and Engaging",    "voice_id": "0S5oIfi8zOZixuSj8K6n", "language": "auto", "stability": 0.50, "similarity_boost": 0.76, "speed": 1.06 },
+
+  "CHARTIST":  { "voice_name": "Archer - Conversational",         "voice_id": "Fahco4VZzobUeiPqni1S", "language": "auto", "stability": 0.60, "similarity_boost": 0.72, "speed": 1.05 },
+  "SIGMA":     { "voice_name": "Beatrice - Mature, Gentle",       "voice_id": "kkPJzQOWz2Oz9cUaEaQd", "language": "auto", "stability": 0.75, "similarity_boost": 0.65, "speed": 0.90 },
+
+  "VESTA":     { "voice_name": "Vanishree - Casual Tamil",        "voice_id": "OUBMjq0LvBjb07bhwD3H", "language": "auto", "stability": 0.72, "similarity_boost": 0.70, "speed": 0.96 },
+  "CASSANDRA": { "voice_name": "Lauren B - Warm Conversational",  "voice_id": "l4Coq6695JDX9xtLqXDE", "language": "auto", "stability": 0.40, "similarity_boost": 0.80, "speed": 1.04 },
+
+  "HOUND":     { "voice_name": "Simran - Bright, Expressive",     "voice_id": "TRnaQb7q41oL7sV0w6Bu", "language": "auto", "stability": 0.28, "similarity_boost": 0.82, "speed": 1.15 },
+  "GEIGER":    { "voice_name": "Roshni",                          "voice_id": "fq1SdXsX6OokE10pJ4Xw", "language": "auto", "stability": 0.80, "similarity_boost": 0.68, "speed": 1.02 },
+  "BALLAST":   { "voice_name": "Peter - Engaging & Informative",  "voice_id": "xjSY1jlib9TWNUuScrNW", "language": "auto", "stability": 0.82, "similarity_boost": 0.66, "speed": 0.90 },
+  "VIPER":     { "voice_name": "Olivia J - Confident & Engaging", "voice_id": "NbkKnEAZ7Bqw4EAkVEaz", "language": "auto", "stability": 0.50, "similarity_boost": 0.78, "speed": 1.18 },
+
+  "SENTINEL":  { "voice_name": "Mark - Natural Conversations",    "voice_id": "UgBBYS2sOqTuMpoF3BR0", "language": "auto", "stability": 0.85, "similarity_boost": 0.65, "speed": 0.94 },
+  "PILOT":     { "voice_name": "Paige - Engaging Narrator",       "voice_id": "NDTYOmYEjbDIVCKB35i3", "language": "auto", "stability": 0.70, "similarity_boost": 0.70, "speed": 1.08 },
+  "LEDGER":    { "voice_name": "Jessica Anne Bogart - Chatty",    "voice_id": "g6xIsTj2HwM6VR4iXFCw", "language": "auto", "stability": 0.80, "similarity_boost": 0.65, "speed": 0.98 }
+}
