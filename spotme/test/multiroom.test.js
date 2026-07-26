@@ -18,6 +18,12 @@
  * machine. Discovery is genuinely remote; the transport may never leave
  * localhost.
  *
+ * Needs a real path to the public DHT to pass — sandboxes that only permit
+ * outbound HTTPS (no raw UDP) will see the announce/discovery steps stall or
+ * time out even with these timeouts, exactly as swarm.test.js does in that
+ * environment. That is a network property of where the test runs, not a
+ * failure of this code; run it on a normal network before trusting a FAIL.
+ *
  *   node test/multiroom.test.js
  */
 const os = require('os')
@@ -64,26 +70,30 @@ async function openSide (dir, { key = null, identity }) {
 async function main () {
   const started = Date.now()
 
-  // ------------------------------------------------- Alice opens BOTH rooms
-  const room1Alice = await openSide('alice-room1', { identity: 'alice' })
-  const room2Alice = await openSide('alice-room2', { identity: 'alice' })
+  // ------------------------------------------ Alice opens BOTH rooms at once
+  // Concurrently, not sequentially — the whole point is proving one process
+  // can run two announces/rooms in parallel without them stepping on each other.
+  const [room1Alice, room2Alice] = await Promise.all([
+    openSide('alice-room1', { identity: 'alice' }),
+    openSide('alice-room2', { identity: 'alice' })
+  ])
   log('alice announced both rooms after', ((Date.now() - started) / 1000).toFixed(1) + 's')
 
   check('twoRoomsHaveDifferentKeys', room1Alice.room.key !== room2Alice.room.key)
   check('twoRoomsHaveDifferentDiscoveryKeys',
     !room1Alice.room.discoveryKey.equals(room2Alice.room.discoveryKey))
 
-  // ---------------------------------------------------- Bob joins room 1 only
-  const bob = await openSide('bob', { key: room1Alice.room.key, identity: 'bob' })
-  // -------------------------------------------------- Carol joins room 2 only
-  const carol = await openSide('carol', { key: room2Alice.room.key, identity: 'carol' })
+  // Bob joins room 1 only, Carol joins room 2 only — also concurrently.
+  const [bob, carol] = await Promise.all([
+    openSide('bob', { key: room1Alice.room.key, identity: 'bob' }),
+    openSide('carol', { key: room2Alice.room.key, identity: 'carol' })
+  ])
 
-  // This sandbox's DHT bootstrap runs far slower than a normal network (observed
-  // ~70s just to announce, ~190s to find a peer) — give it real room rather than
-  // failing on a timeout tuned for typical conditions.
+  // Double swarm.test.js's single-room default: two concurrent announces
+  // share one process's DHT bootstrap work, so give this a bit more room.
   const [bobFound, carolFound] = await Promise.all([
-    bob.swarm.waitForPeer({ timeout: 240000 }),
-    carol.swarm.waitForPeer({ timeout: 240000 })
+    bob.swarm.waitForPeer({ timeout: 90000 }),
+    carol.swarm.waitForPeer({ timeout: 90000 })
   ])
   check('bobFoundAliceInRoom1', bobFound)
   check('carolFoundAliceInRoom2', carolFound)
@@ -106,11 +116,12 @@ async function main () {
   await room2Alice.room.invite(carol.room.writerKey)
   await Promise.all([room1Alice.room.update(), room2Alice.room.update()])
 
-  // Same slow-sandbox allowance as the peer-discovery wait above.
-  const WRITABLE_WAIT = { attempts: 240, interval: 1000 }
+  // swarm.test.js waits 30s (60 x 500ms) for a single invite to travel the
+  // DHT; double it here for the same two-concurrent-rooms reason as above.
+  const WAIT = { attempts: 90, interval: 500 }
   const [bobWritable, carolWritable] = await Promise.all([
-    bob.room.waitFor((r) => r.writable, WRITABLE_WAIT),
-    carol.room.waitFor((r) => r.writable, WRITABLE_WAIT)
+    bob.room.waitFor((r) => r.writable, WAIT),
+    carol.room.waitFor((r) => r.writable, WAIT)
   ])
   check('bobInvitedInRoom1', bobWritable)
   check('carolInvitedInRoom2', carolWritable)
@@ -122,8 +133,8 @@ async function main () {
   // Both rooms must converge WHILE the other is also mid-exchange — proving
   // one process running two rooms doesn't stall or interleave them.
   const [room1Converged, room2Converged] = await Promise.all([
-    waitForConvergence(room1Alice.room, bob.room, { attempts: 240, interval: 1000 }),
-    waitForConvergence(room2Alice.room, carol.room, { attempts: 240, interval: 1000 })
+    waitForConvergence(room1Alice.room, bob.room, WAIT),
+    waitForConvergence(room2Alice.room, carol.room, WAIT)
   ])
   check('room1ConvergedWhileRoom2Active', room1Converged)
   check('room2ConvergedWhileRoom1Active', room2Converged)
