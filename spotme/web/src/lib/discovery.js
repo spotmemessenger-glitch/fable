@@ -46,6 +46,12 @@ function createLobby () {
     return {
       id: p.id,
       name: p.name,
+      // The username registry hands back the id recorded when the name was
+      // CLAIMED, which goes stale on reinstall (or on a second origin, which
+      // has its own localStorage and its own registry). Announcing the
+      // username lets a sender resolve whoever is live right now and address
+      // their CURRENT id, instead of a dead one the receiver silently drops.
+      username: p.username || null,
       avatar: p.avatar,
       lang: p.lang,
       ghost: !show,

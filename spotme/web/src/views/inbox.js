@@ -353,7 +353,11 @@ export function render (root, ctx) {
       sending = true
       // Addressed, so it reaches them anywhere in the lobby — not only if our
       // peer list already happens to hold them.
-      const live = lobby.peers().find((p) => p.id === match.id)
+      // Match on username FIRST: the registry id is the one recorded when the
+      // name was claimed, so it is stale for anyone who reinstalled, and
+      // looking them up by it misses the very person standing in the lobby.
+      const live = lobby.peers().find((p) => match.username && p.username === match.username) ||
+        lobby.peers().find((p) => p.id === match.id)
       const peer = (live ? { ...live, username: match.username } : null) ||
         { id: match.id, name: who, username: match.username, avatar: null, lang: 'en' }
       const text = input.value.trim().slice(0, 300) || 'Hi!'
