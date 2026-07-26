@@ -1,31 +1,33 @@
 /* J.A.R.V.I.S. HUD — Iron Man command interface.
-   Red + gold metallic on black, cyan arc reactor, glowing helmet bust.
-   Style: HUD / Sci-Fi FUI. Fonts: Orbitron (display) + Share Tech Mono (data). */
+   Red + gold metallic on black, cyan reserved for the arc reactor/eyes only,
+   glowing helmet bust. Style: HUD / Sci-Fi FUI.
+   Fonts: Orbitron (display) + Share Tech Mono (data). */
 
 :root {
-  /* Electric blue + luminous gold, matching the blueprint reference. */
-  --bg: #010409;
-  --bg2: #041018;
-  --panel: rgba(5, 18, 30, 0.55);
-  --line: rgba(25, 181, 255, 0.30);
+  /* Red + gold as the primary structural duo (retheme from the earlier
+     blue-line variant); cyan survives only as the reactor's own accent. */
+  --bg: #0a0402;
+  --bg2: #180402;
+  --panel: rgba(30, 4, 2, 0.55);
+  --line: rgba(255, 180, 60, 0.32);
   --blue: #19b5ff;
   --blue-bright: #6fd2ff;
   --blue-dim: #0d5e86;
-  --gold: #ffd54a;
-  --gold-bright: #ffe38a;
+  --gold: #ffd700;
+  --gold-bright: #ffe57f;
   --gold-dim: #8a6c1c;
-  --red: #ff3b4e;
-  --red-bright: #ff5b6b;
-  --red-dim: #5c0f14;
-  --red-line: rgba(255, 59, 78, 0.45);
-  --cyan: #19b5ff;
+  --red: #d32f2f;
+  --red-bright: #ff5b4d;
+  --red-dim: #500000;
+  --red-line: rgba(211, 47, 47, 0.5);
+  --cyan: #00ffff;
   --green: #4dffa6;
-  --amber: #ffb340;
-  --text: #c8e8fb;
-  --text-dim: #5f8ba3;
-  --glow: 0 0 12px rgba(25, 181, 255, 0.55);
-  --gold-glow: 0 0 12px rgba(255, 213, 74, 0.55);
-  --red-glow: 0 0 12px rgba(255, 59, 78, 0.55);
+  --amber: #ff4500;
+  --text: #ffe9c2;
+  --text-dim: #b08a55;
+  --glow: 0 0 12px rgba(255, 215, 0, 0.5);
+  --gold-glow: 0 0 12px rgba(255, 215, 0, 0.55);
+  --red-glow: 0 0 12px rgba(211, 47, 47, 0.55);
   --font: "Rajdhani", "Bahnschrift", "Segoe UI", system-ui, sans-serif;
   --font-display: "Orbitron", "Bahnschrift", sans-serif;
   --font-mono: "Share Tech Mono", "Consolas", monospace;
@@ -36,7 +38,7 @@
 html, body {
   height: 100%;
   background:
-    radial-gradient(1100px 640px at 50% 46%, #2a0f06 0%, var(--bg) 62%),
+    radial-gradient(1100px 640px at 50% 46%, #3a0806 0%, var(--bg) 62%),
     var(--bg);
   color: var(--text);
   font-family: var(--font);
@@ -44,6 +46,9 @@ html, body {
   letter-spacing: 0.03em;
 }
 
+#bg-rings {
+  position: fixed; inset: 0; z-index: 0; pointer-events: none; mix-blend-mode: screen;
+}
 #scanlines {
   position: fixed; inset: 0; pointer-events: none; z-index: 60;
   background: repeating-linear-gradient(
@@ -81,20 +86,48 @@ html, body {
 #date { font-size: 11px; color: var(--text-dim); font-family: var(--font-mono); }
 .pill { font-family: var(--font-mono); font-size: 10px; padding: 3px 9px; border: 1px solid var(--line); border-radius: 10px; color: var(--red); letter-spacing: 0.12em; }
 .pill.on { color: var(--green); border-color: rgba(77,255,166,0.4); }
+
+/* ----------------------------------------------------------- model picker */
+.model-pick { display: flex; align-items: center; gap: 7px; padding: 3px 9px; border: 1px solid var(--line); border-radius: 3px; background: rgba(30,12,6,0.7); cursor: pointer; }
+.model-pick .mp-label { font-family: var(--font-display); font-size: 9px; letter-spacing: 0.16em; color: var(--gold); white-space: nowrap; }
+#model-select {
+  font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.04em;
+  background: rgba(10,4,2,0.9); color: var(--gold-bright); border: 1px solid var(--gold-dim);
+  border-radius: 2px; padding: 3px 6px; max-width: 200px; cursor: pointer; outline: none;
+}
+#model-select:hover { box-shadow: var(--glow); border-color: var(--gold); }
+#model-select:disabled { color: var(--text-dim); cursor: default; box-shadow: none; }
+#model-select optgroup { font-family: var(--font-display); font-size: 10px; color: var(--gold); background: #140402; }
+#model-select option { font-family: var(--font-mono); color: var(--text); background: #140402; }
 .reactor-mini { width: 26px; height: 26px; border-radius: 50%; border: 1px solid var(--gold); display: grid; place-items: center; box-shadow: var(--glow); }
 .rm-core { width: 10px; height: 10px; border-radius: 50%; background: var(--cyan); box-shadow: 0 0 10px var(--cyan); animation: pulse 2.4s infinite; }
 @keyframes pulse { 0%,100% { opacity: 0.5; } 50% { opacity: 1; } }
 @keyframes blink { 0%,45% { opacity: 1; } 50%,95% { opacity: 0.25; } 100% { opacity: 1; } }
 
 /* ------------------------------------------------------------------ grid */
-#grid { height: calc(100vh - 46px); display: grid; grid-template-columns: 296px 1fr 316px; gap: 12px; padding: 12px; }
+#grid { height: calc(100vh - 46px); display: grid; grid-template-columns: 296px 1fr 336px; gap: 12px; padding: 12px; }
 .col { display: flex; flex-direction: column; gap: 12px; min-height: 0; }
 
 .panel {
   position: relative; background: var(--panel); border: 1px solid var(--line);
-  border-radius: 4px; padding: 10px 12px; backdrop-filter: blur(2px);
+  padding: 10px 12px; backdrop-filter: blur(5px);
   box-shadow: inset 0 0 24px rgba(60, 24, 0, 0.35);
+  transition: border-color 0.4s ease;
+  animation: panel-breathe 6s ease-in-out infinite;
+  /* cut-corner HUD plate silhouette, replacing the plain rounded rect */
+  clip-path: polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 12px 100%, 0 calc(100% - 12px));
 }
+/* Every panel should read as alive, not just the reactor bust — a slow
+   ambient breathe at rest, and app.js mirrors the reactor's mode onto
+   body[data-state] so the whole HUD visibly quickens with what JARVIS is
+   doing (listening/thinking/speaking), not just the center canvas. */
+@keyframes panel-breathe {
+  0%, 100% { box-shadow: inset 0 0 24px rgba(60,24,0,0.35); }
+  50% { box-shadow: inset 0 0 30px rgba(60,24,0,0.5), 0 0 6px rgba(255,215,0,0.1); }
+}
+body[data-state="listening"] .panel { animation-duration: 2.6s; border-color: rgba(0,255,255,0.5); }
+body[data-state="thinking"] .panel { animation-duration: 1.2s; border-color: rgba(255,215,0,0.65); }
+body[data-state="speaking"] .panel { animation-duration: 0.85s; border-color: var(--red-line); }
 .panel::before, .panel::after { content: ""; position: absolute; width: 11px; height: 11px; border: 1px solid var(--gold); opacity: 0.75; }
 .panel::before { top: -1px; left: -1px; border-right: 0; border-bottom: 0; }
 .panel::after { bottom: -1px; right: -1px; border-left: 0; border-top: 0; }
@@ -143,6 +176,41 @@ html, body {
 #m-list { margin-top: 8px; display: flex; flex-direction: column; gap: 4px; overflow-y: auto; max-height: 120px; }
 .m-fact { font-size: 10px; color: var(--text-dim); line-height: 1.35; border-left: 2px solid var(--gold-dim); padding-left: 7px; }
 
+/* -------------------------------------------------------------- weather */
+#w-now { display: flex; align-items: baseline; gap: 10px; margin: 4px 0 8px; }
+#w-temp { font-family: var(--font-display); font-size: 30px; font-weight: 900; color: var(--gold-bright); text-shadow: var(--glow); }
+#w-cond { font-size: 11px; color: var(--text-dim); letter-spacing: 0.06em; text-transform: uppercase; }
+#w-forecast { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.w-day { text-align: center; font-family: var(--font-mono); font-size: 9px; color: var(--text-dim); border-top: 1px solid rgba(240,181,62,0.14); padding-top: 5px; }
+.w-day .w-hi { color: var(--gold); }
+.w-day .w-lo { color: var(--text-dim); }
+
+/* -------------------------------------------------------- equalizer strip */
+/* Ambient audio-reactive bars flanking the header — real spectrum data while
+   JARVIS speaks or listens, idle shimmer otherwise, so the header feels
+   alive even when nothing is happening. */
+#eq-strip { display: flex; justify-content: space-between; padding: 0 6px; height: 22px; pointer-events: none; }
+.eq-bars { display: flex; align-items: flex-end; gap: 3px; width: 40%; }
+.eq-bars i { flex: 1; min-width: 2px; height: 20%; background: linear-gradient(180deg, var(--gold), var(--gold-dim)); box-shadow: 0 0 5px rgba(255,213,74,0.5); border-radius: 1px; transition: height 0.12s ease; }
+#eq-right { justify-content: flex-end; }
+
+/* --------------------------------------------------------- orbit rings */
+/* Purely decorative concentric rings around the reactor bust, screen-blended
+   so they add light rather than obscuring the art. Slow independent
+   rotation gives the whole stage a sense of machinery quietly turning. */
+.orbit { position: absolute; border-radius: 50%; border: 1px solid rgba(25,181,255,0.18); mix-blend-mode: screen; pointer-events: none; }
+.orbit::before, .orbit::after { content: ""; position: absolute; width: 6px; height: 6px; border-radius: 50%; background: var(--gold); box-shadow: 0 0 8px var(--gold); }
+.orbit-a { width: 62%; aspect-ratio: 1; top: 50%; left: 50%; transform: translate(-50%, -50%); animation: orbit-spin 34s linear infinite; }
+.orbit-a::before { top: -3px; left: calc(50% - 3px); }
+.orbit-b { width: 78%; aspect-ratio: 1; top: 50%; left: 50%; transform: translate(-50%, -50%); border-color: rgba(255,59,78,0.16); animation: orbit-spin-rev 48s linear infinite; }
+.orbit-b::before { display: none; }
+.orbit-b::after { bottom: -3px; right: calc(50% - 3px); background: var(--red); box-shadow: 0 0 8px var(--red); }
+.orbit-c { width: 94%; aspect-ratio: 1; top: 50%; left: 50%; transform: translate(-50%, -50%); border-style: dashed; animation: orbit-spin 70s linear infinite; }
+.orbit-c::before, .orbit-c::after { display: none; }
+@keyframes orbit-spin { from { transform: translate(-50%, -50%) rotate(0deg); } to { transform: translate(-50%, -50%) rotate(360deg); } }
+@keyframes orbit-spin-rev { from { transform: translate(-50%, -50%) rotate(360deg); } to { transform: translate(-50%, -50%) rotate(0deg); } }
+body[data-state="speaking"] .orbit, body[data-state="thinking"] .orbit { border-color: rgba(255,213,74,0.32); }
+
 /* ------------------------------------------------------------ led strip */
 #led-strip { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; }
 .led-chip {
@@ -155,7 +223,10 @@ html, body {
 .led-chip.red::before { background: var(--red); box-shadow: 0 0 7px var(--red); animation: blink 1.8s infinite; }
 
 /* ------------------------------------------------------- reactor / core */
-#reactor-wrap { position: relative; flex: 1.6; min-height: 0; display: grid; place-items: center; overflow: hidden; }
+/* Now the only flex item left in col-center once console+command-bar moved
+   to the right dock — it fills essentially the whole page, as the reactor
+   bust is meant to be the hero, not a box competing for space with a panel. */
+#reactor-wrap { position: relative; flex: 1; min-height: 0; display: grid; place-items: center; overflow: hidden; }
 #reactor-stage { position: relative; aspect-ratio: 1280 / 720; height: auto; width: 100%; max-height: 100%; margin: auto; }
 #core-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; border-radius: 4px;
   box-shadow: 0 0 44px rgba(25,181,255,0.25) inset, 0 0 30px rgba(0,0,0,0.6); }
@@ -179,21 +250,41 @@ html, body {
 .ps-fill { height: 100%; width: 100%; background: linear-gradient(90deg, var(--blue-dim), var(--blue), var(--gold)); box-shadow: 0 0 8px var(--blue); animation: pulse 3s infinite; }
 
 /* -------------------------------------------------------------- console */
-/* This is the actual conversation record — every word Yuvraj and JARVIS say,
-   in both directions. It needs real room: a fixed 150px only fit 3-4 short
-   lines, so a normal multi-sentence exchange scrolled straight out of view
-   (looked like messages "vanished" when they were just off-screen). The core
-   still gets more space (flex 1.9 vs 1.1) so it stays the visual centerpiece,
-   but the console now grows too instead of being pinned tiny. */
-#panel-console { flex: 1.5; min-height: 280px; }
+/* Lives in the right-hand dock now, not competing with the reactor for the
+   center of the page. Still real room for a full exchange (not a 3-line
+   sliver), just proportioned as a sidebar rather than half the screen. */
+#panel-console { flex: 1.15; min-height: 220px; }
 #transcript { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; padding-right: 6px; }
-.msg { font-size: 13px; line-height: 1.4; max-width: 92%; padding: 7px 11px; border-radius: 4px; animation: fade 0.3s; }
+.msg { font-size: 13px; line-height: 1.4; max-width: 92%; padding: 7px 11px; border-radius: 4px; animation: msg-in 0.42s cubic-bezier(0.2, 0.9, 0.25, 1.15) both; }
 .msg.you { align-self: flex-end; background: rgba(245,187,71,0.1); border: 1px solid var(--gold-dim); color: #ffeec4; }
 .msg.jarvis { align-self: flex-start; background: rgba(30,14,6,0.7); border: 1px solid var(--line); border-left: 2px solid var(--red); color: var(--text); }
 .msg.system { align-self: center; font-size: 10px; color: var(--text-dim); letter-spacing: 0.1em; border: none; font-family: var(--font-mono); }
-.msg .who { font-family: var(--font-display); font-size: 9px; letter-spacing: 0.16em; color: var(--text-dim); display: block; margin-bottom: 2px; }
+.msg .who { font-family: var(--font-display); font-size: 9px; letter-spacing: 0.16em; color: var(--text-dim); display: block; margin-bottom: 2px; animation: who-in 0.3s ease-out 0.08s both; }
 .msg.jarvis .who { color: var(--red); }
-@keyframes fade { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; } }
+
+/* Slide-and-settle entrance with a slight overshoot, plus a quick glow flash
+   so a new line reads as "just arrived" rather than the whole panel jumping. */
+@keyframes msg-in {
+  from { opacity: 0; transform: translateY(10px) scale(0.96); }
+  60% { opacity: 1; }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+.msg.you { animation-name: msg-in-you; }
+.msg.jarvis { animation-name: msg-in-jarvis; }
+@keyframes msg-in-you {
+  from { opacity: 0; transform: translateY(10px) scale(0.96); box-shadow: 0 0 0 rgba(245,187,71,0); }
+  55% { opacity: 1; box-shadow: 0 0 14px rgba(245,187,71,0.35); }
+  to { opacity: 1; transform: translateY(0) scale(1); box-shadow: 0 0 0 rgba(245,187,71,0); }
+}
+@keyframes msg-in-jarvis {
+  from { opacity: 0; transform: translateY(10px) scale(0.96); box-shadow: 0 0 0 rgba(211,47,47,0); }
+  55% { opacity: 1; box-shadow: 0 0 14px rgba(211,47,47,0.3); }
+  to { opacity: 1; transform: translateY(0) scale(1); box-shadow: 0 0 0 rgba(211,47,47,0); }
+}
+@keyframes who-in { from { opacity: 0; transform: translateX(-3px); } to { opacity: 1; transform: translateX(0); } }
+@media (prefers-reduced-motion: reduce) {
+  .msg, .msg .who { animation: none; }
+}
 
 /* ---------------------------------------------------------- command bar */
 /* Hands-free: the mic icon is gone — JARVIS is always listening. */
@@ -201,15 +292,20 @@ html, body {
 #mic-btn { display: none !important; }
 #cmd { height: 44px; background: rgba(20,9,4,0.85); border: 1px solid var(--line); border-radius: 4px; color: #ffeec4; font-family: var(--font); font-size: 14px; padding: 0 14px; letter-spacing: 0.03em; }
 #cmd:focus { outline: none; border-color: var(--gold); box-shadow: var(--glow); }
-#mic-btn, #send-btn { height: 44px; border: 1px solid var(--line); background: rgba(30,14,6,0.8); color: var(--gold); border-radius: 4px; cursor: pointer; font-family: var(--font-display); letter-spacing: 0.12em; font-size: 11px; transition: all 0.2s; }
+#mic-btn, #send-btn {
+  height: 44px; border: 2px solid var(--gold); background: linear-gradient(135deg, var(--red), var(--red-dim));
+  color: #fff; cursor: pointer; font-family: var(--font-display); letter-spacing: 0.12em; font-size: 11px;
+  transition: all 0.2s; box-shadow: 0 0 12px rgba(211,47,47,0.5);
+  clip-path: polygon(9px 0, 100% 0, calc(100% - 9px) 100%, 0 100%);
+}
 #mic-btn { width: 46px; display: grid; place-items: center; }
-#send-btn { padding: 0 18px; font-weight: 700; border-color: var(--red-line); color: var(--red); }
-#mic-btn:hover { border-color: var(--gold); box-shadow: var(--glow); color: var(--gold-bright); }
-#send-btn:hover { box-shadow: var(--red-glow); color: #ffd0d5; }
-#mic-btn.listening { border-color: var(--red); color: var(--red); box-shadow: 0 0 14px rgba(255,47,47,0.6); animation: pulse 1s infinite; }
+#send-btn { padding: 0 18px; font-weight: 700; }
+#mic-btn:hover, #send-btn:hover { background: var(--gold); color: #1a0800; box-shadow: 0 0 20px var(--gold); }
+#mic-btn.listening { border-color: var(--cyan); box-shadow: 0 0 14px rgba(0,255,255,0.6); animation: pulse 1s infinite; }
 
 /* --------------------------------------------------------- markets/news */
 .live-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); box-shadow: 0 0 8px var(--green); animation: pulse 1.8s infinite; }
+.mrow, .frow, .nrow { animation: msg-in 0.4s cubic-bezier(0.2, 0.9, 0.25, 1.05) both; }
 .mrow { display: grid; grid-template-columns: 46px 1fr auto; align-items: baseline; gap: 8px; padding: 6px 0; border-bottom: 1px dashed rgba(240,181,62,0.12); }
 .mrow .sym { font-family: var(--font-display); font-size: 12px; color: var(--gold-bright); letter-spacing: 0.06em; }
 .mrow .px { font-family: var(--font-mono); font-size: 12px; text-align: right; color: var(--text); }
@@ -235,6 +331,37 @@ html, body {
 #ap-deny:hover { box-shadow: var(--red-glow); }
 #ap-allow:hover { box-shadow: var(--glow); }
 .ap-hint { font-size: 10px; color: var(--text-dim); margin-top: 14px; letter-spacing: 0.1em; }
+
+/* ---- CHARTS button + live TradingView overlay ---- */
+.sys-btn.gold { color: var(--gold); border-color: var(--line); }
+.sys-btn.gold:hover { box-shadow: var(--glow); }
+
+/* market rows double as chart triggers */
+.mrow, .frow { cursor: pointer; transition: background 0.15s; }
+.mrow:hover, .frow:hover { background: rgba(255,213,74,0.08); }
+
+#charts { position: fixed; inset: 0; background: rgba(6,3,1,0.9); display: grid; place-items: center; z-index: 120; backdrop-filter: blur(2px); }
+#charts.hidden { display: none; }
+.ch-box { width: 94vw; height: 90vh; background: var(--bg); border: 1px solid var(--gold); border-radius: 8px;
+  box-shadow: 0 0 48px rgba(255,215,0,0.28); display: flex; flex-direction: column; overflow: hidden; }
+.ch-head { display: flex; align-items: center; gap: 12px; padding: 10px 14px; border-bottom: 1px solid var(--line);
+  background: rgba(30,12,6,0.6); flex-wrap: wrap; }
+.ch-title { font-family: var(--font-display); font-size: 13px; font-weight: 700; color: var(--gold-bright);
+  letter-spacing: 0.16em; text-shadow: var(--glow); white-space: nowrap; }
+.ch-picker { display: flex; gap: 6px; flex-wrap: wrap; flex: 1; }
+.ch-chip { font-family: var(--font-mono); font-size: 11px; padding: 4px 10px; cursor: pointer;
+  background: rgba(30,12,6,0.7); border: 1px solid var(--line); color: var(--gold); border-radius: 4px; letter-spacing: 0.06em; }
+.ch-chip:hover { box-shadow: var(--glow); }
+.ch-chip.active { background: rgba(245,187,71,0.18); color: var(--gold-bright); box-shadow: var(--glow); }
+#ch-input { font-family: var(--font-mono); font-size: 12px; width: 240px; max-width: 46vw; padding: 6px 10px;
+  background: rgba(10,4,2,0.8); border: 1px solid var(--line); color: var(--text); border-radius: 4px; }
+#ch-input:focus { outline: none; border-color: var(--gold); box-shadow: var(--glow); }
+#ch-close { height: 32px; padding: 0 16px; cursor: pointer; }
+.ch-body { flex: 1; min-height: 0; position: relative; }
+#tv_chart { position: absolute; inset: 0; }
+.ch-foot { padding: 6px 14px; font-family: var(--font-mono); font-size: 10px; color: var(--text-dim);
+  border-top: 1px solid var(--line); letter-spacing: 0.06em; }
+.ch-err { display: grid; place-items: center; height: 100%; color: var(--red); font-family: var(--font-mono); font-size: 13px; padding: 20px; text-align: center; }
 
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-thumb { background: var(--gold-dim); border-radius: 3px; }

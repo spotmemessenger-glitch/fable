@@ -349,6 +349,33 @@ class Hub:
         facts = [f.render() for f in self.session.memory.active_facts(limit=12)]
         return {"type": "memory", "stats": stats, "facts": facts}
 
+    # ------------------------------------------------------------- models
+
+    def model_catalog(self) -> list[dict]:
+        """Every model the HUD picker can offer (Anthropic + all Ollama)."""
+        from .models import catalog
+
+        return catalog(settings)
+
+    def current_model(self) -> dict:
+        return self.session.brain.current_model()
+
+    def set_model(self, provider: str, model: str) -> dict:
+        """Switch JARVIS's live model; resolve the free endpoints server-side."""
+        from .models import resolve_ollama
+
+        if provider == "ollama":
+            host, key = resolve_ollama(settings, model)
+            return self.session.brain.set_model("ollama", model, host=host, api_key=key)
+        if provider == "cerebras":
+            return self.session.brain.set_model(
+                "cerebras",
+                model,
+                host=settings.cerebras_base_url,
+                api_key=settings.cerebras_api_key,
+            )
+        return self.session.brain.set_model("anthropic", model)
+
 
 hub = Hub()
 
@@ -414,6 +441,7 @@ async def client_handler(ws) -> None:
     await ws.send(json.dumps({
         "type": "hello", "agents": AGENTS, "name": settings.assistant_name,
         "native": _native_listener is not None,
+        "model": hub.current_model(),
     }))
     await ws.send(json.dumps(hub.memory_summary()))
     # Push the most recent feed data immediately so a fresh page isn't blank
@@ -442,6 +470,23 @@ async def client_handler(ws) -> None:
                 hub.resolve_approval(str(msg.get("id")), bool(msg.get("granted")))
             elif kind == "get_memory":
                 await ws.send(json.dumps(hub.memory_summary(), ensure_ascii=False))
+            elif kind == "list_models":
+                # The catalog makes a couple of blocking HTTP calls to Ollama;
+                # run them off the event loop so the socket stays responsive.
+                models = await asyncio.to_thread(hub.model_catalog)
+                await ws.send(json.dumps(
+                    {"type": "models", "models": models, "active": hub.current_model()},
+                    ensure_ascii=False,
+                ))
+            elif kind == "set_model":
+                provider = str(msg.get("provider", "")).strip()
+                model = str(msg.get("model", "")).strip()
+                if provider and model:
+                    try:
+                        active = await asyncio.to_thread(hub.set_model, provider, model)
+                        hub.cast({"type": "model_set", "active": active})
+                    except Exception as exc:  # noqa: BLE001 - surface the reason to the HUD
+                        await ws.send(json.dumps({"type": "model_error", "error": str(exc)}))
     except websockets.ConnectionClosed:
         pass
     finally:
@@ -457,10 +502,14 @@ async def vitals_loop() -> None:
 async def feeds_loop() -> None:
     from .feeds import Feeds
 
-    feeds = Feeds()
+    feeds = Feeds(
+        weather_lat=settings.weather_lat,
+        weather_lon=settings.weather_lon,
+        weather_place=settings.weather_place,
+    )
     while True:
         snap = await asyncio.to_thread(feeds.snapshot)
-        for key in ("crypto", "forex", "news"):
+        for key in ("crypto", "forex", "news", "weather"):
             if snap.get(key):
                 hub.last_feeds[key] = snap[key]
                 hub.cast(snap[key])

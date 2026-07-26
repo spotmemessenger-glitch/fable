@@ -121,6 +121,7 @@ class DeepgramListener:
             frames_per_buffer=CHUNK_FRAMES,
         )
         stop_session = threading.Event()
+        segments: list[str] = []
 
         try:
             with self._client.listen.v1.connect(
@@ -133,7 +134,8 @@ class DeepgramListener:
                 smart_format=True,
                 punctuate=True,
                 endpointing=300,
-                utterance_end_ms=1000,
+                utterance_end_ms=1500,
+                vad_events=True,
             ) as connection:
 
                 def sender() -> None:
@@ -155,18 +157,31 @@ class DeepgramListener:
 
                 threading.Thread(target=sender, daemon=True).start()
 
+                # Deepgram finalizes each natural speech segment as soon as it
+                # detects a pause (endpointing=300), which is far shorter than
+                # a person's mid-sentence pauses/fillers. Treating the first
+                # is_final as "the user is done talking" split one continuous
+                # thought into several disconnected fragments. Instead, we
+                # accumulate every is_final segment and only act once
+                # UtteranceEnd fires — Deepgram's dedicated signal that the
+                # speaker has actually stopped.
                 for msg in connection:
                     if self._stop.is_set() or self.hub.speaking:
                         stop_session.set()
                         break
-                    if type(msg).__name__ != "ListenV1Results" or not msg.is_final:
-                        continue
-                    alts = msg.channel.alternatives if msg.channel else []
-                    text = (alts[0].transcript or "").strip() if alts else ""
-                    if text:
-                        self._handle(text)
-                        stop_session.set()
-                        break
+                    cls = type(msg).__name__
+                    if cls == "ListenV1Results" and msg.is_final:
+                        alts = msg.channel.alternatives if msg.channel else []
+                        text = (alts[0].transcript or "").strip() if alts else ""
+                        if text:
+                            segments.append(text)
+                    elif cls == "ListenV1UtteranceEnd":
+                        full = " ".join(segments).strip()
+                        segments = []
+                        if full:
+                            self._handle(full)
+                            stop_session.set()
+                            break
         finally:
             stop_session.set()
             try:

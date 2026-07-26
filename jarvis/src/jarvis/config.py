@@ -25,6 +25,10 @@ class ConfigError(RuntimeError):
     """Raised when required configuration is missing or unusable."""
 
 
+# Providers that stream plain text with no tool use and need no Anthropic key.
+FREE_PROVIDERS = frozenset({"ollama", "cerebras"})
+
+
 def _env(name: str, default: str = "") -> str:
     return os.environ.get(name, default).strip()
 
@@ -44,6 +48,16 @@ def _env_bool(name: str, default: bool) -> bool:
     if not raw:
         return default
     return raw in {"1", "true", "yes", "on"}
+
+
+def _env_float(name: str, default: float) -> float:
+    raw = _env(name)
+    if not raw:
+        return default
+    try:
+        return float(raw)
+    except ValueError as exc:
+        raise ConfigError(f"{name} must be a number, got {raw!r}") from exc
 
 
 @dataclass(frozen=True)
@@ -75,20 +89,70 @@ class Settings:
     db_path: Path
     log_path: Path
 
+    weather_lat: float
+    weather_lon: float
+    weather_place: str
+
+    # LLM provider: "anthropic" (default, paid), "ollama" (free — local or
+    # Ollama Cloud), or "cerebras" (free tier, same gpt-oss-120b on much faster
+    # hardware). Neither free provider needs an Anthropic key.
+    llm_provider: str = "anthropic"
+    ollama_model: str = "gpt-oss:120b"
+    ollama_host: str = "http://localhost:11434"
+    ollama_api_key: str = ""   # bearer token for Ollama Cloud; empty for local
+
+    # Cerebras free tier: 30 req/min, 14,400 req/day, 1M tokens/day (2026-07-24).
+    # Hitting a limit returns HTTP 429 — brain.py surfaces that rather than
+    # silently falling back to the paid provider.
+    cerebras_model: str = "gpt-oss-120b"
+    cerebras_base_url: str = "https://api.cerebras.ai/v1"
+    cerebras_api_key: str = ""
+
     workspace_root: Path = field(default=WORKSPACE_ROOT)
 
     @property
     def has_voice_output(self) -> bool:
         return bool(self.elevenlabs_api_key and self.voice_id and self.tts_enabled)
 
+    @property
+    def use_ollama(self) -> bool:
+        return self.llm_provider == "ollama"
+
+    @property
+    def use_cerebras(self) -> bool:
+        return self.llm_provider == "cerebras"
+
+    @property
+    def uses_free_llm(self) -> bool:
+        """True when the active provider is a plain-streaming free one.
+
+        Both free paths skip tool use and never create an Anthropic client.
+        """
+        return self.llm_provider in FREE_PROVIDERS
+
 
 def load_settings() -> Settings:
+    provider = _env("LLM_PROVIDER", "anthropic").lower()
     anthropic_key = _env("ANTHROPIC_API_KEY")
-    if not anthropic_key:
+    if provider not in FREE_PROVIDERS and not anthropic_key:
         raise ConfigError(
             "ANTHROPIC_API_KEY is not set. Add it to the .env file at "
-            f"{WORKSPACE_ROOT / '.env'} — see .env.example for the format."
+            f"{WORKSPACE_ROOT / '.env'} — see .env.example for the format. "
+            "(Or set LLM_PROVIDER=cerebras / ollama to run on a free model.)"
         )
+
+    cerebras_key = _env("CEREBRAS_API_KEY")
+    if provider == "cerebras" and not cerebras_key:
+        raise ConfigError(
+            "LLM_PROVIDER=cerebras but CEREBRAS_API_KEY is not set. Get a free "
+            "key at https://cloud.cerebras.ai/ and add it to the .env file at "
+            f"{WORKSPACE_ROOT / '.env'}."
+        )
+
+    ollama_api_key = _env("OLLAMA_API_KEY")
+    # If a cloud key is present but no host was given, default to Ollama Cloud;
+    # otherwise default to a local Ollama server.
+    default_ollama_host = "https://ollama.com" if ollama_api_key else "http://localhost:11434"
 
     data_dir = Path(_env("JARVIS_DATA_DIR") or (PROJECT_ROOT / "data"))
     data_dir.mkdir(parents=True, exist_ok=True)
@@ -114,6 +178,18 @@ def load_settings() -> Settings:
         data_dir=data_dir,
         db_path=Path(_env("JARVIS_DB_PATH") or (data_dir / "jarvis.db")),
         log_path=Path(_env("JARVIS_LOG_PATH") or (data_dir / "jarvis.log")),
+        # Defaults to New Delhi; override in .env if Yuvraj is somewhere else —
+        # JARVIS_LAT / JARVIS_LON / JARVIS_PLACE.
+        weather_lat=_env_float("JARVIS_LAT", 28.6139),
+        weather_lon=_env_float("JARVIS_LON", 77.2090),
+        weather_place=_env("JARVIS_PLACE", "New Delhi"),
+        llm_provider=provider,
+        ollama_model=_env("OLLAMA_MODEL", "gpt-oss:120b"),
+        ollama_host=_env("OLLAMA_HOST", default_ollama_host),
+        ollama_api_key=ollama_api_key,
+        cerebras_model=_env("CEREBRAS_MODEL", "gpt-oss-120b"),
+        cerebras_base_url=_env("CEREBRAS_BASE_URL", "https://api.cerebras.ai/v1"),
+        cerebras_api_key=cerebras_key,
     )
 
 

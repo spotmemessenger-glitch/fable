@@ -11,6 +11,18 @@
   const WS_URL = (location.protocol === "https:" ? "wss://" : "ws://") + location.host + "/ws";
   const $ = (id) => document.getElementById(id);
 
+  // hud.js defines window.setReactorMode for the canvas bust. Wrapping it
+  // here mirrors every mode change onto body[data-state] so CSS can quicken
+  // the ambient animation on every panel (vitals, agents, console, markets)
+  // to match what JARVIS is doing, not just the reactor itself — one wrap
+  // covers every call site (state messages, wake acks, approvals, recording)
+  // without touching hud.js or duplicating the mode logic.
+  const _setReactorModeCore = window.setReactorMode;
+  window.setReactorMode = function (mode) {
+    document.body.dataset.state = mode;
+    if (_setReactorModeCore) _setReactorModeCore(mode);
+  };
+
   // If no real jarvis.server is reachable behind this page (e.g. the
   // static-only Vercel preview), fall back to a self-contained PREVIEW: the
   // visuals animate, market data is fetched client-side (real), and
@@ -70,6 +82,8 @@
     switch (m.type) {
       case "hello":
         agents = m.agents; renderAgents();
+        if (m.model) setActiveModel(m.model);
+        send({ type: "list_models" });
         if (m.native) {
           // The PC is listening natively; the browser must NOT also listen or
           // every command runs twice. Stand down and go visual-only.
@@ -83,6 +97,7 @@
       case "crypto": renderCrypto(m.items); break;
       case "forex": renderForex(m.items); break;
       case "news": renderNews(m.items); break;
+      case "weather": renderWeather(m); break;
       case "memory": renderMemory(m); break;
       case "user_said": addMsg("you", m.text); break;
       case "say": handleSay(m); break;
@@ -91,6 +106,9 @@
       case "notice": addMsg("system", m.text); break;
       case "approval_request": showApproval(m); break;
       case "approval_resolved": hideApproval(); break;
+      case "models": renderModels(m.models, m.active); break;
+      case "model_set": onModelSet(m.active); break;
+      case "model_error": addMsg("system", "Couldn't switch model: " + m.error); break;
     }
   }
 
@@ -151,6 +169,61 @@
     });
   }
 
+  // --------------------------------------------------------- model picker
+  // A live dropdown of every brain JARVIS can use: the Claude tiers plus every
+  // Ollama model (local + cloud). Picking one tells the server to switch the
+  // model for the next turn — Claude for full tool use, Ollama for free chat.
+
+  let activeModel = null;
+
+  function renderModels(models, active) {
+    const sel = $("model-select");
+    if (!sel) return;
+    sel.disabled = false;
+    sel.innerHTML = "";
+    [
+      ["anthropic", "CLAUDE · paid"],
+      ["cerebras", "CEREBRAS · free"],
+      ["ollama", "OLLAMA · free"],
+    ].forEach(([prov, label]) => {
+      const items = (models || []).filter((m) => m.provider === prov);
+      if (!items.length) return;
+      const og = document.createElement("optgroup");
+      og.label = label;
+      items.forEach((m) => {
+        const o = document.createElement("option");
+        o.value = m.provider + "|" + m.id;
+        const tag = m.kind === "local" ? "  ·local" : m.kind === "cloud" ? "  ·cloud" : "";
+        o.textContent = m.label + tag;
+        og.appendChild(o);
+      });
+      sel.appendChild(og);
+    });
+    if (active) setActiveModel(active);
+  }
+
+  function setActiveModel(active) {
+    activeModel = active;
+    const sel = $("model-select");
+    if (sel && active) sel.value = active.provider + "|" + active.model;
+  }
+
+  function onModelSet(active) {
+    setActiveModel(active);
+    status("BRAIN → " + active.model.toUpperCase());
+    addMsg("system", "Model switched to " + active.model + " (" + active.provider + ").");
+  }
+
+  function onModelPick() {
+    const v = $("model-select").value;
+    const i = v.indexOf("|");
+    if (i < 0) return;
+    const provider = v.slice(0, i), model = v.slice(i + 1);
+    if (activeModel && activeModel.provider === provider && activeModel.model === model) return;
+    send({ type: "set_model", provider: provider, model: model });
+    status("SWITCHING BRAIN → " + model.toUpperCase());
+  }
+
   let toolTimers = {};
   function handleTool(m) {
     const el = $("agent-" + m.agent);
@@ -189,6 +262,16 @@
     $("news-list").innerHTML = (items || []).map((n) =>
       `<div class="nrow ${n.alert ? "alert" : ""}">${escapeHtml(n.title)}</div>`
     ).join("");
+  }
+
+  function renderWeather(m) {
+    $("w-place").textContent = m.place || "—";
+    $("w-temp").textContent = (m.temp_f != null ? Math.round(m.temp_f) : "—") + "°";
+    $("w-cond").textContent = m.condition || "—";
+    $("w-forecast").innerHTML = (m.forecast || []).map((d) => {
+      const label = new Date(d.day).toLocaleDateString(undefined, { weekday: "short" }).toUpperCase();
+      return `<div class="w-day">${label}<br><span class="w-hi">${d.hi}°</span>/<span class="w-lo">${d.lo}°</span></div>`;
+    }).join("");
   }
 
   function renderMemory(m) {
@@ -576,6 +659,33 @@
     hideApproval();
   }
 
+  // --------------------------------------------------------- equalizer bars
+
+  const EQ_BARS = 24;
+  function initEqualizer() {
+    ["eq-left", "eq-right"].forEach((id) => {
+      const wrap = $(id);
+      for (let i = 0; i < EQ_BARS; i++) wrap.appendChild(document.createElement("i"));
+    });
+    requestAnimationFrame(tickEqualizer);
+  }
+
+  function tickEqualizer() {
+    const spec = window.audioSpectrum;
+    const bars = document.querySelectorAll("#eq-left i, #eq-right i");
+    const t = now() / 1000;
+    bars.forEach((bar, i) => {
+      let h;
+      if (spec) {
+        h = 15 + (spec[Math.floor((i / EQ_BARS) * spec.length)] / 255) * 85;
+      } else {
+        h = 10 + Math.abs(Math.sin(t * 1.6 + i * 0.5)) * 22; // idle shimmer
+      }
+      bar.style.height = h + "%";
+    });
+    requestAnimationFrame(tickEqualizer);
+  }
+
   // -------------------------------------------------------------- clock
 
   function tickClock() {
@@ -597,6 +707,7 @@
   $("send-btn").onclick = () => submit();
   $("cmd").addEventListener("keydown", (e) => { if (e.key === "Enter") submit(); });
   $("mic-btn").onclick = toggleMic;
+  { const ms = $("model-select"); if (ms) ms.onchange = onModelPick; }
   $("ap-allow").onclick = () => answerApproval(true);
   $("ap-deny").onclick = () => answerApproval(false);
 
@@ -649,6 +760,7 @@
   function startDemo() {
     document.body.classList.add("preview");
     agents = DEMO_AGENTS; renderAgents();
+    { const ms = $("model-select"); if (ms) { ms.innerHTML = "<option>PREVIEW — models load on your PC</option>"; ms.disabled = true; } }
     status("PREVIEW · full assistant runs on your PC");
     const el = $("link-state"); el.textContent = "PREVIEW"; el.classList.add("on");
     setReactorMode("idle");
@@ -660,6 +772,7 @@
       { title: "Preview mode — connect on your machine for the live news wire.", alert: false },
       { title: "Voice, memory, and the AI brain run locally on your PC.", alert: false },
     ]);
+    renderWeather({ place: "PREVIEW", temp_f: 72, condition: "Clear", forecast: [] });
     addMsg("system", "PREVIEW MODE — this is the live interface. Voice, memory and the AI brain run on your machine; open it there to talk to JARVIS.");
     demoVitals();
     demoMarkets();
@@ -677,6 +790,7 @@
 
   tickClock();
   setInterval(tickClock, 1000);
+  initEqualizer();
 
   // Decide preview-vs-full mode by actually trying the backend, not by
   // guessing from the hostname. A static-only deploy (no server behind the

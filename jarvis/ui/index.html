@@ -10,6 +10,7 @@
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
+<canvas id="bg-rings" aria-hidden="true"></canvas>
 <div id="scanlines"></div>
 <div id="vignette"></div>
 
@@ -20,6 +21,11 @@
     <span class="sub" id="status-line">INITIALISING…</span>
   </div>
   <div class="tb-center">
+    <label class="model-pick" title="Which brain JARVIS thinks with — Claude (paid) or any Ollama model (free)">
+      <span class="mp-label">◈ MODEL</span>
+      <select id="model-select"><option>—</option></select>
+    </label>
+    <button class="sys-btn gold" id="charts-btn">◫ CHARTS</button>
     <button class="sys-btn red">SHUTDOWN</button>
     <button class="sys-btn">RESTART</button>
     <button class="sys-btn">LOG OFF</button>
@@ -43,6 +49,15 @@
       <div id="cores"></div>
       <div class="kv"><span>NET ▲</span><b id="v-up">—</b><span>NET ▼</span><b id="v-down">—</b></div>
       <div class="kv"><span>UPTIME</span><b id="v-uptime">—</b><span>FREE C:</span><b id="v-free">—</b></div>
+    </div>
+
+    <div class="panel" id="panel-weather">
+      <h2>WEATHER <span class="hint" id="w-place">—</span></h2>
+      <div id="w-now">
+        <b id="w-temp">—°</b>
+        <span id="w-cond">—</span>
+      </div>
+      <div id="w-forecast"></div>
     </div>
 
     <div class="panel red-frame grow" id="panel-agents">
@@ -69,7 +84,16 @@
       <span class="led-chip red">PWR</span>
     </div>
 
+    <div id="eq-strip" aria-hidden="true">
+      <div class="eq-bars" id="eq-left"></div>
+      <div class="eq-bars" id="eq-right"></div>
+    </div>
+
     <div id="reactor-wrap">
+      <!-- purely decorative orbiting rings, screen-blended behind the bust -->
+      <div class="orbit orbit-a" aria-hidden="true"></div>
+      <div class="orbit orbit-b" aria-hidden="true"></div>
+      <div class="orbit orbit-c" aria-hidden="true"></div>
       <div id="reactor-stage">
         <img id="core-img" src="assets/core.jpg" alt="">
         <!-- living rig drawn over the premium image (screen-blended) -->
@@ -85,6 +109,10 @@
       <span class="ps-corner">◢</span>
     </div>
 
+  </section>
+
+  <!-- ============ RIGHT: chat dock + markets + news ============ -->
+  <section class="col" id="col-right">
     <div class="panel grow" id="panel-console">
       <h2>CONSOLE <span class="live-dot"></span></h2>
       <div id="transcript"></div>
@@ -97,10 +125,7 @@
       <input id="cmd" type="text" placeholder="Say 'Hey Jarvis'… or type a command" autocomplete="off">
       <button id="send-btn">EXECUTE</button>
     </div>
-  </section>
 
-  <!-- ============ RIGHT: markets + news ============ -->
-  <section class="col" id="col-right">
     <div class="panel" id="panel-crypto">
       <h2>CRYPTO <span class="live-dot" id="crypto-dot"></span></h2>
       <div id="crypto-rows"></div>
@@ -118,6 +143,20 @@
   </section>
 </main>
 
+<!-- live TradingView charts overlay -->
+<div id="charts" class="hidden">
+  <div class="ch-box">
+    <div class="ch-head">
+      <span class="ch-title">◫ LIVE CHARTS</span>
+      <div class="ch-picker" id="ch-picker"></div>
+      <input id="ch-input" type="text" placeholder="symbol… e.g. DOGE or BINANCE:ADAUSDT" autocomplete="off">
+      <button id="ch-close" class="sys-btn red">CLOSE ✕</button>
+    </div>
+    <div class="ch-body"><div id="tv_chart"></div></div>
+    <div class="ch-foot">live data via TradingView · click a CRYPTO / CURRENCY row to load it here · Esc to close</div>
+  </div>
+</div>
+
 <!-- approval modal -->
 <div id="approval" class="hidden">
   <div class="ap-box">
@@ -133,5 +172,6 @@
 
 <script src="hud.js"></script>
 <script src="app.js"></script>
+<script src="charts.js"></script>
 </body>
 </html>

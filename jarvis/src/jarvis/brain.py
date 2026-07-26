@@ -13,7 +13,9 @@ from typing import Any, Callable, Iterator
 
 from anthropic import Anthropic, APIError, APIStatusError
 
-from .config import Settings
+from .config import FREE_PROVIDERS, Settings
+from .llm_ollama import stream_chat
+from .llm_openai_compat import stream_chat as stream_chat_openai
 from .memory import Memory
 from .persona import build_system_prompt
 from .tools.registry import Registry, Risk, Tool
@@ -63,8 +65,16 @@ class Brain:
         self.session_id = session_id
         self.owner = owner
         self.approver = approver or _always_allow
-        self.client = Anthropic(api_key=settings.anthropic_api_key)
+        # No Anthropic client is created on a free provider — those paths never
+        # touch the paid API (and need no key).
+        self.client = None if settings.uses_free_llm else Anthropic(api_key=settings.anthropic_api_key)
         self._history: list[dict[str, Any]] = []
+
+        # Runtime model override set by the HUD picker (None = follow settings).
+        # Keys: {"provider": "anthropic"|"ollama"|"cerebras", "model": str}; the
+        # free providers also carry "host"/"base_url" and "api_key" so local,
+        # cloud, and Cerebras models each route right.
+        self._override: dict[str, Any] | None = None
 
         # Optional observer, called as on_tool(name, arguments, phase, approved)
         # with phase "start" or "end". The HUD uses this to light up the agent
@@ -84,8 +94,9 @@ class Brain:
         self._trim_history()
 
         spoken: list[str] = []
+        loop = self._free_reply if self._use_free_now else self._run_loop
         try:
-            for sentence in self._run_loop():
+            for sentence in loop():
                 spoken.append(sentence)
                 yield sentence
         except APIStatusError as exc:
@@ -94,6 +105,26 @@ class Brain:
         except APIError as exc:
             log.exception("Anthropic API error")
             yield f"I couldn't reach my brain just then. {exc.__class__.__name__}."
+            return
+        except Exception as exc:  # noqa: BLE001 - local (Ollama) transport path
+            log.exception("Brain loop error")
+            if self._use_free_now:
+                # Never silently fall back to the paid provider — say what's wrong.
+                if self._provider_now == "cerebras":
+                    _model, _endpoint, _ = self._active_cerebras()
+                    yield (
+                        f"I couldn't reach Cerebras at {_endpoint}. "
+                        "Check the key is valid, or that the free daily limit "
+                        "isn't spent."
+                    )
+                    return
+                _model, _host, _ = self._active_ollama()
+                yield (
+                    f"I couldn't reach the Ollama model at {_host}. "
+                    "Make sure Ollama is running (or the cloud key is valid)."
+                )
+            else:
+                yield f"Something went wrong just then: {exc.__class__.__name__}."
             return
 
         if spoken:
@@ -107,6 +138,83 @@ class Brain:
     def turn_count(self) -> int:
         return len(self._history)
 
+    # --------------------------------------------------------- model switch
+
+    def set_model(self, provider: str, model: str, *, host: str = "", api_key: str = "") -> dict[str, str]:
+        """Switch the active model at runtime (driven by the HUD picker).
+
+        Anthropic needs a client; if JARVIS booted in Ollama mode there isn't
+        one yet, so create it lazily (and refuse if no key is configured).
+        """
+        provider = provider.lower().strip()
+        if provider == "anthropic":
+            if self.client is None:
+                if not self.settings.anthropic_api_key:
+                    raise ValueError("No Anthropic API key is configured.")
+                self.client = Anthropic(api_key=self.settings.anthropic_api_key)
+            self._override = {"provider": "anthropic", "model": model}
+        elif provider == "ollama":
+            self._override = {
+                "provider": "ollama",
+                "model": model,
+                "host": host or self.settings.ollama_host,
+                "api_key": api_key,
+            }
+        elif provider == "cerebras":
+            key = api_key or self.settings.cerebras_api_key
+            if not key:
+                raise ValueError("No Cerebras API key is configured.")
+            self._override = {
+                "provider": "cerebras",
+                "model": model,
+                "base_url": host or self.settings.cerebras_base_url,
+                "api_key": key,
+            }
+        else:
+            raise ValueError(f"Unknown provider {provider!r}.")
+        log.info("Model switched -> %s / %s", provider, model)
+        return self.current_model()
+
+    def current_model(self) -> dict[str, str]:
+        """The provider+model in effect right now (override or settings default)."""
+        if self._override:
+            return {"provider": self._override["provider"], "model": self._override["model"]}
+        if self.settings.use_ollama:
+            return {"provider": "ollama", "model": self.settings.ollama_model}
+        if self.settings.use_cerebras:
+            return {"provider": "cerebras", "model": self.settings.cerebras_model}
+        return {"provider": "anthropic", "model": self.settings.model}
+
+    @property
+    def _provider_now(self) -> str:
+        """The provider actually in effect (override wins over settings)."""
+        if self._override:
+            return self._override["provider"]
+        return self.settings.llm_provider
+
+    @property
+    def _use_free_now(self) -> bool:
+        """True when the active provider streams plain text with no tools."""
+        return self._provider_now in FREE_PROVIDERS
+
+    def _active_ollama(self) -> tuple[str, str, str]:
+        """(model, host, api_key) for the current Ollama selection."""
+        if self._override and self._override["provider"] == "ollama":
+            o = self._override
+            return o["model"], o["host"], o["api_key"]
+        return self.settings.ollama_model, self.settings.ollama_host, self.settings.ollama_api_key
+
+    def _active_cerebras(self) -> tuple[str, str, str]:
+        """(model, base_url, api_key) for the current Cerebras selection."""
+        if self._override and self._override["provider"] == "cerebras":
+            o = self._override
+            return o["model"], o["base_url"], o["api_key"]
+        return (
+            self.settings.cerebras_model,
+            self.settings.cerebras_base_url,
+            self.settings.cerebras_api_key,
+        )
+
     # --------------------------------------------------------------- internals
 
     def _run_loop(self) -> Iterator[str]:
@@ -115,8 +223,13 @@ class Brain:
             assistant_blocks: list[dict[str, Any]] = []
             buffer = ""
 
+            model = (
+                self._override["model"]
+                if self._override and self._override["provider"] == "anthropic"
+                else self.settings.model
+            )
             with self.client.messages.stream(
-                model=self.settings.model,
+                model=model,
                 max_tokens=self.settings.max_tokens,
                 system=self._system_prompt(),
                 tools=self.registry.specs() + WEB_SEARCH_TOOLS,
@@ -199,6 +312,74 @@ class Brain:
             facts=self.memory.active_facts(),
             cwd=str(self.settings.workspace_root),
         )
+
+    # ---- free / local path (Ollama) ---------------------------------------
+    # A plain streaming chat with no tools or hosted web search — small/local
+    # models are unreliable at tool use, so the free path is honest chat only.
+
+    def _free_reply(self) -> Iterator[str]:
+        system_text = self._system_text()
+        messages = self._ollama_messages()
+        # Both clients take (endpoint, model, system, messages, api_key=, max_tokens=),
+        # so the only thing that varies is which one and where it points.
+        if self._provider_now == "cerebras":
+            model, endpoint, api_key = self._active_cerebras()
+            client = stream_chat_openai
+        else:
+            model, endpoint, api_key = self._active_ollama()
+            client = stream_chat
+        buffer = ""
+        parts_out: list[str] = []
+        for chunk in client(
+            endpoint,
+            model,
+            system_text,
+            messages,
+            api_key=api_key,
+            max_tokens=self.settings.max_tokens,
+        ):
+            buffer += chunk
+            pieces = _SENTENCE_END.split(buffer)
+            if len(pieces) > 1:
+                for complete in pieces[:-1]:
+                    if complete.strip():
+                        parts_out.append(complete.strip())
+                        yield complete.strip()
+                buffer = pieces[-1]
+        if buffer.strip():
+            parts_out.append(buffer.strip())
+            yield buffer.strip()
+
+        # Keep conversational context for the next turn. History stays plain
+        # text in ollama mode (no tool blocks), which is exactly what the API
+        # here expects.
+        if parts_out:
+            self._history.append({"role": "assistant", "content": " ".join(parts_out)})
+            self._trim_history()
+
+    def _system_text(self) -> str:
+        """Flatten the block-structured system prompt into plain text for Ollama."""
+        return "\n\n".join(
+            b.get("text", "")
+            for b in self._system_prompt()
+            if isinstance(b, dict) and b.get("text")
+        )
+
+    def _ollama_messages(self) -> list[dict[str, str]]:
+        """History as OpenAI-style {role, content} string messages."""
+        out: list[dict[str, str]] = []
+        for message in self._history:
+            content = message.get("content")
+            if isinstance(content, list):
+                text = " ".join(
+                    b.get("text", "")
+                    for b in content
+                    if isinstance(b, dict) and b.get("type") == "text"
+                )
+            else:
+                text = str(content)
+            out.append({"role": message["role"], "content": text})
+        return out
 
     def _trim_history(self) -> None:
         """Keep history bounded while staying valid for the API.

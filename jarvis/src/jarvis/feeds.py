@@ -154,17 +154,78 @@ class NewsFeed(Feed):
         return {"type": "news", "items": items[: self.MAX_ITEMS], "at": time.time()}
 
 
+_WMO_CONDITIONS = {
+    0: "Clear", 1: "Mostly Clear", 2: "Partly Cloudy", 3: "Overcast",
+    45: "Fog", 48: "Rime Fog",
+    51: "Light Drizzle", 53: "Drizzle", 55: "Heavy Drizzle",
+    61: "Light Rain", 63: "Rain", 65: "Heavy Rain",
+    71: "Light Snow", 73: "Snow", 75: "Heavy Snow",
+    80: "Rain Showers", 81: "Rain Showers", 82: "Violent Showers",
+    95: "Thunderstorm", 96: "Thunderstorm", 99: "Severe Thunderstorm",
+}
+
+
+class WeatherFeed(Feed):
+    """Current + 3-day forecast from Open-Meteo — free, keyless."""
+
+    URL = "https://api.open-meteo.com/v1/forecast"
+
+    def __init__(self, lat: float, lon: float, place: str) -> None:
+        super().__init__("weather", interval=1800)
+        self.lat, self.lon, self.place = lat, lon, place
+
+    def _fetch(self) -> dict:
+        resp = requests.get(
+            self.URL,
+            params={
+                "latitude": self.lat,
+                "longitude": self.lon,
+                "current": "temperature_2m,weather_code",
+                "daily": "temperature_2m_max,temperature_2m_min,weather_code",
+                "temperature_unit": "fahrenheit",
+                "timezone": "auto",
+                "forecast_days": 4,
+            },
+            timeout=_TIMEOUT,
+            headers=_UA,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        cur = data.get("current", {})
+        daily = data.get("daily", {})
+        days = daily.get("time", [])
+        forecast = [
+            {
+                "day": d,
+                "hi": round(daily["temperature_2m_max"][i]),
+                "lo": round(daily["temperature_2m_min"][i]),
+                "condition": _WMO_CONDITIONS.get(daily["weather_code"][i], "—"),
+            }
+            for i, d in enumerate(days[1:4], start=1)
+        ]
+        return {
+            "type": "weather",
+            "place": self.place,
+            "temp_f": round(cur.get("temperature_2m", 0)),
+            "condition": _WMO_CONDITIONS.get(cur.get("weather_code"), "—"),
+            "forecast": forecast,
+            "at": time.time(),
+        }
+
+
 class Feeds:
     """The bundle the server polls."""
 
-    def __init__(self) -> None:
+    def __init__(self, *, weather_lat: float, weather_lon: float, weather_place: str) -> None:
         self.crypto = CryptoFeed()
         self.forex = ForexFeed()
         self.news = NewsFeed()
+        self.weather = WeatherFeed(weather_lat, weather_lon, weather_place)
 
     def snapshot(self) -> dict:
         return {
             "crypto": self.crypto.get(),
             "forex": self.forex.get(),
             "news": self.news.get(),
+            "weather": self.weather.get(),
         }

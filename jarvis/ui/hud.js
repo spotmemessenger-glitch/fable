@@ -158,3 +158,48 @@
   };
   window.setReactorLevel = function (v) { state.target = Math.max(0, Math.min(1, v)); };
 })();
+
+/* Page-wide background: large slow perspective rings behind every panel,
+   independent of the reactor's own local canvas above. Purely decorative —
+   gives the whole page a sense of machinery turning, not just the bust. */
+(function () {
+  "use strict";
+  const canvas = document.getElementById("bg-rings");
+  if (!canvas) return;
+  const ctx = canvas.getContext("2d");
+
+  function resize() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+  }
+  window.addEventListener("resize", resize);
+  resize();
+
+  function ring(cx, cy, rx, ry, angle, color, dash) {
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate(angle);
+    ctx.scale(1, ry / rx);
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash(dash);
+    ctx.shadowBlur = 10;
+    ctx.shadowColor = color;
+    ctx.beginPath();
+    ctx.arc(0, 0, rx, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  let a1 = 0, a2 = 0, a3 = 0;
+  function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    const cx = canvas.width / 2, cy = canvas.height / 2;
+    ring(cx, cy, Math.min(canvas.width, canvas.height) * 0.62, 90, a1, "rgba(255,215,0,0.16)", [16, 10]);
+    ring(cx, cy, Math.min(canvas.width, canvas.height) * 0.5, 70, -a2, "rgba(211,47,47,0.14)", [8, 14]);
+    ring(cx, cy, Math.min(canvas.width, canvas.height) * 0.38, 50, a3, "rgba(255,69,0,0.12)", [4, 8]);
+    a1 += 0.0018; a2 += 0.0028; a3 += 0.004;
+    requestAnimationFrame(draw);
+  }
+  draw();
+})();
