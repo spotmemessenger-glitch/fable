@@ -79,8 +79,10 @@ const fakeRoom = {
   leave: () => {}
 }
 
-mock.module('@trystero-p2p/torrent', {
-  namedExports: { joinRoom: () => fakeRoom, selfId: 'self-id' }
+/* net.js now rides the server-backed transport module; the fake below is
+ * transport-agnostic (room + actions), so only the mocked path changes. */
+mock.module(`${SRC}lib/socket-transport.js`, {
+  namedExports: { joinRoom: () => fakeRoom, selfId: 'self-id', serverMode: false }
 })
 /* Alerts are a side effect of receiving, not part of it — but they are
  * recorded so the suite can assert an incoming message actually raises one. */

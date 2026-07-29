@@ -76,8 +76,10 @@ function fakeRoomFor (roomId) {
   return roomsById.get(roomId)
 }
 
-mock.module('@trystero-p2p/torrent', {
-  namedExports: { joinRoom: (_opts, roomId) => fakeRoomFor(roomId) }
+/* reach.js now rides the server-backed transport module; the fake below is
+ * transport-agnostic (rooms + actions), so only the mocked path changes. */
+mock.module(`${SRC}lib/socket-transport.js`, {
+  namedExports: { joinRoom: (_opts, roomId) => fakeRoomFor(roomId), selfId: 'test-self', serverMode: false }
 })
 /* Relay credentials resolve instantly; reach.js waits on this before joining. */
 mock.module(`${SRC}net.js`, {
@@ -100,7 +102,8 @@ const relayData = new Map()   // roomId -> { toId, knock }
 const pushPokes = []          // toUserId values pokePeer() asked the server to notify
 
 globalThis.fetch = async (url, opts = {}) => {
-  const { pathname, searchParams } = new URL(url)
+  // API calls are same-origin (relative) now — give URL a base to parse them.
+  const { pathname, searchParams } = new URL(url, 'http://localhost')
   const body = opts.body ? JSON.parse(opts.body) : null
 
   if (pathname === '/api/knock') {

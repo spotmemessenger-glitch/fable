@@ -12,7 +12,13 @@ export default defineConfig({
     // Bind all interfaces so a phone on the same network (or over Tailscale)
     // can reach the dev server, not just localhost.
     host: true,
-    port: 5173
+    port: 5173,
+    // The Spot Me backend serves /api and the /rooms Socket.IO namespace —
+    // same-origin in production, proxied here so dev matches it exactly.
+    proxy: {
+      '/api': 'http://localhost:4000',
+      '/socket.io': { target: 'http://localhost:4000', ws: true }
+    }
   },
   optimizeDeps: {
     // spotme-core is CommonJS and lives outside the web root. Pre-bundling it

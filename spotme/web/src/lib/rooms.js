@@ -435,7 +435,9 @@ function createConnection (convo) {
     const total = Math.max(1, Math.ceil(buffer.byteLength / SLICE_BYTES))
     const envelope = { ...message, data: null, mime }
     for (let seq = 0; seq < total; seq++) {
-      if (conn.net.livePeerIds().length === 0) throw new Error('They went offline mid-transfer')
+      // Durable transport: slices land in the server log even with nobody
+      // online — the receiver assembles them from replay + lazy fetch.
+      if (!conn.net.DURABLE && conn.net.livePeerIds().length === 0) throw new Error('They went offline mid-transfer')
       const slice = buffer.slice(seq * SLICE_BYTES, (seq + 1) * SLICE_BYTES)
       const metadata = seq === 0
         ? { ...envelope, seq, total }
@@ -684,7 +686,12 @@ export const rooms = {
   async fetchAttachment (roomId, id) {
     const conn = this.ensure(roomId)
     if (!conn) throw new Error('Conversation not found')
-    const peers = conn.net.livePeerIds()
+    // The server log holds every slice ever sent through it, so a durable
+    // transport can serve bytes with the sender long gone — 'server' is a
+    // pseudo-peer the transport resolves internally.
+    const peers = conn.net.DURABLE
+      ? ['server', ...conn.net.livePeerIds()]
+      : conn.net.livePeerIds()
     if (peers.length === 0) throw new Error('They are offline — media transfers while you are both online')
     const m = conn.store.list().find((x) => x.id === id)
     let bytes = null

@@ -23,9 +23,7 @@
  * ------------------------------------------------------------------------- */
 import { db } from './db.js'
 
-const API_ORIGIN = (location.hostname === 'localhost' || /^[\d.:[\]]+$/.test(location.hostname))
-  ? 'https://spotme-messenger.vercel.app'
-  : ''
+const API_ORIGIN = ''  // same-origin: vite proxies /api to the backend in dev
 
 const ENDPOINT = `${API_ORIGIN}/api/push`
 

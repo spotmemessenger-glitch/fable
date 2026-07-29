@@ -25,7 +25,11 @@
 // `trystero/torrent` subpath is now a stub that throws a deprecation error.
 // Swap this import for @trystero-p2p/nostr or /mqtt if tracker discovery is
 // ever unreliable — the API is identical across strategies.
-import { joinRoom, selfId } from '@trystero-p2p/torrent'
+// Server-backed transport (2026-07-30): same API surface, but rooms live on
+// the Spot Me backend with a persistent, ciphertext-only event log — which is
+// what finally gives the web app offline delivery. Trystero remains available
+// behind localStorage['spotme.transport'] = 'p2p'.
+import { joinRoom, selfId } from './lib/socket-transport.js'
 
 /** Namespaces our rooms so we never collide with another Trystero app. */
 /**
@@ -70,9 +74,9 @@ export const hasRelay = () =>
   RTC_CONFIG.iceServers.some((s) =>
     (Array.isArray(s.urls) ? s.urls : [s.urls]).some((u) => String(u).startsWith('turn')))
 
-const API_ORIGIN = (location.hostname === 'localhost' || /^[0-9.]+$/.test(location.hostname))
-  ? 'https://spotme-messenger.vercel.app'
-  : ''
+// Same origin everywhere: the vite dev server proxies /api to the local
+// backend, and production serves the API from the app's own host.
+const API_ORIGIN = ''
 
 const APP_ID = 'io.ysnapai.spotme'
 
@@ -189,6 +193,9 @@ export function createNet (roomId, secret, handlers, getHistory) {
   }
 
   return {
+    /** True when the transport persists actions server-side — senders may
+     * then deliver into an empty room instead of waiting for a live peer. */
+    DURABLE: room.DURABLE === true,
     sendMessage: (data) => msgSafe(msg.send(data)),
     sendReaction: (data) => msgSafe(react.send(data)),
     sendProfile: (data) => msgSafe(profile.send(data)),

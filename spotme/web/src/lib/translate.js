@@ -111,10 +111,8 @@ async function fetchJson (url, timeoutMs = 8000) {
   }
 }
 
-/** The /api functions live on Vercel; dev servers borrow production's. */
-const API_BASE = (location.hostname === 'localhost' || /^[0-9.]+$/.test(location.hostname))
-  ? 'https://spotme-messenger.vercel.app'
-  : ''
+/** Same-origin: the backend bridges the /api functions (vite proxies in dev). */
+const API_BASE = ''
 
 /**
  * Cloud fallback, tried in quality order:

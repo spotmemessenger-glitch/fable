@@ -50,7 +50,7 @@
  * relay only ever holds the OPENING knock, never anything exchanged after
  * the chat is live — everything past that stays P2P-only, unchanged.
  */
-import { joinRoom } from '@trystero-p2p/torrent'
+import { joinRoom } from './socket-transport.js'
 import { RTC_CONFIG, readyRTC } from '../net.js'
 import { db } from './db.js'
 import { rooms } from './rooms.js'
@@ -61,10 +61,8 @@ const APP_ID = 'io.ysnapai.spotme'
 const HEARTBEAT_MS = 10_000
 const OUTBOX_TTL_MS = 24 * 60 * 60_000   // 24 hours — was 10 min, which silently abandoned most requests
 
-/** Same origin-detection every other api/* caller in this app uses. */
-const API_ORIGIN = (location.hostname === 'localhost' || /^[\d.:[\]]+$/.test(location.hostname))
-  ? 'https://spotme-messenger.vercel.app'
-  : ''
+/** Same origin everywhere — vite proxies /api to the local backend in dev. */
+const API_ORIGIN = ''
 const KNOCK_ENDPOINT = `${API_ORIGIN}/api/knock`
 
 /** Stable, non-cryptographic string hash — enough to derive a room id/secret
@@ -255,7 +253,9 @@ function createReach () {
       const convo = db.convo(entry.payload.roomId)
       if (!convo || convo.delivered) { closeOutboxEntry(peerId); continue }
       const live = entry.room.getPeers ? entry.room.getPeers() : {}
-      if (!joinedPeerId && Object.keys(live).length === 0) continue
+      // A durable transport persists the knock server-side, so an empty inbox
+      // is no reason to hold delivery — the recipient replays it on next boot.
+      if (!entry.room.DURABLE && !joinedPeerId && Object.keys(live).length === 0) continue
       safe(entry.knockAction.send(entry.payload, joinedPeerId ? { target: joinedPeerId } : undefined))
     }
   }

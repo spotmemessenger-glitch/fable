@@ -7,10 +7,8 @@
  * Every function throws an Error with a readable message on failure.
  */
 
-/** The /api functions live on Vercel; dev servers borrow production's. */
-const API_BASE = (location.hostname === 'localhost' || /^[0-9.]+$/.test(location.hostname))
-  ? 'https://spotme-messenger.vercel.app'
-  : ''
+/** Same-origin: the backend bridges the /api functions (vite proxies in dev). */
+const API_BASE = ''
 
 /* Cloning uploads ~0.5 MB and EL processes it — give slow ops more room. */
 const CALL_TIMEOUT_MS = 30_000

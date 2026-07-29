@@ -203,12 +203,9 @@ function render () {
 
 /* ------------------------------------------------------------ onboarding */
 
-/** Username registry origin: same-origin in production; the deployed app when
- *  developing on localhost/an IP (Vite has no /api functions). */
-const REGISTRY_API = (window.location.hostname === 'localhost' ||
-  /^[0-9.]+$/.test(window.location.hostname) || window.location.hostname.includes(':'))
-  ? 'https://spotme-messenger.vercel.app'
-  : ''
+/** Username registry origin: same-origin everywhere — the registry now lives
+ *  on the Spot Me backend (vite proxies /api to it in dev). */
+const REGISTRY_API = ''
 const USERNAME_RE = /^[a-z0-9_]{3,16}$/
 const CHECK_DEBOUNCE_MS = 400
 

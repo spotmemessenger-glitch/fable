@@ -24,11 +24,9 @@ const SHEET_CLOSE_MS = 160
 const GROUP_NAME_MAX = 40
 const PULL_REVEAL_PX = 48      // pull-down distance that reveals the Archived row
 const USERNAME_RE = /^[a-z0-9_]{2,}$/
-// The username registry API only exists on the Vercel deployment (it sends
-// CORS headers), so local/LAN dev must call it cross-origin.
-const REGISTRY_API = (location.hostname === 'localhost' || /^[\d.:[\]]+$/.test(location.hostname))
-  ? 'https://spotme-messenger.vercel.app'
-  : ''
+// The username registry now lives on the Spot Me backend — same origin
+// everywhere (vite proxies /api in dev).
+const REGISTRY_API = ''
 
 const ICON = {
   plus: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>',

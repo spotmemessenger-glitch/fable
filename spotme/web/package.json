@@ -15,6 +15,7 @@
   "type": "module",
   "dependencies": {
     "@trystero-p2p/torrent": "^0.25.3",
+    "socket.io-client": "^4.8.3",
     "spotme-core": "file:..",
     "trystero": "^0.25.3"
   },
