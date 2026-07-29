@@ -1,8 +1,53 @@
 # START HERE — pickup brief
 
 **Written:** 2026-07-29, end of session (~$341 spent).
+**Updated:** 2026-07-30 ~03:00 (overnight autonomous session — Spot Me P2P→server migration).
 **Read this file first.** It exists so the user does not have to re-explain
 anything. Everything below was verified by RUNNING it, not by exit codes.
+
+---
+
+## 0. LATEST (2026-07-30 overnight): Spot Me now runs on a server backend
+
+**What happened:** the web app's Trystero/BitTorrent-tracker transport was
+replaced by a server-backed one. Commits `7aad447` (backend), `43cfc02` (web),
+`9603543` (docs). The UI is UNTOUCHED (user: "stick to this UI").
+
+**PROVEN by two-browser Playwright E2E** (screenshots in
+`spotme/docs/verification/`): onboarding + username registry on the backend,
+knock→chat both sides, live encrypted text, presence Online/Last-seen, Read
+receipts, **offline text delivery via replay**, live photo (5 encrypted slices
++ binack), **offline photo (envelope replay + tap-to-load lazy fetch from the
+server)** — the old P0 media-persistence bug is structurally fixed. Test
+suites: web 24/24 + 32/32 + 21/21.
+
+**How to run:**
+```
+docker start spotme-postgres                     # port 5433
+cd spotme/backend && node dist/main.js           # :4000 (or npm run start:dev)
+cd spotme/web && npx vite                        # :5173, proxies /api + /socket.io
+```
+Two isolated identities for testing: open localhost:5173 AND 127.0.0.1:5173
+(different origins → different localStorage). `?fresh` resets a device.
+
+**Architecture (see spotme/docs/02-SYSTEM-ARCHITECTURE.md):** rooms are
+Socket.IO rooms on NestJS; persistent actions append to Postgres `RoomEvent`
+(AES-GCM ciphertext, key derived client-side from the room secret — server
+never sees plaintext); clients replay from a per-room cursor. Calls remain
+true P2P (WebRTC, signalling relayed). `web/src/lib/socket-transport.js` is a
+drop-in for the Trystero API; `localStorage['spotme.transport']='p2p'` reverts.
+
+**UNPROVEN / open:** calls over the new signalling path (machinery written,
+never dialed); groups/discovery/bluetooth screens on server transport;
+multi-tab same-profile; knock payloads are server-readable (Phase 2: seal to
+recipient publicKey — field already in schema); RoomEvent retention job not
+written; translate/voice/push bridges return 400 locally until their vendor
+env keys are set in backend/.env (client degrades gracefully).
+
+**Deploy decision (deliberate):** spotme-messenger.vercel.app is still 404 and
+was NOT redeployed — the new build needs a hosted backend first (Railway/Fly +
+Neon per backend/README.md, then set VITE_SPOTME_SERVER at build). Deploying
+the new web build to Vercel without that would ship a dead transport.
 
 ---
 
