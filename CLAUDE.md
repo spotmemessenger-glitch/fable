@@ -1,5 +1,29 @@
 # Ruflo — Claude Code Configuration
 
+## ⭐ Resuming a previous session — READ FIRST
+
+When the user says **"recall previous session"**, "pick up from where you left
+off", "continue from last session", or `/pickup`:
+
+**Read `.handoff/NEXT-SESSION.md` before doing anything else.** It is the
+authoritative pickup brief — current state, the agreed next task, known traps,
+measured numbers, what is unproven, and what is blocked on the user.
+
+Also in `.handoff/`:
+- `SESSION-<date>.md` — full chronological log with evidence
+- `ai-os-stack-2026-07-29.md` — technical facts (venvs, versions, gotchas)
+- `pickup-SKILL.md` — the skill definition; copy to `~/.claude/skills/pickup/`
+  to get the `/pickup` command locally (`.claude/` is gitignored, so it cannot
+  travel with the repo)
+
+**Why this lives in the repo:** cloud/remote sessions run in a fresh clone.
+Anything under `~/.claude/` (skills, memory notes) does NOT travel. Only
+committed files do. Keep `.handoff/` updated in place and commit it at the end
+of any substantial session, or the next remote session starts blind.
+
+**Never claim something works because the brief says so** — the brief is a
+record, not a live check. Anything marked UNPROVEN stays unproven until re-run.
+
 ## Rules
 
 - Do what has been asked; nothing more, nothing less
