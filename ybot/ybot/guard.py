@@ -30,16 +30,26 @@ class Decision:
     reason: str = ""
 
 
-def active_window_title() -> str:
+def foreground_window() -> tuple[int, str]:
+    """(hwnd, title) of the foreground window; (0, "") if it cannot be read.
+
+    The handle matters as much as the title: two dialogs can share a title, and
+    a title can change while focus does not. Callers comparing "did focus move?"
+    need both.
+    """
     try:
         user32 = ctypes.windll.user32
         hwnd = user32.GetForegroundWindow()
         length = user32.GetWindowTextLengthW(hwnd)
         buf = ctypes.create_unicode_buffer(length + 1)
         user32.GetWindowTextW(hwnd, buf, length + 1)
-        return buf.value
+        return int(hwnd), buf.value
     except Exception:
-        return ""
+        return 0, ""
+
+
+def active_window_title() -> str:
+    return foreground_window()[1]
 
 
 def evaluate(action: str, params: dict, independent: bool) -> Decision:

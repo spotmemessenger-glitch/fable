@@ -16,7 +16,7 @@ from anthropic import Anthropic
 
 from . import actions
 from .config import SETTINGS
-from .guard import evaluate
+from .guard import evaluate, foreground_window
 from .killswitch import KillSwitch
 from .perf import count, record, span
 from .screen import Frame, Screen
@@ -272,7 +272,7 @@ class Operator:
         action = params.get("action", "")
         # An explicit look always gets real pixels, even if nothing moved.
         if action in ("screenshot", "cursor_position", "zoom"):
-            self.screen._last_digest = None
+            self.screen.force_next_send()
             return _tool_result(tool_use_id, self.screen.capture().png)
 
         decision = evaluate(action, params, self.independent)
@@ -282,25 +282,47 @@ class Operator:
             return _tool_result(tool_use_id, None, "User declined this action.")
 
         self.kill.check()
+        before = foreground_window()
         # Only the dimensions matter for scaling coordinates — grabbing a frame
         # here encoded a 252 KB PNG that was discarded on every single action.
         try:
             actions.execute(action, params, self.screen.metrics())
         except Exception as e:  # keep the loop alive; report the failure to the model
             return _tool_result(tool_use_id, None, f"Action error: {e}")
-        return self._after(tool_use_id, action)
+        return self._after(tool_use_id, action, before)
 
-    def _after(self, tool_use_id: str, what: str) -> dict:
-        """Result of an action: pixels as soon as the screen changes (event-ish)."""
+    def _after(self, tool_use_id: str, what: str, before: tuple[int, str] | None = None) -> dict:
+        """Result of an action, classified three ways rather than two.
+
+        "Changed" is not one outcome. A click that opens the dialog you expected
+        and a click that raises a permission prompt both change the screen, and
+        treating them alike is how an agent ends up typing into a modal it never
+        noticed. So when focus moves to a different window, say so explicitly.
+        """
         frame = self.screen.wait_change(timeout=1.2)
         if frame is None:
+            count("outcome.unchanged")
             return _tool_result(
                 tool_use_id, None,
                 f"Screen unchanged after {what} — nothing on screen moved for 1.2s. The "
                 "click may have missed, or the application ignored it. Do not simply "
                 "repeat it; call ui_inspect to find the real target.",
             )
-        return _tool_result(tool_use_id, frame.png)
+
+        note = None
+        if before is not None:
+            after = foreground_window()
+            if after[0] and after[0] != before[0]:
+                count("outcome.focus_changed")
+                note = (
+                    f"FOCUS CHANGED after {what}: the foreground window is now "
+                    f"{after[1]!r} (was {before[1]!r}). Any element refs from an earlier "
+                    "ui_inspect belong to the old window and are now stale — re-inspect "
+                    "before clicking anything."
+                )
+        if note is None:
+            count("outcome.changed")
+        return _tool_result(tool_use_id, frame.png, note)
 
     # --- batch executor: think once, act many -----------------------------------------
     def _batch(self, tool_use_id: str, params: dict) -> dict:
@@ -339,6 +361,7 @@ class Operator:
         # the clearest single measure of whether the batching doctrine is working.
         count("batch.steps_executed", len(steps))
         count("batch.calls")
+        focus = foreground_window()
         log: list[str] = []
         for i, st in enumerate(steps, 1):
             self.kill.check()
@@ -364,13 +387,38 @@ class Operator:
                     return self._batch_done(tool_use_id, log,
                                             f"stopped at step {i}/{len(steps)}: that click "
                                             "changed nothing (likely missed). ")
+                # A batch is planned against ONE window's accessibility tree, so a
+                # focus change invalidates the refs the remaining steps carry — a ref
+                # is an index into the tree we walked before, and the new window has
+                # its own. Stop only when a later step actually uses one.
+                #
+                # Not a blanket stop: the taught save flow (ctrl+s -> type full path ->
+                # enter) deliberately spans a focus change into the Save dialog and
+                # uses no refs. Breaking that would cost a round trip on every save
+                # to prevent a failure that cannot happen.
+                now = foreground_window()
+                if now[0] and now[0] != focus[0]:
+                    count("outcome.focus_changed")
+                    stale = [j for j, s in enumerate(steps[i:], i + 1)
+                             if str(s.get("action", "")) == "ui_click"]
+                    if stale:
+                        log.append(f"{i} ✓ {act} {note} ({ms}ms) — focus moved to {now[1]!r}")
+                        return self._batch_done(
+                            tool_use_id, log,
+                            f"stopped after step {i}/{len(steps)}: focus changed to "
+                            f"{now[1]!r} (was {focus[1]!r}), and step {stale[0]} clicks by "
+                            "ref — those refs belong to the previous window's tree and "
+                            "would land on the wrong element. Re-inspect and replan. ")
+                    log.append(f"{i} ✓ {act} {note} ({ms}ms) — focus now {now[1]!r}")
+                    focus = now
+                    continue
                 log.append(f"{i} ✓ {act} {note} ({ms}ms)")
             else:
                 log.append(f"{i} ✓ {act} {note}")
         return self._batch_done(tool_use_id, log, "all steps completed. ")
 
     def _batch_done(self, tool_use_id: str, log: list[str], headline: str) -> dict:
-        self.screen._last_digest = None                  # final frame always sends
+        self.screen.force_next_send()                    # final frame always sends
         frame = self.screen.capture()
         return _tool_result(tool_use_id, frame.png,
                             "batch_actions: " + headline + "\n" + "\n".join(log))
@@ -415,11 +463,12 @@ class Operator:
             return _tool_result(tool_use_id, None, "User declined this action.")
 
         self.kill.check()
+        before = foreground_window()
         try:
             self.uia.click(ref)
         except Exception as e:
             return _tool_result(tool_use_id, None, f"ui_click error: {e}")
-        return self._after(tool_use_id, f"ui_click on {el.name!r}")
+        return self._after(tool_use_id, f"ui_click on {el.name!r}", before)
 
     def _prune_images(self, messages: list) -> None:
         """Keep only the most recent N screenshots; replace older ones with a stub."""

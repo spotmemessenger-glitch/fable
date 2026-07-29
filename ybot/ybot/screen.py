@@ -13,6 +13,7 @@ from __future__ import annotations
 import ctypes
 import hashlib
 import io
+import threading
 import time
 from dataclasses import dataclass
 
@@ -55,11 +56,32 @@ class Frame:
 
 
 class Screen:
+    """Screen capture. Safe to call from more than one thread.
+
+    An `mss.mss()` instance wraps per-thread OS state (on Windows, a device
+    context and bitmap) and is explicitly not thread-safe — sharing one across
+    threads yields torn or blank frames rather than an exception, which is the
+    worst way to fail. Each thread therefore gets its own instance, created on
+    first use and cached.
+    """
+
     def __init__(self, target_width: int):
         self.target_width = target_width
-        self._sct = mss.mss()
+        self._tl = threading.local()
         self._mon = self._sct.monitors[1]  # [0] is the virtual all-monitor box; [1] is primary
+        # The digest is shared, not thread-local: "has the screen changed" is a
+        # property of the screen, not of the caller. Guarded because a lost update
+        # here shows up as a frame silently reported unchanged.
+        self._digest_lock = threading.Lock()
         self._last_digest: bytes | None = None
+
+    @property
+    def _sct(self):
+        sct = getattr(self._tl, "sct", None)
+        if sct is None:
+            sct = mss.mss()
+            self._tl.sct = sct
+        return sct
 
     @property
     def native_size(self) -> tuple[int, int]:
@@ -80,6 +102,17 @@ class Screen:
         nw, nh = self.native_size
         sw, sh = self.sent_size()
         return Frame(b"", nw, nh, sw, sh)
+
+    def force_next_send(self) -> None:
+        """Make the next capture return pixels even if nothing moved.
+
+        For the two cases where the model asked to LOOK rather than to act: an
+        explicit screenshot, and the frame that closes a batch. Both must show
+        real pixels, and 'nothing changed' is not an acceptable answer to a
+        direct look.
+        """
+        with self._digest_lock:
+            self._last_digest = None
 
     def capture(self, only_if_changed: bool = False) -> Frame | None:
         """Grab the screen. With only_if_changed, returns None if nothing moved.
@@ -102,10 +135,11 @@ class Screen:
 
             with span("screen.capture.digest"):
                 digest = hashlib.blake2b(img.tobytes(), digest_size=16).digest()
-            if only_if_changed and digest == self._last_digest:
-                count("screen.capture.unchanged")
-                return None
-            self._last_digest = digest
+            with self._digest_lock:
+                if only_if_changed and digest == self._last_digest:
+                    count("screen.capture.unchanged")
+                    return None
+                self._last_digest = digest
 
             with span("screen.capture.encode"):
                 buf = io.BytesIO()
