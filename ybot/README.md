@@ -83,7 +83,7 @@ Protocols exist to enforce: STT must stream partials, and TTS `stop()` must cut
 audio already sent to the speaker, synchronously. A synthesiser that can only be
 left to finish cannot do barge-in at all.
 
-Run `python -m pytest tests/test_voice.py` — 27 tests, no hardware needed.
+Run `python -m pytest tests/test_voice.py` — 33 tests, no hardware needed.
 
 ## Measuring performance
 
