@@ -1,0 +1,389 @@
+// Spot Me — server-tier backend schema.
+// Design constraint from the compliance review: the server never stores message
+// plaintext or holds any key capable of decrypting it. See README.md.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  USER
+  SUPPORT
+  MODERATOR
+  ADMIN
+  OPS
+}
+
+enum RequestSource {
+  NEARBY
+  USERNAME
+  LINK
+  CONTACT
+  BLUETOOTH
+}
+
+enum RequestStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  EXPIRED
+}
+
+enum ReportReason {
+  HARASSMENT
+  SPAM
+  CSAM
+  IMPERSONATION
+  OTHER
+}
+
+enum ReportStatus {
+  OPEN
+  ACTIONED
+  DISMISSED
+  ESCALATED_NCMEC
+}
+
+enum Sex {
+  MALE
+  FEMALE
+  OTHER
+  UNSPECIFIED
+}
+
+model User {
+  id            String   @id @default(cuid())
+  username      String   @unique
+  email         String?  @unique
+  phone         String?  @unique
+  name          String?
+  avatarUrl     String?
+  // X25519 public key (base64), used for NaCl box E2E encryption — safe to
+  // store server-side and hand out via lookup, since it's a PUBLIC key.
+  // The matching secret key lives only on the user's device.
+  publicKey     String?
+  // Self-reported, optional, used only for aggregate analytics — never combined
+  // with a location history (none is kept; see Presence below).
+  city          String?
+  area          String?
+  age           Int?
+  sex           Sex      @default(UNSPECIFIED)
+  ageVerified   Boolean  @default(false)
+  ageVerifiedAt DateTime?
+  ageVerifyRef  String? // third-party verification provider's reference id only
+
+  passwordHash  String? // unset when the account only ever used OTP
+  // SHA-256 of the device-held claim secret for guest (no-account) identities —
+  // proves a re-auth or username release comes from the device that claimed it.
+  claimSecretHash String?
+  role          Role     @default(USER)
+
+  createdAt     DateTime @default(now())
+  deletedAt     DateTime? // soft-delete marker; hard-delete job purges after grace period
+  uninstalledAt DateTime?
+
+  devices          Device[]
+  otpCodes         OtpCode[]
+  refreshTokens    RefreshToken[]
+  sentRequests     ChatRequest[]     @relation("RequestSender")
+  receivedRequests ChatRequest[]     @relation("RequestRecipient")
+  participants     ConversationParticipant[]
+  reportsFiled     Report[]          @relation("ReportedBy")
+  reportsAgainst   Report[]          @relation("ReportedUser")
+  blocksMade       Block[]           @relation("Blocker")
+  blocksReceived   Block[]           @relation("Blocked")
+  presence         Presence?
+  installEvents    InstallEvent[]
+  groupsOwned      Group[]           @relation("GroupOwner")
+  stories          Story[]
+  storyViews       StoryView[]
+
+  @@index([city])
+  @@index([createdAt])
+}
+
+// One row per user, overwritten on every update. No history table exists —
+// this is the entire "location" footprint the server keeps.
+model Presence {
+  userId    String   @id
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lat       Float?
+  lon       Float?
+  ghost     Boolean  @default(false)
+  updatedAt DateTime @updatedAt
+}
+
+model Device {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  platform    String   // ios | android | web
+  pushToken   String?
+  appVersion  String?
+  installedAt DateTime @default(now())
+  lastSeenAt  DateTime @default(now())
+
+  @@index([userId])
+}
+
+model InstallEvent {
+  id        String   @id @default(cuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  kind      String   // install | uninstall | first_open
+  platform  String
+  city      String?  // coarse, IP or self-reported at signup — never GPS-derived
+  ts        DateTime @default(now())
+
+  @@index([kind, ts])
+}
+
+model OtpCode {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  codeHash  String
+  channel   String   // email | sms
+  expiresAt DateTime
+  consumedAt DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([userId, expiresAt])
+}
+
+model RefreshToken {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String   @unique
+  deviceId  String?
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+model Conversation {
+  id        String   @id @default(cuid())
+  kind      String   @default("dm") // dm | group
+  title     String?
+  createdAt DateTime @default(now())
+
+  participants ConversationParticipant[]
+  messages     Message[]
+  chatRequest  ChatRequest?
+  group        Group?
+}
+
+// Metadata layer on top of a kind:"group" Conversation. Membership itself is
+// just ConversationParticipant rows on that conversation — no separate member
+// table, so the existing chat gateway/history/read-receipt code (which already
+// fans a message out to every participant) works for groups with zero changes.
+model Group {
+  id             String       @id @default(cuid())
+  name           String
+  avatarUrl      String?
+  ownerId        String
+  owner          User         @relation("GroupOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  conversationId String       @unique
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  createdAt      DateTime     @default(now())
+}
+
+// 24h-expiry story. Text-only for now: media stories need the R2 upload
+// pipeline (see backend README "still needs wiring"), so mediaKey stays
+// unpopulated rather than faking a photo path with no storage behind it.
+model Story {
+  id          String      @id @default(cuid())
+  authorId    String
+  author      User        @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  kind        String      @default("text") // text | photo (photo needs R2, not wired yet)
+  textContent String?
+  mediaKey    String?
+  createdAt   DateTime    @default(now())
+  expiresAt   DateTime
+  views       StoryView[]
+
+  @@index([authorId, createdAt])
+  @@index([expiresAt])
+}
+
+model StoryView {
+  id        String   @id @default(cuid())
+  storyId   String
+  story     Story    @relation(fields: [storyId], references: [id], onDelete: Cascade)
+  viewerId  String
+  viewer    User     @relation(fields: [viewerId], references: [id], onDelete: Cascade)
+  viewedAt  DateTime @default(now())
+
+  @@unique([storyId, viewerId])
+  @@index([storyId])
+}
+
+model ConversationParticipant {
+  id             String       @id @default(cuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  joinedAt       DateTime     @default(now())
+  archived       Boolean      @default(false)
+  lastReadAt     DateTime?
+
+  @@unique([conversationId, userId])
+  @@index([userId])
+}
+
+// Ciphertext + metadata only. The server never has a key that opens `cipherText`.
+model Message {
+  id             String       @id @default(cuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  senderId       String
+  cipherText     String       // base64 NaCl box ciphertext, opaque to the server
+  nonce          String?      // base64 nonce for the box above — public, not secret
+  mediaKey       String?      // R2 object key, itself encrypted client-side before upload
+  kind           String       @default("text") // text | image | voice | video | file | location
+  ttlSeconds     Int?         // disappearing-message TTL, mirrors the current app
+  sentAt         DateTime     @default(now())
+  expiresAt      DateTime?
+
+  @@index([conversationId, sentAt])
+}
+
+model ChatRequest {
+  id             String        @id @default(cuid())
+  fromUserId     String
+  fromUser       User          @relation("RequestSender", fields: [fromUserId], references: [id], onDelete: Cascade)
+  toUserId       String
+  toUser         User          @relation("RequestRecipient", fields: [toUserId], references: [id], onDelete: Cascade)
+  source         RequestSource
+  status         RequestStatus @default(PENDING)
+  greeting       String?
+  conversationId String?       @unique
+  conversation   Conversation? @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+  createdAt      DateTime      @default(now())
+  respondedAt    DateTime?
+  expiresAt      DateTime
+
+  @@index([toUserId, status])
+  @@index([fromUserId, status])
+}
+
+// The only path content ever reaches a human in readable form: the reporter's
+// own client attaches plaintext at report time. Nothing is decrypted server-side.
+model Report {
+  id                String       @id @default(cuid())
+  reporterId        String
+  reporter          User         @relation("ReportedBy", fields: [reporterId], references: [id], onDelete: Cascade)
+  reportedUserId    String
+  reportedUser      User         @relation("ReportedUser", fields: [reportedUserId], references: [id], onDelete: Cascade)
+  reason            ReportReason
+  status            ReportStatus @default(OPEN)
+  reportedContent   String       // plaintext supplied by the reporter's client at report time
+  contextNote       String?
+  createdAt         DateTime     @default(now())
+  resolvedAt        DateTime?
+  resolvedByEmployeeId String?
+  // 18 U.S.C. 2258A: preserve reported material + metadata for 90 days
+  // (180 if law enforcement requests it) — enforced by a retention job, not by hand.
+  retainUntil       DateTime
+  ncmecReportedAt   DateTime?
+  ncmecReportId     String?
+
+  @@index([status, createdAt])
+  @@index([reportedUserId])
+}
+
+model Block {
+  id          String   @id @default(cuid())
+  blockerId   String
+  blocker     User     @relation("Blocker", fields: [blockerId], references: [id], onDelete: Cascade)
+  blockedId   String
+  blocked     User     @relation("Blocked", fields: [blockedId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+
+  @@unique([blockerId, blockedId])
+}
+
+// Staff accounts for the admin dashboard — deliberately separate from end-user
+// accounts, even though it shares the Role enum.
+model Employee {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  name         String
+  passwordHash String
+  role         Role      @default(SUPPORT)
+  active       Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+  lastLoginAt  DateTime?
+
+  auditEntries AuditLog[]
+}
+
+// Every sensitive dashboard action, logged — the accountability control GDPR
+// expects in exchange for any staff access to user-adjacent data.
+model AuditLog {
+  id          String   @id @default(cuid())
+  employeeId  String
+  employee    Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  action      String   // e.g. "report.view", "report.action", "employee.create"
+  targetType  String?  // e.g. "Report", "User", "Employee"
+  targetId    String?
+  metadata    Json?
+  createdAt   DateTime @default(now())
+
+  @@index([employeeId, createdAt])
+  @@index([action, createdAt])
+}
+
+// Server health samples, polled by the ops dashboard. A real deployment layers
+// Sentry/host metrics on top of this later — this is the zero-dependency floor.
+model HealthSample {
+  id           String   @id @default(cuid())
+  ts           DateTime @default(now())
+  uptimeOk     Boolean
+  errorCount   Int      @default(0)
+  p95LatencyMs Int?
+  note         String?
+
+  @@index([ts])
+}
+
+// Transport-level event log for server-backed rooms (the web client's rooms
+// become Socket.IO rooms whose persistent actions land here and replay on
+// join). `payload` is AES-GCM ciphertext produced client-side from the room
+// secret — the server never receives that secret, so this log is opaque.
+// `id` doubles as the replay cursor: clients ask for events with id > since.
+model RoomEvent {
+  id        Int      @id @default(autoincrement())
+  roomId    String
+  type      String   // msg | react | profile | del | edit | read | seen | knock | knockAck | bin | binack
+  senderId  String
+  payload   Bytes
+  meta      Json?    // cleartext routing only (attachment id/seq/total) — no content
+  attachId  String?  // set on bin slices so fetch can serve an attachment by id
+  createdAt DateTime @default(now())
+
+  @@index([roomId, id])
+  @@index([roomId, attachId])
+}
+
+model CrashReport {
+  id           String   @id @default(cuid())
+  platform     String   // ios | android | web
+  appVersion   String?
+  signature    String   // grouping key — top stack frame or error message
+  message      String
+  stackTrace   String?
+  userId       String?
+  ts           DateTime @default(now())
+
+  @@index([signature, ts])
+}
