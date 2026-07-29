@@ -88,7 +88,7 @@ awesome-cursorrules/
 .playwright/
 .playwright-cli/
 .gstack/
-.claude/
+.claude/*
 !.claude/settings.json
 !.claude/agents/
 !.claude/skills/
