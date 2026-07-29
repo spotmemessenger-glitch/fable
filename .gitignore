@@ -154,3 +154,6 @@ jarvis/ui/preview/
 
 # ybot voice runtime data (conversation transcripts)
 ybot/voice_memory/
+
+# vendored reference clones (have their own .git)
+awesome-llm-apps/
