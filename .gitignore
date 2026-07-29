@@ -151,3 +151,6 @@ jarvis/ui/preview/
 
 .vercel
 .keys/
+
+# ybot voice runtime data (conversation transcripts)
+ybot/voice_memory/
