@@ -25,6 +25,20 @@ Three skills were renamed to clear duplicate `name:` frontmatter, which would ot
 skill selection ambiguous: `macos-app-planner`, `macos-coding-best-practices`,
 `swift-language-core`.
 
+## Written here, not vendored
+
+GitHub has no agent skills for desktop/GUI automation — searched by keyword, by
+`topic:claude-skill`, by code search, and through the curated lists. That ecosystem is
+tools (OmniParser, OmniMCP, autoMate), not skills. These four were written against
+`ybot/ybot/`'s actual implementation:
+
+| Skill | Covers |
+|---|---|
+| `desktop-automation/` | Operator loop, perception hierarchy (UIA before pixels), the two coordinate spaces, DPI, pyautogui/pywinauto/mss behaviour, guard + kill switch |
+| `action-verify-loop/` | Confirming an action took effect; retry by a different route; the silent-failure class (dropped input, elevated windows) |
+| `omniparser-eyes/` | Vision-based element grounding when the accessibility tree is empty; deployment options; keeping it behind the same interface as `uia.py` |
+| `browser-automation/` | Playwright/DOM instead of pixel-driving Chrome; selector priority; session reuse; CDP attach |
+
 ## Deliberately not installed
 
 - `google/skills`, `android/skills` — checked, no Apple content (Google Cloud and Android only).
