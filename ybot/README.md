@@ -61,3 +61,45 @@ to register and if you want the agent to drive elevated windows.
 | `ybot/guard.py` | permission policy (purchases, terminal) |
 | `ybot/killswitch.py` | global hotkey + corner failsafe |
 | `ybot/config.py` | settings from `.env` |
+| `ybot/perf.py` | latency instrumentation (off unless `YBOT_PERF=1`) |
+| `scripts/bench.py` | local microbenchmark — capture, change detection, UIA walk |
+
+## Measuring performance
+
+Optimise nothing without a number. Two tools:
+
+**Live run.** Set `YBOT_PERF=1` and every span is timed; a ranked table prints when
+the run ends (including after a kill-switch abort).
+
+```powershell
+$env:YBOT_PERF=1; $env:YBOT_PERF_OUT="before.json"; python run.py
+```
+
+Spans are ranked by *total* time, so the top row is the highest-impact target.
+Percentiles are reported rather than means — a p95 of 2s with a mean of 300ms is
+the shape that makes an assistant feel broken, and a mean alone hides it.
+
+Overhead is 1.5µs per span enabled, 0.3µs disabled — against a ~105ms capture
+that is 0.0014%, i.e. the instrument does not move the reading.
+
+**Local microbenchmark.** `python scripts/bench.py` breaks a capture into stages,
+compares four ways of answering "did the screen change?", and times one
+accessibility-tree walk. It never clicks or types, so it is safe to run anytime.
+Run it twice — once with Notepad focused, once with a browser — because the UIA
+walk scales with window complexity.
+
+**Comparing runs.** Every optimisation must show up as a number:
+
+```powershell
+python -c "from ybot.perf import compare; compare('before.json','after.json')"
+```
+
+### Counters worth watching
+
+| Counter | Reads as |
+|---|---|
+| `tokens.cache_read` | If 0, the tools+system prefix cache is not working and every step pays full price |
+| `batch.steps_executed` vs `agent.steps` | The batching doctrine's payoff — steps per round trip |
+| `screen.wait_change.polls` | Each poll is a full capture; multiply by capture cost |
+| `screen.wait_change.timeouts` | Actions that changed nothing — missed clicks |
+| `uia.inspect.nodes_walked` | Tree size; the walk cost scales with it |

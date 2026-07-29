@@ -19,6 +19,8 @@ from dataclasses import dataclass
 import mss
 from PIL import Image
 
+from .perf import count, span
+
 
 def set_dpi_awareness() -> None:
     """Make screenshot pixels line up with click coordinates on scaled displays.
@@ -87,21 +89,29 @@ class Screen:
         ~1,230 image tokens. It is an exact hash — a one-pixel difference counts
         as a change — so this can never hide a real update from the model.
         """
-        raw = self._sct.grab(self._mon)
-        img = Image.frombytes("RGB", raw.size, raw.rgb)
-        nw, nh = img.size
-        sw, sh = self.sent_size()
-        if (sw, sh) != (nw, nh):
-            img = img.resize((sw, sh), Image.LANCZOS)
+        with span("screen.capture"):
+            with span("screen.capture.grab"):
+                raw = self._sct.grab(self._mon)
+            with span("screen.capture.frombytes"):
+                img = Image.frombytes("RGB", raw.size, raw.rgb)
+            nw, nh = img.size
+            sw, sh = self.sent_size()
+            with span("screen.capture.resize"):
+                if (sw, sh) != (nw, nh):
+                    img = img.resize((sw, sh), Image.LANCZOS)
 
-        digest = hashlib.blake2b(img.tobytes(), digest_size=16).digest()
-        if only_if_changed and digest == self._last_digest:
-            return None
-        self._last_digest = digest
+            with span("screen.capture.digest"):
+                digest = hashlib.blake2b(img.tobytes(), digest_size=16).digest()
+            if only_if_changed and digest == self._last_digest:
+                count("screen.capture.unchanged")
+                return None
+            self._last_digest = digest
 
-        buf = io.BytesIO()
-        img.save(buf, format="PNG")
-        return Frame(buf.getvalue(), nw, nh, sw, sh)
+            with span("screen.capture.encode"):
+                buf = io.BytesIO()
+                img.save(buf, format="PNG")
+            count("screen.capture.frames_sent")
+            return Frame(buf.getvalue(), nw, nh, sw, sh)
 
     def wait_change(self, timeout: float = 1.2, poll: float = 0.05) -> Frame | None:
         """Event-ish settle: return the frame as soon as the screen CHANGES.
@@ -111,11 +121,14 @@ class Screen:
         before being declared unchanged. None = nothing moved within timeout,
         which callers should treat as a real signal (the action missed).
         """
-        deadline = time.monotonic() + timeout
-        while True:
-            frame = self.capture(only_if_changed=True)
-            if frame is not None:
-                return frame
-            if time.monotonic() >= deadline:
-                return None
-            time.sleep(poll)
+        with span("screen.wait_change"):
+            deadline = time.monotonic() + timeout
+            while True:
+                count("screen.wait_change.polls")
+                frame = self.capture(only_if_changed=True)
+                if frame is not None:
+                    return frame
+                if time.monotonic() >= deadline:
+                    count("screen.wait_change.timeouts")
+                    return None
+                time.sleep(poll)

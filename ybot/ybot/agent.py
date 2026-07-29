@@ -18,6 +18,7 @@ from . import actions
 from .config import SETTINGS
 from .guard import evaluate
 from .killswitch import KillSwitch
+from .perf import count, record, span
 from .screen import Frame, Screen
 from .uia import UIA
 
@@ -209,15 +210,26 @@ class Operator:
             self.kill.check()
             if self.should_stop():
                 return "(stopped by user)"
-            resp = self.client.beta.messages.create(
-                model=self.model,
-                max_tokens=SETTINGS.max_tokens,
-                system=self.system,
-                tools=self._tools(),
-                betas=[SETTINGS.beta_flag],
-                messages=messages,
-                timeout=120,  # never let one step hang the whole assistant
-            )
+            count("agent.steps")
+            with span("agent.api_call"):
+                resp = self.client.beta.messages.create(
+                    model=self.model,
+                    max_tokens=SETTINGS.max_tokens,
+                    system=self.system,
+                    tools=self._tools(),
+                    betas=[SETTINGS.beta_flag],
+                    messages=messages,
+                    timeout=120,  # never let one step hang the whole assistant
+                )
+            # Cache reads are the difference between re-processing the tools+system
+            # prefix every step and skipping it; if this stays at 0 the cache_control
+            # on the last tool is not taking effect and every step pays full price.
+            usage = getattr(resp, "usage", None)
+            if usage is not None:
+                count("tokens.input", getattr(usage, "input_tokens", 0) or 0)
+                count("tokens.output", getattr(usage, "output_tokens", 0) or 0)
+                count("tokens.cache_read", getattr(usage, "cache_read_input_tokens", 0) or 0)
+                count("tokens.cache_write", getattr(usage, "cache_creation_input_tokens", 0) or 0)
             messages.append(
                 {"role": "assistant", "content": [b.model_dump() for b in resp.content]}
             )
@@ -237,19 +249,23 @@ class Operator:
 
             if self.should_stop():
                 return "(stopped by user)"
-            results = [self._handle_tool(tu) for tu in tool_uses]
+            with span("agent.tools_total"):
+                results = [self._handle_tool(tu) for tu in tool_uses]
             messages.append({"role": "user", "content": results})
-            self._prune_images(messages)
+            with span("agent.prune_images"):
+                self._prune_images(messages)
         return "(stopped: reached max steps)"
 
     def _handle_tool(self, tu) -> dict:
-        if tu.name == "ui_inspect":
-            return self._ui_inspect(tu.id)
-        if tu.name == "ui_click":
-            return self._ui_click(tu.id, tu.input or {})
-        if tu.name == "batch_actions":
-            return self._batch(tu.id, tu.input or {})
-        return self._computer(tu.id, tu.input or {})
+        count(f"tool.{tu.name}")
+        with span(f"tool.{tu.name}"):
+            if tu.name == "ui_inspect":
+                return self._ui_inspect(tu.id)
+            if tu.name == "ui_click":
+                return self._ui_click(tu.id, tu.input or {})
+            if tu.name == "batch_actions":
+                return self._batch(tu.id, tu.input or {})
+            return self._computer(tu.id, tu.input or {})
 
     # --- computer (pixel) tool ---------------------------------------------------------
     def _computer(self, tool_use_id: str, params: dict) -> dict:
@@ -319,6 +335,10 @@ class Operator:
                                           + "; ".join(needs_ok)):
             return _tool_result(tool_use_id, None, "User declined the batch. Nothing was executed.")
 
+        # A batch of N replaces N round trips. This counter against agent.steps is
+        # the clearest single measure of whether the batching doctrine is working.
+        count("batch.steps_executed", len(steps))
+        count("batch.calls")
         log: list[str] = []
         for i, st in enumerate(steps, 1):
             self.kill.check()

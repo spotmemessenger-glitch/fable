@@ -15,6 +15,7 @@ import pyautogui
 import pyperclip
 
 from .config import SETTINGS
+from .perf import span
 from .screen import Frame
 
 pyautogui.PAUSE = SETTINGS.action_pause
@@ -37,6 +38,11 @@ _KEYMAP = {
 
 def execute(action: str, params: dict, frame: Frame) -> None:
     """Perform a single action. Coordinates arrive in sent-image space and are scaled."""
+    with span(f"action.{action}"):
+        _execute(action, params, frame)
+
+
+def _execute(action: str, params: dict, frame: Frame) -> None:
     coord = params.get("coordinate")
 
     def at(c):

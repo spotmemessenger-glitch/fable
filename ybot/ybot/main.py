@@ -1,7 +1,9 @@
 """Entry point: `python run.py` (or `python -m operator_agent.main`)."""
 from __future__ import annotations
 
-from . import charts, crash_reporter
+import os
+
+from . import charts, crash_reporter, perf
 from .agent import Operator
 from .config import SETTINGS
 from .screen import set_dpi_awareness
@@ -62,6 +64,14 @@ def main() -> None:
         print(f"\n=== RESULT ===\n{result}")
     except KeyboardInterrupt:
         print("\n[stopped by kill switch]")
+    finally:
+        # Always report, even on a kill — a run you aborted is still a measurement.
+        if perf.ENABLED:
+            perf.report()
+            out = os.environ.get("YBOT_PERF_OUT")
+            if out:
+                perf.dump(out)
+                print(f"\nperf written to {out}")
 
 
 if __name__ == "__main__":

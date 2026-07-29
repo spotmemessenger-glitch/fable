@@ -11,6 +11,8 @@ from dataclasses import dataclass
 
 from pywinauto import Desktop
 
+from .perf import count, span
+
 # Control types worth surfacing to the model as clickable targets.
 INTERACTIVE = {
     "Button",
@@ -53,31 +55,39 @@ class UIA:
         """Return the visible interactive elements of the current foreground window."""
         self._elements = []
         self._wrappers = []
-        try:
-            descendants = self._foreground().descendants()
-        except Exception:
-            return self._elements
-
-        ref = 0
-        for d in descendants:
+        with span("uia.inspect"):
             try:
-                ct = d.element_info.control_type
-                if ct not in INTERACTIVE or not d.is_visible():
-                    continue
-                r = d.rectangle()
-                if r.right <= r.left or r.bottom <= r.top:
-                    continue
-                name = (d.window_text() or "").strip()[:60]
-                self._elements.append(
-                    Element(ref, name, ct, (r.left + r.right) // 2, (r.top + r.bottom) // 2)
-                )
-                self._wrappers.append(d)
-                ref += 1
-                if ref >= self.max_elements:
-                    break
+                # The whole tree is materialised here, before any filtering — one
+                # cross-process COM call per node. On a heavy window (browser, IDE)
+                # this dominates the step, and no max_elements break can undo it.
+                with span("uia.inspect.descendants"):
+                    descendants = self._foreground().descendants()
             except Exception:
-                continue
-        return self._elements
+                return self._elements
+            count("uia.inspect.nodes_walked", len(descendants))
+
+            ref = 0
+            with span("uia.inspect.filter"):
+                for d in descendants:
+                    try:
+                        ct = d.element_info.control_type
+                        if ct not in INTERACTIVE or not d.is_visible():
+                            continue
+                        r = d.rectangle()
+                        if r.right <= r.left or r.bottom <= r.top:
+                            continue
+                        name = (d.window_text() or "").strip()[:60]
+                        self._elements.append(
+                            Element(ref, name, ct, (r.left + r.right) // 2, (r.top + r.bottom) // 2)
+                        )
+                        self._wrappers.append(d)
+                        ref += 1
+                        if ref >= self.max_elements:
+                            break
+                    except Exception:
+                        continue
+            count("uia.inspect.elements_returned", len(self._elements))
+            return self._elements
 
     def element(self, ref: int) -> Element:
         if not 0 <= ref < len(self._elements):
