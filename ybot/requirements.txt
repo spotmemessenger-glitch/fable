@@ -7,3 +7,9 @@ pywinauto>=0.6.9         # Windows UI Automation (element targeting, active-wind
 pyperclip>=1.9           # clipboard (copy/paste)
 keyboard>=0.13.5         # global kill-switch hotkey
 python-dotenv>=1.0       # load ANTHROPIC_API_KEY from .env
+
+# --- voice (optional) — only needed to run the OpenAI Realtime front end.
+# The conversation logic in ybot/voice/ has no dependency on either and is
+# tested without them.
+# openai>=2.0            # Realtime API client (the ChatGPT voice)
+# sounddevice>=0.4       # mic capture + speaker playback; needs PortAudio

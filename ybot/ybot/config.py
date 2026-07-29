@@ -36,6 +36,13 @@ class Settings:
     ollama_model: str = os.environ.get("OPERATOR_OLLAMA_MODEL", "gemma4:31b")
     ollama_host: str = os.environ.get("OPERATOR_OLLAMA_HOST", "")
     ollama_api_key: str = os.environ.get("OLLAMA_API_KEY", "")
+    # --- voice (OpenAI Realtime: the ChatGPT voice) -------------------------
+    # Speech-to-speech, so it replaces local STT/TTS entirely. The desktop
+    # operator stays on Claude computer-use — this is the conversational front
+    # end, and it reaches the machine only through ybot's tools.
+    openai_api_key: str = os.environ.get("OPENAI_API_KEY", "")
+    realtime_model: str = os.environ.get("YBOT_REALTIME_MODEL", "gpt-realtime-2")
+    realtime_voice: str = os.environ.get("YBOT_REALTIME_VOICE", "marin")
     # Computer-use tool version + beta header (verified against Anthropic docs).
     beta_flag: str = "computer-use-2025-11-24"
     tool_type: str = "computer_20251124"

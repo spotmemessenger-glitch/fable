@@ -62,7 +62,7 @@ to register and if you want the agent to drive elevated windows.
 | `ybot/killswitch.py` | global hotkey + corner failsafe |
 | `ybot/config.py` | settings from `.env` |
 | `ybot/perf.py` | latency instrumentation (off unless `YBOT_PERF=1`) |
-| `ybot/voice/` | streaming conversation logic — chunking, barge-in, routing |
+| `ybot/voice/` | conversation logic + OpenAI Realtime front end |
 | `scripts/bench.py` | local microbenchmark — capture, change detection, UIA walk |
 
 ## Voice layer (`ybot/voice/`)
@@ -76,14 +76,44 @@ The conversation logic, with no audio vendor baked in. What ships:
 | `router.py` | LOCAL / FAST / SMART tiering; "stop" never reaches a model |
 | `engines.py` | `SpeechRecognizer` / `SpeechSynthesizer` Protocols, plus test doubles |
 
-**Not implemented:** audio capture and playback. Those are the vendor half —
-implement the two Protocols against Whisper/Deepgram/Azure and
-ElevenLabs/Piper/SAPI, and nothing above changes. Two hard requirements the
-Protocols exist to enforce: STT must stream partials, and TTS `stop()` must cut
-audio already sent to the speaker, synchronously. A synthesiser that can only be
-left to finish cannot do barge-in at all.
-
 Run `python -m pytest tests/test_voice.py` — 33 tests, no hardware needed.
+
+### The ChatGPT voice (OpenAI Realtime)
+
+`openai_realtime.py` + `tools.py` wire the OpenAI Realtime API in as the
+conversational front end. Realtime is **speech-to-speech** — recognition,
+reasoning and synthesis all happen server-side with its own VAD — so it replaces
+the local chunker and STT/TTS entirely. The split:
+
+```
+mic ──audio──> OpenAI Realtime ──audio──> speaker
+                    │    ▲
+             function_call │ result
+                    ▼    │
+        ybot: desktop Operator, browser, memory
+```
+
+The voice model never sees a screenshot or a coordinate. It asks for an outcome
+and the existing Operator does the work — so `guard.evaluate()` still gates
+every action and voice does not become a second, unguarded path to the mouse.
+Desktop goals run on a background thread and return a task id immediately,
+because an assistant that goes silent for ninety seconds while it works is
+broken however good the result is.
+
+```
+OPENAI_API_KEY=sk-...
+YBOT_REALTIME_VOICE=marin      # try: marin, cedar, alloy, echo, shimmer
+```
+
+**Not implemented:** the websocket loop and audio device I/O — they need a
+socket, a microphone and a speaker, none of which can be covered by tests. The
+loop is ~10 lines and is written out at the bottom of `openai_realtime.py`. The
+one requirement that is easy to get wrong: `stop_audio` must **discard audio
+already handed to the output device**. A stream that merely stops accepting new
+data keeps playing its buffer, and the assistant talks over the user after being
+interrupted.
+
+Run `python -m pytest tests/test_realtime.py` — 19 tests, no socket or API key.
 
 ## Measuring performance
 

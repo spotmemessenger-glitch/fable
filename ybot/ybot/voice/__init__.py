@@ -18,21 +18,30 @@ from .engines import (
     SpeechSynthesizer,
     Transcript,
 )
+from .openai_realtime import RealtimeError, RealtimeSession, Tool
 from .router import Route, Tier, route
 from .state import Conversation, Event, State, Turn
+from .tools import VOICE_INSTRUCTIONS, Task, TaskRunner, build_tools
 
 __all__ = [
     "Chunker",
     "Conversation",
     "Event",
     "NullSynthesizer",
+    "RealtimeError",
+    "RealtimeSession",
     "Route",
     "ScriptedRecognizer",
     "SpeechRecognizer",
     "SpeechSynthesizer",
     "State",
+    "Task",
+    "TaskRunner",
     "Tier",
+    "Tool",
     "Transcript",
     "Turn",
+    "VOICE_INSTRUCTIONS",
+    "build_tools",
     "route",
 ]
