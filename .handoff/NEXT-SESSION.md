@@ -74,6 +74,26 @@ having **no durable state** (a crash currently loses everything).
 
 ---
 
+## 3b. Git on this machine — already fixed, do not re-debug
+
+`git push` / `git ls-remote` used to **hang forever** (exit 124), while `gh`
+worked fine. Cause: the Windows credential helper blocking. Fixed with:
+
+```bash
+gh auth setup-git      # points git at gh's token
+```
+
+If git ever hangs again, that is the fix. Also: **never read a git exit code
+through a pipe** — `git ... | head; echo $?` reports *head's* status, so a
+hanging command looks successful. Redirect to a file and check `$?` directly.
+
+Everything is committed and pushed to `origin/master`:
+- `e4c8987` handoff docs + CLAUDE.md pointer
+- `5035d7f` ybot voice subsystem (10 files, 8/8 self-checks passing)
+
+`ybot/voice_memory/` is gitignored — it holds runtime conversation transcripts
+and must not be committed.
+
 ## 4. Measured numbers (GTX 1050 Ti, 4 GB VRAM)
 
 | Operation | Measured |
