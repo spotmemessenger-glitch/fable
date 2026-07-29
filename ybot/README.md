@@ -62,7 +62,28 @@ to register and if you want the agent to drive elevated windows.
 | `ybot/killswitch.py` | global hotkey + corner failsafe |
 | `ybot/config.py` | settings from `.env` |
 | `ybot/perf.py` | latency instrumentation (off unless `YBOT_PERF=1`) |
+| `ybot/voice/` | streaming conversation logic — chunking, barge-in, routing |
 | `scripts/bench.py` | local microbenchmark — capture, change detection, UIA walk |
+
+## Voice layer (`ybot/voice/`)
+
+The conversation logic, with no audio vendor baked in. What ships:
+
+| Module | Does |
+|---|---|
+| `chunker.py` | Cuts a token stream into speakable chunks — first on a clause (latency wins), later on full sentences (prosody wins) |
+| `state.py` | Turn state and barge-in, including truncating an interrupted turn to what was actually heard |
+| `router.py` | LOCAL / FAST / SMART tiering; "stop" never reaches a model |
+| `engines.py` | `SpeechRecognizer` / `SpeechSynthesizer` Protocols, plus test doubles |
+
+**Not implemented:** audio capture and playback. Those are the vendor half —
+implement the two Protocols against Whisper/Deepgram/Azure and
+ElevenLabs/Piper/SAPI, and nothing above changes. Two hard requirements the
+Protocols exist to enforce: STT must stream partials, and TTS `stop()` must cut
+audio already sent to the speaker, synchronously. A synthesiser that can only be
+left to finish cannot do barge-in at all.
+
+Run `python -m pytest tests/test_voice.py` — 27 tests, no hardware needed.
 
 ## Measuring performance
 
