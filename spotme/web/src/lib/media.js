@@ -95,7 +95,17 @@ export async function recordVoice () {
   const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
   const mime = MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm'
     : MediaRecorder.isTypeSupported('audio/mp4') ? 'audio/mp4' : ''
-  const recorder = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined)
+  /* Speech, not music. With no bitrate set the browser picks ~128 kbps, and a
+   * measured recording came out at 16.2 kB/s — so a note crossed the 128 KiB
+   * transport slice at EIGHT SECONDS, and nine 30-second notes filled the
+   * localStorage quota, after which the store silently sheds the sender's own
+   * audio. 24 kbps is the range voice messengers actually use: it cuts every
+   * note 5-6x, moves the slice threshold to ~45s, and takes a 30s note on 3G
+   * from 23s to about 4s. Browsers that do not support the hint ignore it. */
+  const recorder = new MediaRecorder(stream, {
+    ...(mime ? { mimeType: mime } : {}),
+    audioBitsPerSecond: 24000
+  })
   const chunks = []
   const startedAt = Date.now()
   recorder.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data) }
