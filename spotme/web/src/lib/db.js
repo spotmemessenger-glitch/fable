@@ -41,13 +41,38 @@ const DEFAULT_SETTINGS = {
  * Scoped to one `?id=` slot so resetting one test identity leaves the other
  * intact. Room keys for other slots carry an extra `:` segment after the
  * prefix, which is what distinguishes them — room ids are bare hex.
+ *
+ * TWO PREFIXES, NOT ONE. This filter used to match `spotme:` only, and the
+ * transport names its keys with a DOT — `spotme.server.tokens`,
+ * `spotme.cursor.<profileId>.<roomId>` (socket-transport.js:37,43). So "clear
+ * all data" left the server access AND refresh tokens on the device: after a
+ * wipe the browser could still authenticate to the backend as the identity the
+ * user had just erased. It also left the replay cursors, which name every room
+ * the user took part in and how far they read. Both are now removed.
+ *
+ * `spotme.transport` is deliberately kept: it is a debug opt-out
+ * (`'p2p'` restores Trystero), not user data, and silently reverting it turns
+ * a wipe into a transport change nobody asked for.
+ *
+ * Still true after this fix, and worth saying plainly: a wipe is LOCAL. It
+ * deletes nothing from the server, and it cannot revoke the refresh token
+ * server-side because there is no endpoint for that yet.
  */
 export function wipeDevice () {
+  const profileId = db.profile()?.id
+  // No profile means no way to tell this slot's cursors from another's — and a
+  // wipe with no identity should err toward deleting more, not less.
+  const cursorPrefix = profileId ? `spotme.cursor.${profileId}.` : 'spotme.cursor.'
   const doomed = []
   for (let i = 0; i < localStorage.length; i++) {
     const key = localStorage.key(i)
-    if (!key || !key.startsWith('spotme:')) continue
+    if (!key) continue
+    if (key === 'spotme.server.tokens' || key.startsWith(cursorPrefix)) { doomed.push(key); continue }
+    if (!key.startsWith('spotme:')) continue
     if (key === KEY || key === 'spotme:me' || key === 'spotme:demo-seeded') { doomed.push(key); continue }
+    // Translated message text, keyed BY the original message text
+    // (lib/translate.js CACHE_KEY). Message content, so it goes with the rest.
+    if (key.startsWith('spotme:tcache:')) { doomed.push(key); continue }
     if (key.startsWith(ROOM_PREFIX) && !key.slice(ROOM_PREFIX.length).includes(':')) doomed.push(key)
   }
   doomed.forEach((key) => localStorage.removeItem(key))
