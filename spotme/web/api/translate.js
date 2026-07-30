@@ -175,6 +175,44 @@ function jsonFrom (raw) {
   }
 }
 
+/**
+ * Gemini — the second opinion when the first reader does not recognise a
+ * message. Google's models see a great deal of romanized Indic text, which is
+ * exactly the input this app lives on.
+ *
+ * Auth is the `x-goog-api-key` header. A Bearer token is NOT accepted here
+ * (the API answers 401 asking for an OAuth token), which is worth stating
+ * because the key format looks like one.
+ */
+async function askGemini (system, user) {
+  const key = process.env.GEMINI_API_KEY
+  if (!key) throw new Error('no gemini key')
+  const model = process.env.GEMINI_MODEL || 'gemini-2.0-flash'
+  const res = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
+    {
+      method: 'POST',
+      headers: { 'x-goog-api-key': key, 'content-type': 'application/json' },
+      body: JSON.stringify({
+        systemInstruction: { parts: [{ text: system }] },
+        contents: [{ role: 'user', parts: [{ text: user }] }],
+        // Gemini has a real JSON mode, so no brace-prefill trickery is needed.
+        generationConfig: { responseMimeType: 'application/json', maxOutputTokens: 400 }
+      })
+    }
+  )
+  if (!res.ok) {
+    const detail = (await res.text()).slice(0, 200)
+    // 429 here usually means the AI Studio project is out of credit rather
+    // than that we are sending too fast — the message says which.
+    throw new Error(`gemini ${res.status}: ${detail}`)
+  }
+  const json = await res.json()
+  const body = json?.candidates?.[0]?.content?.parts?.map((p) => p.text).join('') || ''
+  if (!body.trim()) throw new Error('gemini empty')
+  return body
+}
+
 async function askOpenAI (system, user) {
   const key = process.env.OPENAI_API_KEY
   if (!key) throw new Error('no openai key')
@@ -200,7 +238,11 @@ async function askOpenAI (system, user) {
 }
 
 async function llmRead (q, hint) {
-  if (!process.env.ANTHROPIC_API_KEY && !process.env.OPENAI_API_KEY) {
+  // Must list every provider below. This guard predated Gemini and, left
+  // alone, refused to run at all when Gemini was the ONLY key configured —
+  // silently disabling the exact fallback it was added to provide.
+  if (!process.env.ANTHROPIC_API_KEY && !process.env.GEMINI_API_KEY &&
+      !process.env.OPENAI_API_KEY) {
     throw new Error('no llm key')
   }
   /* Graded against a 26-sentence corpus of the owner's own Tanglish, the
@@ -251,20 +293,37 @@ async function llmRead (q, hint) {
    * feature. Failures are collected so a total outage still says why. */
   const providers = []
   if (process.env.ANTHROPIC_API_KEY) providers.push(['anthropic', askAnthropic])
+  // Gemini sits second: it is the supervisor for messages the first reader
+  // cannot make sense of, and Google's models see far more romanized Indic
+  // text than most. It is ahead of OpenAI because that key has been found
+  // rotated in the field more than once.
+  if (process.env.GEMINI_API_KEY) providers.push(['gemini', askGemini])
   if (process.env.OPENAI_API_KEY) providers.push(['openai', askOpenAI])
 
-  let raw = null
+  let parsed = null
   const failures = []
   for (const [name, ask] of providers) {
     try {
-      raw = await ask(system, user)
-      if (raw) break
+      const raw = await ask(system, user)
+      if (!raw) continue
+      const candidate = jsonFrom(raw)
+      // A reader that NAMES a language but returns no English has not
+      // understood the message — it recognised the script and gave up. That is
+      // a failure even though the call succeeded, so the next provider gets a
+      // turn. Plain English is exempt: {"lang":"en","english":""} is the
+      // correct answer for a message that needs no translation.
+      const named = String(candidate.lang || '')
+      if (named && named !== 'en' && !String(candidate.english || '').trim()) {
+        failures.push(`${name}: recognised ${named} but returned no translation`)
+        continue
+      }
+      parsed = candidate
+      break
     } catch (error) {
       failures.push(`${name}: ${error.message}`)
     }
   }
-  if (!raw) throw new Error(failures.join(' | ') || 'no llm provider')
-  const parsed = jsonFrom(raw)
+  if (!parsed) throw new Error(failures.join(' | ') || 'no llm provider')
   return {
     lang: String(parsed.lang || '').slice(0, 8),
     script: String(parsed.script || ''),
