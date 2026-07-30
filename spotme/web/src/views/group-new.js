@@ -1,21 +1,27 @@
 /**
- * Spot Me — three-step group creation.
+ * Spot Me — three-step group creation, in WhatsApp's order.
  *
- * Steps exist because the three questions have different stakes. Naming is
- * throwaway, choosing members is social, and the visibility choice is the one
- * that decides whether the server can read the group at all — putting that on
- * the same screen as a name field is how people pick it without reading it.
+ * PEOPLE FIRST, THEN THE NAME. The first version asked for a name first, and a
+ * device with no contacts then hit a member step with nothing in it and a
+ * disabled Next — you could name a group and discover only afterwards that you
+ * could not make one. Asking for people first means the wall, if there is one,
+ * appears before any work is invested, and the picker can now resolve an
+ * @username so there need not be a wall at all.
  *
- * PRIVATE keeps the room key on the devices; the invite link carries it in the
- * URL fragment, which browsers never send to a server. PUBLIC hands the key to
- * the server so anyone can join by @username. Step 3 says so in plain words.
+ * Visibility stays on its own last step because it is the one choice that
+ * decides whether the server can read the group. PRIVATE keeps the room key in
+ * the invite-URL fragment, which browsers never send to a server; PUBLIC hands
+ * the key over so anyone can join by @handle. The step says so in those words.
  */
 import { db, randomHex } from '../lib/db.js'
 import { rooms } from '../lib/rooms.js'
 import { groupsApi } from '../lib/groups-api.js'
-import { el, clear, avatar } from '../lib/ui.js'
+import { buildPicker } from './member-picker.js'
+import { el, clear } from '../lib/ui.js'
 
 const NAME_MAX = 40
+/** The server refuses fewer (CreateGroupDto @ArrayMinSize(2)); asking for more
+ *  here than the server does would be a second, invisible rule. */
 const MIN_MEMBERS = 2
 const CHECK_DEBOUNCE_MS = 400
 const CLOSE_MS = 160
@@ -29,7 +35,7 @@ export function openGroupWizard (host, ctx) {
   const state = {
     step: 1,
     name: '',
-    members: new Set(),
+    members: new Map(),        // userId -> person, shared with the picker
     visibility: 'PRIVATE',
     username: '',
     usernameOk: false,
@@ -42,9 +48,11 @@ export function openGroupWizard (host, ctx) {
   const body = el('div', { class: 'gw-body' })
   const backdrop = el('div', { class: 'as-backdrop' })
   let checkTimer = null
+  let picker = null
 
   function close () {
     clearTimeout(checkTimer)
+    picker?.dispose()
     backdrop.classList.add('closing')
     setTimeout(() => backdrop.remove(), CLOSE_MS)
   }
@@ -55,8 +63,6 @@ export function openGroupWizard (host, ctx) {
 
   async function create () {
     if (state.busy) return
-    const name = state.name.trim()
-    const memberIds = [...state.members]
     if (state.visibility === 'PUBLIC' && !state.usernameOk) {
       ctx.toast('Pick an available @username first')
       return
@@ -68,8 +74,8 @@ export function openGroupWizard (host, ctx) {
     const secret = randomHex(16)
     const payload = {
       roomId,
-      name,
-      memberIds,
+      name: state.name.trim(),
+      memberIds: [...state.members.keys()],
       visibility: state.visibility,
       membersCanAdd: state.membersCanAdd,
       membersCanMessage: state.membersCanMessage,
@@ -89,9 +95,9 @@ export function openGroupWizard (host, ctx) {
         secret,
         kind: 'group',
         mode: 'meet',
-        title: name,
+        title: payload.name,
         groupId: group.id,
-        peer: { id: null, name, avatar: null, lang: 'en' }
+        peer: { id: null, name: payload.name, avatar: null, lang: 'en' }
       })
       rooms.ensure(roomId)
       close()
@@ -105,7 +111,37 @@ export function openGroupWizard (host, ctx) {
     }
   }
 
-  /* -------------------------------------------------------------- step 1 */
+  /* ----------------------------------------------------- step 1: people */
+
+  function stepMembers () {
+    const nextBtn = el('button', { class: 'pill ok', type: 'button', text: 'Next' })
+
+    const relabel = () => {
+      const n = state.members.size
+      nextBtn.textContent = n < MIN_MEMBERS
+        ? `Add ${MIN_MEMBERS - n} more`
+        : `Next · ${n}`
+      nextBtn.disabled = n < MIN_MEMBERS
+    }
+
+    picker?.dispose()
+    picker = buildPicker({ selected: state.members, onChange: relabel })
+    nextBtn.addEventListener('click', () => { if (state.members.size >= MIN_MEMBERS) go(2) })
+
+    body.appendChild(el('div', { class: 'gw-step' }, [
+      el('div', { class: 'gw-title', text: 'Add members' }),
+      el('p', { class: 'gw-hint', text: `Step 1 of 3 — pick at least ${MIN_MEMBERS} people.` }),
+      picker.node,
+      el('div', { class: 'gw-actions' }, [
+        el('button', { class: 'as-item cancel', type: 'button', text: 'Cancel', onclick: close }),
+        nextBtn
+      ])
+    ]))
+    relabel()
+    picker.focus()
+  }
+
+  /* ------------------------------------------------------- step 2: name */
 
   function stepName () {
     const input = el('input', {
@@ -119,85 +155,27 @@ export function openGroupWizard (host, ctx) {
     const next = () => {
       state.name = input.value.trim()
       if (!state.name) { ctx.toast('Give the group a name first'); input.focus(); return }
-      go(2)
+      go(3)
     }
     input.addEventListener('input', () => { state.name = input.value.trim() })
     input.addEventListener('keydown', (e) => { if (e.key === 'Enter') next() })
 
+    const who = [...state.members.values()]
+      .map((p) => p.name || `@${p.username}`).join(', ')
+
     body.appendChild(el('div', { class: 'gw-step' }, [
-      el('div', { class: 'gw-title', text: 'New group' }),
-      el('p', { class: 'gw-hint', text: 'Step 1 of 3 — what is it called?' }),
+      el('div', { class: 'gw-title', text: 'Name this group' }),
+      el('p', { class: 'gw-hint', text: `Step 2 of 3 — ${state.members.size} members: ${who}` }),
       input,
       el('div', { class: 'gw-actions' }, [
-        el('button', { class: 'as-item cancel', type: 'button', text: 'Cancel', onclick: close }),
+        el('button', { class: 'as-item cancel', type: 'button', text: 'Back', onclick: () => go(1) }),
         el('button', { class: 'pill ok', type: 'button', text: 'Next', onclick: next })
       ])
     ]))
     input.focus()
   }
 
-  /* -------------------------------------------------------------- step 2 */
-
-  function stepMembers () {
-    const contacts = db.contacts()
-    const search = el('input', {
-      class: 'gw-input',
-      type: 'text',
-      placeholder: 'Search contacts...',
-      autocomplete: 'off'
-    })
-    const list = el('div', { class: 'gw-list' })
-    const nextBtn = el('button', { class: 'pill ok', type: 'button', text: 'Next' })
-
-    const refresh = () => {
-      const q = search.value.trim().toLowerCase()
-      clear(list)
-      const shown = contacts.filter((c) => !q || (c.name || '').toLowerCase().includes(q))
-      if (!shown.length) {
-        list.appendChild(el('p', {
-          class: 'gw-hint',
-          text: contacts.length
-            ? 'Nobody matches that search.'
-            : 'No contacts yet — meet someone first, then make a group.'
-        }))
-      }
-      shown.forEach((c) => {
-        const on = state.members.has(c.id)
-        list.appendChild(el('div', {
-          class: 'gw-pick' + (on ? ' on' : ''),
-          onclick () {
-            if (state.members.has(c.id)) state.members.delete(c.id)
-            else state.members.add(c.id)
-            refresh()
-          }
-        }, [
-          avatar(c, 40),
-          el('span', { class: 'gw-pick-nm', text: c.name || 'Unknown' }),
-          el('span', { class: 'gw-tick', text: on ? '✓' : '' })
-        ]))
-      })
-      const n = state.members.size
-      nextBtn.textContent = n < MIN_MEMBERS ? `Pick ${MIN_MEMBERS - n} more` : `Next · ${n}`
-      nextBtn.disabled = n < MIN_MEMBERS
-    }
-
-    nextBtn.addEventListener('click', () => { if (state.members.size >= MIN_MEMBERS) go(3) })
-    search.addEventListener('input', refresh)
-
-    body.appendChild(el('div', { class: 'gw-step' }, [
-      el('div', { class: 'gw-title', text: state.name }),
-      el('p', { class: 'gw-hint', text: `Step 2 of 3 — add at least ${MIN_MEMBERS} people.` }),
-      search,
-      list,
-      el('div', { class: 'gw-actions' }, [
-        el('button', { class: 'as-item cancel', type: 'button', text: 'Back', onclick: () => go(1) }),
-        nextBtn
-      ])
-    ]))
-    refresh()
-  }
-
-  /* -------------------------------------------------------------- step 3 */
+  /* ------------------------------------------------- step 3: visibility */
 
   function toggleRow (label, key, note) {
     const on = state[key]
@@ -221,6 +199,8 @@ export function openGroupWizard (host, ctx) {
       maxlength: '16',
       placeholder: 'group_handle',
       autocomplete: 'off',
+      autocapitalize: 'none',
+      spellcheck: 'false',
       value: state.username
     })
 
@@ -301,8 +281,8 @@ export function openGroupWizard (host, ctx) {
 
   function draw () {
     clear(body)
-    if (state.step === 1) stepName()
-    else if (state.step === 2) stepMembers()
+    if (state.step === 1) stepMembers()
+    else if (state.step === 2) stepName()
     else stepVisibility()
   }
 

@@ -18,6 +18,7 @@ import './groups.css'
 import { db } from '../lib/db.js'
 import { rooms } from '../lib/rooms.js'
 import { groupsApi, may, outranks, ROLE_LABEL } from '../lib/groups-api.js'
+import { buildPicker } from './member-picker.js'
 import { el, clear, avatar, actionSheet } from '../lib/ui.js'
 
 const MUTE_CHOICES = [
@@ -78,6 +79,83 @@ export function render (root, ctx, groupId) {
     ])
   }
 
+  /**
+   * Add people after the group exists — the other half of creation, and the
+   * thing group info is opened for most often. Mirrors the server rule in
+   * groups.service.addMember: the owner, anyone holding canControlInvites, or
+   * any member when the group allows members to add.
+   */
+  function canAddMembers () {
+    return group.myRole === 'OWNER' ||
+      Boolean(group.myGrants?.canControlInvites) ||
+      Boolean(group.permissions?.membersCanAdd)
+  }
+
+  function openAddMembers () {
+    const selected = new Map()
+    // Everyone already on the roster is shown as "in" rather than hidden, so
+    // it is obvious the person you are looking for is present, not missing.
+    const exclude = new Set(group.members.map((m) => m.userId))
+    const backdrop = el('div', { class: 'as-backdrop' })
+    const addBtn = el('button', { class: 'pill ok', type: 'button', text: 'Add' })
+
+    const relabel = () => {
+      addBtn.textContent = selected.size ? `Add ${selected.size}` : 'Add'
+      addBtn.disabled = selected.size === 0
+    }
+    const picker = buildPicker({ selected, exclude, onChange: relabel })
+
+    const close = () => {
+      picker.dispose()
+      backdrop.classList.add('closing')
+      setTimeout(() => backdrop.remove(), 160)
+    }
+
+    addBtn.addEventListener('click', async () => {
+      addBtn.disabled = true
+      addBtn.textContent = 'Adding…'
+      const failed = []
+      // One call per person: a partial success must still land the people it
+      // can, and name only the ones it could not.
+      for (const userId of selected.keys()) {
+        try { await groupsApi.addMember(groupId, userId) } catch { failed.push(userId) }
+      }
+      close()
+      if (failed.length) ctx.toast(`Could not add ${failed.length} of ${selected.size}`)
+      else ctx.toast(selected.size === 1 ? 'Member added' : `${selected.size} members added`)
+      load()
+    })
+
+    backdrop.addEventListener('click', (e) => { if (e.target === backdrop) close() })
+    backdrop.appendChild(el('div', { class: 'as-sheet gw' }, [
+      el('div', { class: 'gw-title', text: 'Add members' }),
+      el('p', { class: 'gw-hint', text: 'Pick from contacts, or find anyone by @username.' }),
+      picker.node,
+      el('div', { class: 'gw-actions' }, [
+        el('button', { class: 'as-item cancel', type: 'button', text: 'Cancel', onclick: close }),
+        addBtn
+      ])
+    ]))
+    wrap.appendChild(backdrop)
+    relabel()
+    picker.focus()
+  }
+
+  /** Private groups travel by link: the key rides in the URL fragment, which
+   *  browsers never send to a server. Nothing to share without the local key. */
+  async function shareInvite () {
+    const convo = db.convos().find((c) => c.groupId === groupId)
+    if (!convo?.secret) { ctx.toast('No invite key on this device'); return }
+    const url = `${location.origin}${location.pathname}#r=${convo.roomId}&k=${convo.secret}` +
+      `&g=${encodeURIComponent(group.name)}`
+    if (navigator.share) {
+      try { await navigator.share({ title: 'Spot Me', text: `Join ${group.name} on Spot Me`, url }); return }
+      catch (err) { if (err?.name === 'AbortError') return }
+    }
+    try { await navigator.clipboard.writeText(url); ctx.toast('Invite link copied') }
+    catch { ctx.toast('Could not share the link') }
+  }
+
   function drawSettings () {
     clear(settingsEl)
 
@@ -87,6 +165,17 @@ export function render (root, ctx, groupId) {
         ? `Public as @${group.username} — the server holds the key and can read this group.`
         : 'Private — the key never reaches the server.'
     }))
+
+    const actions = el('div', { class: 'gm-actions' })
+    if (canAddMembers()) {
+      actions.appendChild(el('button', {
+        class: 'pill ok', type: 'button', text: 'Add members', onclick: openAddMembers
+      }))
+    }
+    actions.appendChild(el('button', {
+      class: 'pill', type: 'button', text: 'Invite via link', onclick: shareInvite
+    }))
+    settingsEl.appendChild(actions)
 
     // Member defaults are owner-only server-side; showing them to an admin
     // would be showing a switch that always throws.

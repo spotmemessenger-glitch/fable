@@ -76,6 +76,34 @@ Username namespace is **shared with users**: `usernameCheck` must consult both
       3. Lifting a ban cleared only `bannedAt`, leaving `leftAt` set and the
          `RoomMember` row deleted — un-banned into invisibility, still
          receiving nothing. It now clears both and restores the room row.
+- [x] **P3a add-members pass** — user report: "after creating the group name
+      there is no option to add members". Two real gaps, both reproduced on
+      production before changing anything:
+      1. **Creation dead-ended on a fresh device.** The picker listed local
+         contacts only, so with an empty contact list you typed a name, pressed
+         Next, and met "No contacts yet" with a disabled button. No way
+         forward, no way to add anyone.
+      2. **Group info had no "Add members" at all**, though the server has
+         had `POST /:id/members` the whole time.
+
+      Fixed to WhatsApp's shape: **people first, then the name** (so the wall,
+      if any, appears before work is invested), a shared `views/member-picker.js`
+      used by both creation and add-members, removable chips for who is picked,
+      and an exact `@username` lookup via `GET /api/users/lookup` — the
+      equivalent of WhatsApp letting you type a phone number that is not in
+      your address book. Existing members render as "in" and are not tappable.
+      Group info now carries **Add members** and **Invite via link**.
+
+      Verified in a browser from a zero-contact profile: found two strangers by
+      handle, created the group, then added a fourth person from group info.
+
+      **One deliberate difference from WhatsApp:** it allows a group of two
+      (you + 1). Here the server requires 2 others (`CreateGroupDto
+      @ArrayMinSize(2)`, `MIN_OTHER_MEMBERS = 2`). That is a product rule, not
+      an oversight, so the UI states it rather than quietly working around it.
+      Say so if it should change — it is a DTO constant, a service constant and
+      a test.
+
 - [ ] **P4 port** — move the Expo mobile app + admin dashboard off
       `/api/groups` onto the unified model, then delete the old stack.
 - [ ] **P5 verify** — backend tests + two-browser E2E.

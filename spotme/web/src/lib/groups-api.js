@@ -67,6 +67,28 @@ export const groupsApi = {
     call(`/${enc(id)}/members/${enc(userId)}/mute`, { method: 'PATCH', body: { minutes } })
 }
 
+/**
+ * Find one person by exact @username.
+ *
+ * This is what lets you add someone you have never met — the equivalent of
+ * typing a phone number into WhatsApp's participant picker. Without it a new
+ * account can never make a group, because the only candidates would be people
+ * already in the local contact list, and a fresh device's list is empty.
+ *
+ * Returns null rather than throwing when there is no such user: "not found" is
+ * an ordinary search outcome, not an error to surface.
+ */
+export async function lookupUser (username) {
+  const name = String(username || '').trim().toLowerCase().replace(/^@/, '')
+  if (!/^[a-z0-9_]{3,16}$/.test(name)) return null
+  const { accessToken } = await freshTokens()
+  const res = await fetch(`${API_BASE}/api/users/lookup?username=${enc(name)}`, {
+    headers: { Authorization: `Bearer ${accessToken}` }
+  })
+  if (!res.ok) return null
+  return res.json()
+}
+
 /* ------------------------------------------------------------ permissions */
 
 /* Re-exported from a dependency-free module so the rules can be tested without
