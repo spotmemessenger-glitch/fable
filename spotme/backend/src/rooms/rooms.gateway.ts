@@ -9,6 +9,7 @@ import {
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { JwtService } from '@nestjs/jwt';
+import { PushService } from '../push/push.service';
 import { RoomsService } from './rooms.service';
 
 interface JoinPayload {
@@ -85,7 +86,47 @@ export class RoomsGateway implements OnGatewayConnection, OnGatewayDisconnect {
   constructor(
     private roomsService: RoomsService,
     private jwt: JwtService,
+    private push: PushService,
   ) {}
+
+  /** Users with at least one live socket anywhere — they need no push. */
+  private connectedUsers(): Set<string> {
+    const live = new Set<string>();
+    for (const room of this.rooms.values()) {
+      for (const [userId, sockets] of room) {
+        if (sockets.size) live.add(userId);
+      }
+    }
+    return live;
+  }
+
+  /**
+   * Tell absent members something arrived.
+   *
+   * Never awaited by the send path: a message must land whether or not
+   * Apple's push service is reachable this second, and a sender should not
+   * wait on it either.
+   */
+  private pushForEvent(roomId: string, type: string, senderId: string): void {
+    const title = type === 'knock' ? 'New chat request' : 'New message';
+    void (async () => {
+      try {
+        const members = await this.push.membersToNotify(roomId, senderId);
+        const live = this.connectedUsers();
+        const absent = members.filter((id) => !live.has(id));
+        if (!absent.length) return;
+        // No message text: the payload passes through Apple and Google, and
+        // handing them content is exactly what the encryption exists to stop.
+        await this.push.notify(absent, {
+          title,
+          body: type === 'knock' ? 'Someone wants to chat' : 'Open Spot Me to read it',
+          tag: roomId,
+        });
+      } catch {
+        /* push is a courtesy; never let it break delivery */
+      }
+    })();
+  }
 
   handleConnection(client: Socket) {
     const token = client.handshake.auth?.token as string | undefined;
@@ -139,6 +180,10 @@ export class RoomsGateway implements OnGatewayConnection, OnGatewayDisconnect {
     if (!roomId || typeof roomId !== 'string' || roomId.length > 128) {
       return { error: 'bad roomId' };
     }
+    // Rooms are opaque ids the server cannot decode, so membership is learned
+    // from who joins — and it is the only way to know whom to notify later.
+    void this.push.remember(roomId, userId).catch(() => undefined);
+
     const room = this.members(roomId);
     const firstSocket = !room.has(userId);
     if (firstSocket) room.set(userId, new Set());
@@ -187,6 +232,12 @@ export class RoomsGateway implements OnGatewayConnection, OnGatewayDisconnect {
         roomId, type, userId, payload, body.meta, body.attachId,
       );
       seq = created.id;
+      // Only things a person would want waking their phone. Read receipts and
+      // profile syncs are persisted too, and a notification for those would
+      // teach people to swipe Spot Me away without looking.
+      if (type === 'msg' || type === 'knock') {
+        this.pushForEvent(roomId, type, userId);
+      }
     } else if (!EPHEMERAL.has(type)) {
       return { error: `unknown action type: ${type}` };
     }

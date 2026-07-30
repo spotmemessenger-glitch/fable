@@ -19,7 +19,10 @@ const dynamicImport = new Function('p', 'return import(p)') as (p: string) => Pr
 async function mountWebApiBridge(app: INestApplication) {
   const express = app.getHttpAdapter().getInstance();
   const apiDir = join(process.cwd(), '..', 'web', 'api');
-  for (const name of ['turn', 'translate', 'voice', 'knock', 'presence', 'push']) {
+  // `push` is NOT bridged: PushController owns /api/push now. The old handler
+  // stored subscriptions in Upstash and had the sender poke the recipient,
+  // which the server can do better and more honestly from the event log.
+  for (const name of ['turn', 'translate', 'voice', 'knock', 'presence']) {
     try {
       const mod = await dynamicImport(pathToFileURL(join(apiDir, `${name}.js`)).href);
       const handler = mod.default;

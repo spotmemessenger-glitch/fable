@@ -379,6 +379,34 @@ model RoomEvent {
   @@index([roomId, attachId])
 }
 
+// A device's Web Push subscription. Endpoint is the natural key: browsers mint
+// a new one per install, and re-subscribing after a permission reset produces
+// a different endpoint rather than a duplicate of the old one.
+model PushSubscription {
+  id         String    @id @default(cuid())
+  userId     String
+  endpoint   String    @unique
+  p256dh     String
+  auth       String
+  createdAt  DateTime  @default(now())
+  lastUsedAt DateTime?
+
+  @@index([userId])
+}
+
+// Who belongs to a room, so the server knows whom to notify when an event
+// lands there. Rooms are opaque ids the server cannot decode — it learns
+// membership from who joins, and that is the only reason this table exists.
+model RoomMember {
+  roomId   String
+  userId   String
+  joinedAt DateTime @default(now())
+  lastSeen DateTime @updatedAt
+
+  @@id([roomId, userId])
+  @@index([userId])
+}
+
 model CrashReport {
   id           String   @id @default(cuid())
   platform     String   // ios | android | web

@@ -11,6 +11,7 @@ import { AuditModule } from './audit/audit.module';
 import { GroupsModule } from './groups/groups.module';
 import { StoriesModule } from './stories/stories.module';
 import { RoomsModule } from './rooms/rooms.module';
+import { PushModule } from './push/push.module';
 
 @Module({
   imports: [
@@ -25,6 +26,7 @@ import { RoomsModule } from './rooms/rooms.module';
     AdminModule,
     GroupsModule,
     StoriesModule,
+    PushModule,
     RoomsModule,
   ],
 })
