@@ -9,6 +9,12 @@ import { AppModule } from './app.module';
 // dynamic import so the ESM handlers in spotme/web/api load correctly.
 const dynamicImport = new Function('p', 'return import(p)') as (p: string) => Promise<{ default?: unknown }>;
 
+/** The slice of the Express response the bridge itself touches. */
+type BridgeResponse = {
+  headersSent: boolean;
+  status: (n: number) => { json: (b: unknown) => void };
+};
+
 /**
  * Bridge the existing Vercel serverless handlers (spotme/web/api/*.js) onto
  * this server at the same /api/* paths. They are plain (req, res) functions —
@@ -40,9 +46,20 @@ async function mountWebApiBridge(app: INestApplication) {
       // (that happens during listen()), and Express runs middleware in
       // registration order — so without this the handlers see req.body
       // undefined and answer "need q" to a request that plainly had one.
-      express.all(`/api/${name}`, jsonBody, (req: unknown, res: { status: (n: number) => { json: (b: unknown) => void } }) => {
+      express.all(`/api/${name}`, jsonBody, (req: unknown, res: BridgeResponse) => {
         Promise.resolve((handler as (rq: unknown, rs: unknown) => unknown)(req, res)).catch((e: unknown) => {
-          res.status(500).json({ error: e instanceof Error ? e.message : String(e) });
+          // Log the detail, return none of it. This used to answer 500 with the
+          // raw error message, which for a vendor proxy names the vendor, the
+          // model and often the pricing tier — the exact thing translate.js
+          // takes care never to relay from its own catch block. The handlers
+          // answer their own errors; anything reaching here is a bug in ours.
+          // eslint-disable-next-line no-console
+          console.error(`api bridge: /api/${name} threw:`, e);
+          // A handler that already answered (or double-sent) leaves headers
+          // flushed; writing again throws ERR_HTTP_HEADERS_SENT and turns a
+          // handled failure into an unhandled rejection.
+          if (res.headersSent) return;
+          res.status(500).json({ error: 'service unavailable' });
         });
       });
     } catch (e) {
