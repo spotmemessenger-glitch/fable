@@ -19,7 +19,7 @@ import { compressImage, shrinkDataURL, AVATAR_EDGE, AVATAR_QUALITY } from './lib
 import { openCrop } from './lib/crop.js'
 import { readLink } from './net.js'
 import { primeAudio, startNotifier } from './lib/notify.js'
-import { subscribePush } from './lib/push.js'
+import { subscribePush, isNative as isNativeShell } from './lib/push.js'
 
 import * as inbox from './views/inbox.js'
 import * as discovery from './views/discovery.js'
@@ -513,7 +513,11 @@ if (!RESETTING) {
      * rotates an endpoint — and a stale endpoint fails silently, so a device
      * that once enabled alerts would simply stop being wakeable and never say
      * so. Existing subscriptions are reused, so this is cheap. */
-    if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+    /* The packaged app has NO `Notification` object at all, so gating on
+     * Notification.permission silently skipped native registration and left
+     * the phone permanently unwakeable. Native asks the OS for permission
+     * itself, so it must bypass this browser-only check entirely. */
+    if (isNativeShell() || (typeof Notification !== 'undefined' && Notification.permission === 'granted')) {
       subscribePush().catch(() => {})
     }
   })

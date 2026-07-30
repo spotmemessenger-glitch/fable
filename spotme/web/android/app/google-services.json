@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "151924679706",
+    "project_id": "spot-messenger-48a74",
+    "storage_bucket": "spot-messenger-48a74.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:151924679706:android:18adfdd98efd5fa9479da3",
+        "android_client_info": {
+          "package_name": "io.ysnapai.spotme"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDCLKiZDWqyQWyXSA_ljYCm6qrrme1b0Sc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

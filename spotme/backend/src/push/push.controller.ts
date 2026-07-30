@@ -33,6 +33,8 @@ export class PushController {
       action?: string;
       userId?: string;
       endpoint?: string;
+      token?: string;
+      platform?: string;
       subscription?: { endpoint: string; keys: { p256dh: string; auth: string } };
     },
   ) {
@@ -53,6 +55,22 @@ export class PushController {
         // Older clients send only userId; clear every device for that user.
         if (!body.userId) throw new BadRequestException('endpoint or userId required');
         return this.push.unsubscribeUser(body.userId);
+      }
+      // Native (FCM/APNs) registration — the only path that can wake the
+      // packaged app, since its WebView has no Push API at all.
+      case 'register-device': {
+        if (!body.userId || !body.token) {
+          throw new BadRequestException('userId and token required');
+        }
+        try {
+          return await this.push.registerDevice(body.userId, body.token, body.platform ?? 'android');
+        } catch (err) {
+          throw new BadRequestException((err as Error).message);
+        }
+      }
+      case 'unregister-device': {
+        if (!body.token) throw new BadRequestException('token required');
+        return this.push.unregisterDevice(body.token);
       }
       case 'notify':
         return { ok: true, ignored: 'the server decides who to notify' };

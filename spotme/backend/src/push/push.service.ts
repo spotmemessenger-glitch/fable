@@ -1,5 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import * as webpush from 'web-push';
+import { getApps, initializeApp, cert } from 'firebase-admin/app';
+import { getMessaging } from 'firebase-admin/messaging';
 import { PrismaService } from '../prisma/prisma.service';
 
 /**
@@ -30,7 +32,42 @@ export class PushService {
     if (this.enabled) {
       webpush.setVapidDetails(this.subject, this.publicKey, this.privateKey);
     }
+    this.initFirebase();
   }
+
+  /**
+   * FCM is the ONLY way to wake an idle Android device. A background socket
+   * does not survive Doze, and the packaged app cannot use Web Push at all
+   * (Capacitor's WebView has no PushManager). Credentials arrive as a
+   * service-account JSON, either inline or as a path, so the same code works
+   * on Railway (env var) and locally (file).
+   */
+  private initFirebase(): void {
+    const raw = process.env.FIREBASE_SERVICE_ACCOUNT || '';
+    if (!raw) return;
+    try {
+      // Accept a JSON blob or a path to one. Railway env vars cannot hold
+      // newlines comfortably, so base64 is accepted too.
+      let json = raw.trim();
+      if (!json.startsWith('{')) {
+        const decoded = Buffer.from(json, 'base64').toString('utf8').trim();
+        json = decoded.startsWith('{')
+          ? decoded
+          : // eslint-disable-next-line @typescript-eslint/no-var-requires
+            require('fs').readFileSync(raw, 'utf8');
+      }
+      const creds = JSON.parse(json);
+      if (!getApps().length) initializeApp({ credential: cert(creds) });
+      this.fcmReady = true;
+      this.log.log(`FCM ready (project ${creds.project_id})`);
+    } catch (err) {
+      // Never throw: a malformed key must not stop the server from booting and
+      // delivering messages over the socket, which is the primary path.
+      this.log.warn(`FCM disabled — could not read FIREBASE_SERVICE_ACCOUNT: ${(err as Error).message}`);
+    }
+  }
+
+  private fcmReady = false;
 
   /** Dormant without keys — the client asks first and never offers push. */
   get enabled(): boolean {
@@ -38,7 +75,32 @@ export class PushService {
   }
 
   config() {
-    return { enabled: this.enabled, publicKey: this.enabled ? this.publicKey : null };
+    return {
+      enabled: this.enabled,
+      publicKey: this.enabled ? this.publicKey : null,
+      // Lets the client decide whether to bother registering natively.
+      native: this.fcmReady,
+    };
+  }
+
+  // ── native device tokens (FCM / APNs) ─────────────────────────────────
+
+  async registerDevice(userId: string, token: string, platform: string) {
+    if (!token) throw new Error('token required');
+    const plat = platform === 'ios' ? 'ios' : 'android';
+    await this.prisma.deviceToken.upsert({
+      where: { token },
+      // A token can migrate between identities on a shared device, so userId
+      // is updated rather than left pointing at whoever registered it first.
+      create: { userId, token, platform: plat },
+      update: { userId, platform: plat, lastUsedAt: new Date() },
+    });
+    return { ok: true };
+  }
+
+  async unregisterDevice(token: string) {
+    await this.prisma.deviceToken.deleteMany({ where: { token } });
+    return { ok: true };
   }
 
   async subscribe(
@@ -84,7 +146,94 @@ export class PushService {
    * learn to ignore notifications.
    */
   async notify(userIds: string[], payload: { title: string; body: string; tag?: string }) {
-    if (!this.enabled || userIds.length === 0) return { sent: 0 };
+    if (userIds.length === 0) return { sent: 0 };
+    // Both transports run: one identity can have a phone (FCM) and a desktop
+    // browser (Web Push) at once, and both should light up.
+    const [web, native] = await Promise.all([
+      this.notifyWeb(userIds, payload),
+      this.notifyNative(userIds, payload),
+    ]);
+    return { sent: web.sent + native.sent, web, native };
+  }
+
+  /**
+   * FCM, sent with BOTH a notification block and a data block, at high
+   * priority.
+   *
+   * Data-only was tried first, on the theory that letting Android render the
+   * notification itself would hand Google the content. It does not: the
+   * payload deliberately carries no message text — only "New message" and a
+   * room tag — so there is nothing to leak, and the privacy argument buys
+   * nothing while costing everything. Measured on-device: a data-only push
+   * reached a backgrounded app but displayed NOTHING, because Android never
+   * auto-renders data-only, and it is dropped entirely once the process dies.
+   *
+   * With a notification block the system tray shows it whether or not our
+   * process is alive, which is the whole point of waking a sleeping phone.
+   * The data block rides along so the app can route the tap when it IS alive.
+   *
+   * Note: FCM is not delivered at all to a FORCE-STOPPED app — that is an
+   * Android rule, not a bug here. Normal background and swiped-away both work.
+   */
+  private async notifyNative(
+    userIds: string[],
+    payload: { title: string; body: string; tag?: string },
+  ) {
+    if (!this.fcmReady) return { sent: 0, skipped: 'fcm not configured' };
+    const rows = await this.prisma.deviceToken.findMany({ where: { userId: { in: userIds } } });
+    if (!rows.length) return { sent: 0 };
+
+    const res = await getMessaging().sendEachForMulticast({
+      tokens: rows.map((r) => r.token),
+      notification: { title: payload.title, body: payload.body },
+      data: { title: payload.title, body: payload.body, tag: payload.tag ?? '' },
+      android: {
+        priority: 'high',
+        notification: {
+          // Collapse repeats from one room into a single tray entry instead of
+          // stacking a buzz per message.
+          tag: payload.tag || 'spotme',
+          defaultSound: true,
+          // HIGH, not MAX: this should light the screen, not bypass Do Not
+          // Disturb for a chat message.
+          priority: 'high',
+        },
+      },
+      apns: {
+        headers: { 'apns-priority': '10', 'apns-push-type': 'alert' },
+        // content-available also wakes the app so it can fetch the real message.
+        payload: { aps: { 'content-available': 1, sound: 'default', 'thread-id': payload.tag ?? '' } },
+      },
+    });
+
+    // Drop tokens Google says are gone for good, or the table fills with
+    // corpses that fail on every future send.
+    const dead: string[] = [];
+    res.responses.forEach((r, i) => {
+      const code = (r.error as { code?: string } | undefined)?.code ?? '';
+      if (!r.success && /registration-token-not-registered|invalid-argument/.test(code)) {
+        dead.push(rows[i].token);
+      } else if (!r.success) {
+        this.log.warn(`FCM send failed (${code || 'unknown'}) for ${rows[i].userId}`);
+      }
+    });
+    if (dead.length) {
+      await this.prisma.deviceToken.deleteMany({ where: { token: { in: dead } } });
+    }
+    if (res.successCount) {
+      await this.prisma.deviceToken.updateMany({
+        where: { token: { in: rows.map((r) => r.token) } },
+        data: { lastUsedAt: new Date() },
+      });
+    }
+    return { sent: res.successCount, pruned: dead.length };
+  }
+
+  private async notifyWeb(
+    userIds: string[],
+    payload: { title: string; body: string; tag?: string },
+  ) {
+    if (!this.enabled) return { sent: 0, skipped: 'vapid not configured' };
     const subs = await this.prisma.pushSubscription.findMany({
       where: { userId: { in: userIds } },
     });

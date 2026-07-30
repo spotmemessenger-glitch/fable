@@ -40,7 +40,57 @@ function config () {
 }
 
 /** True when the deployment actually has keys and a store behind it. */
-export const pushAvailable = async () => Boolean((await config())?.enabled)
+export const pushAvailable = async () => Boolean((await config())?.enabled || (await config())?.native)
+
+/** Running inside the Capacitor shell rather than a browser tab.
+ *  Exported because callers must NOT gate push on `Notification.permission`:
+ *  that object does not exist in the WebView, so a browser-shaped guard skips
+ *  native registration entirely and the phone is never wakeable. */
+export const isNative = () => Boolean(globalThis.Capacitor?.isNativePlatform?.())
+
+/**
+ * Native push (FCM on Android, APNs on iOS).
+ *
+ * The packaged app cannot use Web Push — its WebView exposes no PushManager
+ * and no Notification API — so this is the ONLY way a closed phone gets woken.
+ * The plugin is imported lazily so the browser build never pulls in native
+ * code it cannot run.
+ */
+export async function registerNativePush () {
+  const me = db.profile()?.id
+  if (!me) return { ok: false, reason: 'no-profile' }
+  try {
+    const { PushNotifications } = await import('@capacitor/push-notifications')
+
+    let permission = await PushNotifications.checkPermissions()
+    if (permission.receive !== 'granted') permission = await PushNotifications.requestPermissions()
+    if (permission.receive !== 'granted') return { ok: false, reason: 'no-permission' }
+
+    // The token arrives asynchronously via an event, so registration is only
+    // complete once it has been handed to the server — resolving earlier would
+    // report success for a device the server still cannot reach.
+    const token = await new Promise((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error('token-timeout')), 15000)
+      PushNotifications.addListener('registration', (t) => { clearTimeout(timer); resolve(t.value) })
+      PushNotifications.addListener('registrationError', (e) => { clearTimeout(timer); reject(new Error(String(e?.error || 'registration-error'))) })
+      PushNotifications.register()
+    })
+
+    const response = await fetch(ENDPOINT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'register-device',
+        userId: me,
+        token,
+        platform: globalThis.Capacitor?.getPlatform?.() === 'ios' ? 'ios' : 'android'
+      })
+    })
+    return { ok: response.ok, reason: response.ok ? null : 'server', native: true }
+  } catch (error) {
+    return { ok: false, reason: String(error?.message || error?.name || 'failed') }
+  }
+}
 
 /** applicationServerKey wants raw bytes, not the base64url the server sends. */
 function decodeKey (base64url) {
@@ -60,6 +110,11 @@ function decodeKey (base64url) {
  * holds and would quietly break alerts until the next call.
  */
 export async function subscribePush () {
+  // Inside the packaged app there is no Push API at all — the WebView has no
+  // PushManager and no Notification (verified on-device). Web Push cannot work
+  // there under any configuration, so the native path is the whole story.
+  if (isNative()) return registerNativePush()
+
   const settings = await config()
   if (!settings?.publicKey || !settings.enabled) return { ok: false, reason: 'not-configured' }
   if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
