@@ -1,0 +1,91 @@
+// domain: data-engineering
+// title: Data Engineering — Streaming, Batch, Lakehouse, Orchestration, Databases
+// format: owner/repo | tags | why it matters
+
+apache/spark | batch,streaming,distributed | The distributed processing default
+apache/flink | streaming,stateful,exactly-once | Stateful stream processing with real correctness guarantees
+apache/beam | portability,pipelines,unified | One pipeline model across runners
+apache/kafka | streaming,log,backbone | The event backbone
+confluentinc/ksql | streaming,sql,kafka | SQL over Kafka streams
+confluentinc/schema-registry | schemas,compatibility,kafka | Schema evolution enforcement; the thing that prevents outages
+redpanda-data/redpanda | streaming,kafka-api,cpp | Kafka-compatible broker without the JVM
+apache/pulsar | messaging,streaming,multi-tenant | Multi-tenant messaging and streaming
+nats-io/nats-server | messaging,lightweight,cloud-native | Simple high-performance messaging
+rabbitmq/rabbitmq-server | messaging,amqp,broker | The AMQP broker most enterprises already run
+apache/airflow | orchestration,scheduling,dags | The scheduling incumbent
+dagster-io/dagster | orchestration,assets,typed | Asset-oriented orchestration with typed IO
+PrefectHQ/prefect | orchestration,python,dynamic | Dynamic Python workflows
+apache/dolphinscheduler | orchestration,visual,distributed | Visual workflow scheduling
+kestra-io/kestra | orchestration,declarative,yaml | Declarative orchestration
+dbt-labs/dbt-core | transformation,sql,testing | SQL transformation with tests and lineage
+sqlfluff/sqlfluff | linting,sql,standards | SQL linting; the only way to enforce SQL style at scale
+tobymao/sqlglot | sql,parsing,transpile | Parse and transpile SQL across dialects
+apache/iceberg | lakehouse,tables,acid | Open table format with real schema evolution
+delta-io/delta | lakehouse,tables,acid | Delta Lake table format
+apache/hudi | lakehouse,upserts,incremental | Incremental processing on the lake
+apache/parquet-java | format,columnar,storage | The columnar storage format
+apache/arrow | memory,columnar,interchange | In-memory columnar standard
+duckdb/duckdb | analytics,embedded,olap | Embedded OLAP; the fastest path from file to answer
+pola-rs/polars | dataframe,rust,performance | Fast dataframes with a lazy engine
+pandas-dev/pandas | dataframe,python,ubiquitous | The dataframe everyone already knows
+ibis-project/ibis | dataframe,portable,sql | One dataframe API over many engines
+apache/superset | bi,visualization,sql | Open BI and exploration
+metabase/metabase | bi,selfservice,dashboards | Self-service analytics
+apache/druid | olap,realtime,timeseries | Real-time analytical queries
+ClickHouse/ClickHouse | olap,columnar,speed | Column store for very fast aggregation
+apache/pinot | olap,realtime,latency | Low-latency realtime OLAP
+apache/doris | olap,mpp,analytics | MPP analytical database
+questdb/questdb | timeseries,sql,performance | Time-series database with SQL
+timescale/timescaledb | timeseries,postgres,extension | Time-series inside Postgres
+influxdata/influxdb | timeseries,metrics,storage | Time-series storage
+cockroachdb/cockroach | database,distributed,sql | Distributed SQL with survivability
+yugabyte/yugabyte-db | database,distributed,postgres | Postgres-compatible distributed SQL
+pingcap/tidb | database,distributed,htap | The TiDB source
+scylladb/scylladb | nosql,cassandra,cpp | Cassandra-compatible, much faster
+apache/cassandra | nosql,wide-column,availability | Wide column store for availability-first workloads
+mongodb/mongo | nosql,document,database | The document database incumbent
+etcd-io/etcd | consensus,keyvalue,coordination | The coordination store Kubernetes depends on
+apache/zookeeper | coordination,consensus,legacy | Still coordinating a lot of production Hadoop and Kafka
+sqlite/sqlite | database,embedded,ubiquitous | The most deployed database in the world
+supabase/supabase | backend,postgres,platform | Postgres platform with auth and APIs
+hasura/graphql-engine | graphql,database,api | Instant GraphQL over Postgres
+PostgREST/postgrest | api,postgres,rest | REST API straight from schema
+prisma/prisma | orm,typescript,schema | Type-safe database access for TypeScript
+drizzle-team/drizzle-orm | orm,typescript,sql | SQL-shaped TypeScript ORM
+sqlalchemy/sqlalchemy | orm,python,core | The Python data access standard
+airbytehq/airbyte | ingestion,connectors,elt | Broad connector catalogue for ELT
+dlt-hub/dlt | ingestion,python,pipelines | Pipelines as Python, schema inferred
+singer-io/getting-started | ingestion,spec,taps | The Singer tap/target specification
+meltano/meltano | elt,orchestration,cli | Declarative ELT on Singer
+debezium/debezium | cdc,streaming,database | Change data capture done properly
+estuary/flow | streaming,cdc,realtime | Real-time ELT
+apache/nifi | dataflow,visual,routing | Visual dataflow routing; common in regulated estates
+great-expectations/great_expectations | quality,validation,tests | Data quality assertions
+sodadata/soda-core | quality,checks,cli | Data quality checks as config
+awslabs/deequ | quality,spark,scala | Data quality at Spark scale
+apache/griffin | quality,hadoop,metrics | Data quality in the Hadoop estate
+OpenLineage/OpenLineage | lineage,standard,metadata | Lineage as an open standard
+MarquezProject/marquez | lineage,metadata,api | OpenLineage reference implementation
+linkedin/datahub | catalog,metadata,discovery | Metadata platform at scale
+open-metadata/OpenMetadata | catalog,governance,quality | Unified metadata and quality
+apache/ranger | governance,authorization,hadoop | Fine-grained data authorization
+apache/atlas | governance,lineage,classification | Classification and lineage
+trinodb/trino | federation,sql,query | Query anything from one SQL engine
+prestodb/presto | federation,sql,query | The Presto lineage
+apache/hive | warehouse,sql,hadoop | Still the metastore many estates depend on
+apache/hadoop | storage,batch,hdfs | HDFS and YARN; the legacy you will inherit
+minio/minio | storage,s3,object | S3-compatible object storage
+apache/ozone | storage,object,hadoop | Object store for the Hadoop estate
+delta-io/delta-rs | lakehouse,rust,bindings | Delta without Spark
+apache/iceberg-python | lakehouse,python,tables | Iceberg from Python
+googleapis/python-bigquery | warehouse,gcp,client | BigQuery client
+snowflakedb/snowflake-connector-python | warehouse,snowflake,client | Snowflake connectivity
+databricks/databricks-sdk-py | platform,databricks,sdk | Databricks automation
+delta-io/delta-sharing | sharing,protocol,governance | Share data without copying it
+apache/seatunnel | integration,sync,connectors | High-volume data integration
+apache/paimon | lakehouse,streaming,tables | Streaming lakehouse format
+risingwavelabs/risingwave | streaming,sql,database | Streaming database with SQL
+MaterializeInc/materialize | streaming,incremental,sql | Incrementally maintained views
+feast-dev/feast | features,serving,ml | Feature store
+kedro-org/kedro | pipelines,structure,python | Opinionated data pipeline structure
+quantumblacklabs/kedro-viz | pipelines,visualization | Pipeline visualisation

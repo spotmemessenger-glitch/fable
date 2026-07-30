@@ -1,0 +1,93 @@
+// domain: microsoft
+// title: Microsoft Stack — .NET, Azure, TypeScript, Windows, Power Platform, M365
+// format: owner/repo | tags | why it matters
+
+dotnet/runtime | dotnet,runtime,core | The .NET runtime and base libraries
+dotnet/aspnetcore | dotnet,web,api | The web framework; minimal APIs are the modern default
+dotnet/roslyn | compiler,csharp,analyzers | The C# compiler platform; write analyzers, not lint scripts
+dotnet/efcore | orm,data,dotnet | Entity Framework Core
+dotnet/sdk | tooling,cli,dotnet | The .NET SDK and CLI
+dotnet/maui | mobile,crossplatform,dotnet | Cross-platform native UI from .NET
+dotnet/aspire | cloud-native,orchestration,dotnet | Opinionated cloud-native app stack and dashboard
+dotnet/eShop | reference,microservices,architecture | The canonical reference microservices app
+dotnet-architecture/eShopOnContainers | reference,containers,architecture | Long-running architecture reference with free ebooks
+dotnet/orleans | actors,distributed,dotnet | Virtual actor model for distributed systems
+dotnet/machinelearning | ml,dotnet | ML.NET for in-process inference
+dotnet/csharplang | language,design,proposals | Language design in the open; read the proposals
+dotnet/docs | documentation,official | Official .NET documentation source
+microsoft/dotnet-podcasts | reference,sample,architecture | End-to-end .NET sample application
+Azure/azure-sdk-for-net | azure,sdk,dotnet | Official Azure SDK for .NET
+Azure/azure-sdk-for-python | azure,sdk,python | Official Azure SDK for Python
+Azure/azure-sdk-for-js | azure,sdk,javascript | Official Azure SDK for JS/TS
+Azure/azure-sdk-for-java | azure,sdk,java | Official Azure SDK for Java
+Azure/azure-sdk-for-go | azure,sdk,go | Official Azure SDK for Go
+Azure/azure-cli | azure,cli,automation | The Azure command line
+Azure/bicep | iac,azure,dsl | Bicep DSL for ARM; the modern Azure IaC path
+Azure/azure-quickstart-templates | iac,templates,arm | Large template corpus for ARM/Bicep
+Azure/Azure-Verified-Modules | iac,modules,standards | Microsoft-verified IaC modules with a compliance bar
+Azure/terraform-azurerm-avm-template | terraform,azure,modules | AVM Terraform module template
+MicrosoftDocs/cloud-adoption-framework | governance,architecture,caf | The CAF guidance corpus
+MicrosoftDocs/well-architected | architecture,pillars,waf | Well-Architected Framework guidance
+mspnp/architecture-center | architecture,patterns,reference | Reference architectures and patterns
+Azure/azure-rest-api-specs | api,specs,openapi | Every Azure REST surface as OpenAPI
+Azure/AKS | kubernetes,azure,managed | Managed Kubernetes issues and roadmap
+Azure/azure-functions-host | serverless,functions,runtime | The Functions runtime
+Azure/azure-functions-python-worker | serverless,python | Python worker for Functions
+Azure/azure-workload-identity | identity,kubernetes,security | Workload identity federation for AKS
+Azure/azure-policy | governance,policy,compliance | Built-in policy definitions
+Azure/review-checklists | governance,review,checklists | Architecture review checklists worth stealing wholesale
+microsoft/azure-devops-python-api | devops,api,automation | Azure DevOps automation
+microsoft/azure-pipelines-agent | cicd,agent,devops | The pipeline agent
+microsoft/azure-pipelines-tasks | cicd,tasks,library | Built-in pipeline tasks
+Azure-Samples/azure-search-openai-demo | rag,azure,reference | The most-copied enterprise RAG reference on Azure
+Azure-Samples/cognitive-services-speech-sdk | speech,samples,azure | Speech SDK samples
+Azure/azureml-examples | mlops,azure,notebooks | Azure ML examples and pipelines
+microsoft/TypeScript | language,types,tooling | The language; the compiler is also the best-documented one to read
+microsoft/vscode | editor,extensibility,electron | The editor and its extension model
+microsoft/monaco-editor | editor,web,component | The editor as a web component
+microsoft/playwright | testing,browser,automation | Cross-browser automation and test runner
+microsoft/playwright-python | testing,python | Python bindings for Playwright
+microsoft/vscode-extension-samples | extensions,samples | How to build editor extensions properly
+microsoft/rushstack | monorepo,tooling,scale | Monorepo tooling built for large orgs
+microsoft/fluentui | design-system,react,components | Fluent design system components
+microsoft/fluentui-system-icons | icons,design | The Fluent icon set
+microsoft/PowerToys | windows,utilities,csharp | Windows utilities; a good large C# codebase to read
+microsoft/winget-cli | packaging,windows,cli | Windows package manager
+microsoft/terminal | windows,terminal,cpp | Windows Terminal
+PowerShell/PowerShell | shell,automation,crossplatform | PowerShell core
+MicrosoftDocs/PowerShell-Docs | documentation,powershell | Official PowerShell docs
+microsoft/WindowsAppSDK | windows,appdev,sdk | Modern Windows app platform
+microsoft/microsoft-ui-xaml | windows,ui,winui | WinUI controls
+microsoft/Windows-driver-samples | drivers,windows,kernel | Driver samples; the low-level Windows reference
+microsoft/Detours | windows,hooking,binary | Binary interception library
+microsoft/wsl | linux,windows,subsystem | The Linux subsystem
+microsoft/vcpkg | cpp,packages,dependencies | C++ dependency manager
+microsoft/GSL | cpp,guidelines,library | C++ Core Guidelines support library
+isocpp/CppCoreGuidelines | cpp,standards,guidelines | The C++ standards document to hold reviews against
+microsoft/mimalloc | allocator,performance,cpp | High-performance allocator
+microsoft/napajs | javascript,multithreading | Multithreaded JS runtime experiment
+microsoft/BotFramework-SDK | bots,conversation,enterprise | Enterprise bot framework
+microsoft/botbuilder-python | bots,python | Bot Framework Python SDK
+microsoft/kiota | api,codegen,openapi | Generate API clients from OpenAPI
+microsoft/OpenAPI.NET | openapi,dotnet,parsing | OpenAPI document model for .NET
+microsoftgraph/microsoft-graph-docs-contrib | m365,graph,documentation | Microsoft Graph documentation
+microsoftgraph/msgraph-sdk-python | m365,graph,sdk | Graph SDK for Python
+microsoftgraph/msgraph-sdk-dotnet | m365,graph,sdk | Graph SDK for .NET
+OfficeDev/office-js | office,addins,api | Office add-in APIs
+OfficeDev/Microsoft-Teams-Samples | teams,samples,m365 | Teams app samples
+SharePoint/sp-dev-fx-webparts | sharepoint,spfx,samples | SPFx web part samples
+pnp/powershell | m365,automation,powershell | PnP PowerShell for M365 automation
+microsoft/coe-starter-kit | powerplatform,alm,cicd | ALM for Power Platform
+microsoft/PowerApps-Samples | powerplatform,samples | Power Apps and Dataverse samples
+microsoft/sql-server-samples | sql,samples,database | SQL Server sample databases and code
+microsoft/mssql-jdbc | sql,jdbc,driver | SQL Server JDBC driver
+microsoft/mssql-docker | sql,containers | SQL Server in containers
+microsoft/DirectX-Graphics-Samples | graphics,directx,gpu | DirectX 12 samples
+microsoft/garnet | cache,performance,dotnet | High-performance cache store from MSR
+microsoft/FASTER | storage,keyvalue,performance | Fast persistent key-value store
+microsoft/service-fabric | orchestration,distributed,legacy | Service Fabric; still load-bearing in many estates
+microsoft/reverse-proxy | proxy,dotnet,yarp | YARP reverse proxy toolkit
+microsoft/security-devops-action | security,cicd,github | Microsoft security tooling in GitHub Actions
+microsoft/Microsoft-365-Defender-Hunting-Queries | security,kql,hunting | KQL hunting query corpus
+Azure/Azure-Sentinel | security,siem,detections | Detection rules and hunting content
+microsoft/SymCrypt | crypto,library,windows | The core cryptographic library

@@ -1,0 +1,90 @@
+// domain: ai-agents
+// title: AI Agent Frameworks, Orchestration, MCP and Agent Memory
+// format: owner/repo | tags | why it matters
+// lines starting with // are comments; blank lines ignored
+
+langchain-ai/langgraph | agents,orchestration,python,state | Durable graph state machines with checkpointing; the fix for agents that lose everything on crash
+langchain-ai/langchain | agents,chains,python | The default composition layer; read it for interface design, not for runtime weight
+langchain-ai/langchainjs | agents,typescript | TypeScript port; the idiomatic reference for JS agent stacks
+run-llama/llama_index | rag,agents,python | Data framework for LLM apps; strongest ingestion/indexing abstractions
+crewAIInc/crewAI | agents,multi-agent,roles | Role-and-task multi-agent model; clean mental model for team-shaped agents
+microsoft/autogen | agents,multi-agent,conversation | Conversational multi-agent patterns from MSR; AgentChat + Core split is worth studying
+microsoft/semantic-kernel | agents,dotnet,plugins | Microsoft's enterprise agent SDK; the .NET/Java path to agents
+microsoft/TaskWeaver | agents,code-first,analytics | Code-first agent for data analytics tasks
+microsoft/UFO | agents,windows,gui | Windows GUI agent; direct prior art for desktop automation
+geekan/MetaGPT | agents,multi-agent,sop | SOP-encoded software company simulation; install from source, PyPI is a stub
+princeton-nlp/SWE-agent | agents,swe,benchmarks | Agent-computer interface design for repo-level bug fixing
+All-Hands-AI/OpenHands | agents,swe,sandbox | Full dev agent with sandboxed runtime and browser
+Significant-Gravitas/AutoGPT | agents,autonomy,history | The original autonomy experiment; study its failure modes
+yoheinakajima/babyagi | agents,task-loop | Minimal task-planning loop; useful as a teaching artifact
+reworkd/AgentGPT | agents,web,typescript | Browser-hosted autonomous agents
+TransformerOptimus/SuperAGI | agents,platform | Agent platform with tooling and GUI
+camel-ai/camel | agents,multi-agent,research | Role-playing agent society research framework
+OpenBMB/ChatDev | agents,multi-agent,sdlc | Multi-agent software company with SDLC phases
+OpenBMB/XAgent | agents,autonomy,planner | Dual-loop outer planner / inner executor design
+openai/swarm | agents,handoff,minimal | Minimal handoff-and-routine pattern; read in an afternoon
+openai/openai-agents-python | agents,sdk,handoff | Production successor to Swarm; guardrails and tracing built in
+huggingface/smolagents | agents,code-agents,minimal | Code-writing agents in ~1k lines; excellent altitude
+agno-agi/agno | agents,multimodal,performance | Fast multimodal agent runtime with memory and tools
+pydantic/pydantic-ai | agents,typing,python | Type-safe agent framework; validation at the model boundary
+deepset-ai/haystack | rag,agents,pipelines | Production pipeline framework with strong eval story
+stanfordnlp/dspy | prompting,optimization,compiler | Programmatic prompt optimization; replaces hand-tuned prompt strings
+guidance-ai/guidance | constrained,generation | Constrained generation with control flow
+dottxt-ai/outlines | structured,generation,grammar | Grammar-constrained structured output
+sgl-project/sglang | serving,structured,performance | Structured generation language plus high-throughput runtime
+BerriAI/litellm | gateway,routing,proxy | One OpenAI-shaped interface over 100+ providers; the pragmatic router
+Portkey-AI/gateway | gateway,reliability,routing | AI gateway with retries, fallbacks and load balancing
+modelcontextprotocol/servers | mcp,tools,reference | Reference MCP servers; the canonical tool-server examples
+modelcontextprotocol/python-sdk | mcp,python,sdk | Build MCP servers and clients in Python
+modelcontextprotocol/typescript-sdk | mcp,typescript,sdk | Build MCP servers and clients in TypeScript
+modelcontextprotocol/modelcontextprotocol | mcp,spec | The protocol specification itself
+modelcontextprotocol/inspector | mcp,debugging | Interactive MCP server debugger; use before shipping a server
+punkpeye/awesome-mcp-servers | mcp,catalog,awesome | Large curated index of MCP servers
+mem0ai/mem0 | memory,personalization | Memory layer with extraction and consolidation
+letta-ai/letta | memory,agents,stateful | Stateful agents with self-editing memory (formerly MemGPT)
+zilliztech/GPTCache | caching,llm,cost | Semantic cache; direct token-cost reduction
+e2b-dev/E2B | sandbox,code-execution | Firecracker sandboxes for agent-generated code
+browser-use/browser-use | browser,agents,automation | LLM-driven browser control with DOM grounding
+microsoft/playwright | browser,automation,testing | The automation substrate most browser agents sit on
+Skyvern-AI/skyvern | browser,agents,vision | Vision-based browser automation for workflows
+microsoft/OmniParser | vision,gui,grounding | Screen parsing into numbered elements; grounding beats guessed coordinates
+Aider-AI/aider | coding,cli,git | Repo-map-driven pair programming in the terminal
+block/goose | agents,extensible,local | Local extensible dev agent with MCP support
+continuedev/continue | ide,assistant,open | IDE assistant with an open configuration model
+danielmiessler/fabric | prompts,patterns,cli | Large library of reusable task patterns
+f/awesome-chatgpt-prompts | prompts,catalog | Prompt corpus; useful as raw material, not as doctrine
+microsoft/JARVIS | agents,model-routing | Task planning that routes to specialist models
+langfuse/langfuse | observability,tracing,evals | Open-source LLM tracing and evaluation
+traceloop/openllmetry | observability,otel | OpenTelemetry conventions for LLM apps
+Arize-ai/phoenix | observability,evals,notebook | Local tracing and evaluation UI
+comet-ml/opik | observability,evals | Tracing plus automated evaluation
+confident-ai/deepeval | evals,pytest | Unit-test-shaped LLM evaluation
+truera/trulens | evals,feedback | Feedback functions for RAG and agent quality
+openai/evals | evals,benchmarks | Evaluation registry and harness
+EleutherAI/lm-evaluation-harness | evals,benchmarks,academic | Standard academic benchmark harness
+microsoft/promptflow | prompting,orchestration,azure | Prompt engineering lifecycle with evaluation on Azure
+guardrails-ai/guardrails | validation,safety,output | Output validation and correction
+NVIDIA/NeMo-Guardrails | safety,dialogue,rails | Programmable dialogue rails
+protectai/rebuff | security,prompt-injection | Prompt injection detection
+leondz/garak | security,redteam,llm | LLM vulnerability scanner
+Azure/PyRIT | security,redteam,microsoft | Risk identification toolkit for generative AI
+microsoft/promptbench | evals,robustness | Robustness evaluation for prompts
+ScrapeGraphAI/Scrapegraph-ai | scraping,agents,graph | Graph-shaped LLM scraping pipelines
+unclecode/crawl4ai | crawling,llm-ready | Crawler that emits LLM-ready markdown
+mendableai/firecrawl | crawling,api,markdown | Site-to-markdown crawling service
+assafelovic/gpt-researcher | research,agents,reports | Autonomous research agent with citation discipline
+stanford-oval/storm | research,writing,outline | Outline-first long-form research writing
+InternLM/lagent | agents,lightweight | Lightweight agent framework
+modelscope/agentscope | agents,multi-agent,platform | Multi-agent platform with distributed execution
+phidatahq/phidata | agents,memory,tools | Agents with memory, knowledge and tools (now Agno lineage)
+superagent-ai/superagent | agents,platform,api | Agent API platform
+langchain-ai/open_deep_research | research,agents,langgraph | Reference deep-research implementation on LangGraph
+lastmile-ai/mcp-agent | mcp,agents,patterns | Agent patterns built directly on MCP primitives
+awslabs/agent-squad | agents,routing,aws | Multi-agent routing framework from AWS Labs
+google/adk-python | agents,google,sdk | Google's Agent Development Kit
+googleapis/python-genai | google,sdk,gemini | Official Gemini SDK
+anthropics/anthropic-sdk-python | anthropic,sdk | Official Claude SDK for Python
+anthropics/anthropic-sdk-typescript | anthropic,sdk,typescript | Official Claude SDK for TypeScript
+anthropics/claude-code | agents,cli,anthropic | The harness this pack installs into
+anthropics/courses | education,prompting | Official prompt engineering and API courses
+anthropics/anthropic-cookbook | recipes,patterns | Working recipes for tool use, RAG and vision

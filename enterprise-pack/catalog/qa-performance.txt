@@ -1,0 +1,80 @@
+// domain: qa-performance
+// title: Testing, QA Automation, Performance Engineering and Reliability
+// format: owner/repo | tags | why it matters
+
+microsoft/playwright | e2e,browser,parallel | The current default for cross-browser E2E
+cypress-io/cypress | e2e,dx,debugging | Strong developer experience for E2E
+SeleniumHQ/selenium | e2e,webdriver,standard | The WebDriver standard and its ecosystem
+appium/appium | mobile,e2e,crossplatform | Mobile automation across iOS and Android
+robotframework/robotframework | acceptance,keyword-driven,enterprise | Keyword-driven testing common in large QA orgs
+cucumber/cucumber-jvm | bdd,gherkin,jvm | BDD on the JVM
+cucumber/cucumber-js | bdd,gherkin,javascript | BDD in JavaScript
+pytest-dev/pytest | testing,python,fixtures | The Python test framework
+pytest-dev/pytest-xdist | testing,parallel,python | Parallel test execution
+pytest-dev/pytest-cov | coverage,python,reporting | Coverage integration
+nedbat/coveragepy | coverage,python,measurement | Coverage measurement
+HypothesisWorks/hypothesis | property-testing,python,fuzzing | Property-based testing; finds what examples miss
+proptest-rs/proptest | property-testing,rust | Property testing for Rust
+jestjs/jest | testing,javascript,snapshot | The JS test standard
+vitest-dev/vitest | testing,vite,fast | Vite-native testing
+testing-library/react-testing-library | testing,react,behaviour | Test behaviour, not implementation
+testing-library/dom-testing-library | testing,dom,queries | The query model everything else copies
+avajs/ava | testing,javascript,concurrent | Concurrent JS testing
+mochajs/mocha | testing,javascript,classic | Long-standing JS test runner
+junit-team/junit5 | testing,java,jvm | JUnit 5
+mockito/mockito | mocking,java,testing | Java mocking
+testcontainers/testcontainers-java | integration,docker,java | Real dependencies in JVM tests
+testcontainers/testcontainers-python | integration,docker,python | Testcontainers for Python
+testcontainers/testcontainers-go | integration,docker,go | Testcontainers for Go
+wiremock/wiremock | mocking,http,contract | HTTP service virtualisation
+stretchr/testify | testing,go,assertions | Go assertions and mocks
+golang/mock | mocking,go,codegen | Generated mocks for Go
+pact-foundation/pact-specification | contract-testing,standard | Consumer-driven contract standard
+pactflow/example-consumer | contract-testing,example | Working consumer contract example
+asyncapi/spec | api,events,standard | Event-driven API specification
+stoplightio/spectral | api,linting,openapi | Lint API specs in CI
+OpenAPITools/openapi-diff | api,compatibility,breaking | Detect breaking API changes
+Redocly/redocly-cli | api,docs,linting | API docs and governance
+schemathesis/schemathesis | api,property-testing,openapi | Property tests generated from your spec
+grafana/k6 | load,performance,scripting | Scriptable load testing
+locustio/locust | load,python,distributed | Load testing in Python
+gatling/gatling | load,scala,reporting | High-load testing with strong reports
+apache/jmeter | load,classic,enterprise | The load tool most enterprises already own
+tsenart/vegeta | load,http,cli | Constant-rate HTTP load
+rakyll/hey | load,http,simple | Simple HTTP benchmarking
+giltene/wrk2 | load,latency,correctness | Load testing with correct latency accounting
+brendangregg/FlameGraph | profiling,visualization,performance | Flame graphs; the standard profiling visual
+brendangregg/perf-tools | profiling,linux,tracing | Classic Linux performance tools
+iovisor/bcc | ebpf,tracing,linux | eBPF tracing toolkit
+iovisor/bpftrace | ebpf,tracing,dsl | High-level tracing language
+koute/bytehound | profiling,memory,linux | Memory profiler
+KDAB/hotspot | profiling,perf,gui | GUI for Linux perf data
+async-profiler/async-profiler | profiling,jvm,production | Low-overhead JVM profiling
+openjdk/jmh | benchmarking,jvm,rigour | Microbenchmarking without lying to yourself
+google/benchmark | benchmarking,cpp | C++ microbenchmarks
+bheisler/criterion.rs | benchmarking,rust,statistics | Statistically sound Rust benchmarks
+sharkdp/hyperfine | benchmarking,cli,shell | Benchmark command line tools properly
+plasma-umass/scalene | profiling,python,cpu-gpu | Python CPU/GPU/memory profiler
+benfred/py-spy | profiling,python,sampling | Sample a running Python process
+pythonprofilers/memory_profiler | profiling,memory,python | Line-level memory profiling
+jazzband/django-debug-toolbar | profiling,django,web | In-request performance visibility
+dotnet/BenchmarkDotNet | benchmarking,dotnet,rigour | The .NET benchmarking standard
+microsoft/perfview | profiling,dotnet,etw | Windows/.NET performance analysis
+microsoft/vscode-js-profile-visualizer | profiling,javascript,tooling | JS profile visualisation
+google/perfetto | tracing,systems,android | System-wide tracing
+chaos-mesh/chaos-mesh | chaos,kubernetes,resilience | Fault injection on Kubernetes
+Shopify/toxiproxy | chaos,network,testing | Simulate network failure in tests
+Netflix/simianarmy | chaos,resilience,history | The origin of resilience testing practice
+allure-framework/allure2 | reporting,tests,dashboards | Test reporting that stakeholders read
+ReportPortal/reportportal | reporting,ai,analysis | Test result analysis at scale
+nunit/nunit | testing,dotnet | NUnit
+xunit/xunit | testing,dotnet,modern | xUnit.net
+fluentassertions/fluentassertions | assertions,dotnet,readability | Readable .NET assertions
+approvals/ApprovalTests.Java | testing,approval,golden | Approval testing
+VerifyTests/Verify | testing,snapshot,dotnet | Snapshot testing for .NET
+tarantool/checks | validation,lua | Argument validation patterns
+antonmedv/expr | rules,expressions,go | Safe expression evaluation for rules engines
+TheJambo/awesome-testing | testing,catalog,awesome | Curated testing resources
+atinfo/awesome-test-automation | testing,catalog,awesome | Test automation index
+goldbergyoni/nodebestpractices | practice,node,checklist | Dense, opinionated Node checklist
+goldbergyoni/javascript-testing-best-practices | testing,practice,javascript | Testing practice worth adopting

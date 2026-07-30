@@ -1,0 +1,89 @@
+// domain: oracle-java
+// title: Oracle, Java/JVM, Databases and the Enterprise Java Ecosystem
+// format: owner/repo | tags | why it matters
+
+openjdk/jdk | java,runtime,language | The JDK itself; the authoritative Java source
+oracle/graal | jvm,native-image,polyglot | GraalVM: native images and polyglot runtime
+oracle/graalpython | polyglot,python,jvm | Python on GraalVM
+oracle/graaljs | polyglot,javascript,jvm | JavaScript on GraalVM
+oracle/helidon | microservices,java,cloud-native | Oracle's microservices framework
+oracle/coherence | caching,data-grid,java | In-memory data grid
+oracle/oracle-db-examples | database,samples,plsql | Official Oracle DB code samples
+oracle/python-oracledb | database,driver,python | Modern Oracle driver for Python
+oracle/node-oracledb | database,driver,node | Oracle driver for Node
+oracle/oracle-r2dbc | database,reactive,java | Reactive Oracle connectivity
+oracle/docker-images | containers,official,oracle | Official Oracle container builds
+oracle/terraform-provider-oci | iac,terraform,oci | Terraform provider for OCI
+oracle/oci-cli | cloud,cli,oci | OCI command line
+oracle/oci-python-sdk | cloud,sdk,oci | OCI SDK for Python
+oracle/weblogic-kubernetes-operator | weblogic,kubernetes,operator | Run WebLogic on Kubernetes; the classic modernisation path
+oracle/oracle-database-operator | database,kubernetes,operator | Oracle DB on Kubernetes
+oracle/opengrok | code-search,navigation,java | Source code search across huge estates
+oracle/visualvm | profiling,jvm,tooling | JVM profiler
+graalvm/graalvm-demos | native-image,samples | GraalVM demos
+mysql/mysql-server | database,mysql,source | MySQL server source
+postgres/postgres | database,postgres,source | The PostgreSQL source mirror
+spring-projects/spring-boot | java,framework,enterprise | The default enterprise Java framework
+spring-projects/spring-framework | java,core,di | The core container everything sits on
+spring-projects/spring-security | security,auth,java | Authentication and authorisation
+spring-projects/spring-data-jpa | data,orm,java | Repository abstractions over JPA
+spring-projects/spring-batch | batch,jobs,enterprise | Batch processing; still core to bank workloads
+spring-projects/spring-integration | integration,eip,java | Enterprise integration patterns in code
+spring-cloud/spring-cloud-gateway | gateway,routing,reactive | API gateway
+spring-cloud/spring-cloud-config | configuration,distributed | Externalised configuration
+spring-projects/spring-ai | ai,java,abstractions | LLM abstractions for Spring
+spring-projects/spring-kafka | messaging,kafka,java | Kafka integration
+spring-projects/spring-modulith | architecture,modularity,java | Modular monoliths with verification
+quarkusio/quarkus | java,native,cloud-native | Supersonic Java; the GraalVM-native enterprise path
+micronaut-projects/micronaut-core | java,aot,microservices | Compile-time DI microservices
+eclipse-vertx/vert.x | reactive,jvm,eventloop | Reactive toolkit on the JVM
+eclipse-ee4j/jakartaee-platform | standards,jakarta,enterprise | Jakarta EE platform specifications
+jakartaee/rest | standards,rest,jaxrs | Jakarta REST specification
+hibernate/hibernate-orm | orm,jpa,java | The reference JPA implementation
+brettwooldridge/HikariCP | pooling,jdbc,performance | The connection pool to standardise on
+apache/tomcat | server,servlet,java | The servlet container
+apache/maven | build,java,dependencies | Maven
+gradle/gradle | build,jvm,incremental | Gradle
+apache/commons-lang | library,java,utilities | Commons Lang
+google/error-prone | static-analysis,java,compile | Catch Java bugs at compile time
+pmd/pmd | static-analysis,multi-language | Source analyser across languages
+checkstyle/checkstyle | style,java,enforcement | Style enforcement
+spotbugs/spotbugs | static-analysis,bytecode,java | Bytecode bug finding
+diffplug/spotless | formatting,build,polyglot | Formatting as a build step
+junit-team/junit5 | testing,java,framework | JUnit 5
+mockito/mockito | testing,mocking,java | Mocking framework
+testcontainers/testcontainers-java | testing,integration,docker | Real dependencies in tests; the single best integration-test upgrade
+assertj/assertj | testing,assertions,java | Fluent assertions
+rest-assured/rest-assured | testing,api,java | REST API testing DSL
+awaitility/awaitility | testing,async,java | Assertions for asynchronous systems
+netty/netty | networking,async,jvm | The async networking core under most JVM servers
+reactor/reactor-core | reactive,streams,jvm | Reactive Streams implementation
+ReactiveX/RxJava | reactive,streams,jvm | Reactive extensions on the JVM
+resilience4j/resilience4j | resilience,circuit-breaker,java | Circuit breakers and bulkheads
+Netflix/Hystrix | resilience,history,java | The pattern's origin; read for the lessons
+FasterXML/jackson-databind | json,serialization,java | The JSON binding everyone uses
+apache/kafka | messaging,streaming,distributed | The event backbone
+apache/camel | integration,eip,routing | Integration routes at enterprise scale
+apache/activemq | messaging,jms,broker | JMS broker
+apache/cxf | soap,webservices,java | SOAP and WS-* services; still required in legacy estates
+jetty/jetty.project | server,http,embedded | Embeddable HTTP server
+keycloak/keycloak | identity,sso,oidc | Open-source IAM; the default self-hosted SSO
+jwtk/jjwt | jwt,security,java | JWT for Java
+OpenAPITools/openapi-generator | codegen,api,polyglot | Generate clients/servers from OpenAPI
+swagger-api/swagger-core | openapi,annotations,java | OpenAPI generation for JVM services
+liquibase/liquibase | migrations,database,changelog | Database change management
+flyway/flyway | migrations,database,sql | SQL-first migrations
+jOOQ/jOOQ | sql,typesafe,java | Type-safe SQL in Java
+debezium/debezium | cdc,streaming,database | Change data capture; the safe way out of a legacy DB
+apache/dubbo | rpc,microservices,java | RPC framework widely used in Asia-Pacific enterprises
+alibaba/nacos | discovery,configuration,microservices | Service discovery and config
+alibaba/arthas | diagnostics,jvm,production | Live JVM diagnostics; invaluable in production incidents
+async-profiler/async-profiler | profiling,jvm,flamegraphs | Low-overhead JVM profiler
+jvm-profiling-tools/perf-map-agent | profiling,jvm,perf | Map JVM symbols for perf
+openjdk/jmh | benchmarking,jvm,microbench | The only correct way to microbenchmark on the JVM
+Netflix/conductor | orchestration,workflows,java | Workflow orchestration at scale
+temporalio/temporal | workflows,durable,orchestration | Durable execution; the modern answer to long-running enterprise processes
+temporalio/sdk-java | workflows,java,sdk | Temporal Java SDK
+camunda/camunda-bpm-platform | bpmn,workflow,java | BPMN engine for enterprise process automation
+flowable/flowable-engine | bpmn,workflow,java | BPMN/CMMN/DMN engine
+kiegroup/drools | rules,engine,java | Business rules engine

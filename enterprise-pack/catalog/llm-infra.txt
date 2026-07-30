@@ -1,0 +1,83 @@
+// domain: llm-infra
+// title: LLM Serving, Inference, Training, Fine-tuning and Compression
+// format: owner/repo | tags | why it matters
+
+vllm-project/vllm | serving,throughput,paged-attention | PagedAttention; the default high-throughput server on Linux
+huggingface/text-generation-inference | serving,rust,production | Production inference server used behind HF endpoints
+ggml-org/llama.cpp | inference,cpp,quantization | CPU/GPU inference with GGUF; the portability baseline
+ollama/ollama | local,serving,dx | Simplest local model runtime; correct default for laptop-class work
+lm-sys/FastChat | serving,eval,chat | Serving plus arena-style evaluation
+InternLM/lmdeploy | serving,quantization,turbomind | High-performance serving with strong quantization
+NVIDIA/TensorRT-LLM | serving,nvidia,optimized | NVIDIA's optimized LLM runtime; TensorRT kernels
+triton-inference-server/server | serving,multi-framework,nvidia | Multi-framework model server with dynamic batching
+ray-project/ray | distributed,serving,training | Distributed compute substrate for training and serving
+mlc-ai/mlc-llm | compilation,edge,universal | Compile models to run on almost any device
+huggingface/transformers | models,library,reference | The reference model implementations
+huggingface/accelerate | training,distributed,simple | Device-agnostic training loop wrapper
+huggingface/peft | finetuning,lora,efficient | Parameter-efficient fine-tuning methods
+huggingface/trl | rlhf,dpo,training | Preference optimization and RL fine-tuning
+huggingface/diffusers | diffusion,images,models | Diffusion model pipelines
+huggingface/datasets | data,loading,streaming | Dataset loading and streaming at scale
+huggingface/tokenizers | tokenization,rust,fast | Fast tokenizers; understand cost before you optimize it
+huggingface/optimum | optimization,export,hardware | Hardware-targeted export and acceleration
+openai/tiktoken | tokenization,counting,cost | Byte-pair tokenizer for cost estimation
+hiyouga/LLaMA-Factory | finetuning,ui,recipes | Broad fine-tuning recipes with a usable interface
+unslothai/unsloth | finetuning,speed,memory | Materially faster/leaner LoRA fine-tuning
+OpenAccess-AI-Collective/axolotl | finetuning,config,yaml | Config-driven fine-tuning pipelines
+microsoft/DeepSpeed | training,zero,scale | ZeRO sharding; the standard for large-scale training
+NVIDIA/Megatron-LM | training,parallelism,nvidia | Tensor/pipeline parallelism reference
+pytorch/pytorch | framework,core | The framework everything else assumes
+pytorch/torchtune | finetuning,native,recipes | Native PyTorch fine-tuning recipes
+pytorch/serve | serving,pytorch | PyTorch model server
+pytorch/executorch | edge,mobile,inference | On-device inference for mobile and embedded
+tensorflow/tensorflow | framework,google,production | Still the substrate for a large installed base
+google/jax | autodiff,xla,research | Composable transforms; the research default at Google
+google-deepmind/optax | optimization,jax | Gradient processing and optimizers for JAX
+google-deepmind/dm-haiku | neural-nets,jax | Neural network library for JAX
+keras-team/keras | api,multi-backend | Multi-backend high-level API
+onnx/onnx | interchange,format,standard | Model interchange standard
+microsoft/onnxruntime | inference,cross-platform,performance | Cross-platform inference runtime
+openvinotoolkit/openvino | inference,intel,edge | Intel-targeted inference optimization
+apple/coremltools | conversion,apple,ondevice | Convert models to Core ML for Apple silicon
+ml-explore/mlx | apple,training,inference | Array framework for Apple silicon
+ggml-org/whisper.cpp | speech,inference,cpp | Portable Whisper inference
+openai/whisper | speech,asr,reference | Reference speech recognition
+SYSTRAN/faster-whisper | speech,ctranslate2,speed | Much faster Whisper via CTranslate2
+OpenNMT/CTranslate2 | inference,transformer,optimized | Optimized transformer inference engine
+rhasspy/piper | tts,fast,onnx | Fast local neural TTS
+coqui-ai/TTS | tts,voices,cloning | Broad TTS toolkit with voice cloning
+mistralai/mistral-inference | models,reference,mistral | Reference inference for Mistral models
+meta-llama/llama-models | models,meta,cards | Llama model cards and utilities
+meta-llama/llama-cookbook | recipes,finetuning,meta | Official Llama recipes
+QwenLM/Qwen | models,multilingual | Qwen model family
+deepseek-ai/DeepSeek-V3 | models,moe,efficiency | Efficient MoE architecture at scale
+google-deepmind/gemma | models,open,google | Google's open model family
+allenai/OLMo | models,open,reproducible | Fully open training pipeline; reproducibility matters for audit
+bitsandbytes-foundation/bitsandbytes | quantization,8bit,4bit | k-bit quantization for training and inference
+AutoGPTQ/AutoGPTQ | quantization,gptq | GPTQ quantization toolkit
+casper-hansen/AutoAWQ | quantization,awq | Activation-aware weight quantization
+Dao-AILab/flash-attention | kernels,attention,speed | IO-aware attention; the single biggest cheap win
+triton-lang/triton | kernels,dsl,gpu | Python DSL for GPU kernels
+pytorch/ao | quantization,sparsity,native | Native PyTorch quantization and sparsity
+Lightning-AI/pytorch-lightning | training,structure,scale | Structured training loops
+Lightning-AI/litgpt | training,recipes,scratch | Readable from-scratch LLM implementations
+karpathy/nanoGPT | education,training,minimal | The clearest small training loop in existence
+karpathy/llm.c | education,c,cuda | LLM training in raw C/CUDA; removes all abstraction
+karpathy/minGPT | education,minimal | Minimal GPT for teaching
+mlflow/mlflow | mlops,tracking,registry | Experiment tracking and model registry
+iterative/dvc | mlops,data-versioning,git | Data and pipeline versioning on top of git
+wandb/wandb | mlops,tracking,dashboards | Experiment tracking service client
+kubeflow/kubeflow | mlops,kubernetes,platform | ML platform on Kubernetes
+bentoml/BentoML | serving,packaging,deploy | Model packaging and deployment
+skypilot-org/skypilot | multicloud,training,cost | Run training on whichever cloud is cheapest and available
+determined-ai/determined | training,platform,hpo | Distributed training platform with HPO
+optuna/optuna | hpo,search,pruning | Hyperparameter optimization
+ray-project/kuberay | ray,kubernetes,operator | Ray on Kubernetes
+seldonio/seldon-core | serving,kubernetes,mlops | Model deployment on Kubernetes
+kserve/kserve | serving,kubernetes,standard | Standard serverless inference on Kubernetes
+feast-dev/feast | features,store,mlops | Feature store for training/serving parity
+great-expectations/great_expectations | data-quality,validation | Data expectations as tests
+evidentlyai/evidently | monitoring,drift,ml | Drift and quality monitoring
+SeldonIO/alibi-detect | drift,outliers,detection | Outlier and drift detection
+interpretml/interpret | explainability,glassbox | Glassbox models and explanations
+slundberg/shap | explainability,attribution | Shapley attributions

@@ -1,0 +1,6615 @@
+{
+ "checked_at": "2026-07-29T21:11:15Z",
+ "results": {
+  "0PandaDEV/awesome-windows": {
+   "detail": "ok",
+   "elapsed": 0.48,
+   "ok": true
+  },
+  "AcademySoftwareFoundation/MaterialX": {
+   "detail": "ok",
+   "elapsed": 0.62,
+   "ok": true
+  },
+  "Accenture/AmpliGraph": {
+   "detail": "ok",
+   "elapsed": 0.28,
+   "ok": true
+  },
+  "Accenture/adop-docker-compose": {
+   "detail": "ok",
+   "elapsed": 0.36,
+   "ok": true
+  },
+  "Accenture/mercury": {
+   "detail": "ok",
+   "elapsed": 0.26,
+   "ok": true
+  },
+  "Accenture/reactive-interaction-gateway": {
+   "detail": "ok",
+   "elapsed": 0.26,
+   "ok": true
+  },
+  "Accenture/sfmc-devtools": {
+   "detail": "ok",
+   "elapsed": 0.25,
+   "ok": true
+  },
+  "Aider-AI/aider": {
+   "detail": "ok",
+   "elapsed": 0.44,
+   "ok": true
+  },
+  "Alamofire/Alamofire": {
+   "detail": "ok",
+   "elapsed": 0.27,
+   "ok": true
+  },
+  "All-Hands-AI/OpenHands": {
+   "detail": "ok",
+   "elapsed": 0.49,
+   "ok": true
+  },
+  "AmenRa/ranx": {
+   "detail": "ok",
+   "elapsed": 0.24,
+   "ok": true
+  },
+  "Arize-ai/phoenix": {
+   "detail": "ok",
+   "elapsed": 0.58,
+   "ok": true
+  },
+  "AutoGPTQ/AutoGPTQ": {
+   "detail": "ok",
+   "elapsed": 0.25,
+   "ok": true
+  },
+  "Awesome-Windows/Awesome": {
+   "detail": "fatal: Authentication failed for 'http://127.0.0.1:41729/git/Awesome-Windows/Awesome/'",
+   "elapsed": 0.2,
+   "ok": false
+  },
+  "Azure-Samples/azure-search-openai-demo": {
+   "detail": "ok",
+   "elapsed": 0.34,
+   "ok": true
+  },
+  "Azure-Samples/cognitive-services-speech-sdk": {
+   "detail": "ok",
+   "elapsed": 0.31,
+   "ok": true
+  },
+  "Azure/AKS": {
+   "detail": "ok",
+   "elapsed": 0.29,
+   "ok": true
+  },
+  "Azure/Azure-Sentinel": {
+   "detail": "ok",
+   "elapsed": 0.32,
+   "ok": true
+  },
+  "Azure/Azure-Verified-Modules": {
+   "detail": "ok",
+   "elapsed": 0.3,
+   "ok": true
+  },
+  "Azure/PyRIT": {
+   "detail": "ok",
+   "elapsed": 0.45,
+   "ok": true
+  },
+  "Azure/azure-cli": {
+   "detail": "ok",
+   "elapsed": 0.41,
+   "ok": true
+  },
+  "Azure/azure-devops-python-api": {
+   "detail": "fatal: Authentication failed for 'http://127.0.0.1:41729/git/Azure/azure-devops-python-api/'",
+   "elapsed": 0.22,
+   "ok": false
+  },
+  "Azure/azure-functions-host": {
+   "detail": "ok",
+   "elapsed": 0.38,
+   "ok": true
+  },
+  "Azure/azure-functions-python-worker": {
+   "detail": "ok",
+   "elapsed": 0.28,
+   "ok": true
+  },
+  "Azure/azure-policy": {
+   "detail": "ok",
+   "elapsed": 0.25,
+   "ok": true
+  },
+  "Azure/azure-quickstart-templates": {
+   "detail": "ok",
+   "elapsed": 0.58,
+   "ok": true
+  },
+  "Azure/azure-rest-api-specs": {
+   "detail": "ok",
+   "elapsed": 0.46,
+   "ok": true
+  },
+  "Azure/azure-sdk-for-go": {
+   "detail": "ok",
+   "elapsed": 0.5,
+   "ok": true
+  },
+  "Azure/azure-sdk-for-java": {
+   "detail": "ok",
+   "elapsed": 0.5,
+   "ok": true
+  },
+  "Azure/azure-sdk-for-js": {
+   "detail": "ok",
+   "elapsed": 0.73,
+   "ok": true
+  },
+  "Azure/azure-sdk-for-net": {
+   "detail": "ok",
+   "elapsed": 0.47,
+   "ok": true
+  },
+  "Azure/azure-sdk-for-python": {
+   "detail": "ok",
+   "elapsed": 0.79,
+   "ok": true
+  },
+  "Azure/azure-workload-identity": {
+   "detail": "ok",
+   "elapsed": 0.3,
+   "ok": true
+  },
+  "Azure/azureml-examples": {
+   "detail": "ok",
+   "elapsed": 0.32,
+   "ok": true
+  },
+  "Azure/bicep": {
+   "detail": "ok",
+   "elapsed": 0.47,
+   "ok": true
+  },
+  "Azure/review-checklists": {
+   "detail": "ok",
+   "elapsed": 0.25,
+   "ok": true
+  },
+  "Azure/terraform-azurerm-avm-template": {
+   "detail": "ok",
+   "elapsed": 0.32,
+   "ok": true
+  },
+  "BerriAI/litellm": {
+   "detail": "ok",
+   "elapsed": 0.52,
+   "ok": true
+  },
+  "ByteByteGoHq/system-design-101": {
+   "detail": "ok",
+   "elapsed": 0.24,
+   "ok": true
+  },
+  "CISAgov/development-guide": {
+   "detail": "ok",
+   "elapsed": 0.29,
+   "ok": true
+  },
+  "Capgemini/apigee-edge-drupal": {
+   "detail": "fatal: Authentication failed for 'http://127.0.0.1:41729/git/Capgemini/apigee-edge-drupal/'",
+   "elapsed": 0.22,
+   "ok": false
+  },
+  "ClickHouse/ClickHouse": {
+   "detail": "ok",
+   "elapsed": 0.76,
+   "ok": true
+  },
+  "CognizantOneDevOps/Insights": {
+   "detail": "ok",
+   "elapsed": 0.28,
+   "ok": true
+  },
+  "CombineCommunity/CombineExt": {
+   "detail": "ok",
+   "elapsed": 0.28,
+   "ok": true
+  },
+  "ComplianceAsCode/content": {
+   "detail": "ok",
+   "elapsed": 0.4,
+   "ok": true
+  },
+  "CycloneDX/specification": {
+   "detail": "ok",
+   "elapsed": 0.26,
+   "ok": true
+  },
+  "DS4SD/docling": {
+   "detail": "ok",
+   "elapsed": 0.85,
+   "ok": true
+  },
+  "Dao-AILab/flash-attention": {
+   "detail": "ok",
+   "elapsed": 0.38,
+   "ok": true
+  },
+  "DependencyTrack/dependency-track": {
+   "detail": "ok",
+   "elapsed": 0.3,
+   "ok": true
+  },
+  "DovAmir/awesome-design-patterns": {
+   "detail": "ok",
+   "elapsed": 0.44,
+   "ok": true
+  },
+  "EleutherAI/lm-evaluation-harness": {
+   "detail": "ok",
+   "elapsed": 0.35,
+   "ok": true
+  },
+  "EventStore/EventStore": {
+   "detail": "ok",
+   "elapsed": 0.34,
+   "ok": true
+  },
+  "FasterXML/jackson-databind": {
+   "detail": "ok",
+   "elapsed": 0.43,
+   "ok": true
+  },
+  "FlagOpen/FlagEmbedding": {
+   "detail": "ok",
+   "elapsed": 0.26,
+   "ok": true
+  },
+  "GnuCOBOL/gnucobol": {
+   "detail": "fatal: Authentication failed for 'http://127.0.0.1:41729/git/GnuCOBOL/gnucobol/'",
+   "elapsed": 0.25,
+   "ok": false
+  },
+  "GoogleChrome/lighthouse": {
+   "detail": "ok",
+   "elapsed": 0.32,
+   "ok": true
+  },
+  "GoogleChrome/puppeteer": {
+   "detail": "ok",
+   "elapsed": 0.35,
+   "ok": true
+  },
+  "GoogleChrome/web-vitals": {
+   "detail": "ok",
+   "elapsed": 0.36,
+   "ok": true
+  },
+  "GoogleChromeLabs/quicklink": {
+   "detail": "ok",
+   "elapsed": 0.31,
+   "ok": true
+  },
+  "GoogleCloudPlatform/bank-of-anthos": {
+   "detail": "ok",
+   "elapsed": 0.27,
+   "ok": true
+  },
+  "GoogleCloudPlatform/cloud-foundation-fabric": {
+   "detail": "ok",
+   "elapsed": 0.26,
+   "ok": true
+  },
+  "GoogleCloudPlatform/cloud-sql-proxy": {
+   "detail": "ok",
+   "elapsed": 0.51,
+   "ok": true
+  },
+  "GoogleCloudPlatform/gcsfuse": {
+   "detail": "ok",
+   "elapsed": 0.37,
+   "ok": true
+  },
+  "GoogleCloudPlatform/generative-ai": {
+   "detail": "ok",
+   "elapsed": 0.26,
+   "ok": true
+  },
+  "GoogleCloudPlatform/golang-samples": {
+   "detail": "ok",
+   "elapsed": 0.31,
+   "ok": true
+  },
+  "GoogleCloudPlatform/java-docs-samples": {
+   "detail": "ok",
+   "elapsed": 0.39,
+   "ok": true
+  },
+  "GoogleCloudPlatform/kubernetes-engine-samples": {
+   "detail": "ok",
+   "elapsed": 0.29,
+   "ok": true
+  },
+  "GoogleCloudPlatform/microservices-demo": {
+   "detail": "ok",
+   "elapsed": 0.26,
+   "ok": true
+  },
+  "GoogleCloudPlatform/nodejs-docs-samples": {
+   "detail": "ok",
+   "elapsed": 0.39,
+   "ok": true
+  },
+  "GoogleCloudPlatform/professional-services": {
+   "detail": "ok",
+   "elapsed": 0.33,
+   "ok": true
+  },
+  "GoogleCloudPlatform/python-docs-samples": {
+   "detail": "ok",
+   "elapsed": 0.28,
+   "ok": true
+  },
+  "GoogleCloudPlatform/terraform-google-modules": {
+   "detail": "fatal: Authentication failed for 'http://127.0.0.1:41729/git/GoogleCloudPlatform/terraform-google-modules/'",
+   "elapsed": 0.24,
+   "ok": false
+  },
+  "GoogleContainerTools/distroless": {
+   "detail": "ok",
+   "elapsed": 0.31,
+   "ok": true
+  },
+  "GoogleContainerTools/jib": {
+   "detail": "ok",
+   "elapsed": 0.4,
+   "ok": true
+  },
+  "GoogleContainerTools/kaniko": {
+   "detail": "ok",
+   "elapsed": 0.23,
+   "ok": true
+  },
+  "GoogleContainerTools/skaffold": {
+   "detail": "ok",
+   "elapsed": 0.52,
+   "ok": true
+  },
+  "HCL-TECH-SOFTWARE/appscan-codesweep-jenkins": {
+   "detail": "fatal: Authentication failed for 'http://127.0.0.1:41729/git/HCL-TECH-SOFTWARE/appscan-codesweep-jenkins/'",
+   "elapsed": 0.24,
+   "ok": false
+  },
+  "HKUDS/LightRAG": {
+   "detail": "ok",
+   "elapsed": 0.27,
+   "ok": true
+  },
+  "Hannibal046/Awesome-LLM": {
+   "detail": "ok",
+   "elapsed": 0.45,
+   "ok": true
+  },
+  "HypothesisWorks/hypothesis": {
+   "detail": "ok",
+   "elapsed": 0.56,
+   "ok": true
+  },
+  "IBM/CodeEngine": {
+   "detail": "ok",
+   "elapsed": 0.37,
+   "ok": true
+  },
+  "IBM/Db2": {
+   "detail": "ok",
+   "elapsed": 0.41,
+   "ok": true
+  },
+  "IBM/Dockerfile": {
+   "detail": "fatal: Authentication failed for 'http://127.0.0.1:41729/git/IBM/Dockerfile/'",
+   "elapsed": 0.21,
+   "ok": false
+  },
+  "IBM/blockchain-network-on-kubernetes": {
+   "detail": "ok",
+   "elapsed": 0.37,
+   "ok": true
+  },
+  "IBM/carbon": {
+   "detail": "fatal: Authentication failed for 'http://127.0.0.1:41729/git/IBM/carbon/'",
+   "elapsed": 0.34,
+   "ok": false
+  },
+  "IBM/db2-python": {
+   "detail": "ok",
+   "elapsed": 0.43,
+   "ok": true
+  },
+  "IBM/fp-go": {
+   "detail": "ok",
+   "elapsed": 0.34,
+   "ok": true
+  },
+  "IBM/ibm-cos-sdk-python": {
+   "detail": "ok",
+   "elapsed": 0.43,
+   "ok": true
+  },
+  "IBM/japan-technology": {
+   "detail": "ok",
+   "elapsed": 0.36,
+   "ok": true
+  },
+  "IBM/mainframe-downloads": {
+   "detail": "ok",
+   "elapsed": 0.29,
+   "ok": true
+  },
+  "IBM/mq-container": {
+   "detail": "fatal: Authentication failed for 'http://127.0.0.1:41729/git/IBM/mq-container/'",
+   "elapsed": 0.25,
+   "ok": false
+  },
+  "IBM/mq-golang": {
+   "detail": "fatal: Authentication failed for 'http://127.0.0.1:41729/git/IBM/mq-golang/'",
+   "elapsed": 0.33,
+   "ok": false
+  },
+  "IBM/openapi-validator": {
+   "detail": "ok",
+   "elapsed": 0.24,
+   "ok": true
+  },
+  "IBM/platform-services-python-sdk": {
+   "detail": "ok",
+   "elapsed": 0.38,
+   "ok": true
+  },
+  "IBM/sarama": {
+   "detail": "ok",
+   "elapsed": 0.26,
+   "ok": true
+  },
+  "IBM/watson-developer-cloud": {
+   "detail": "fatal: Authentication failed for 'http://127.0.0.1:41729/git/IBM/watson-developer-cloud/'",
+   "elapsed": 0.23,
+   "ok": false
+  },
+  "IBM/watsonx-ai-samples": {
+   "detail": "ok",
+   "elapsed": 0.3,
+   "ok": true
+  },
+  "IBM/zos-python-sdk": {
+   "detail": "fatal: Authentication failed for 'http://127.0.0.1:41729/git/IBM/zos-python-sdk/'",
+   "elapsed": 0.21,
+   "ok": false
+  },
+  "IdentityServer/IdentityServer4": {
+   "detail": "ok",
+   "elapsed": 0.28,
+   "ok": true
+  },
+  "Infosys/Nia-Chatbot": {
+   "detail": "fatal: Authentication failed for 'http://127.0.0.1:41729/git/Infosys/Nia-Chatbot/'",
+   "elapsed": 0.25,
+   "ok": false
+  },
+  "Infosys/purple-llama-guard": {
+   "detail": "fatal: Authentication failed for 'http://127.0.0.1:41729/git/Infosys/purple-llama-guard/'",
+   "elapsed": 0.3,
+   "ok": false
+  },
+  "InsertKoinIO/koin": {
+   "detail": "ok",
+   "elapsed": 0.29,
+   "ok": true
+  },
+  "InternLM/lagent": {
+   "detail": "ok",
+   "elapsed": 0.25,
+   "ok": true
+  },
+  "InternLM/lmdeploy": {
+   "detail": "ok",
+   "elapsed": 0.51,
+   "ok": true
+  },
+  "JStumpp/awesome-android": {
+   "detail": "ok",
+   "elapsed": 0.32,
+   "ok": true
+  },
+  "JaidedAI/EasyOCR": {
+   "detail": "ok",
+   "elapsed": 0.28,
+   "ok": true
+  },
+  "JetBrains/compose-multiplatform": {
+   "detail": "ok",
+   "elapsed": 0.38,
+   "ok": true
+  },
+  "JetBrains/kotlin": {
+   "detail": "ok",
+   "elapsed": 0.6,
+   "ok": true
+  },
+  "KDAB/hotspot": {
+   "detail": "ok",
+   "elapsed": 0.28,
+   "ok": true
+  },
+  "Kotlin/kotlinx.coroutines": {
+   "detail": "ok",
+   "elapsed": 0.27,
+   "ok": true
+  },
+  "Kotlin/kotlinx.serialization": {
+   "detail": "ok",
+   "elapsed": 0.38,
+   "ok": true
+  },
+  "LMSYS/FastChat": {
+   "detail": "fatal: Authentication failed for 'http://127.0.0.1:41729/git/LMSYS/FastChat/'",
+   "elapsed": 0.21,
+   "ok": false
+  },
+  "LTIMindtree/canvas-ai": {
+   "detail": "fatal: Authentication failed for 'http://127.0.0.1:41729/git/LTIMindtree/canvas-ai/'",
+   "elapsed": 0.21,
+   "ok": false
+  },
+  "Lightning-AI/litgpt": {
+   "detail": "ok",
+   "elapsed": 0.28,
+   "ok": true
+  },
+  "Lightning-AI/pytorch-lightning": {
+   "detail": "ok",
+   "elapsed": 0.36,
+   "ok": true
+  },
+  "MarquezProject/marquez": {
+   "detail": "ok",
+   "elapsed": 0.27,
+   "ok": true
+  },
+  "MaterializeInc/materialize": {
+   "detail": "ok",
+   "elapsed": 0.7,
+   "ok": true
+  },
+  "MicrosoftDocs/PowerShell-Docs": {
+   "detail": "ok",
+   "elapsed": 0.41,
+   "ok": true
+  },
+  "MicrosoftDocs/cloud-adoption-framework": {
+   "detail": "ok",
+   "elapsed": 0.32,
+   "ok": true
+  },
+  "MicrosoftDocs/well-architected": {
+   "detail": "ok",
+   "elapsed": 0.3,
+   "ok": true
+  },
+  "NVIDIA-Omniverse/OmniverseKitExtensions": {
+   "detail": "fatal: Authentication failed for 'http://127.0.0.1:41729/git/NVIDIA-Omniverse/OmniverseKitExtensions/'",
+   "elapsed": 0.26,
+   "ok": false
+  },
+  "NVIDIA-Omniverse/PhysX": {
+   "detail": "ok",
+   "elapsed": 0.26,
+   "ok": true
+  },
+  "NVIDIA-Omniverse/kit-extension-template": {
+   "detail": "fatal: Authentication failed for 'http://127.0.0.1:41729/git/NVIDIA-Omniverse/kit-extension-template/'",
+   "elapsed": 0.31,
+   "ok": false
+  },
+  "NVIDIA/Cosmos": {
+   "detail": "ok",
+   "elapsed": 0.26,
+   "ok": true
+  },
+  "NVIDIA/DALI": {
+   "detail": "ok",
+   "elapsed": 0.45,
+   "ok": true
+  },
+  "NVIDIA/DCGM": {
+   "detail": "ok",
+   "elapsed": 0.23,
+   "ok": true
+  },
+  "NVIDIA/Fuser": {
+   "detail": "ok",
+   "elapsed": 0.49,
+   "ok": true
+  },
+  "NVIDIA/Isaac-GR00T": {
+   "detail": "ok",
+   "elapsed": 0.27,
+   "ok": true
+  },
+  "NVIDIA/Megatron-LM": {
+   "detail": "ok",
+   "elapsed": 0.46,
+   "ok": true
+  },
+  "NVIDIA/NeMo": {
+   "detail": "ok",
+   "elapsed": 0.51,
+   "ok": true
+  },
+  "NVIDIA/NeMo-Guardrails": {
+   "detail": "ok",
+   "elapsed": 0.33,
+   "ok": true
+  },
+  "NVIDIA/PhysicsNeMo": {
+   "detail": "ok",
+   "elapsed": 0.31,
+   "ok": true
+  },
+  "NVIDIA/TensorRT": {
+   "detail": "ok",
+   "elapsed": 0.36,
+   "ok": true
+  },
+  "NVIDIA/TensorRT-LLM": {
+   "detail": "ok",
+   "elapsed": 0.39,
+   "ok": true
+  },
+  "NVIDIA/TransformerEngine": {
+   "detail": "ok",
+   "elapsed": 0.35,
+   "ok": true
+  },
+  "NVIDIA/aistore": {
+   "detail": "ok",
+   "elapsed": 0.3,
+   "ok": true
+  },
+  "NVIDIA/apex": {
+   "detail": "ok",
+   "elapsed": 0.35,
+   "ok": true
+  },
+  "NVIDIA/cccl": {
+   "detail": "ok",
+   "elapsed": 0.47,
+   "ok": true
+  },
+  "NVIDIA/cuQuantum": {
+   "detail": "ok",
+   "elapsed": 0.26,
+   "ok": true
+  },
+  "NVIDIA/cuda-python": {
+   "detail": "ok",
+   "elapsed": 0.25,
+   "ok": true
+  },
+  "NVIDIA/cuda-samples": {
+   "detail": "ok",
+   "elapsed": 0.32,
+   "ok": true
+  },
+  "NVIDIA/cutlass": {
+   "detail": "ok",
+   "elapsed": 0.3,
+   "ok": true
+  },
+  "NVIDIA/dcgm-exporter": {
+   "detail": "ok",
+   "elapsed": 0.44,
+   "ok": true
+  },
+  "NVIDIA/garak": {
+   "detail": "ok",
+   "elapsed": 0.25,
+   "ok": true
+  },
+  "NVIDIA/gpu-operator": {
+   "detail": "ok",
+   "elapsed": 0.3,
+   "ok": true
+  },
+  "NVIDIA/k8s-device-plugin": {
+   "detail": "ok",
+   "elapsed": 0.23,
+   "ok": true
+  },
+  "NVIDIA/nccl": {
+   "detail": "ok",
+   "elapsed": 0.28,
+   "ok": true
+  },
+  "NVIDIA/nsight-visual-studio-edition-samples": {
+   "detail": "fatal: Authentication failed for 'http://127.0.0.1:41729/git/NVIDIA/nsight-visual-studio-edition-samples/'",
+   "elapsed": 0.26,
+   "ok": false
+  },
+  "NVIDIA/nvbench": {
+   "detail": "ok",
+   "elapsed": 0.25,
+   "ok": true
+  },
+  "NVIDIA/nvidia-container-toolkit": {
+   "detail": "ok",
+   "elapsed": 0.26,
+   "ok": true
+  },
+  "NVIDIA/nvidia-docker": {
+   "detail": "ok",
+   "elapsed": 0.26,
+   "ok": true
+  },
+  "NVIDIA/open-gpu-kernel-modules": {
+   "detail": "ok",
+   "elapsed": 0.28,
+   "ok": true
+  },
+  "NVIDIA/spark-rapids": {
+   "detail": "ok",
+   "elapsed": 1.62,
+   "ok": true
+  },
+  "NVIDIA/thrust": {
+   "detail": "ok",
+   "elapsed": 0.4,
+   "ok": true
+  },
+  "NVIDIA/warp": {
+   "detail": "ok",
+   "elapsed": 0.26,
+   "ok": true
+  },
+  "NativeScript/NativeScript": {
+   "detail": "ok",
+   "elapsed": 0.83,
+   "ok": true
+  },
+  "Neo23x0/sigma": {
+   "detail": "ok",
+   "elapsed": 0.41,
+   "ok": true
+  },
+  "NeoRedis/legacy-modernization": {
+   "detail": "fatal: Authentication failed for 'http://127.0.0.1:41729/git/NeoRedis/legacy-modernization/'",
+   "elapsed": 0.23,
+   "ok": false
+  },
+  "Netflix/Hystrix": {
+   "detail": "ok",
+   "elapsed": 0.34,
+   "ok": true
+  },
+  "Netflix/chaosmonkey": {
+   "detail": "ok",
+   "elapsed": 0.24,
+   "ok": true
+  },
+  "Netflix/conductor": {
+   "detail": "ok",
+   "elapsed": 0.42,
+   "ok": true
+  },
+  "Netflix/security_monkey": {
+   "detail": "ok",
+   "elapsed": 0.3,
+   "ok": true
+  },
+  "Netflix/simianarmy": {
+   "detail": "ok",
+   "elapsed": 0.35,
+   "ok": true
+  },
+  "NirDiamant/RAG_Techniques": {
+   "detail": "ok",
+   "elapsed": 0.35,
+   "ok": true
+  },
+  "OAI/OpenAPI-Specification": {
+   "detail": "ok",
+   "elapsed": 0.32,
+   "ok": true
+  },
+  "OJ/gobuster": {
+   "detail": "ok",
+   "elapsed": 0.23,
+   "ok": true
+  },
+  "OWASP/API-Security": {
+   "detail": "ok",
+   "elapsed": 0.3,
+   "ok": true
+  },
+  "OWASP/ASVS": {
+   "detail": "ok",
+   "elapsed": 0.46,
+   "ok": true
+  },
+  "OWASP/CheatSheetSeries": {
+   "detail": "ok",
+   "elapsed": 0.28,
+   "ok": true
+  },
+  "OWASP/Nettacker": {
+   "detail": "ok",
+   "elapsed": 0.34,
+   "ok": true
+  },
+  "OWASP/Top10": {
+   "detail": "ok",
+   "elapsed": 0.28,
+   "ok": true
+  },
+  "OWASP/dependency-check": {
+   "detail": "fatal: Authentication failed for 'http://127.0.0.1:41729/git/OWASP/dependency-check/'",
+   "elapsed": 0.22,
+   "ok": false
+  },
+  "OWASP/threat-dragon": {
+   "detail": "ok",
+   "elapsed": 0.25,
+   "ok": true
+  },
+  "OWASP/wstg": {
+   "detail": "ok",
+   "elapsed": 0.32,
+   "ok": true
+  },
+  "OWASP/www-project-proactive-controls": {
+   "detail": "ok",
+   "elapsed": 0.31,
+   "ok": true
+  },
+  "OWASP/www-project-top-10-for-large-language-model-applications": {
+   "detail": "ok",
+   "elapsed": 0.37,
+   "ok": true
+  },
+  "OfficeDev/Microsoft-Teams-Samples": {
+   "detail": "ok",
+   "elapsed": 0.59,
+   "ok": true
+  },
+  "OfficeDev/office-js": {
+   "detail": "ok",
+   "elapsed": 0.24,
+   "ok": true
+  },
+  "OpenAPITools/openapi-diff": {
+   "detail": "ok",
+   "elapsed": 0.31,
+   "ok": true
+  },
+  "OpenAPITools/openapi-generator": {
+   "detail": "ok",
+   "elapsed": 0.45,
+   "ok": true
+  },
+  "OpenAccess-AI-Collective/axolotl": {
+   "detail": "ok",
+   "elapsed": 0.26,
+   "ok": true
+  },
+  "OpenBMB/ChatDev": {
+   "detail": "ok",
+   "elapsed": 0.36,
+   "ok": true
+  },
+  "OpenBMB/XAgent": {
+   "detail": "ok",
+   "elapsed": 0.46,
+   "ok": true
+  },
+  "OpenLiberty/guide-getting-started": {
+   "detail": "ok",
+   "elapsed": 0.24,
+   "ok": true
+  },
+  "OpenLiberty/guides-getting-started": {
+   "detail": "fatal: Authentication failed for 'http://127.0.0.1:41729/git/OpenLiberty/guides-getting-started/'",
+   "elapsed": 0.24,
+   "ok": false
+  },
+  "OpenLineage/OpenLineage": {
+   "detail": "ok",
+   "elapsed": 0.28,
+   "ok": true
+  },
+  "OpenNMT/CTranslate2": {
+   "detail": "ok",
+   "elapsed": 0.4,
+   "ok": true
+  },
+  "PaddlePaddle/PaddleOCR": {
+   "detail": "ok",
+   "elapsed": 0.28,
+   "ok": true
+  },
+  "PixarAnimationStudios/OpenUSD": {
+   "detail": "ok",
+   "elapsed": 0.35,
+   "ok": true
+  },
+  "Portkey-AI/gateway": {
+   "detail": "ok",
+   "elapsed": 0.54,
+   "ok": true
+  },
+  "PostgREST/postgrest": {
+   "detail": "ok",
+   "elapsed": 0.36,
+   "ok": true
+  },
+  "PowerShell/PowerShell": {
+   "detail": "ok",
+   "elapsed": 0.58,
+   "ok": true
+  },
+  "PrefectHQ/prefect": {
+   "detail": "ok",
+   "elapsed": 0.44,
+   "ok": true
+  },
+  "PyCQA/bandit": {
+   "detail": "ok",
+   "elapsed": 0.44,
+   "ok": true
+  },
+  "Quick/Nimble": {
+   "detail": "ok",
+   "elapsed": 0.26,
+   "ok": true
+  },
+  "Quick/Quick": {
+   "detail": "ok",
+   "elapsed": 0.29,
+   "ok": true
+  },
+  "QuivrHQ/quivr": {
+   "detail": "ok",
+   "elapsed": 0.42,
+   "ok": true
+  },
+  "QwenLM/Qwen": {
+   "detail": "ok",
+   "elapsed": 0.32,
+   "ok": true
+  },
+  "RDFLib/rdflib": {
+   "detail": "ok",
+   "elapsed": 0.45,
+   "ok": true
+  },
+  "ROCm-Developer-Tools/HIP": {
+   "detail": "ok",
+   "elapsed": 0.35,
+   "ok": true
+  },
+  "ROCm/ROCm": {
+   "detail": "ok",
+   "elapsed": 0.32,
+   "ok": true
+  },
+  "ReactiveX/RxJava": {
+   "detail": "ok",
+   "elapsed": 0.44,
+   "ok": true
+  },
+  "ReactiveX/RxSwift": {
+   "detail": "ok",
+   "elapsed": 0.23,
+   "ok": true
+  },
+  "RedHatOfficial/ansible-lockdown-rhel9-stig": {
+   "detail": "fatal: Authentication failed for 'http://127.0.0.1:41729/git/RedHatOfficial/ansible-lockdown-rhel9-stig/'",
+   "elapsed": 0.22,
+   "ok": false
+  },
+  "Redocly/redocly-cli": {
+   "detail": "ok",
+   "elapsed": 0.29,
+   "ok": true
+  },
+  "ReportPortal/reportportal": {
+   "detail": "ok",
+   "elapsed": 0.37,
+   "ok": true
+  },
+  "RichardLitt/standard-readme": {
+   "detail": "ok",
+   "elapsed": 0.32,
+   "ok": true
+  },
+  "RustCrypto/traits": {
+   "detail": "ok",
+   "elapsed": 0.25,
+   "ok": true
+  },
+  "SAP-samples/abap-cheat-sheets": {
+   "detail": "ok",
+   "elapsed": 0.23,
+   "ok": true
+  },
+  "SAP-samples/abap-platform-rap-opensap": {
+   "detail": "ok",
+   "elapsed": 0.24,
+   "ok": true
+  },
+  "SAP-samples/btp-developer-guide-cap": {
+   "detail": "ok",
+   "elapsed": 0.26,
+   "ok": true
+  },
+  "SAP-samples/cap-sflight": {
+   "detail": "ok",
+   "elapsed": 0.58,
+   "ok": true
+  },
+  "SAP-samples/cloud-cap-samples": {
+   "detail": "ok",
+   "elapsed": 0.32,
+   "ok": true
+  },
+  "SAP/abap-file-formats": {
+   "detail": "ok",
+   "elapsed": 0.27,
+   "ok": true
+  },
+  "SAP/cap-sflight": {
+   "detail": "fatal: Authentication failed for 'http://127.0.0.1:41729/git/SAP/cap-sflight/'",
+   "elapsed": 0.21,
+   "ok": false
+  },
+  "SAP/cf-tools": {
+   "detail": "fatal: Authentication failed for 'http://127.0.0.1:41729/git/SAP/cf-tools/'",
+   "elapsed": 0.26,
+   "ok": false
+  },
+  "SAP/cloud-mta-build-tool": {
+   "detail": "ok",
+   "elapsed": 0.25,
+   "ok": true
+  },
+  "SAP/cloud-sdk": {
+   "detail": "ok",
+   "elapsed": 0.48,
+   "ok": true
+  },
+  "SAP/cloud-sdk-java": {
+   "detail": "ok",
+   "elapsed": 0.24,
+   "ok": true
+  },
+  "SAP/cloud-sdk-js": {
+   "detail": "ok",
+   "elapsed": 0.57,
+   "ok": true
+  },
+  "SAP/fundamental-styles": {
+   "detail": "ok",
+   "elapsed": 0.41,
+   "ok": true
+  },
+  "SAP/jenkins-library": {
+   "detail": "ok",
+   "elapsed": 0.25,
+   "ok": true
+  },
+  "SAP/luigi": {
+   "detail": "ok",
+   "elapsed": 0.27,
+   "ok": true
+  },
+  "SAP/machine-learning-lab": {
+   "detail": "ok",
+   "elapsed": 0.3,
+   "ok": true
+  },
+  "SAP/odata-vocabularies": {
+   "detail": "ok",
+   "elapsed": 0.28,
+   "ok": true
+  },
+  "SAP/openSAP-cloud-native-development": {
+   "detail": "fatal: Authentication failed for 'http://127.0.0.1:41729/git/SAP/openSAP-cloud-native-development/'",
+   "elapsed": 0.23,
+   "ok": false
+  },
+  "SAP/openui5": {
+   "detail": "ok",
+   "elapsed": 0.55,
+   "ok": true
+  },
+  "SAP/project-piper-action": {
+   "detail": "ok",
+   "elapsed": 0.25,
+   "ok": true
+  },
+  "SAP/spartacus": {
+   "detail": "ok",
+   "elapsed": 0.7,
+   "ok": true
+  },
+  "SAP/styleguides": {
+   "detail": "ok",
+   "elapsed": 0.39,
+   "ok": true
+  },
+  "SAP/ui5-tooling": {
+   "detail": "ok",
+   "elapsed": 0.4,
+   "ok": true
+  },
+  "SAP/ui5-webcomponents": {
+   "detail": "ok",
+   "elapsed": 0.38,
+   "ok": true
+  },
+  "SDWebImage/SDWebImage": {
+   "detail": "ok",
+   "elapsed": 0.32,
+   "ok": true
+  },
+  "SYSTRAN/faster-whisper": {
+   "detail": "ok",
+   "elapsed": 0.51,
+   "ok": true
+  },
+  "ScrapeGraphAI/Scrapegraph-ai": {
+   "detail": "ok",
+   "elapsed": 0.28,
+   "ok": true
+  },
+  "SeldonIO/alibi-detect": {
+   "detail": "ok",
+   "elapsed": 0.34,
+   "ok": true
+  },
+  "SeleniumHQ/selenium": {
+   "detail": "ok",
+   "elapsed": 0.41,
+   "ok": true
+  },
+  "SharePoint/sp-dev-fx-webparts": {
+   "detail": "ok",
+   "elapsed": 0.31,
+   "ok": true
+  },
+  "Shopify/toxiproxy": {
+   "detail": "ok",
+   "elapsed": 0.25,
+   "ok": true
+  },
+  "SigmaHQ/sigma": {
+   "detail": "ok",
+   "elapsed": 0.29,
+   "ok": true
+  },
+  "Significant-Gravitas/AutoGPT": {
+   "detail": "ok",
+   "elapsed": 1.58,
+   "ok": true
+  },
+  "Skyvern-AI/skyvern": {
+   "detail": "ok",
+   "elapsed": 1.57,
+   "ok": true
+  },
+  "Solido/awesome-flutter": {
+   "detail": "ok",
+   "elapsed": 0.34,
+   "ok": true
+  },
+  "SuiteCRM/SuiteCRM": {
+   "detail": "ok",
+   "elapsed": 0.3,
+   "ok": true
+  },
+  "TechMahindra/tech-mahindra-oss": {
+   "detail": "fatal: Authentication failed for 'http://127.0.0.1:41729/git/TechMahindra/tech-mahindra-oss/'",
+   "elapsed": 0.22,
+   "ok": false
+  },
+  "Tencent/MMKV": {
+   "detail": "ok",
+   "elapsed": 0.65,
+   "ok": true
+  },
+  "TheAlgorithms/Python": {
+   "detail": "ok",
+   "elapsed": 0.54,
+   "ok": true
+  },
+  "TheJambo/awesome-testing": {
+   "detail": "ok",
+   "elapsed": 0.41,
+   "ok": true
+  },
+  "ToolJet/ToolJet": {
+   "detail": "ok",
+   "elapsed": 0.63,
+   "ok": true
+  },
+  "TransformerOptimus/SuperAGI": {
+   "detail": "ok",
+   "elapsed": 0.61,
+   "ok": true
+  },
+  "Tryton/tryton": {
+   "detail": "ok",
+   "elapsed": 0.42,
+   "ok": true
+  },
+  "UKPLab/sentence-transformers": {
+   "detail": "ok",
+   "elapsed": 0.28,
+   "ok": true
+  },
+  "Unstructured-IO/unstructured": {
+   "detail": "ok",
+   "elapsed": 0.48,
+   "ok": true
+  },
+  "VerifyTests/Verify": {
+   "detail": "ok",
+   "elapsed": 0.5,
+   "ok": true
+  },
+  "VikParuchuri/marker": {
+   "detail": "ok",
+   "elapsed": 0.33,
+   "ok": true
+  },
+  "VikParuchuri/surya": {
+   "detail": "ok",
+   "elapsed": 0.28,
+   "ok": true
+  },
+  "Wipro/wipro-opensource": {
+   "detail": "fatal: Authentication failed for 'http://127.0.0.1:41729/git/Wipro/wipro-opensource/'",
+   "elapsed": 0.27,
+   "ok": false
+  },
+  "XcodesOrg/xcodes": {
+   "detail": "ok",
+   "elapsed": 0.26,
+   "ok": true
+  },
+  "Yelp/detect-secrets": {
+   "detail": "ok",
+   "elapsed": 0.29,
+   "ok": true
+  },
+  "abapGit/abapGit": {
+   "detail": "ok",
+   "elapsed": 0.39,
+   "ok": true
+  },
+  "abseil/abseil-cpp": {
+   "detail": "ok",
+   "elapsed": 0.25,
+   "ok": true
+  },
+  "actions/cache": {
+   "detail": "ok",
+   "elapsed": 0.31,
+   "ok": true
+  },
+  "actions/checkout": {
+   "detail": "ok",
+   "elapsed": 0.4,
+   "ok": true
+  },
+  "actions/runner": {
+   "detail": "ok",
+   "elapsed": 0.24,
+   "ok": true
+  },
+  "actions/runner-images": {
+   "detail": "ok",
+   "elapsed": 0.36,
+   "ok": true
+  },
+  "activepieces/activepieces": {
+   "detail": "ok",
+   "elapsed": 0.37,
+   "ok": true
+  },
+  "actix/actix-web": {
+   "detail": "ok",
+   "elapsed": 0.32,
+   "ok": true
+  },
+  "adidas/api-guidelines": {
+   "detail": "ok",
+   "elapsed": 0.32,
+   "ok": true
+  },
+  "adobe/react-spectrum": {
+   "detail": "ok",
+   "elapsed": 0.3,
+   "ok": true
+  },
+  "agno-agi/agno": {
+   "detail": "ok",
+   "elapsed": 0.4,
+   "ok": true
+  },
+  "airbnb/javascript": {
+   "detail": "ok",
+   "elapsed": 0.41,
+   "ok": true
+  },
+  "airbnb/lottie-android": {
+   "detail": "ok",
+   "elapsed": 0.43,
+   "ok": true
+  },
+  "airbnb/lottie-ios": {
+   "detail": "ok",
+   "elapsed": 0.25,
+   "ok": true
+  },
+  "airbytehq/airbyte": {
+   "detail": "ok",
+   "elapsed": 0.54,
+   "ok": true
+  },
+  "aisingapore/TagUI": {
+   "detail": "ok",
+   "elapsed": 0.31,
+   "ok": true
+  },
+  "akullpp/awesome-java": {
+   "detail": "ok",
+   "elapsed": 0.45,
+   "ok": true
+  },
+  "alibaba/arthas": {
+   "detail": "ok",
+   "elapsed": 0.35,
+   "ok": true
+  },
+  "alibaba/nacos": {
+   "detail": "ok",
+   "elapsed": 0.28,
+   "ok": true
+  },
+  "allenai/OLMo": {
+   "detail": "ok",
+   "elapsed": 0.25,
+   "ok": true
+  },
+  "allure-framework/allure2": {
+   "detail": "ok",
+   "elapsed": 0.43,
+   "ok": true
+  },
+  "alphagov/govuk-design-system": {
+   "detail": "ok",
+   "elapsed": 0.29,
+   "ok": true
+  },
+  "amundsen-io/amundsen": {
+   "detail": "ok",
+   "elapsed": 0.33,
+   "ok": true
+  },
+  "amzn/style-dictionary": {
+   "detail": "ok",
+   "elapsed": 0.48,
+   "ok": true
+  },
+  "anchore/grype": {
+   "detail": "ok",
+   "elapsed": 0.33,
+   "ok": true
+  },
+  "anchore/syft": {
+   "detail": "ok",
+   "elapsed": 0.55,
+   "ok": true
+  },
+  "android/android-ktx": {
+   "detail": "ok",
+   "elapsed": 0.29,
+   "ok": true
+  },
+  "android/architecture-samples": {
+   "detail": "ok",
+   "elapsed": 0.26,
+   "ok": true
+  },
+  "android/compose-samples": {
+   "detail": "ok",
+   "elapsed": 0.43,
+   "ok": true
+  },
+  "android/nowinandroid": {
+   "detail": "ok",
+   "elapsed": 0.25,
+   "ok": true
+  },
+  "android/platform-samples": {
+   "detail": "ok",
+   "elapsed": 0.48,
+   "ok": true
+  },
+  "android/skills": {
+   "detail": "ok",
+   "elapsed": 0.26,
+   "ok": true
+  },
+  "androidx/androidx": {
+   "detail": "ok",
+   "elapsed": 0.29,
+   "ok": true
+  },
+  "angular/angular": {
+   "detail": "ok",
+   "elapsed": 0.47,
+   "ok": true
+  },
+  "angular/angular-cli": {
+   "detail": "ok",
+   "elapsed": 1.75,
+   "ok": true
+  },
+  "angular/components": {
+   "detail": "ok",
+   "elapsed": 0.44,
+   "ok": true
+  },
+  "ansible-lockdown/RHEL9-STIG": {
+   "detail": "ok",
+   "elapsed": 0.29,
+   "ok": true
+  },
+  "ansible/ansible": {
+   "detail": "ok",
+   "elapsed": 0.56,
+   "ok": true
+  },
+  "ansible/awx": {
+   "detail": "ok",
+   "elapsed": 0.4,
+   "ok": true
+  },
+  "ant-design/ant-design": {
+   "detail": "ok",
+   "elapsed": 0.76,
+   "ok": true
+  },
+  "anthropics/anthropic-cookbook": {
+   "detail": "ok",
+   "elapsed": 0.34,
+   "ok": true
+  },
+  "anthropics/anthropic-sdk-python": {
+   "detail": "ok",
+   "elapsed": 0.4,
+   "ok": true
+  },
+  "anthropics/anthropic-sdk-typescript": {
+   "detail": "ok",
+   "elapsed": 0.35,
+   "ok": true
+  },
+  "anthropics/claude-code": {
+   "detail": "ok",
+   "elapsed": 0.31,
+   "ok": true
+  },
+  "anthropics/courses": {
+   "detail": "ok",
+   "elapsed": 0.41,
+   "ok": true
+  },
+  "antonmedv/expr": {
+   "detail": "ok",
+   "elapsed": 0.26,
+   "ok": true
+  },
+  "apache/activemq": {
+   "detail": "ok",
+   "elapsed": 0.28,
+   "ok": true
+  },
+  "apache/age": {
+   "detail": "ok",
+   "elapsed": 0.32,
+   "ok": true
+  },
+  "apache/airflow": {
+   "detail": "ok",
+   "elapsed": 0.57,
+   "ok": true
+  },
+  "apache/arrow": {
+   "detail": "ok",
+   "elapsed": 0.58,
+   "ok": true
+  },
+  "apache/atlas": {
+   "detail": "ok",
+   "elapsed": 0.29,
+   "ok": true
+  },
+  "apache/beam": {
+   "detail": "ok",
+   "elapsed": 0.35,
+   "ok": true
+  },
+  "apache/camel": {
+   "detail": "ok",
+   "elapsed": 0.53,
+   "ok": true
+  },
+  "apache/camel-k": {
+   "detail": "ok",
+   "elapsed": 0.35,
+   "ok": true
+  },
+  "apache/camel-quarkus": {
+   "detail": "ok",
+   "elapsed": 0.33,
+   "ok": true
+  },
+  "apache/cassandra": {
+   "detail": "ok",
+   "elapsed": 0.39,
+   "ok": true
+  },
+  "apache/commons-lang": {
+   "detail": "ok",
+   "elapsed": 0.32,
+   "ok": true
+  },
+  "apache/cxf": {
+   "detail": "ok",
+   "elapsed": 0.32,
+   "ok": true
+  },
+  "apache/dolphinscheduler": {
+   "detail": "ok",
+   "elapsed": 0.56,
+   "ok": true
+  },
+  "apache/doris": {
+   "detail": "ok",
+   "elapsed": 0.57,
+   "ok": true
+  },
+  "apache/druid": {
+   "detail": "ok",
+   "elapsed": 0.66,
+   "ok": true
+  },
+  "apache/dubbo": {
+   "detail": "ok",
+   "elapsed": 0.72,
+   "ok": true
+  },
+  "apache/flink": {
+   "detail": "ok",
+   "elapsed": 0.44,
+   "ok": true
+  },
+  "apache/griffin": {
+   "detail": "ok",
+   "elapsed": 0.25,
+   "ok": true
+  },
+  "apache/hadoop": {
+   "detail": "ok",
+   "elapsed": 0.28,
+   "ok": true
+  },
+  "apache/hive": {
+   "detail": "ok",
+   "elapsed": 0.3,
+   "ok": true
+  },
+  "apache/hudi": {
+   "detail": "ok",
+   "elapsed": 0.56,
+   "ok": true
+  },
+  "apache/iceberg": {
+   "detail": "ok",
+   "elapsed": 0.42,
+   "ok": true
+  },
+  "apache/iceberg-python": {
+   "detail": "ok",
+   "elapsed": 0.46,
+   "ok": true
+  },
+  "apache/incubator-kie-drools": {
+   "detail": "ok",
+   "elapsed": 0.39,
+   "ok": true
+  },
+  "apache/jena": {
+   "detail": "ok",
+   "elapsed": 0.36,
+   "ok": true
+  },
+  "apache/jmeter": {
+   "detail": "ok",
+   "elapsed": 0.31,
+   "ok": true
+  },
+  "apache/kafka": {
+   "detail": "ok",
+   "elapsed": 0.48,
+   "ok": true
+  },
+  "apache/kie-drools": {
+   "detail": "fatal: Authentication failed for 'http://127.0.0.1:41729/git/apache/kie-drools/'",
+   "elapsed": 0.22,
+   "ok": false
+  },
+  "apache/lucene": {
+   "detail": "ok",
+   "elapsed": 0.32,
+   "ok": true
+  },
+  "apache/maven": {
+   "detail": "ok",
+   "elapsed": 0.37,
+   "ok": true
+  },
+  "apache/nifi": {
+   "detail": "ok",
+   "elapsed": 0.52,
+   "ok": true
+  },
+  "apache/ofbiz-framework": {
+   "detail": "ok",
+   "elapsed": 1.24,
+   "ok": true
+  },
+  "apache/ozone": {
+   "detail": "ok",
+   "elapsed": 0.47,
+   "ok": true
+  },
+  "apache/paimon": {
+   "detail": "ok",
+   "elapsed": 0.31,
+   "ok": true
+  },
+  "apache/parquet-java": {
+   "detail": "ok",
+   "elapsed": 1.38,
+   "ok": true
+  },
+  "apache/pinot": {
+   "detail": "ok",
+   "elapsed": 0.42,
+   "ok": true
+  },
+  "apache/pulsar": {
+   "detail": "ok",
+   "elapsed": 0.31,
+   "ok": true
+  },
+  "apache/ranger": {
+   "detail": "ok",
+   "elapsed": 0.25,
+   "ok": true
+  },
+  "apache/seatunnel": {
+   "detail": "ok",
+   "elapsed": 0.41,
+   "ok": true
+  },
+  "apache/servicecomb-java-chassis": {
+   "detail": "ok",
+   "elapsed": 0.31,
+   "ok": true
+  },
+  "apache/solr": {
+   "detail": "ok",
+   "elapsed": 0.43,
+   "ok": true
+  },
+  "apache/spark": {
+   "detail": "ok",
+   "elapsed": 0.83,
+   "ok": true
+  },
+  "apache/streampipes": {
+   "detail": "ok",
+   "elapsed": 0.56,
+   "ok": true
+  },
+  "apache/superset": {
+   "detail": "ok",
+   "elapsed": 0.43,
+   "ok": true
+  },
+  "apache/synapse": {
+   "detail": "ok",
+   "elapsed": 0.26,
+   "ok": true
+  },
+  "apache/tomcat": {
+   "detail": "ok",
+   "elapsed": 0.31,
+   "ok": true
+  },
+  "apache/unomi": {
+   "detail": "ok",
+   "elapsed": 0.3,
+   "ok": true
+  },
+  "apache/zookeeper": {
+   "detail": "ok",
+   "elapsed": 0.39,
+   "ok": true
+  },
+  "apollographql/apollo-server": {
+   "detail": "ok",
+   "elapsed": 0.42,
+   "ok": true
+  },
+  "appium/appium": {
+   "detail": "ok",
+   "elapsed": 0.68,
+   "ok": true
+  },
+  "apple/app-store-server-library-java": {
+   "detail": "ok",
+   "elapsed": 0.33,
+   "ok": true
+  },
+  "apple/app-store-server-library-node": {
+   "detail": "ok",
+   "elapsed": 0.31,
+   "ok": true
+  },
+  "apple/app-store-server-library-python": {
+   "detail": "ok",
+   "elapsed": 0.35,
+   "ok": true
+  },
+  "apple/axlearn": {
+   "detail": "ok",
+   "elapsed": 0.31,
+   "ok": true
+  },
+  "apple/container": {
+   "detail": "ok",
+   "elapsed": 0.3,
+   "ok": true
+  },
+  "apple/coremltools": {
+   "detail": "ok",
+   "elapsed": 0.52,
+   "ok": true
+  },
+  "apple/darwin-xnu": {
+   "detail": "ok",
+   "elapsed": 0.63,
+   "ok": true
+  },
+  "apple/foundationdb": {
+   "detail": "ok",
+   "elapsed": 0.33,
+   "ok": true
+  },
+  "apple/homebrew-apple-oss": {
+   "detail": "fatal: Authentication failed for 'http://127.0.0.1:41729/git/apple/homebrew-apple-oss/'",
+   "elapsed": 0.39,
+   "ok": false
+  },
+  "apple/ml-4m": {
+   "detail": "ok",
+   "elapsed": 0.26,
+   "ok": true
+  },
+  "apple/ml-ferret": {
+   "detail": "ok",
+   "elapsed": 0.34,
+   "ok": true
+  },
+  "apple/ml-stable-diffusion": {
+   "detail": "ok",
+   "elapsed": 0.31,
+   "ok": true
+  },
+  "apple/password-manager-resources": {
+   "detail": "ok",
+   "elapsed": 0.36,
+   "ok": true
+  },
+  "apple/pkl": {
+   "detail": "ok",
+   "elapsed": 0.39,
+   "ok": true
+  },
+  "apple/sample-food-truck": {
+   "detail": "ok",
+   "elapsed": 0.25,
+   "ok": true
+  },
+  "apple/servicetalk": {
+   "detail": "ok",
+   "elapsed": 0.39,
+   "ok": true
+  },
+  "apple/sourcekit-lsp": {
+   "detail": "ok",
+   "elapsed": 0.28,
+   "ok": true
+  },
+  "apple/swift": {
+   "detail": "ok",
+   "elapsed": 0.6,
+   "ok": true
+  },
+  "apple/swift-algorithms": {
+   "detail": "ok",
+   "elapsed": 0.22,
+   "ok": true
+  },
+  "apple/swift-argument-parser": {
+   "detail": "ok",
+   "elapsed": 0.24,
+   "ok": true
+  },
+  "apple/swift-async-algorithms": {
+   "detail": "ok",
+   "elapsed": 0.35,
+   "ok": true
+  },
+  "apple/swift-certificates": {
+   "detail": "ok",
+   "elapsed": 0.32,
+   "ok": true
+  },
+  "apple/swift-collections": {
+   "detail": "ok",
+   "elapsed": 0.32,
+   "ok": true
+  },
+  "apple/swift-corelibs-foundation": {
+   "detail": "ok",
+   "elapsed": 0.5,
+   "ok": true
+  },
+  "apple/swift-crypto": {
+   "detail": "ok",
+   "elapsed": 0.29,
+   "ok": true
+  },
+  "apple/swift-distributed-tracing": {
+   "detail": "ok",
+   "elapsed": 0.22,
+   "ok": true
+  },
+  "apple/swift-docc": {
+   "detail": "ok",
+   "elapsed": 0.34,
+   "ok": true
+  },
+  "apple/swift-evolution": {
+   "detail": "ok",
+   "elapsed": 0.46,
+   "ok": true
+  },
+  "apple/swift-format": {
+   "detail": "ok",
+   "elapsed": 0.54,
+   "ok": true
+  },
+  "apple/swift-http-types": {
+   "detail": "ok",
+   "elapsed": 0.23,
+   "ok": true
+  },
+  "apple/swift-log": {
+   "detail": "ok",
+   "elapsed": 0.26,
+   "ok": true
+  },
+  "apple/swift-markdown": {
+   "detail": "ok",
+   "elapsed": 0.47,
+   "ok": true
+  },
+  "apple/swift-metrics": {
+   "detail": "ok",
+   "elapsed": 0.38,
+   "ok": true
+  },
+  "apple/swift-nio": {
+   "detail": "ok",
+   "elapsed": 0.41,
+   "ok": true
+  },
+  "apple/swift-nio-http2": {
+   "detail": "ok",
+   "elapsed": 0.23,
+   "ok": true
+  },
+  "apple/swift-nio-ssl": {
+   "detail": "ok",
+   "elapsed": 0.33,
+   "ok": true
+  },
+  "apple/swift-numerics": {
+   "detail": "ok",
+   "elapsed": 0.44,
+   "ok": true
+  },
+  "apple/swift-openapi-generator": {
+   "detail": "ok",
+   "elapsed": 0.25,
+   "ok": true
+  },
+  "apple/swift-package-manager": {
+   "detail": "ok",
+   "elapsed": 0.31,
+   "ok": true
+  },
+  "apple/swift-protobuf": {
+   "detail": "ok",
+   "elapsed": 0.29,
+   "ok": true
+  },
+  "apple/swift-service-lifecycle": {
+   "detail": "fatal: Authentication failed for 'http://127.0.0.1:41729/git/apple/swift-service-lifecycle/'",
+   "elapsed": 0.22,
+   "ok": false
+  },
+  "apple/swift-syntax": {
+   "detail": "ok",
+   "elapsed": 0.41,
+   "ok": true
+  },
+  "apple/swift-testing": {
+   "detail": "ok",
+   "elapsed": 0.45,
+   "ok": true
+  },
+  "approvals/ApprovalTests.Java": {
+   "detail": "ok",
+   "elapsed": 0.37,
+   "ok": true
+  },
+  "appsmithorg/appsmith": {
+   "detail": "ok",
+   "elapsed": 0.34,
+   "ok": true
+  },
+  "aquasecurity/cloudsploit": {
+   "detail": "ok",
+   "elapsed": 0.51,
+   "ok": true
+  },
+  "aquasecurity/kube-bench": {
+   "detail": "ok",
+   "elapsed": 0.32,
+   "ok": true
+  },
+  "aquasecurity/kube-hunter": {
+   "detail": "ok",
+   "elapsed": 0.24,
+   "ok": true
+  },
+  "aquasecurity/tfsec": {
+   "detail": "ok",
+   "elapsed": 0.33,
+   "ok": true
+  },
+  "aquasecurity/trivy": {
+   "detail": "ok",
+   "elapsed": 0.38,
+   "ok": true
+  },
+  "arc42/arc42-template": {
+   "detail": "ok",
+   "elapsed": 0.24,
+   "ok": true
+  },
+  "argoproj/argo-cd": {
+   "detail": "ok",
+   "elapsed": 0.36,
+   "ok": true
+  },
+  "argoproj/argo-rollouts": {
+   "detail": "ok",
+   "elapsed": 0.45,
+   "ok": true
+  },
+  "argoproj/argo-workflows": {
+   "detail": "ok",
+   "elapsed": 0.35,
+   "ok": true
+  },
+  "ashishps1/awesome-low-level-design": {
+   "detail": "ok",
+   "elapsed": 0.26,
+   "ok": true
+  },
+  "ashishps1/awesome-system-design-resources": {
+   "detail": "ok",
+   "elapsed": 0.24,
+   "ok": true
+  },
+  "assafelovic/gpt-researcher": {
+   "detail": "ok",
+   "elapsed": 0.37,
+   "ok": true
+  },
+  "assertj/assertj": {
+   "detail": "ok",
+   "elapsed": 0.27,
+   "ok": true
+  },
+  "asweigart/pyautogui": {
+   "detail": "ok",
+   "elapsed": 0.27,
+   "ok": true
+  },
+  "async-profiler/async-profiler": {
+   "detail": "ok",
+   "elapsed": 0.31,
+   "ok": true
+  },
+  "asyncapi/spec": {
+   "detail": "ok",
+   "elapsed": 0.23,
+   "ok": true
+  },
+  "atinfo/awesome-test-automation": {
+   "detail": "ok",
+   "elapsed": 0.48,
+   "ok": true
+  },
+  "authelia/authelia": {
+   "detail": "ok",
+   "elapsed": 0.35,
+   "ok": true
+  },
+  "avajs/ava": {
+   "detail": "ok",
+   "elapsed": 0.26,
+   "ok": true
+  },
+  "avelino/awesome-go": {
+   "detail": "ok",
+   "elapsed": 0.27,
+   "ok": true
+  },
+  "awaitility/awaitility": {
+   "detail": "ok",
+   "elapsed": 0.31,
+   "ok": true
+  },
+  "aws-cloudformation/aws-cloudformation-templates": {
+   "detail": "ok",
+   "elapsed": 0.28,
+   "ok": true
+  },
+  "aws-powertools/powertools-lambda-python": {
+   "detail": "ok",
+   "elapsed": 0.34,
+   "ok": true
+  },
+  "aws-samples/aws-security-reference-architecture-examples": {
+   "detail": "ok",
+   "elapsed": 0.24,
+   "ok": true
+  },
+  "aws-samples/aws-serverless-workshops": {
+   "detail": "ok",
+   "elapsed": 0.25,
+   "ok": true
+  },
+  "aws-samples/aws-well-architected-labs": {
+   "detail": "fatal: Authentication failed for 'http://127.0.0.1:41729/git/aws-samples/aws-well-architected-labs/'",
+   "elapsed": 0.21,
+   "ok": false
+  },
+  "aws/aws-cdk": {
+   "detail": "ok",
+   "elapsed": 0.54,
+   "ok": true
+  },
+  "aws/aws-cli": {
+   "detail": "ok",
+   "elapsed": 0.53,
+   "ok": true
+  },
+  "aws/aws-sdk-go-v2": {
+   "detail": "ok",
+   "elapsed": 0.76,
+   "ok": true
+  },
+  "aws/aws-sdk-js-v3": {
+   "detail": "ok",
+   "elapsed": 0.49,
+   "ok": true
+  },
+  "aws/karpenter-provider-aws": {
+   "detail": "ok",
+   "elapsed": 0.3,
+   "ok": true
+  },
+  "aws/serverless-application-model": {
+   "detail": "ok",
+   "elapsed": 0.46,
+   "ok": true
+  },
+  "awsdocs/aws-doc-sdk-examples": {
+   "detail": "ok",
+   "elapsed": 0.36,
+   "ok": true
+  },
+  "awslabs/agent-squad": {
+   "detail": "ok",
+   "elapsed": 0.4,
+   "ok": true
+  },
+  "awslabs/aws-lambda-powertools-typescript": {
+   "detail": "ok",
+   "elapsed": 0.26,
+   "ok": true
+  },
+  "awslabs/aws-security-hub-automated-response-and-remediation": {
+   "detail": "ok",
+   "elapsed": 0.34,
+   "ok": true
+  },
+  "awslabs/aws-well-architected-labs": {
+   "detail": "ok",
+   "elapsed": 0.4,
+   "ok": true
+  },
+  "awslabs/deequ": {
+   "detail": "ok",
+   "elapsed": 0.24,
+   "ok": true
+  },
+  "babel/babel": {
+   "detail": "ok",
+   "elapsed": 0.34,
+   "ok": true
+  },
+  "backstage/backstage": {
+   "detail": "ok",
+   "elapsed": 0.49,
+   "ok": true
+  },
+  "ballerina-platform/ballerina-lang": {
+   "detail": "ok",
+   "elapsed": 0.61,
+   "ok": true
+  },
+  "baserow/baserow": {
+   "detail": "ok",
+   "elapsed": 0.26,
+   "ok": true
+  },
+  "bazelbuild/bazel": {
+   "detail": "ok",
+   "elapsed": 0.48,
+   "ok": true
+  },
+  "bazelbuild/bazelisk": {
+   "detail": "ok",
+   "elapsed": 0.32,
+   "ok": true
+  },
+  "bazelbuild/rules_docker": {
+   "detail": "ok",
+   "elapsed": 0.35,
+   "ok": true
+  },
+  "benfred/py-spy": {
+   "detail": "ok",
+   "elapsed": 0.27,
+   "ok": true
+  },
+  "bentoml/BentoML": {
+   "detail": "ok",
+   "elapsed": 0.51,
+   "ok": true
+  },
+  "bheisler/criterion.rs": {
+   "detail": "ok",
+   "elapsed": 0.22,
+   "ok": true
+  },
+  "binhnguyennus/awesome-scalability": {
+   "detail": "ok",
+   "elapsed": 0.27,
+   "ok": true
+  },
+  "biomejs/biome": {
+   "detail": "ok",
+   "elapsed": 0.39,
+   "ok": true
+  },
+  "bitnami-labs/sealed-secrets": {
+   "detail": "ok",
+   "elapsed": 0.5,
+   "ok": true
+  },
+  "bitsandbytes-foundation/bitsandbytes": {
+   "detail": "ok",
+   "elapsed": 0.29,
+   "ok": true
+  },
+  "block/goose": {
+   "detail": "ok",
+   "elapsed": 0.58,
+   "ok": true
+  },
+  "boto/boto3": {
+   "detail": "ok",
+   "elapsed": 0.3,
+   "ok": true
+  },
+  "brendangregg/FlameGraph": {
+   "detail": "ok",
+   "elapsed": 0.24,
+   "ok": true
+  },
+  "brendangregg/perf-tools": {
+   "detail": "ok",
+   "elapsed": 0.26,
+   "ok": true
+  },
+  "brettwooldridge/HikariCP": {
+   "detail": "ok",
+   "elapsed": 0.29,
+   "ok": true
+  },
+  "bridgecrewio/checkov": {
+   "detail": "ok",
+   "elapsed": 0.39,
+   "ok": true
+  },
+  "browser-use/browser-use": {
+   "detail": "ok",
+   "elapsed": 0.4,
+   "ok": true
+  },
+  "budibase/budibase": {
+   "detail": "ok",
+   "elapsed": 0.39,
+   "ok": true
+  },
+  "bumptech/glide": {
+   "detail": "ok",
+   "elapsed": 0.39,
+   "ok": true
+  },
+  "bytehound-rs/bytehound": {
+   "detail": "fatal: Authentication failed for 'http://127.0.0.1:41729/git/bytehound-rs/bytehound/'",
+   "elapsed": 0.21,
+   "ok": false
+  },
+  "camel-ai/camel": {
+   "detail": "ok",
+   "elapsed": 0.94,
+   "ok": true
+  },
+  "camunda/camunda-bpm-examples": {
+   "detail": "ok",
+   "elapsed": 0.28,
+   "ok": true
+  },
+  "camunda/camunda-bpm-platform": {
+   "detail": "ok",
+   "elapsed": 0.3,
+   "ok": true
+  },
+  "camunda/camunda-platform": {
+   "detail": "ok",
+   "elapsed": 0.29,
+   "ok": true
+  },
+  "carbon-design-system/carbon": {
+   "detail": "ok",
+   "elapsed": 0.38,
+   "ok": true
+  },
+  "casper-hansen/AutoAWQ": {
+   "detail": "ok",
+   "elapsed": 0.94,
+   "ok": true
+  },
+  "castorini/pyserini": {
+   "detail": "ok",
+   "elapsed": 0.26,
+   "ok": true
+  },
+  "center-for-threat-informed-defense/attack-flow": {
+   "detail": "ok",
+   "elapsed": 0.24,
+   "ok": true
+  },
+  "chainguard-dev/melange": {
+   "detail": "ok",
+   "elapsed": 0.33,
+   "ok": true
+  },
+  "chakra-ui/chakra-ui": {
+   "detail": "ok",
+   "elapsed": 0.33,
+   "ok": true
+  },
+  "chaos-mesh/chaos-mesh": {
+   "detail": "ok",
+   "elapsed": 0.36,
+   "ok": true
+  },
+  "chatwoot/chatwoot": {
+   "detail": "ok",
+   "elapsed": 0.72,
+   "ok": true
+  },
+  "checkstyle/checkstyle": {
+   "detail": "ok",
+   "elapsed": 0.64,
+   "ok": true
+  },
+  "chroma-core/chroma": {
+   "detail": "ok",
+   "elapsed": 0.34,
+   "ok": true
+  },
+  "cilium/cilium": {
+   "detail": "ok",
+   "elapsed": 0.46,
+   "ok": true
+  },
+  "cilium/hubble": {
+   "detail": "ok",
+   "elapsed": 0.31,
+   "ok": true
+  },
+  "cilium/tetragon": {
+   "detail": "ok",
+   "elapsed": 0.48,
+   "ok": true
+  },
+  "cloudevents/spec": {
+   "detail": "ok",
+   "elapsed": 0.28,
+   "ok": true
+  },
+  "cloudflare/quiche": {
+   "detail": "ok",
+   "elapsed": 0.37,
+   "ok": true
+  },
+  "cloudsecurityalliance/cloud-controls-matrix": {
+   "detail": "fatal: Authentication failed for 'http://127.0.0.1:41729/git/cloudsecurityalliance/cloud-controls-matrix/'",
+   "elapsed": 0.22,
+   "ok": false
+  },
+  "cncf/landscape": {
+   "detail": "ok",
+   "elapsed": 0.61,
+   "ok": true
+  },
+  "cncf/tag-security": {
+   "detail": "ok",
+   "elapsed": 0.32,
+   "ok": true
+  },
+  "cncf/toc": {
+   "detail": "ok",
+   "elapsed": 0.32,
+   "ok": true
+  },
+  "cockroachdb/cockroach": {
+   "detail": "ok",
+   "elapsed": 0.73,
+   "ok": true
+  },
+  "codecrafters-io/build-your-own-x": {
+   "detail": "ok",
+   "elapsed": 0.44,
+   "ok": true
+  },
+  "coil-kt/coil": {
+   "detail": "ok",
+   "elapsed": 0.55,
+   "ok": true
+  },
+  "comet-ml/opik": {
+   "detail": "ok",
+   "elapsed": 0.68,
+   "ok": true
+  },
+  "confident-ai/deepeval": {
+   "detail": "ok",
+   "elapsed": 0.43,
+   "ok": true
+  },
+  "confluentinc/ksql": {
+   "detail": "ok",
+   "elapsed": 0.55,
+   "ok": true
+  },
+  "confluentinc/schema-registry": {
+   "detail": "ok",
+   "elapsed": 0.6,
+   "ok": true
+  },
+  "containerd/containerd": {
+   "detail": "ok",
+   "elapsed": 0.44,
+   "ok": true
+  },
+  "containers/podman": {
+   "detail": "ok",
+   "elapsed": 0.31,
+   "ok": true
+  },
+  "continuedev/continue": {
+   "detail": "ok",
+   "elapsed": 0.32,
+   "ok": true
+  },
+  "controlplaneio/kubesec": {
+   "detail": "ok",
+   "elapsed": 0.31,
+   "ok": true
+  },
+  "conventional-changelog/commitlint": {
+   "detail": "ok",
+   "elapsed": 0.32,
+   "ok": true
+  },
+  "conventional-commits/conventionalcommits.org": {
+   "detail": "ok",
+   "elapsed": 0.29,
+   "ok": true
+  },
+  "coqui-ai/TTS": {
+   "detail": "ok",
+   "elapsed": 0.33,
+   "ok": true
+  },
+  "crewAIInc/crewAI": {
+   "detail": "ok",
+   "elapsed": 0.64,
+   "ok": true
+  },
+  "crossplane/crossplane": {
+   "detail": "ok",
+   "elapsed": 0.57,
+   "ok": true
+  },
+  "cucumber/cucumber-js": {
+   "detail": "ok",
+   "elapsed": 0.25,
+   "ok": true
+  },
+  "cucumber/cucumber-jvm": {
+   "detail": "ok",
+   "elapsed": 0.3,
+   "ok": true
+  },
+  "cupy/cupy": {
+   "detail": "ok",
+   "elapsed": 0.41,
+   "ok": true
+  },
+  "cypress-io/cypress": {
+   "detail": "ok",
+   "elapsed": 0.46,
+   "ok": true
+  },
+  "dagster-io/dagster": {
+   "detail": "ok",
+   "elapsed": 0.5,
+   "ok": true
+  },
+  "danielmiessler/SecLists": {
+   "detail": "ok",
+   "elapsed": 0.32,
+   "ok": true
+  },
+  "danielmiessler/fabric": {
+   "detail": "ok",
+   "elapsed": 0.62,
+   "ok": true
+  },
+  "danswer-ai/danswer": {
+   "detail": "ok",
+   "elapsed": 0.46,
+   "ok": true
+  },
+  "dart-lang/sdk": {
+   "detail": "ok",
+   "elapsed": 0.69,
+   "ok": true
+  },
+  "dask/dask": {
+   "detail": "ok",
+   "elapsed": 0.62,
+   "ok": true
+  },
+  "dastergon/awesome-sre": {
+   "detail": "ok",
+   "elapsed": 0.25,
+   "ok": true
+  },
+  "databricks/databricks-sdk-py": {
+   "detail": "ok",
+   "elapsed": 0.33,
+   "ok": true
+  },
+  "dbt-labs/dbt-core": {
+   "detail": "ok",
+   "elapsed": 0.32,
+   "ok": true
+  },
+  "ddd-crew/bounded-context-canvas": {
+   "detail": "ok",
+   "elapsed": 0.25,
+   "ok": true
+  },
+  "ddd-crew/context-mapping": {
+   "detail": "ok",
+   "elapsed": 0.25,
+   "ok": true
+  },
+  "ddd-crew/ddd-starter-modelling-process": {
+   "detail": "ok",
+   "elapsed": 0.33,
+   "ok": true
+  },
+  "debezium/debezium": {
+   "detail": "ok",
+   "elapsed": 0.42,
+   "ok": true
+  },
+  "deepseek-ai/DeepSeek-V3": {
+   "detail": "ok",
+   "elapsed": 0.28,
+   "ok": true
+  },
+  "deepset-ai/haystack": {
+   "detail": "ok",
+   "elapsed": 0.66,
+   "ok": true
+  },
+  "delta-io/delta": {
+   "detail": "ok",
+   "elapsed": 0.34,
+   "ok": true
+  },
+  "delta-io/delta-rs": {
+   "detail": "ok",
+   "elapsed": 0.43,
+   "ok": true
+  },
+  "delta-io/delta-sharing": {
+   "detail": "ok",
+   "elapsed": 0.25,
+   "ok": true
+  },
+  "dequelabs/axe-core": {
+   "detail": "ok",
+   "elapsed": 0.45,
+   "ok": true
+  },
+  "design-tokens/community-group": {
+   "detail": "ok",
+   "elapsed": 0.54,
+   "ok": true
+  },
+  "determined-ai/determined": {
+   "detail": "ok",
+   "elapsed": 0.38,
+   "ok": true
+  },
+  "dexidp/dex": {
+   "detail": "ok",
+   "elapsed": 0.33,
+   "ok": true
+  },
+  "diataxis/diataxis.fr": {
+   "detail": "fatal: Authentication failed for 'http://127.0.0.1:41729/git/diataxis/diataxis.fr/'",
+   "elapsed": 0.3,
+   "ok": false
+  },
+  "diffplug/spotless": {
+   "detail": "ok",
+   "elapsed": 0.33,
+   "ok": true
+  },
+  "directus/directus": {
+   "detail": "ok",
+   "elapsed": 0.53,
+   "ok": true
+  },
+  "django/django": {
+   "detail": "ok",
+   "elapsed": 0.45,
+   "ok": true
+  },
+  "dlt-hub/dlt": {
+   "detail": "ok",
+   "elapsed": 0.32,
+   "ok": true
+  },
+  "docker/compose": {
+   "detail": "ok",
+   "elapsed": 0.53,
+   "ok": true
+  },
+  "docsifyjs/docsify": {
+   "detail": "ok",
+   "elapsed": 0.36,
+   "ok": true
+  },
+  "dolibarr/dolibarr": {
+   "detail": "ok",
+   "elapsed": 0.39,
+   "ok": true
+  },
+  "donnemartin/system-design-primer": {
+   "detail": "ok",
+   "elapsed": 0.32,
+   "ok": true
+  },
+  "dotnet-architecture/eShopOnContainers": {
+   "detail": "ok",
+   "elapsed": 0.29,
+   "ok": true
+  },
+  "dotnet/BenchmarkDotNet": {
+   "detail": "ok",
+   "elapsed": 0.37,
+   "ok": true
+  },
+  "dotnet/aspire": {
+   "detail": "ok",
+   "elapsed": 0.47,
+   "ok": true
+  },
+  "dotnet/aspnetcore": {
+   "detail": "ok",
+   "elapsed": 0.5,
+   "ok": true
+  },
+  "dotnet/csharplang": {
+   "detail": "ok",
+   "elapsed": 0.28,
+   "ok": true
+  },
+  "dotnet/docs": {
+   "detail": "ok",
+   "elapsed": 0.51,
+   "ok": true
+  },
+  "dotnet/eShop": {
+   "detail": "ok",
+   "elapsed": 0.33,
+   "ok": true
+  },
+  "dotnet/efcore": {
+   "detail": "ok",
+   "elapsed": 0.53,
+   "ok": true
+  },
+  "dotnet/machinelearning": {
+   "detail": "ok",
+   "elapsed": 0.32,
+   "ok": true
+  },
+  "dotnet/maui": {
+   "detail": "ok",
+   "elapsed": 0.3,
+   "ok": true
+  },
+  "dotnet/orleans": {
+   "detail": "ok",
+   "elapsed": 0.37,
+   "ok": true
+  },
+  "dotnet/perfview": {
+   "detail": "fatal: Authentication failed for 'http://127.0.0.1:41729/git/dotnet/perfview/'",
+   "elapsed": 0.21,
+   "ok": false
+  },
+  "dotnet/roslyn": {
+   "detail": "ok",
+   "elapsed": 0.38,
+   "ok": true
+  },
+  "dotnet/runtime": {
+   "detail": "ok",
+   "elapsed": 0.69,
+   "ok": true
+  },
+  "dotnet/sdk": {
+   "detail": "ok",
+   "elapsed": 0.75,
+   "ok": true
+  },
+  "dottxt-ai/outlines": {
+   "detail": "ok",
+   "elapsed": 1.38,
+   "ok": true
+  },
+  "drizzle-team/drizzle-orm": {
+   "detail": "ok",
+   "elapsed": 0.31,
+   "ok": true
+  },
+  "duckdb/duckdb": {
+   "detail": "ok",
+   "elapsed": 0.36,
+   "ok": true
+  },
+  "duo-labs/cloudmapper": {
+   "detail": "ok",
+   "elapsed": 0.44,
+   "ok": true
+  },
+  "e2b-dev/E2B": {
+   "detail": "ok",
+   "elapsed": 0.42,
+   "ok": true
+  },
+  "e2b-dev/awesome-ai-agents": {
+   "detail": "ok",
+   "elapsed": 0.27,
+   "ok": true
+  },
+  "eclipse-ditto/ditto": {
+   "detail": "ok",
+   "elapsed": 0.31,
+   "ok": true
+  },
+  "eclipse-ee4j/jakartaee-platform": {
+   "detail": "ok",
+   "elapsed": 0.34,
+   "ok": true
+  },
+  "eclipse-hono/hono": {
+   "detail": "ok",
+   "elapsed": 0.27,
+   "ok": true
+  },
+  "eclipse-jetty/jetty.project": {
+   "detail": "fatal: Authentication failed for 'http://127.0.0.1:41729/git/eclipse-jetty/jetty.project/'",
+   "elapsed": 0.25,
+   "ok": false
+  },
+  "eclipse-milo/milo": {
+   "detail": "ok",
+   "elapsed": 0.33,
+   "ok": true
+  },
+  "eclipse-rdf4j/rdf4j": {
+   "detail": "ok",
+   "elapsed": 0.33,
+   "ok": true
+  },
+  "eclipse-vertx/vert.x": {
+   "detail": "ok",
+   "elapsed": 0.33,
+   "ok": true
+  },
+  "eclipse/microprofile": {
+   "detail": "ok",
+   "elapsed": 0.41,
+   "ok": true
+  },
+  "elastic/beats": {
+   "detail": "ok",
+   "elapsed": 0.5,
+   "ok": true
+  },
+  "elastic/detection-rules": {
+   "detail": "ok",
+   "elapsed": 0.33,
+   "ok": true
+  },
+  "elastic/elasticsearch": {
+   "detail": "ok",
+   "elapsed": 0.82,
+   "ok": true
+  },
+  "electron/electron": {
+   "detail": "ok",
+   "elapsed": 0.46,
+   "ok": true
+  },
+  "embeddings-benchmark/mteb": {
+   "detail": "ok",
+   "elapsed": 0.27,
+   "ok": true
+  },
+  "enaqx/awesome-react": {
+   "detail": "ok",
+   "elapsed": 0.93,
+   "ok": true
+  },
+  "encode/httpx": {
+   "detail": "ok",
+   "elapsed": 2.61,
+   "ok": true
+  },
+  "encode/starlette": {
+   "detail": "ok",
+   "elapsed": 0.31,
+   "ok": true
+  },
+  "envoyproxy/envoy": {
+   "detail": "ok",
+   "elapsed": 0.32,
+   "ok": true
+  },
+  "eslint/eslint": {
+   "detail": "ok",
+   "elapsed": 0.34,
+   "ok": true
+  },
+  "espocrm/espocrm": {
+   "detail": "ok",
+   "elapsed": 0.29,
+   "ok": true
+  },
+  "estuary/flow": {
+   "detail": "ok",
+   "elapsed": 0.39,
+   "ok": true
+  },
+  "etcd-io/etcd": {
+   "detail": "ok",
+   "elapsed": 0.5,
+   "ok": true
+  },
+  "evanw/esbuild": {
+   "detail": "ok",
+   "elapsed": 0.27,
+   "ok": true
+  },
+  "evidentlyai/evidently": {
+   "detail": "ok",
+   "elapsed": 0.28,
+   "ok": true
+  },
+  "evildmp/diataxis-documentation-framework": {
+   "detail": "ok",
+   "elapsed": 0.44,
+   "ok": true
+  },
+  "excalidraw/excalidraw": {
+   "detail": "ok",
+   "elapsed": 0.28,
+   "ok": true
+  },
+  "explodinggradients/ragas": {
+   "detail": "ok",
+   "elapsed": 0.43,
+   "ok": true
+  },
+  "expo/expo": {
+   "detail": "ok",
+   "elapsed": 0.71,
+   "ok": true
+  },
+  "expressjs/express": {
+   "detail": "ok",
+   "elapsed": 0.35,
+   "ok": true
+  },
+  "external-secrets/external-secrets": {
+   "detail": "ok",
+   "elapsed": 0.38,
+   "ok": true
+  },
+  "f/awesome-chatgpt-prompts": {
+   "detail": "ok",
+   "elapsed": 0.53,
+   "ok": true
+  },
+  "facebook/react": {
+   "detail": "ok",
+   "elapsed": 0.48,
+   "ok": true
+  },
+  "facebook/react-native": {
+   "detail": "ok",
+   "elapsed": 0.44,
+   "ok": true
+  },
+  "facebookresearch/faiss": {
+   "detail": "ok",
+   "elapsed": 0.27,
+   "ok": true
+  },
+  "falcosecurity/falco": {
+   "detail": "ok",
+   "elapsed": 0.31,
+   "ok": true
+  },
+  "fastify/fastify": {
+   "detail": "ok",
+   "elapsed": 0.43,
+   "ok": true
+  },
+  "fastlane/fastlane": {
+   "detail": "ok",
+   "elapsed": 0.54,
+   "ok": true
+  },
+  "feast-dev/feast": {
+   "detail": "ok",
+   "elapsed": 0.47,
+   "ok": true
+  },
+  "flowable/flowable-engine": {
+   "detail": "ok",
+   "elapsed": 0.32,
+   "ok": true
+  },
+  "fluent/fluent-bit": {
+   "detail": "ok",
+   "elapsed": 0.45,
+   "ok": true
+  },
+  "fluent/fluentd": {
+   "detail": "ok",
+   "elapsed": 0.27,
+   "ok": true
+  },
+  "fluentassertions/fluentassertions": {
+   "detail": "ok",
+   "elapsed": 0.27,
+   "ok": true
+  },
+  "flutter/flutter": {
+   "detail": "ok",
+   "elapsed": 0.68,
+   "ok": true
+  },
+  "flutter/samples": {
+   "detail": "ok",
+   "elapsed": 0.55,
+   "ok": true
+  },
+  "fluxcd/flux2": {
+   "detail": "ok",
+   "elapsed": 0.42,
+   "ok": true
+  },
+  "flyway/flyway": {
+   "detail": "ok",
+   "elapsed": 0.27,
+   "ok": true
+  },
+  "forcedotcom/cli": {
+   "detail": "ok",
+   "elapsed": 0.25,
+   "ok": true
+  },
+  "forcedotcom/salesforcedx-vscode": {
+   "detail": "ok",
+   "elapsed": 0.33,
+   "ok": true
+  },
+  "frappe/erpnext": {
+   "detail": "ok",
+   "elapsed": 0.53,
+   "ok": true
+  },
+  "frappe/frappe": {
+   "detail": "ok",
+   "elapsed": 0.65,
+   "ok": true
+  },
+  "gatling/gatling": {
+   "detail": "ok",
+   "elapsed": 0.32,
+   "ok": true
+  },
+  "geekan/MetaGPT": {
+   "detail": "ok",
+   "elapsed": 0.34,
+   "ok": true
+  },
+  "getsops/sops": {
+   "detail": "ok",
+   "elapsed": 0.26,
+   "ok": true
+  },
+  "ggml-org/llama.cpp": {
+   "detail": "ok",
+   "elapsed": 1.01,
+   "ok": true
+  },
+  "ggml-org/whisper.cpp": {
+   "detail": "ok",
+   "elapsed": 0.25,
+   "ok": true
+  },
+  "giltene/wrk2": {
+   "detail": "ok",
+   "elapsed": 0.37,
+   "ok": true
+  },
+  "gin-gonic/gin": {
+   "detail": "ok",
+   "elapsed": 0.29,
+   "ok": true
+  },
+  "github/codeql": {
+   "detail": "ok",
+   "elapsed": 0.36,
+   "ok": true
+  },
+  "github/docs": {
+   "detail": "ok",
+   "elapsed": 0.42,
+   "ok": true
+  },
+  "github/gitignore": {
+   "detail": "ok",
+   "elapsed": 0.43,
+   "ok": true
+  },
+  "github/opensource.guide": {
+   "detail": "ok",
+   "elapsed": 0.38,
+   "ok": true
+  },
+  "github/super-linter": {
+   "detail": "ok",
+   "elapsed": 0.26,
+   "ok": true
+  },
+  "gitleaks/gitleaks": {
+   "detail": "ok",
+   "elapsed": 0.3,
+   "ok": true
+  },
+  "go-chi/chi": {
+   "detail": "ok",
+   "elapsed": 1.58,
+   "ok": true
+  },
+  "golang-standards/project-layout": {
+   "detail": "ok",
+   "elapsed": 0.29,
+   "ok": true
+  },
+  "golang/go": {
+   "detail": "ok",
+   "elapsed": 0.67,
+   "ok": true
+  },
+  "golang/mock": {
+   "detail": "ok",
+   "elapsed": 0.39,
+   "ok": true
+  },
+  "golang/tools": {
+   "detail": "ok",
+   "elapsed": 0.42,
+   "ok": true
+  },
+  "goldbergyoni/javascript-testing-best-practices": {
+   "detail": "ok",
+   "elapsed": 0.26,
+   "ok": true
+  },
+  "goldbergyoni/nodebestpractices": {
+   "detail": "ok",
+   "elapsed": 0.32,
+   "ok": true
+  },
+  "google-ai-edge/LiteRT": {
+   "detail": "ok",
+   "elapsed": 0.38,
+   "ok": true
+  },
+  "google-ai-edge/mediapipe": {
+   "detail": "ok",
+   "elapsed": 0.34,
+   "ok": true
+  },
+  "google-deepmind/alphafold": {
+   "detail": "ok",
+   "elapsed": 0.23,
+   "ok": true
+  },
+  "google-deepmind/deepmind-research": {
+   "detail": "ok",
+   "elapsed": 0.28,
+   "ok": true
+  },
+  "google-deepmind/dm-haiku": {
+   "detail": "ok",
+   "elapsed": 0.49,
+   "ok": true
+  },
+  "google-deepmind/gemma": {
+   "detail": "ok",
+   "elapsed": 0.53,
+   "ok": true
+  },
+  "google-deepmind/haiku": {
+   "detail": "fatal: Authentication failed for 'http://127.0.0.1:41729/git/google-deepmind/haiku/'",
+   "elapsed": 0.25,
+   "ok": false
+  },
+  "google-deepmind/optax": {
+   "detail": "ok",
+   "elapsed": 0.28,
+   "ok": true
+  },
+  "google-gemini/cookbook": {
+   "detail": "ok",
+   "elapsed": 0.24,
+   "ok": true
+  },
+  "google-gemini/gemini-cli": {
+   "detail": "ok",
+   "elapsed": 0.34,
+   "ok": true
+  },
+  "google-research/google-research": {
+   "detail": "ok",
+   "elapsed": 0.32,
+   "ok": true
+  },
+  "google-research/tuning_playbook": {
+   "detail": "ok",
+   "elapsed": 0.24,
+   "ok": true
+  },
+  "google/AFL": {
+   "detail": "ok",
+   "elapsed": 0.3,
+   "ok": true
+  },
+  "google/adk-python": {
+   "detail": "ok",
+   "elapsed": 0.31,
+   "ok": true
+  },
+  "google/adk-samples": {
+   "detail": "ok",
+   "elapsed": 0.42,
+   "ok": true
+  },
+  "google/benchmark": {
+   "detail": "ok",
+   "elapsed": 0.52,
+   "ok": true
+  },
+  "google/clusterfuzz": {
+   "detail": "ok",
+   "elapsed": 0.38,
+   "ok": true
+  },
+  "google/dagger": {
+   "detail": "ok",
+   "elapsed": 0.27,
+   "ok": true
+  },
+  "google/eng-practices": {
+   "detail": "ok",
+   "elapsed": 0.26,
+   "ok": true
+  },
+  "google/error-prone": {
+   "detail": "ok",
+   "elapsed": 0.35,
+   "ok": true
+  },
+  "google/flax": {
+   "detail": "ok",
+   "elapsed": 0.39,
+   "ok": true
+  },
+  "google/go-cloud": {
+   "detail": "ok",
+   "elapsed": 0.27,
+   "ok": true
+  },
+  "google/go-sre": {
+   "detail": "fatal: Authentication failed for 'http://127.0.0.1:41729/git/google/go-sre/'",
+   "elapsed": 0.36,
+   "ok": false
+  },
+  "google/googletest": {
+   "detail": "ok",
+   "elapsed": 0.26,
+   "ok": true
+  },
+  "google/gson": {
+   "detail": "ok",
+   "elapsed": 0.44,
+   "ok": true
+  },
+  "google/guava": {
+   "detail": "ok",
+   "elapsed": 0.45,
+   "ok": true
+  },
+  "google/gvisor": {
+   "detail": "ok",
+   "elapsed": 0.4,
+   "ok": true
+  },
+  "google/highway": {
+   "detail": "ok",
+   "elapsed": 0.27,
+   "ok": true
+  },
+  "google/jax": {
+   "detail": "ok",
+   "elapsed": 0.76,
+   "ok": true
+  },
+  "google/ko": {
+   "detail": "ok",
+   "elapsed": 0.35,
+   "ok": true
+  },
+  "google/leveldb": {
+   "detail": "ok",
+   "elapsed": 0.23,
+   "ok": true
+  },
+  "google/mediapipe": {
+   "detail": "ok",
+   "elapsed": 0.35,
+   "ok": true
+  },
+  "google/nsjail": {
+   "detail": "ok",
+   "elapsed": 0.29,
+   "ok": true
+  },
+  "google/or-tools": {
+   "detail": "ok",
+   "elapsed": 0.33,
+   "ok": true
+  },
+  "google/oss-fuzz": {
+   "detail": "ok",
+   "elapsed": 0.44,
+   "ok": true
+  },
+  "google/perfetto": {
+   "detail": "ok",
+   "elapsed": 0.33,
+   "ok": true
+  },
+  "google/protobuf": {
+   "detail": "ok",
+   "elapsed": 0.49,
+   "ok": true
+  },
+  "google/sanitizers": {
+   "detail": "ok",
+   "elapsed": 0.25,
+   "ok": true
+  },
+  "google/season-of-docs": {
+   "detail": "ok",
+   "elapsed": 0.27,
+   "ok": true
+  },
+  "google/security-research": {
+   "detail": "ok",
+   "elapsed": 0.24,
+   "ok": true
+  },
+  "google/site-kit-wp": {
+   "detail": "ok",
+   "elapsed": 0.28,
+   "ok": true
+  },
+  "google/skills": {
+   "detail": "ok",
+   "elapsed": 0.27,
+   "ok": true
+  },
+  "google/sqlcommenter": {
+   "detail": "ok",
+   "elapsed": 0.43,
+   "ok": true
+  },
+  "google/styleguide": {
+   "detail": "ok",
+   "elapsed": 0.36,
+   "ok": true
+  },
+  "google/tink": {
+   "detail": "ok",
+   "elapsed": 0.29,
+   "ok": true
+  },
+  "google/tsunami-security-scanner": {
+   "detail": "ok",
+   "elapsed": 0.88,
+   "ok": true
+  },
+  "google/zx": {
+   "detail": "ok",
+   "elapsed": 0.27,
+   "ok": true
+  },
+  "googleapis/google-cloud-cpp": {
+   "detail": "ok",
+   "elapsed": 0.43,
+   "ok": true
+  },
+  "googleapis/google-cloud-go": {
+   "detail": "ok",
+   "elapsed": 0.47,
+   "ok": true
+  },
+  "googleapis/google-cloud-java": {
+   "detail": "ok",
+   "elapsed": 0.3,
+   "ok": true
+  },
+  "googleapis/google-cloud-node": {
+   "detail": "ok",
+   "elapsed": 0.32,
+   "ok": true
+  },
+  "googleapis/google-cloud-python": {
+   "detail": "ok",
+   "elapsed": 0.54,
+   "ok": true
+  },
+  "googleapis/googleapis": {
+   "detail": "ok",
+   "elapsed": 0.47,
+   "ok": true
+  },
+  "googleapis/python-bigquery": {
+   "detail": "ok",
+   "elapsed": 0.34,
+   "ok": true
+  },
+  "googleapis/python-genai": {
+   "detail": "ok",
+   "elapsed": 0.36,
+   "ok": true
+  },
+  "googleapis/release-please": {
+   "detail": "ok",
+   "elapsed": 0.39,
+   "ok": true
+  },
+  "goreleaser/goreleaser": {
+   "detail": "ok",
+   "elapsed": 0.3,
+   "ok": true
+  },
+  "graalvm/graalvm-demos": {
+   "detail": "ok",
+   "elapsed": 0.35,
+   "ok": true
+  },
+  "gradle/gradle": {
+   "detail": "ok",
+   "elapsed": 0.58,
+   "ok": true
+  },
+  "grafana/grafana": {
+   "detail": "ok",
+   "elapsed": 0.77,
+   "ok": true
+  },
+  "grafana/k6": {
+   "detail": "ok",
+   "elapsed": 0.31,
+   "ok": true
+  },
+  "grafana/loki": {
+   "detail": "ok",
+   "elapsed": 0.44,
+   "ok": true
+  },
+  "grafana/mimir": {
+   "detail": "ok",
+   "elapsed": 0.34,
+   "ok": true
+  },
+  "grafana/tempo": {
+   "detail": "ok",
+   "elapsed": 0.36,
+   "ok": true
+  },
+  "graphql/graphql-js": {
+   "detail": "ok",
+   "elapsed": 0.49,
+   "ok": true
+  },
+  "graphql/graphql-spec": {
+   "detail": "ok",
+   "elapsed": 0.24,
+   "ok": true
+  },
+  "great-expectations/great_expectations": {
+   "detail": "ok",
+   "elapsed": 0.43,
+   "ok": true
+  },
+  "grpc/grpc": {
+   "detail": "ok",
+   "elapsed": 0.81,
+   "ok": true
+  },
+  "grpc/grpc-go": {
+   "detail": "ok",
+   "elapsed": 0.34,
+   "ok": true
+  },
+  "grpc/grpc-java": {
+   "detail": "ok",
+   "elapsed": 0.39,
+   "ok": true
+  },
+  "grpc/grpc-web": {
+   "detail": "ok",
+   "elapsed": 0.42,
+   "ok": true
+  },
+  "guardrails-ai/guardrails": {
+   "detail": "ok",
+   "elapsed": 0.36,
+   "ok": true
+  },
+  "guidance-ai/guidance": {
+   "detail": "ok",
+   "elapsed": 0.28,
+   "ok": true
+  },
+  "hashicorp/consul": {
+   "detail": "ok",
+   "elapsed": 0.41,
+   "ok": true
+  },
+  "hashicorp/nomad": {
+   "detail": "ok",
+   "elapsed": 0.4,
+   "ok": true
+  },
+  "hashicorp/packer": {
+   "detail": "ok",
+   "elapsed": 0.86,
+   "ok": true
+  },
+  "hashicorp/terraform": {
+   "detail": "ok",
+   "elapsed": 0.31,
+   "ok": true
+  },
+  "hashicorp/terraform-provider-aws": {
+   "detail": "ok",
+   "elapsed": 0.62,
+   "ok": true
+  },
+  "hashicorp/terraform-provider-azurerm": {
+   "detail": "ok",
+   "elapsed": 0.37,
+   "ok": true
+  },
+  "hashicorp/terraform-provider-google": {
+   "detail": "ok",
+   "elapsed": 0.33,
+   "ok": true
+  },
+  "hashicorp/vagrant": {
+   "detail": "ok",
+   "elapsed": 0.38,
+   "ok": true
+  },
+  "hashicorp/vault": {
+   "detail": "ok",
+   "elapsed": 0.44,
+   "ok": true
+  },
+  "hasura/graphql-engine": {
+   "detail": "ok",
+   "elapsed": 0.3,
+   "ok": true
+  },
+  "helm/helm": {
+   "detail": "ok",
+   "elapsed": 0.25,
+   "ok": true
+  },
+  "hibernate/hibernate-orm": {
+   "detail": "ok",
+   "elapsed": 0.4,
+   "ok": true
+  },
+  "hiyouga/LLaMA-Factory": {
+   "detail": "ok",
+   "elapsed": 0.3,
+   "ok": true
+  },
+  "honojs/hono": {
+   "detail": "ok",
+   "elapsed": 0.31,
+   "ok": true
+  },
+  "horovod/horovod": {
+   "detail": "ok",
+   "elapsed": 0.35,
+   "ok": true
+  },
+  "huggingface/accelerate": {
+   "detail": "ok",
+   "elapsed": 0.34,
+   "ok": true
+  },
+  "huggingface/datasets": {
+   "detail": "ok",
+   "elapsed": 0.54,
+   "ok": true
+  },
+  "huggingface/diffusers": {
+   "detail": "ok",
+   "elapsed": 0.56,
+   "ok": true
+  },
+  "huggingface/optimum": {
+   "detail": "ok",
+   "elapsed": 0.3,
+   "ok": true
+  },
+  "huggingface/peft": {
+   "detail": "ok",
+   "elapsed": 0.36,
+   "ok": true
+  },
+  "huggingface/smolagents": {
+   "detail": "ok",
+   "elapsed": 0.37,
+   "ok": true
+  },
+  "huggingface/text-generation-inference": {
+   "detail": "ok",
+   "elapsed": 0.24,
+   "ok": true
+  },
+  "huggingface/tokenizers": {
+   "detail": "ok",
+   "elapsed": 0.32,
+   "ok": true
+  },
+  "huggingface/transformers": {
+   "detail": "ok",
+   "elapsed": 0.41,
+   "ok": true
+  },
+  "huggingface/trl": {
+   "detail": "ok",
+   "elapsed": 0.24,
+   "ok": true
+  },
+  "hummingbird-project/hummingbird": {
+   "detail": "ok",
+   "elapsed": 0.27,
+   "ok": true
+  },
+  "hyperledger/fabric": {
+   "detail": "ok",
+   "elapsed": 0.43,
+   "ok": true
+  },
+  "ibis-project/ibis": {
+   "detail": "ok",
+   "elapsed": 0.29,
+   "ok": true
+  },
+  "ibm-messaging/mq-container": {
+   "detail": "ok",
+   "elapsed": 0.25,
+   "ok": true
+  },
+  "ibm-messaging/mq-golang": {
+   "detail": "ok",
+   "elapsed": 0.44,
+   "ok": true
+  },
+  "iluwatar/java-design-patterns": {
+   "detail": "ok",
+   "elapsed": 0.35,
+   "ok": true
+  },
+  "in-toto/in-toto": {
+   "detail": "ok",
+   "elapsed": 0.33,
+   "ok": true
+  },
+  "infiniflow/ragflow": {
+   "detail": "ok",
+   "elapsed": 0.66,
+   "ok": true
+  },
+  "influxdata/influxdb": {
+   "detail": "ok",
+   "elapsed": 0.38,
+   "ok": true
+  },
+  "intel/intel-extension-for-pytorch": {
+   "detail": "ok",
+   "elapsed": 0.26,
+   "ok": true
+  },
+  "interpretml/interpret": {
+   "detail": "ok",
+   "elapsed": 0.28,
+   "ok": true
+  },
+  "ionic-team/capacitor": {
+   "detail": "ok",
+   "elapsed": 0.36,
+   "ok": true
+  },
+  "iovisor/bcc": {
+   "detail": "ok",
+   "elapsed": 0.27,
+   "ok": true
+  },
+  "iovisor/bpftrace": {
+   "detail": "ok",
+   "elapsed": 0.32,
+   "ok": true
+  },
+  "isaac-sim/IsaacLab": {
+   "detail": "ok",
+   "elapsed": 0.97,
+   "ok": true
+  },
+  "isocpp/CppCoreGuidelines": {
+   "detail": "ok",
+   "elapsed": 0.26,
+   "ok": true
+  },
+  "istio/istio": {
+   "detail": "ok",
+   "elapsed": 0.38,
+   "ok": true
+  },
+  "iterative/dvc": {
+   "detail": "ok",
+   "elapsed": 0.27,
+   "ok": true
+  },
+  "jOOQ/jOOQ": {
+   "detail": "ok",
+   "elapsed": 0.42,
+   "ok": true
+  },
+  "jaegertracing/jaeger": {
+   "detail": "ok",
+   "elapsed": 0.31,
+   "ok": true
+  },
+  "jakartaee/rest": {
+   "detail": "ok",
+   "elapsed": 0.28,
+   "ok": true
+  },
+  "jax-ml/jax": {
+   "detail": "ok",
+   "elapsed": 0.47,
+   "ok": true
+  },
+  "jaywcjlove/awesome-mac": {
+   "detail": "ok",
+   "elapsed": 0.32,
+   "ok": true
+  },
+  "jazzband/django-debug-toolbar": {
+   "detail": "ok",
+   "elapsed": 0.43,
+   "ok": true
+  },
+  "jedisct1/libsodium": {
+   "detail": "ok",
+   "elapsed": 0.25,
+   "ok": true
+  },
+  "jenkins-x/jx": {
+   "detail": "ok",
+   "elapsed": 0.41,
+   "ok": true
+  },
+  "jenkinsci/jenkins": {
+   "detail": "ok",
+   "elapsed": 0.46,
+   "ok": true
+  },
+  "jenkinsci/pipeline-model-definition-plugin": {
+   "detail": "ok",
+   "elapsed": 0.4,
+   "ok": true
+  },
+  "jeremylong/DependencyCheck": {
+   "detail": "ok",
+   "elapsed": 0.43,
+   "ok": true
+  },
+  "jestjs/jest": {
+   "detail": "ok",
+   "elapsed": 0.32,
+   "ok": true
+  },
+  "jetty/jetty.project": {
+   "detail": "ok",
+   "elapsed": 0.66,
+   "ok": true
+  },
+  "jina-ai/jina": {
+   "detail": "ok",
+   "elapsed": 0.37,
+   "ok": true
+  },
+  "joelparkerhenderson/architecture-decision-record": {
+   "detail": "ok",
+   "elapsed": 0.29,
+   "ok": true
+  },
+  "josephmisiti/awesome-machine-learning": {
+   "detail": "ok",
+   "elapsed": 0.3,
+   "ok": true
+  },
+  "json-schema-org/json-schema-spec": {
+   "detail": "ok",
+   "elapsed": 0.26,
+   "ok": true
+  },
+  "jsvine/pdfplumber": {
+   "detail": "ok",
+   "elapsed": 0.27,
+   "ok": true
+  },
+  "junit-team/junit5": {
+   "detail": "ok",
+   "elapsed": 0.39,
+   "ok": true
+  },
+  "jvm-profiling-tools/perf-map-agent": {
+   "detail": "ok",
+   "elapsed": 0.25,
+   "ok": true
+  },
+  "jwasham/coding-interview-university": {
+   "detail": "ok",
+   "elapsed": 0.38,
+   "ok": true
+  },
+  "jwtk/jjwt": {
+   "detail": "ok",
+   "elapsed": 0.27,
+   "ok": true
+  },
+  "k3s-io/k3s": {
+   "detail": "ok",
+   "elapsed": 0.58,
+   "ok": true
+  },
+  "kamranahmedse/design-patterns-for-humans": {
+   "detail": "ok",
+   "elapsed": 0.43,
+   "ok": true
+  },
+  "kamranahmedse/developer-roadmap": {
+   "detail": "ok",
+   "elapsed": 0.71,
+   "ok": true
+  },
+  "karanpratapsingh/system-design": {
+   "detail": "ok",
+   "elapsed": 0.3,
+   "ok": true
+  },
+  "karpathy/llm.c": {
+   "detail": "ok",
+   "elapsed": 0.31,
+   "ok": true
+  },
+  "karpathy/minGPT": {
+   "detail": "ok",
+   "elapsed": 0.29,
+   "ok": true
+  },
+  "karpathy/nanoGPT": {
+   "detail": "ok",
+   "elapsed": 0.25,
+   "ok": true
+  },
+  "kedro-org/kedro": {
+   "detail": "ok",
+   "elapsed": 0.26,
+   "ok": true
+  },
+  "keepachangelog/keepachangelog.com": {
+   "detail": "fatal: Authentication failed for 'http://127.0.0.1:41729/git/keepachangelog/keepachangelog.com/'",
+   "elapsed": 0.43,
+   "ok": false
+  },
+  "kelvins/awesome-mlops": {
+   "detail": "ok",
+   "elapsed": 0.44,
+   "ok": true
+  },
+  "keptn/lifecycle-toolkit": {
+   "detail": "ok",
+   "elapsed": 0.35,
+   "ok": true
+  },
+  "keras-team/keras": {
+   "detail": "ok",
+   "elapsed": 0.35,
+   "ok": true
+  },
+  "kestra-io/kestra": {
+   "detail": "ok",
+   "elapsed": 0.36,
+   "ok": true
+  },
+  "keycloak/keycloak": {
+   "detail": "ok",
+   "elapsed": 0.33,
+   "ok": true
+  },
+  "kiegroup/drools": {
+   "detail": "ok",
+   "elapsed": 0.29,
+   "ok": true
+  },
+  "kiegroup/kogito-runtimes": {
+   "detail": "ok",
+   "elapsed": 0.38,
+   "ok": true
+  },
+  "kokkos/kokkos": {
+   "detail": "ok",
+   "elapsed": 0.45,
+   "ok": true
+  },
+  "konveyor/move2kube": {
+   "detail": "ok",
+   "elapsed": 0.28,
+   "ok": true
+  },
+  "konveyor/tackle2-hub": {
+   "detail": "ok",
+   "elapsed": 0.5,
+   "ok": true
+  },
+  "koute/bytehound": {
+   "detail": "ok",
+   "elapsed": 0.47,
+   "ok": true
+  },
+  "kserve/kserve": {
+   "detail": "ok",
+   "elapsed": 0.32,
+   "ok": true
+  },
+  "kubearmor/KubeArmor": {
+   "detail": "ok",
+   "elapsed": 0.76,
+   "ok": true
+  },
+  "kubecost/cost-analyzer-helm-chart": {
+   "detail": "ok",
+   "elapsed": 0.33,
+   "ok": true
+  },
+  "kubeflow/kubeflow": {
+   "detail": "ok",
+   "elapsed": 0.37,
+   "ok": true
+  },
+  "kubernetes-sigs/controller-runtime": {
+   "detail": "ok",
+   "elapsed": 0.45,
+   "ok": true
+  },
+  "kubernetes-sigs/descheduler": {
+   "detail": "ok",
+   "elapsed": 0.3,
+   "ok": true
+  },
+  "kubernetes-sigs/external-dns": {
+   "detail": "ok",
+   "elapsed": 0.35,
+   "ok": true
+  },
+  "kubernetes-sigs/gateway-api": {
+   "detail": "ok",
+   "elapsed": 0.33,
+   "ok": true
+  },
+  "kubernetes-sigs/karpenter": {
+   "detail": "ok",
+   "elapsed": 0.44,
+   "ok": true
+  },
+  "kubernetes-sigs/kind": {
+   "detail": "ok",
+   "elapsed": 0.45,
+   "ok": true
+  },
+  "kubernetes-sigs/kubebuilder": {
+   "detail": "ok",
+   "elapsed": 0.4,
+   "ok": true
+  },
+  "kubernetes-sigs/kustomize": {
+   "detail": "ok",
+   "elapsed": 0.53,
+   "ok": true
+  },
+  "kubernetes/autoscaler": {
+   "detail": "ok",
+   "elapsed": 0.49,
+   "ok": true
+  },
+  "kubernetes/client-go": {
+   "detail": "ok",
+   "elapsed": 0.34,
+   "ok": true
+  },
+  "kubernetes/community": {
+   "detail": "ok",
+   "elapsed": 0.62,
+   "ok": true
+  },
+  "kubernetes/enhancements": {
+   "detail": "ok",
+   "elapsed": 0.47,
+   "ok": true
+  },
+  "kubernetes/ingress-nginx": {
+   "detail": "ok",
+   "elapsed": 0.44,
+   "ok": true
+  },
+  "kubernetes/kubernetes": {
+   "detail": "ok",
+   "elapsed": 0.82,
+   "ok": true
+  },
+  "kuzudb/kuzu": {
+   "detail": "ok",
+   "elapsed": 0.36,
+   "ok": true
+  },
+  "kyverno/kyverno": {
+   "detail": "ok",
+   "elapsed": 0.39,
+   "ok": true
+  },
+  "labstack/echo": {
+   "detail": "ok",
+   "elapsed": 0.31,
+   "ok": true
+  },
+  "lancedb/lance": {
+   "detail": "ok",
+   "elapsed": 0.4,
+   "ok": true
+  },
+  "lancedb/lancedb": {
+   "detail": "ok",
+   "elapsed": 0.31,
+   "ok": true
+  },
+  "langchain-ai/langchain": {
+   "detail": "ok",
+   "elapsed": 0.58,
+   "ok": true
+  },
+  "langchain-ai/langchainjs": {
+   "detail": "ok",
+   "elapsed": 0.36,
+   "ok": true
+  },
+  "langchain-ai/langgraph": {
+   "detail": "ok",
+   "elapsed": 0.56,
+   "ok": true
+  },
+  "langchain-ai/open_deep_research": {
+   "detail": "ok",
+   "elapsed": 0.39,
+   "ok": true
+  },
+  "langchain-ai/rag-from-scratch": {
+   "detail": "ok",
+   "elapsed": 0.25,
+   "ok": true
+  },
+  "langfuse/langfuse": {
+   "detail": "ok",
+   "elapsed": 0.4,
+   "ok": true
+  },
+  "laravel/laravel": {
+   "detail": "ok",
+   "elapsed": 0.77,
+   "ok": true
+  },
+  "lastmile-ai/mcp-agent": {
+   "detail": "ok",
+   "elapsed": 0.26,
+   "ok": true
+  },
+  "leondz/garak": {
+   "detail": "ok",
+   "elapsed": 0.38,
+   "ok": true
+  },
+  "letta-ai/letta": {
+   "detail": "ok",
+   "elapsed": 0.58,
+   "ok": true
+  },
+  "linkedin/datahub": {
+   "detail": "ok",
+   "elapsed": 0.45,
+   "ok": true
+  },
+  "linkerd/linkerd2": {
+   "detail": "ok",
+   "elapsed": 0.32,
+   "ok": true
+  },
+  "liquibase/liquibase": {
+   "detail": "ok",
+   "elapsed": 0.37,
+   "ok": true
+  },
+  "lit/lit": {
+   "detail": "ok",
+   "elapsed": 0.25,
+   "ok": true
+  },
+  "lm-sys/FastChat": {
+   "detail": "ok",
+   "elapsed": 0.59,
+   "ok": true
+  },
+  "localstack/localstack": {
+   "detail": "ok",
+   "elapsed": 0.36,
+   "ok": true
+  },
+  "locustio/locust": {
+   "detail": "ok",
+   "elapsed": 0.28,
+   "ok": true
+  },
+  "mac-cain13/R.swift": {
+   "detail": "ok",
+   "elapsed": 0.36,
+   "ok": true
+  },
+  "magento/magento2": {
+   "detail": "ok",
+   "elapsed": 0.69,
+   "ok": true
+  },
+  "material-components/material-web": {
+   "detail": "ok",
+   "elapsed": 0.44,
+   "ok": true
+  },
+  "material-foundation/material-color-utilities": {
+   "detail": "ok",
+   "elapsed": 0.28,
+   "ok": true
+  },
+  "materializedb/materialize": {
+   "detail": "fatal: Authentication failed for 'http://127.0.0.1:41729/git/materializedb/materialize/'",
+   "elapsed": 0.22,
+   "ok": false
+  },
+  "mdn/content": {
+   "detail": "ok",
+   "elapsed": 0.55,
+   "ok": true
+  },
+  "medusajs/medusa": {
+   "detail": "ok",
+   "elapsed": 0.64,
+   "ok": true
+  },
+  "mehdihadeli/awesome-software-architecture": {
+   "detail": "ok",
+   "elapsed": 0.58,
+   "ok": true
+  },
+  "meilisearch/meilisearch": {
+   "detail": "ok",
+   "elapsed": 0.48,
+   "ok": true
+  },
+  "meltano/meltano": {
+   "detail": "ok",
+   "elapsed": 0.29,
+   "ok": true
+  },
+  "mem0ai/mem0": {
+   "detail": "ok",
+   "elapsed": 0.43,
+   "ok": true
+  },
+  "memgraph/memgraph": {
+   "detail": "ok",
+   "elapsed": 0.39,
+   "ok": true
+  },
+  "mendableai/firecrawl": {
+   "detail": "ok",
+   "elapsed": 0.36,
+   "ok": true
+  },
+  "mermaid-js/mermaid": {
+   "detail": "ok",
+   "elapsed": 0.35,
+   "ok": true
+  },
+  "meta-llama/llama-cookbook": {
+   "detail": "ok",
+   "elapsed": 0.74,
+   "ok": true
+  },
+  "meta-llama/llama-models": {
+   "detail": "ok",
+   "elapsed": 0.24,
+   "ok": true
+  },
+  "metabase/metabase": {
+   "detail": "ok",
+   "elapsed": 0.63,
+   "ok": true
+  },
+  "metasfresh/metasfresh": {
+   "detail": "ok",
+   "elapsed": 0.43,
+   "ok": true
+  },
+  "mhadidg/software-architecture-books": {
+   "detail": "ok",
+   "elapsed": 0.28,
+   "ok": true
+  },
+  "mhamilton723/awesome-mlops": {
+   "detail": "fatal: Authentication failed for 'http://127.0.0.1:41729/git/mhamilton723/awesome-mlops/'",
+   "elapsed": 0.33,
+   "ok": false
+  },
+  "micronaut-projects/micronaut-core": {
+   "detail": "ok",
+   "elapsed": 0.52,
+   "ok": true
+  },
+  "microservices-patterns/ftgo-application": {
+   "detail": "ok",
+   "elapsed": 0.3,
+   "ok": true
+  },
+  "microsoft/BashOnWindows-testing": {
+   "detail": "fatal: Authentication failed for 'http://127.0.0.1:41729/git/microsoft/BashOnWindows-testing/'",
+   "elapsed": 0.22,
+   "ok": false
+  },
+  "microsoft/BotFramework-SDK": {
+   "detail": "ok",
+   "elapsed": 0.33,
+   "ok": true
+  },
+  "microsoft/DeepSpeed": {
+   "detail": "ok",
+   "elapsed": 0.37,
+   "ok": true
+  },
+  "microsoft/Detours": {
+   "detail": "ok",
+   "elapsed": 0.27,
+   "ok": true
+  },
+  "microsoft/DirectX-Graphics-Samples": {
+   "detail": "ok",
+   "elapsed": 0.3,
+   "ok": true
+  },
+  "microsoft/FASTER": {
+   "detail": "ok",
+   "elapsed": 0.33,
+   "ok": true
+  },
+  "microsoft/GSL": {
+   "detail": "ok",
+   "elapsed": 0.65,
+   "ok": true
+  },
+  "microsoft/JARVIS": {
+   "detail": "ok",
+   "elapsed": 0.25,
+   "ok": true
+  },
+  "microsoft/Microsoft-365-Defender-Hunting-Queries": {
+   "detail": "ok",
+   "elapsed": 0.48,
+   "ok": true
+  },
+  "microsoft/OmniParser": {
+   "detail": "ok",
+   "elapsed": 0.29,
+   "ok": true
+  },
+  "microsoft/OpenAPI.NET": {
+   "detail": "ok",
+   "elapsed": 0.81,
+   "ok": true
+  },
+  "microsoft/PowerApps-Samples": {
+   "detail": "ok",
+   "elapsed": 0.27,
+   "ok": true
+  },
+  "microsoft/PowerPlatform-DevOps": {
+   "detail": "fatal: Authentication failed for 'http://127.0.0.1:41729/git/microsoft/PowerPlatform-DevOps/'",
+   "elapsed": 0.26,
+   "ok": false
+  },
+  "microsoft/PowerToys": {
+   "detail": "ok",
+   "elapsed": 0.44,
+   "ok": true
+  },
+  "microsoft/RulesEngine": {
+   "detail": "ok",
+   "elapsed": 0.27,
+   "ok": true
+  },
+  "microsoft/SymCrypt": {
+   "detail": "ok",
+   "elapsed": 0.31,
+   "ok": true
+  },
+  "microsoft/TaskWeaver": {
+   "detail": "ok",
+   "elapsed": 0.58,
+   "ok": true
+  },
+  "microsoft/TypeScript": {
+   "detail": "ok",
+   "elapsed": 0.39,
+   "ok": true
+  },
+  "microsoft/UFO": {
+   "detail": "ok",
+   "elapsed": 0.45,
+   "ok": true
+  },
+  "microsoft/Windows-driver-samples": {
+   "detail": "ok",
+   "elapsed": 0.34,
+   "ok": true
+  },
+  "microsoft/WindowsAppSDK": {
+   "detail": "ok",
+   "elapsed": 0.6,
+   "ok": true
+  },
+  "microsoft/api-guidelines": {
+   "detail": "ok",
+   "elapsed": 0.28,
+   "ok": true
+  },
+  "microsoft/autogen": {
+   "detail": "ok",
+   "elapsed": 0.65,
+   "ok": true
+  },
+  "microsoft/azure-devops-python-api": {
+   "detail": "ok",
+   "elapsed": 0.47,
+   "ok": true
+  },
+  "microsoft/azure-pipelines-agent": {
+   "detail": "ok",
+   "elapsed": 0.43,
+   "ok": true
+  },
+  "microsoft/azure-pipelines-tasks": {
+   "detail": "ok",
+   "elapsed": 0.56,
+   "ok": true
+  },
+  "microsoft/botbuilder-python": {
+   "detail": "ok",
+   "elapsed": 0.29,
+   "ok": true
+  },
+  "microsoft/coe-starter-kit": {
+   "detail": "ok",
+   "elapsed": 0.4,
+   "ok": true
+  },
+  "microsoft/dotnet-podcasts": {
+   "detail": "ok",
+   "elapsed": 0.45,
+   "ok": true
+  },
+  "microsoft/fast": {
+   "detail": "ok",
+   "elapsed": 0.46,
+   "ok": true
+  },
+  "microsoft/fluentui": {
+   "detail": "ok",
+   "elapsed": 0.88,
+   "ok": true
+  },
+  "microsoft/fluentui-system-icons": {
+   "detail": "ok",
+   "elapsed": 0.28,
+   "ok": true
+  },
+  "microsoft/garnet": {
+   "detail": "ok",
+   "elapsed": 0.42,
+   "ok": true
+  },
+  "microsoft/graphrag": {
+   "detail": "ok",
+   "elapsed": 0.37,
+   "ok": true
+  },
+  "microsoft/kiota": {
+   "detail": "ok",
+   "elapsed": 0.45,
+   "ok": true
+  },
+  "microsoft/markitdown": {
+   "detail": "ok",
+   "elapsed": 0.37,
+   "ok": true
+  },
+  "microsoft/microsoft-graph-docs-contrib": {
+   "detail": "fatal: Authentication failed for 'http://127.0.0.1:41729/git/microsoft/microsoft-graph-docs-contrib/'",
+   "elapsed": 0.23,
+   "ok": false
+  },
+  "microsoft/microsoft-ui-xaml": {
+   "detail": "ok",
+   "elapsed": 0.42,
+   "ok": true
+  },
+  "microsoft/mimalloc": {
+   "detail": "ok",
+   "elapsed": 0.26,
+   "ok": true
+  },
+  "microsoft/monaco-editor": {
+   "detail": "ok",
+   "elapsed": 0.35,
+   "ok": true
+  },
+  "microsoft/mssql-docker": {
+   "detail": "ok",
+   "elapsed": 0.23,
+   "ok": true
+  },
+  "microsoft/mssql-jdbc": {
+   "detail": "ok",
+   "elapsed": 0.45,
+   "ok": true
+  },
+  "microsoft/napajs": {
+   "detail": "ok",
+   "elapsed": 0.3,
+   "ok": true
+  },
+  "microsoft/onnxruntime": {
+   "detail": "ok",
+   "elapsed": 0.43,
+   "ok": true
+  },
+  "microsoft/perfview": {
+   "detail": "ok",
+   "elapsed": 0.53,
+   "ok": true
+  },
+  "microsoft/playwright": {
+   "detail": "ok",
+   "elapsed": 0.61,
+   "ok": true
+  },
+  "microsoft/playwright-python": {
+   "detail": "ok",
+   "elapsed": 0.71,
+   "ok": true
+  },
+  "microsoft/promptbench": {
+   "detail": "ok",
+   "elapsed": 0.57,
+   "ok": true
+  },
+  "microsoft/promptflow": {
+   "detail": "ok",
+   "elapsed": 0.51,
+   "ok": true
+  },
+  "microsoft/react-native-windows": {
+   "detail": "ok",
+   "elapsed": 0.42,
+   "ok": true
+  },
+  "microsoft/reverse-proxy": {
+   "detail": "ok",
+   "elapsed": 0.37,
+   "ok": true
+  },
+  "microsoft/rushstack": {
+   "detail": "ok",
+   "elapsed": 0.47,
+   "ok": true
+  },
+  "microsoft/security-devops-action": {
+   "detail": "ok",
+   "elapsed": 0.26,
+   "ok": true
+  },
+  "microsoft/semantic-kernel": {
+   "detail": "ok",
+   "elapsed": 0.83,
+   "ok": true
+  },
+  "microsoft/service-fabric": {
+   "detail": "ok",
+   "elapsed": 0.5,
+   "ok": true
+  },
+  "microsoft/sql-server-samples": {
+   "detail": "ok",
+   "elapsed": 0.29,
+   "ok": true
+  },
+  "microsoft/terminal": {
+   "detail": "ok",
+   "elapsed": 0.31,
+   "ok": true
+  },
+  "microsoft/vcpkg": {
+   "detail": "ok",
+   "elapsed": 0.52,
+   "ok": true
+  },
+  "microsoft/vscode": {
+   "detail": "ok",
+   "elapsed": 0.54,
+   "ok": true
+  },
+  "microsoft/vscode-extension-samples": {
+   "detail": "ok",
+   "elapsed": 0.45,
+   "ok": true
+  },
+  "microsoft/vscode-js-profile-visualizer": {
+   "detail": "ok",
+   "elapsed": 0.47,
+   "ok": true
+  },
+  "microsoft/winget-cli": {
+   "detail": "ok",
+   "elapsed": 0.62,
+   "ok": true
+  },
+  "microsoft/wsl": {
+   "detail": "ok",
+   "elapsed": 0.32,
+   "ok": true
+  },
+  "microsoftgraph/microsoft-graph-docs-contrib": {
+   "detail": "ok",
+   "elapsed": 0.41,
+   "ok": true
+  },
+  "microsoftgraph/msgraph-sdk-dotnet": {
+   "detail": "ok",
+   "elapsed": 0.25,
+   "ok": true
+  },
+  "microsoftgraph/msgraph-sdk-python": {
+   "detail": "ok",
+   "elapsed": 0.28,
+   "ok": true
+  },
+  "milvus-io/milvus": {
+   "detail": "ok",
+   "elapsed": 0.43,
+   "ok": true
+  },
+  "mindee/doctr": {
+   "detail": "ok",
+   "elapsed": 0.28,
+   "ok": true
+  },
+  "mingrammer/diagrams": {
+   "detail": "ok",
+   "elapsed": 0.33,
+   "ok": true
+  },
+  "minio/minio": {
+   "detail": "ok",
+   "elapsed": 0.7,
+   "ok": true
+  },
+  "ministryoftesting/awesome-testing": {
+   "detail": "fatal: Authentication failed for 'http://127.0.0.1:41729/git/ministryoftesting/awesome-testing/'",
+   "elapsed": 0.28,
+   "ok": false
+  },
+  "mistralai/mistral-inference": {
+   "detail": "ok",
+   "elapsed": 0.36,
+   "ok": true
+  },
+  "mitre-attack/attack-navigator": {
+   "detail": "ok",
+   "elapsed": 0.35,
+   "ok": true
+  },
+  "mitre/caldera": {
+   "detail": "ok",
+   "elapsed": 0.29,
+   "ok": true
+  },
+  "mitre/cti": {
+   "detail": "ok",
+   "elapsed": 0.24,
+   "ok": true
+  },
+  "ml-explore/mlx": {
+   "detail": "ok",
+   "elapsed": 0.41,
+   "ok": true
+  },
+  "ml-explore/mlx-examples": {
+   "detail": "ok",
+   "elapsed": 0.35,
+   "ok": true
+  },
+  "ml-explore/mlx-swift": {
+   "detail": "ok",
+   "elapsed": 0.3,
+   "ok": true
+  },
+  "mlc-ai/mlc-llm": {
+   "detail": "ok",
+   "elapsed": 0.26,
+   "ok": true
+  },
+  "mlcommons/croissant": {
+   "detail": "ok",
+   "elapsed": 0.25,
+   "ok": true
+  },
+  "mlflow/mlflow": {
+   "detail": "ok",
+   "elapsed": 0.62,
+   "ok": true
+  },
+  "moby/moby": {
+   "detail": "ok",
+   "elapsed": 0.43,
+   "ok": true
+  },
+  "mochajs/mocha": {
+   "detail": "ok",
+   "elapsed": 0.44,
+   "ok": true
+  },
+  "mockito/mockito": {
+   "detail": "ok",
+   "elapsed": 0.27,
+   "ok": true
+  },
+  "modelcontextprotocol/inspector": {
+   "detail": "ok",
+   "elapsed": 0.51,
+   "ok": true
+  },
+  "modelcontextprotocol/modelcontextprotocol": {
+   "detail": "ok",
+   "elapsed": 0.87,
+   "ok": true
+  },
+  "modelcontextprotocol/python-sdk": {
+   "detail": "ok",
+   "elapsed": 0.29,
+   "ok": true
+  },
+  "modelcontextprotocol/servers": {
+   "detail": "ok",
+   "elapsed": 0.58,
+   "ok": true
+  },
+  "modelcontextprotocol/typescript-sdk": {
+   "detail": "ok",
+   "elapsed": 0.38,
+   "ok": true
+  },
+  "modelscope/agentscope": {
+   "detail": "ok",
+   "elapsed": 0.35,
+   "ok": true
+  },
+  "modin-project/modin": {
+   "detail": "ok",
+   "elapsed": 0.4,
+   "ok": true
+  },
+  "mongodb/mongo": {
+   "detail": "ok",
+   "elapsed": 0.64,
+   "ok": true
+  },
+  "mpi4py/mpi4py": {
+   "detail": "ok",
+   "elapsed": 0.28,
+   "ok": true
+  },
+  "mspnp/architecture-center": {
+   "detail": "ok",
+   "elapsed": 0.4,
+   "ok": true
+  },
+  "mui/material-ui": {
+   "detail": "ok",
+   "elapsed": 0.55,
+   "ok": true
+  },
+  "mulesoft/mule": {
+   "detail": "ok",
+   "elapsed": 0.42,
+   "ok": true
+  },
+  "mysql/mysql-server": {
+   "detail": "ok",
+   "elapsed": 0.34,
+   "ok": true
+  },
+  "n8n-io/n8n": {
+   "detail": "ok",
+   "elapsed": 0.35,
+   "ok": true
+  },
+  "nats-io/nats-server": {
+   "detail": "ok",
+   "elapsed": 0.59,
+   "ok": true
+  },
+  "nccgroup/ScoutSuite": {
+   "detail": "ok",
+   "elapsed": 0.41,
+   "ok": true
+  },
+  "nedbat/coveragepy": {
+   "detail": "ok",
+   "elapsed": 0.39,
+   "ok": true
+  },
+  "neo4j/neo4j": {
+   "detail": "ok",
+   "elapsed": 0.53,
+   "ok": true
+  },
+  "nestjs/nest": {
+   "detail": "ok",
+   "elapsed": 0.37,
+   "ok": true
+  },
+  "netdata/netdata": {
+   "detail": "ok",
+   "elapsed": 0.4,
+   "ok": true
+  },
+  "netty/netty": {
+   "detail": "ok",
+   "elapsed": 0.28,
+   "ok": true
+  },
+  "neuml/txtai": {
+   "detail": "ok",
+   "elapsed": 0.23,
+   "ok": true
+  },
+  "nicklockwood/SwiftFormat": {
+   "detail": "ok",
+   "elapsed": 0.29,
+   "ok": true
+  },
+  "nmslib/hnswlib": {
+   "detail": "ok",
+   "elapsed": 0.24,
+   "ok": true
+  },
+  "nocodb/nocodb": {
+   "detail": "ok",
+   "elapsed": 0.27,
+   "ok": true
+  },
+  "node-red/node-red": {
+   "detail": "ok",
+   "elapsed": 0.34,
+   "ok": true
+  },
+  "npryce/adr-tools": {
+   "detail": "ok",
+   "elapsed": 0.51,
+   "ok": true
+  },
+  "numba/numba": {
+   "detail": "ok",
+   "elapsed": 0.41,
+   "ok": true
+  },
+  "nunit/nunit": {
+   "detail": "ok",
+   "elapsed": 0.49,
+   "ok": true
+  },
+  "nuxt/nuxt": {
+   "detail": "ok",
+   "elapsed": 0.36,
+   "ok": true
+  },
+  "oasis-tcs/odata-specs": {
+   "detail": "ok",
+   "elapsed": 0.3,
+   "ok": true
+  },
+  "odoo/odoo": {
+   "detail": "ok",
+   "elapsed": 0.93,
+   "ok": true
+  },
+  "olivierlacan/keep-a-changelog": {
+   "detail": "ok",
+   "elapsed": 0.5,
+   "ok": true
+  },
+  "ollama/ollama": {
+   "detail": "ok",
+   "elapsed": 0.53,
+   "ok": true
+  },
+  "oneapi-src/oneAPI-samples": {
+   "detail": "ok",
+   "elapsed": 0.26,
+   "ok": true
+  },
+  "onevcat/Kingfisher": {
+   "detail": "ok",
+   "elapsed": 0.29,
+   "ok": true
+  },
+  "onnx/onnx": {
+   "detail": "ok",
+   "elapsed": 0.59,
+   "ok": true
+  },
+  "open-metadata/OpenMetadata": {
+   "detail": "ok",
+   "elapsed": 0.45,
+   "ok": true
+  },
+  "open-mpi/ompi": {
+   "detail": "ok",
+   "elapsed": 0.46,
+   "ok": true
+  },
+  "open-policy-agent/gatekeeper": {
+   "detail": "ok",
+   "elapsed": 0.35,
+   "ok": true
+  },
+  "open-policy-agent/opa": {
+   "detail": "ok",
+   "elapsed": 0.3,
+   "ok": true
+  },
+  "open-rpa/openrpa": {
+   "detail": "ok",
+   "elapsed": 0.25,
+   "ok": true
+  },
+  "open-telemetry/opentelemetry-collector": {
+   "detail": "ok",
+   "elapsed": 0.62,
+   "ok": true
+  },
+  "open-telemetry/opentelemetry-demo": {
+   "detail": "ok",
+   "elapsed": 0.34,
+   "ok": true
+  },
+  "open-telemetry/opentelemetry-specification": {
+   "detail": "ok",
+   "elapsed": 0.33,
+   "ok": true
+  },
+  "openai/evals": {
+   "detail": "ok",
+   "elapsed": 0.27,
+   "ok": true
+  },
+  "openai/openai-agents-python": {
+   "detail": "ok",
+   "elapsed": 0.63,
+   "ok": true
+  },
+  "openai/swarm": {
+   "detail": "ok",
+   "elapsed": 0.43,
+   "ok": true
+  },
+  "openai/tiktoken": {
+   "detail": "ok",
+   "elapsed": 0.27,
+   "ok": true
+  },
+  "openai/triton": {
+   "detail": "ok",
+   "elapsed": 0.31,
+   "ok": true
+  },
+  "openai/whisper": {
+   "detail": "ok",
+   "elapsed": 0.53,
+   "ok": true
+  },
+  "opencontainers/image-spec": {
+   "detail": "ok",
+   "elapsed": 0.35,
+   "ok": true
+  },
+  "opencontainers/runc": {
+   "detail": "ok",
+   "elapsed": 0.45,
+   "ok": true
+  },
+  "opencost/opencost": {
+   "detail": "ok",
+   "elapsed": 0.27,
+   "ok": true
+  },
+  "opendatalab/MinerU": {
+   "detail": "ok",
+   "elapsed": 0.34,
+   "ok": true
+  },
+  "opengroup/togaf": {
+   "detail": "fatal: Authentication failed for 'http://127.0.0.1:41729/git/opengroup/togaf/'",
+   "elapsed": 0.23,
+   "ok": false
+  },
+  "openid/AppAuth-Android": {
+   "detail": "ok",
+   "elapsed": 0.3,
+   "ok": true
+  },
+  "openid/AppAuth-iOS": {
+   "detail": "ok",
+   "elapsed": 0.41,
+   "ok": true
+  },
+  "openjdk/jdk": {
+   "detail": "ok",
+   "elapsed": 0.44,
+   "ok": true
+  },
+  "openjdk/jmh": {
+   "detail": "ok",
+   "elapsed": 0.3,
+   "ok": true
+  },
+  "openliberty/open-liberty": {
+   "detail": "ok",
+   "elapsed": 0.47,
+   "ok": true
+  },
+  "openmainframeproject/cobol-programming-course": {
+   "detail": "ok",
+   "elapsed": 0.4,
+   "ok": true
+  },
+  "openmainframeproject/software-discovery-tool": {
+   "detail": "ok",
+   "elapsed": 0.32,
+   "ok": true
+  },
+  "openobserve/openobserve": {
+   "detail": "ok",
+   "elapsed": 0.62,
+   "ok": true
+  },
+  "opensearch-project/OpenSearch": {
+   "detail": "ok",
+   "elapsed": 0.4,
+   "ok": true
+  },
+  "openshift/installer": {
+   "detail": "ok",
+   "elapsed": 0.64,
+   "ok": true
+  },
+  "openshift/origin": {
+   "detail": "ok",
+   "elapsed": 0.61,
+   "ok": true
+  },
+  "opensource-cobol/opensource-COBOL": {
+   "detail": "fatal: Authentication failed for 'http://127.0.0.1:41729/git/opensource-cobol/opensource-COBOL/'",
+   "elapsed": 0.22,
+   "ok": false
+  },
+  "opensource/opensource.guide": {
+   "detail": "fatal: Authentication failed for 'http://127.0.0.1:41729/git/opensource/opensource.guide/'",
+   "elapsed": 0.23,
+   "ok": false
+  },
+  "opensourcecobol/opensourcecobol": {
+   "detail": "fatal: Authentication failed for 'http://127.0.0.1:41729/git/opensourcecobol/opensourcecobol/'",
+   "elapsed": 0.41,
+   "ok": false
+  },
+  "openssl/openssl": {
+   "detail": "ok",
+   "elapsed": 0.49,
+   "ok": true
+  },
+  "opentofu/opentofu": {
+   "detail": "ok",
+   "elapsed": 0.28,
+   "ok": true
+  },
+  "openvinotoolkit/openvino": {
+   "detail": "ok",
+   "elapsed": 0.4,
+   "ok": true
+  },
+  "operator-framework/operator-sdk": {
+   "detail": "ok",
+   "elapsed": 0.28,
+   "ok": true
+  },
+  "optuna/optuna": {
+   "detail": "ok",
+   "elapsed": 0.3,
+   "ok": true
+  },
+  "oracle/coherence": {
+   "detail": "ok",
+   "elapsed": 0.32,
+   "ok": true
+  },
+  "oracle/docker-images": {
+   "detail": "ok",
+   "elapsed": 0.29,
+   "ok": true
+  },
+  "oracle/graal": {
+   "detail": "ok",
+   "elapsed": 0.43,
+   "ok": true
+  },
+  "oracle/graaljs": {
+   "detail": "ok",
+   "elapsed": 0.26,
+   "ok": true
+  },
+  "oracle/graalpython": {
+   "detail": "ok",
+   "elapsed": 0.26,
+   "ok": true
+  },
+  "oracle/graalvm-demos": {
+   "detail": "fatal: Authentication failed for 'http://127.0.0.1:41729/git/oracle/graalvm-demos/'",
+   "elapsed": 0.32,
+   "ok": false
+  },
+  "oracle/helidon": {
+   "detail": "ok",
+   "elapsed": 0.46,
+   "ok": true
+  },
+  "oracle/node-oracledb": {
+   "detail": "ok",
+   "elapsed": 0.25,
+   "ok": true
+  },
+  "oracle/oci-cli": {
+   "detail": "ok",
+   "elapsed": 0.31,
+   "ok": true
+  },
+  "oracle/oci-python-sdk": {
+   "detail": "ok",
+   "elapsed": 0.27,
+   "ok": true
+  },
+  "oracle/opengrok": {
+   "detail": "ok",
+   "elapsed": 0.32,
+   "ok": true
+  },
+  "oracle/oracle-database-operator": {
+   "detail": "ok",
+   "elapsed": 0.26,
+   "ok": true
+  },
+  "oracle/oracle-db-examples": {
+   "detail": "ok",
+   "elapsed": 0.32,
+   "ok": true
+  },
+  "oracle/oracle-r2dbc": {
+   "detail": "ok",
+   "elapsed": 0.25,
+   "ok": true
+  },
+  "oracle/python-oracledb": {
+   "detail": "ok",
+   "elapsed": 0.28,
+   "ok": true
+  },
+  "oracle/terraform-provider-oci": {
+   "detail": "ok",
+   "elapsed": 0.29,
+   "ok": true
+  },
+  "oracle/visualvm": {
+   "detail": "ok",
+   "elapsed": 0.33,
+   "ok": true
+  },
+  "oracle/weblogic-kubernetes-operator": {
+   "detail": "ok",
+   "elapsed": 0.38,
+   "ok": true
+  },
+  "ory/hydra": {
+   "detail": "ok",
+   "elapsed": 0.41,
+   "ok": true
+  },
+  "ory/keto": {
+   "detail": "ok",
+   "elapsed": 1.29,
+   "ok": true
+  },
+  "ory/kratos": {
+   "detail": "ok",
+   "elapsed": 0.25,
+   "ok": true
+  },
+  "oskardudycz/EventSourcing.NetCore": {
+   "detail": "ok",
+   "elapsed": 0.29,
+   "ok": true
+  },
+  "ossf/allstar": {
+   "detail": "ok",
+   "elapsed": 0.29,
+   "ok": true
+  },
+  "ossf/scorecard": {
+   "detail": "ok",
+   "elapsed": 0.4,
+   "ok": true
+  },
+  "pa11y/pa11y": {
+   "detail": "ok",
+   "elapsed": 0.27,
+   "ok": true
+  },
+  "pact-foundation/pact-specification": {
+   "detail": "ok",
+   "elapsed": 0.27,
+   "ok": true
+  },
+  "pactflow/example-consumer": {
+   "detail": "ok",
+   "elapsed": 0.24,
+   "ok": true
+  },
+  "pallets/flask": {
+   "detail": "ok",
+   "elapsed": 0.28,
+   "ok": true
+  },
+  "pandas-dev/pandas": {
+   "detail": "ok",
+   "elapsed": 0.67,
+   "ok": true
+  },
+  "panva/node-oidc-provider": {
+   "detail": "ok",
+   "elapsed": 0.29,
+   "ok": true
+  },
+  "payloadcms/payload": {
+   "detail": "ok",
+   "elapsed": 0.6,
+   "ok": true
+  },
+  "paypal/api-standards": {
+   "detail": "fatal: Authentication failed for 'http://127.0.0.1:41729/git/paypal/api-standards/'",
+   "elapsed": 0.36,
+   "ok": false
+  },
+  "pegasystems/pega-helm-charts": {
+   "detail": "ok",
+   "elapsed": 0.27,
+   "ok": true
+  },
+  "pegasystems/pega-kubernetes-toolkit": {
+   "detail": "fatal: Authentication failed for 'http://127.0.0.1:41729/git/pegasystems/pega-kubernetes-toolkit/'",
+   "elapsed": 0.24,
+   "ok": false
+  },
+  "pgvector/pgvector": {
+   "detail": "ok",
+   "elapsed": 0.23,
+   "ok": true
+  },
+  "phidatahq/phidata": {
+   "detail": "ok",
+   "elapsed": 0.64,
+   "ok": true
+  },
+  "phoenixframework/phoenix": {
+   "detail": "ok",
+   "elapsed": 0.45,
+   "ok": true
+  },
+  "pingcap/tidb": {
+   "detail": "ok",
+   "elapsed": 0.59,
+   "ok": true
+  },
+  "plantuml/plantuml": {
+   "detail": "ok",
+   "elapsed": 0.48,
+   "ok": true
+  },
+  "plasma-umass/scalene": {
+   "detail": "ok",
+   "elapsed": 0.28,
+   "ok": true
+  },
+  "pmd/pmd": {
+   "detail": "ok",
+   "elapsed": 0.57,
+   "ok": true
+  },
+  "pmndrs/zustand": {
+   "detail": "ok",
+   "elapsed": 0.53,
+   "ok": true
+  },
+  "pnp/powershell": {
+   "detail": "ok",
+   "elapsed": 0.37,
+   "ok": true
+  },
+  "pointfreeco/swift-composable-architecture": {
+   "detail": "ok",
+   "elapsed": 0.34,
+   "ok": true
+  },
+  "pointfreeco/swift-dependencies": {
+   "detail": "ok",
+   "elapsed": 0.32,
+   "ok": true
+  },
+  "pointfreeco/swift-snapshot-testing": {
+   "detail": "ok",
+   "elapsed": 0.33,
+   "ok": true
+  },
+  "pola-rs/polars": {
+   "detail": "ok",
+   "elapsed": 0.3,
+   "ok": true
+  },
+  "postgres/postgres": {
+   "detail": "ok",
+   "elapsed": 0.26,
+   "ok": true
+  },
+  "practical-tutorials/project-based-learning": {
+   "detail": "ok",
+   "elapsed": 0.37,
+   "ok": true
+  },
+  "pre-commit/pre-commit": {
+   "detail": "ok",
+   "elapsed": 0.54,
+   "ok": true
+  },
+  "preactjs/preact": {
+   "detail": "ok",
+   "elapsed": 0.31,
+   "ok": true
+  },
+  "prestodb/presto": {
+   "detail": "ok",
+   "elapsed": 0.4,
+   "ok": true
+  },
+  "prettier/prettier": {
+   "detail": "ok",
+   "elapsed": 0.4,
+   "ok": true
+  },
+  "primer/react": {
+   "detail": "ok",
+   "elapsed": 0.36,
+   "ok": true
+  },
+  "princeton-nlp/SWE-agent": {
+   "detail": "ok",
+   "elapsed": 0.49,
+   "ok": true
+  },
+  "prisma/prisma": {
+   "detail": "ok",
+   "elapsed": 0.42,
+   "ok": true
+  },
+  "projectcalico/calico": {
+   "detail": "ok",
+   "elapsed": 0.41,
+   "ok": true
+  },
+  "projectdiscovery/httpx": {
+   "detail": "ok",
+   "elapsed": 0.37,
+   "ok": true
+  },
+  "projectdiscovery/nuclei": {
+   "detail": "ok",
+   "elapsed": 0.31,
+   "ok": true
+  },
+  "projectdiscovery/nuclei-templates": {
+   "detail": "ok",
+   "elapsed": 0.37,
+   "ok": true
+  },
+  "projectdiscovery/subfinder": {
+   "detail": "ok",
+   "elapsed": 0.31,
+   "ok": true
+  },
+  "prometheus-operator/kube-prometheus": {
+   "detail": "ok",
+   "elapsed": 0.31,
+   "ok": true
+  },
+  "prometheus/alertmanager": {
+   "detail": "ok",
+   "elapsed": 0.38,
+   "ok": true
+  },
+  "prometheus/prometheus": {
+   "detail": "ok",
+   "elapsed": 0.53,
+   "ok": true
+  },
+  "proptest-rs/proptest": {
+   "detail": "ok",
+   "elapsed": 0.24,
+   "ok": true
+  },
+  "protectai/llm-guard": {
+   "detail": "ok",
+   "elapsed": 0.26,
+   "ok": true
+  },
+  "protectai/modelscan": {
+   "detail": "ok",
+   "elapsed": 0.27,
+   "ok": true
+  },
+  "protectai/rebuff": {
+   "detail": "ok",
+   "elapsed": 0.23,
+   "ok": true
+  },
+  "protocolbuffers/protobuf": {
+   "detail": "ok",
+   "elapsed": 0.32,
+   "ok": true
+  },
+  "prowler-cloud/prowler": {
+   "detail": "ok",
+   "elapsed": 0.38,
+   "ok": true
+  },
+  "psf/requests": {
+   "detail": "ok",
+   "elapsed": 0.47,
+   "ok": true
+  },
+  "pulumi/pulumi": {
+   "detail": "ok",
+   "elapsed": 0.46,
+   "ok": true
+  },
+  "punkpeye/awesome-mcp-servers": {
+   "detail": "ok",
+   "elapsed": 0.49,
+   "ok": true
+  },
+  "py-pdf/pypdf": {
+   "detail": "ok",
+   "elapsed": 0.26,
+   "ok": true
+  },
+  "pyca/cryptography": {
+   "detail": "ok",
+   "elapsed": 0.38,
+   "ok": true
+  },
+  "pydantic/pydantic-ai": {
+   "detail": "ok",
+   "elapsed": 0.63,
+   "ok": true
+  },
+  "pymupdf/PyMuPDF": {
+   "detail": "ok",
+   "elapsed": 0.23,
+   "ok": true
+  },
+  "pytest-dev/pytest": {
+   "detail": "ok",
+   "elapsed": 0.34,
+   "ok": true
+  },
+  "pytest-dev/pytest-cov": {
+   "detail": "ok",
+   "elapsed": 0.25,
+   "ok": true
+  },
+  "pytest-dev/pytest-xdist": {
+   "detail": "ok",
+   "elapsed": 0.28,
+   "ok": true
+  },
+  "pythonprofilers/memory_profiler": {
+   "detail": "ok",
+   "elapsed": 0.27,
+   "ok": true
+  },
+  "pytorch/ao": {
+   "detail": "ok",
+   "elapsed": 0.45,
+   "ok": true
+  },
+  "pytorch/executorch": {
+   "detail": "ok",
+   "elapsed": 0.32,
+   "ok": true
+  },
+  "pytorch/pytorch": {
+   "detail": "ok",
+   "elapsed": 15.48,
+   "ok": true
+  },
+  "pytorch/serve": {
+   "detail": "ok",
+   "elapsed": 0.25,
+   "ok": true
+  },
+  "pytorch/torchtune": {
+   "detail": "ok",
+   "elapsed": 0.24,
+   "ok": true
+  },
+  "pywinauto/pywinauto": {
+   "detail": "ok",
+   "elapsed": 0.25,
+   "ok": true
+  },
+  "qdrant/fastembed": {
+   "detail": "ok",
+   "elapsed": 0.24,
+   "ok": true
+  },
+  "qdrant/qdrant": {
+   "detail": "ok",
+   "elapsed": 0.42,
+   "ok": true
+  },
+  "quantumblacklabs/kedro-viz": {
+   "detail": "ok",
+   "elapsed": 0.26,
+   "ok": true
+  },
+  "quarkusio/quarkus": {
+   "detail": "ok",
+   "elapsed": 0.41,
+   "ok": true
+  },
+  "questdb/questdb": {
+   "detail": "ok",
+   "elapsed": 0.27,
+   "ok": true
+  },
+  "rabbitmq/rabbitmq-server": {
+   "detail": "ok",
+   "elapsed": 0.55,
+   "ok": true
+  },
+  "radix-ui/primitives": {
+   "detail": "ok",
+   "elapsed": 0.27,
+   "ok": true
+  },
+  "rails/rails": {
+   "detail": "ok",
+   "elapsed": 0.55,
+   "ok": true
+  },
+  "rakyll/hey": {
+   "detail": "ok",
+   "elapsed": 0.26,
+   "ok": true
+  },
+  "ramitsurana/awesome-kubernetes": {
+   "detail": "ok",
+   "elapsed": 0.32,
+   "ok": true
+  },
+  "rapid7/metasploit-framework": {
+   "detail": "ok",
+   "elapsed": 0.75,
+   "ok": true
+  },
+  "rapidsai/cudf": {
+   "detail": "ok",
+   "elapsed": 0.36,
+   "ok": true
+  },
+  "rapidsai/cugraph": {
+   "detail": "ok",
+   "elapsed": 0.33,
+   "ok": true
+  },
+  "rapidsai/cuml": {
+   "detail": "ok",
+   "elapsed": 0.37,
+   "ok": true
+  },
+  "rapidsai/cuspatial": {
+   "detail": "ok",
+   "elapsed": 0.24,
+   "ok": true
+  },
+  "rapidsai/cuvs": {
+   "detail": "ok",
+   "elapsed": 0.25,
+   "ok": true
+  },
+  "rapidsai/raft": {
+   "detail": "ok",
+   "elapsed": 0.34,
+   "ok": true
+  },
+  "ray-project/kuberay": {
+   "detail": "ok",
+   "elapsed": 0.41,
+   "ok": true
+  },
+  "ray-project/ray": {
+   "detail": "ok",
+   "elapsed": 0.7,
+   "ok": true
+  },
+  "react-navigation/react-navigation": {
+   "detail": "ok",
+   "elapsed": 0.59,
+   "ok": true
+  },
+  "reactor/reactor-core": {
+   "detail": "ok",
+   "elapsed": 0.31,
+   "ok": true
+  },
+  "readthedocs/readthedocs.org": {
+   "detail": "ok",
+   "elapsed": 0.38,
+   "ok": true
+  },
+  "realm/SwiftLint": {
+   "detail": "ok",
+   "elapsed": 0.33,
+   "ok": true
+  },
+  "realm/realm-swift": {
+   "detail": "ok",
+   "elapsed": 0.32,
+   "ok": true
+  },
+  "redcanaryco/atomic-red-team": {
+   "detail": "ok",
+   "elapsed": 0.28,
+   "ok": true
+  },
+  "redhat-developer/vscode-java": {
+   "detail": "ok",
+   "elapsed": 0.28,
+   "ok": true
+  },
+  "redis/redis": {
+   "detail": "ok",
+   "elapsed": 0.38,
+   "ok": true
+  },
+  "redpanda-data/redpanda": {
+   "detail": "ok",
+   "elapsed": 0.31,
+   "ok": true
+  },
+  "reduxjs/redux-toolkit": {
+   "detail": "ok",
+   "elapsed": 0.35,
+   "ok": true
+  },
+  "remix-run/react-router": {
+   "detail": "ok",
+   "elapsed": 0.37,
+   "ok": true
+  },
+  "resilience4j/resilience4j": {
+   "detail": "ok",
+   "elapsed": 0.33,
+   "ok": true
+  },
+  "rest-assured/rest-assured": {
+   "detail": "ok",
+   "elapsed": 0.39,
+   "ok": true
+  },
+  "returntocorp/semgrep": {
+   "detail": "ok",
+   "elapsed": 0.35,
+   "ok": true
+  },
+  "reworkd/AgentGPT": {
+   "detail": "ok",
+   "elapsed": 0.45,
+   "ok": true
+  },
+  "rhasspy/piper": {
+   "detail": "ok",
+   "elapsed": 0.4,
+   "ok": true
+  },
+  "risingwavelabs/risingwave": {
+   "detail": "ok",
+   "elapsed": 0.64,
+   "ok": true
+  },
+  "robocorp/rcc": {
+   "detail": "ok",
+   "elapsed": 0.24,
+   "ok": true
+  },
+  "robocorp/rpaframework": {
+   "detail": "ok",
+   "elapsed": 0.29,
+   "ok": true
+  },
+  "robotframework/robotframework": {
+   "detail": "ok",
+   "elapsed": 0.4,
+   "ok": true
+  },
+  "robusta-dev/krr": {
+   "detail": "ok",
+   "elapsed": 0.26,
+   "ok": true
+  },
+  "rollup/rollup": {
+   "detail": "ok",
+   "elapsed": 0.34,
+   "ok": true
+  },
+  "run-llama/llama_index": {
+   "detail": "ok",
+   "elapsed": 0.47,
+   "ok": true
+  },
+  "rust-lang/api-guidelines": {
+   "detail": "ok",
+   "elapsed": 0.34,
+   "ok": true
+  },
+  "rust-unofficial/awesome-rust": {
+   "detail": "ok",
+   "elapsed": 0.26,
+   "ok": true
+  },
+  "saleor/saleor": {
+   "detail": "ok",
+   "elapsed": 0.3,
+   "ok": true
+  },
+  "salesforce/base-components-recipes": {
+   "detail": "ok",
+   "elapsed": 0.27,
+   "ok": true
+  },
+  "salesforce/design-system-react": {
+   "detail": "ok",
+   "elapsed": 0.4,
+   "ok": true
+  },
+  "salesforce/lwc": {
+   "detail": "ok",
+   "elapsed": 0.49,
+   "ok": true
+  },
+  "salesforce/policy_sentry": {
+   "detail": "ok",
+   "elapsed": 1.27,
+   "ok": true
+  },
+  "salesforce/sloop": {
+   "detail": "ok",
+   "elapsed": 0.26,
+   "ok": true
+  },
+  "schemaorg/schemaorg": {
+   "detail": "ok",
+   "elapsed": 0.29,
+   "ok": true
+  },
+  "schemathesis/schemathesis": {
+   "detail": "ok",
+   "elapsed": 0.27,
+   "ok": true
+  },
+  "scylladb/scylladb": {
+   "detail": "ok",
+   "elapsed": 0.68,
+   "ok": true
+  },
+  "seldonio/seldon-core": {
+   "detail": "ok",
+   "elapsed": 0.41,
+   "ok": true
+  },
+  "semantic-release/semantic-release": {
+   "detail": "ok",
+   "elapsed": 0.52,
+   "ok": true
+  },
+  "semgrep/semgrep-rules": {
+   "detail": "ok",
+   "elapsed": 0.34,
+   "ok": true
+  },
+  "semver/semver.org": {
+   "detail": "ok",
+   "elapsed": 0.47,
+   "ok": true
+  },
+  "sgl-project/sglang": {
+   "detail": "ok",
+   "elapsed": 0.54,
+   "ok": true
+  },
+  "shadcn-ui/ui": {
+   "detail": "ok",
+   "elapsed": 0.36,
+   "ok": true
+  },
+  "sharkdp/hyperfine": {
+   "detail": "ok",
+   "elapsed": 0.23,
+   "ok": true
+  },
+  "shuaibiyy/awesome-tf": {
+   "detail": "ok",
+   "elapsed": 0.31,
+   "ok": true
+  },
+  "sigstore/cosign": {
+   "detail": "ok",
+   "elapsed": 0.33,
+   "ok": true
+  },
+  "sigstore/sigstore": {
+   "detail": "ok",
+   "elapsed": 0.33,
+   "ok": true
+  },
+  "sindresorhus/awesome": {
+   "detail": "ok",
+   "elapsed": 0.3,
+   "ok": true
+  },
+  "singer-io/getting-started": {
+   "detail": "ok",
+   "elapsed": 0.3,
+   "ok": true
+  },
+  "skypilot-org/skypilot": {
+   "detail": "ok",
+   "elapsed": 0.26,
+   "ok": true
+  },
+  "slatedocs/slate": {
+   "detail": "ok",
+   "elapsed": 0.31,
+   "ok": true
+  },
+  "sleuthkit/autopsy": {
+   "detail": "ok",
+   "elapsed": 0.3,
+   "ok": true
+  },
+  "slsa-framework/slsa": {
+   "detail": "ok",
+   "elapsed": 0.3,
+   "ok": true
+  },
+  "slundberg/shap": {
+   "detail": "ok",
+   "elapsed": 0.28,
+   "ok": true
+  },
+  "smallrye/smallrye-config": {
+   "detail": "ok",
+   "elapsed": 0.34,
+   "ok": true
+  },
+  "snowflakedb/snowflake-connector-python": {
+   "detail": "ok",
+   "elapsed": 0.41,
+   "ok": true
+  },
+  "soda-cd/soda-core": {
+   "detail": "fatal: Authentication failed for 'http://127.0.0.1:41729/git/soda-cd/soda-core/'",
+   "elapsed": 0.22,
+   "ok": false
+  },
+  "sodadata/soda-core": {
+   "detail": "ok",
+   "elapsed": 0.51,
+   "ok": true
+  },
+  "software-mansion/react-native-reanimated": {
+   "detail": "ok",
+   "elapsed": 0.58,
+   "ok": true
+  },
+  "solidjs/solid": {
+   "detail": "ok",
+   "elapsed": 0.24,
+   "ok": true
+  },
+  "sonarsource/sonar-scanner-cli": {
+   "detail": "ok",
+   "elapsed": 0.3,
+   "ok": true
+  },
+  "sonarsource/sonarqube": {
+   "detail": "ok",
+   "elapsed": 0.34,
+   "ok": true
+  },
+  "sorrycc/awesome-javascript": {
+   "detail": "ok",
+   "elapsed": 0.25,
+   "ok": true
+  },
+  "sourcegraph/cody": {
+   "detail": "fatal: Authentication failed for 'http://127.0.0.1:41729/git/sourcegraph/cody/'",
+   "elapsed": 0.31,
+   "ok": false
+  },
+  "spack/spack": {
+   "detail": "ok",
+   "elapsed": 0.69,
+   "ok": true
+  },
+  "spdx/spdx-spec": {
+   "detail": "ok",
+   "elapsed": 0.35,
+   "ok": true
+  },
+  "sphinx-doc/sphinx": {
+   "detail": "ok",
+   "elapsed": 0.53,
+   "ok": true
+  },
+  "splunk/security_content": {
+   "detail": "ok",
+   "elapsed": 0.26,
+   "ok": true
+  },
+  "spotbugs/spotbugs": {
+   "detail": "ok",
+   "elapsed": 0.25,
+   "ok": true
+  },
+  "spotify/annoy": {
+   "detail": "ok",
+   "elapsed": 0.23,
+   "ok": true
+  },
+  "spring-cloud/spring-cloud-config": {
+   "detail": "ok",
+   "elapsed": 0.32,
+   "ok": true
+  },
+  "spring-cloud/spring-cloud-gateway": {
+   "detail": "ok",
+   "elapsed": 0.26,
+   "ok": true
+  },
+  "spring-petclinic/spring-petclinic-microservices": {
+   "detail": "ok",
+   "elapsed": 0.25,
+   "ok": true
+  },
+  "spring-projects/spring-ai": {
+   "detail": "ok",
+   "elapsed": 0.49,
+   "ok": true
+  },
+  "spring-projects/spring-batch": {
+   "detail": "ok",
+   "elapsed": 0.33,
+   "ok": true
+  },
+  "spring-projects/spring-boot": {
+   "detail": "ok",
+   "elapsed": 0.38,
+   "ok": true
+  },
+  "spring-projects/spring-data-jpa": {
+   "detail": "ok",
+   "elapsed": 0.3,
+   "ok": true
+  },
+  "spring-projects/spring-framework": {
+   "detail": "ok",
+   "elapsed": 0.36,
+   "ok": true
+  },
+  "spring-projects/spring-integration": {
+   "detail": "ok",
+   "elapsed": 0.39,
+   "ok": true
+  },
+  "spring-projects/spring-kafka": {
+   "detail": "ok",
+   "elapsed": 0.41,
+   "ok": true
+  },
+  "spring-projects/spring-modulith": {
+   "detail": "ok",
+   "elapsed": 0.5,
+   "ok": true
+  },
+  "spring-projects/spring-security": {
+   "detail": "ok",
+   "elapsed": 0.4,
+   "ok": true
+  },
+  "spryker/spryker": {
+   "detail": "fatal: Authentication failed for 'http://127.0.0.1:41729/git/spryker/spryker/'",
+   "elapsed": 0.44,
+   "ok": false
+  },
+  "sqlalchemy/sqlalchemy": {
+   "detail": "ok",
+   "elapsed": 0.46,
+   "ok": true
+  },
+  "sqlfluff/sqlfluff": {
+   "detail": "ok",
+   "elapsed": 0.31,
+   "ok": true
+  },
+  "sqlite/sqlite": {
+   "detail": "ok",
+   "elapsed": 0.52,
+   "ok": true
+  },
+  "sqlmapproject/sqlmap": {
+   "detail": "ok",
+   "elapsed": 0.3,
+   "ok": true
+  },
+  "square/leakcanary": {
+   "detail": "ok",
+   "elapsed": 0.24,
+   "ok": true
+  },
+  "square/moshi": {
+   "detail": "ok",
+   "elapsed": 0.33,
+   "ok": true
+  },
+  "square/okhttp": {
+   "detail": "ok",
+   "elapsed": 0.29,
+   "ok": true
+  },
+  "square/retrofit": {
+   "detail": "ok",
+   "elapsed": 0.31,
+   "ok": true
+  },
+  "squidfunk/mkdocs-material": {
+   "detail": "ok",
+   "elapsed": 0.44,
+   "ok": true
+  },
+  "stakater/Reloader": {
+   "detail": "ok",
+   "elapsed": 0.84,
+   "ok": true
+  },
+  "stanford-futuredata/ColBERT": {
+   "detail": "ok",
+   "elapsed": 0.35,
+   "ok": true
+  },
+  "stanford-oval/storm": {
+   "detail": "ok",
+   "elapsed": 0.25,
+   "ok": true
+  },
+  "stanfordnlp/dspy": {
+   "detail": "ok",
+   "elapsed": 0.42,
+   "ok": true
+  },
+  "statelyai/xstate": {
+   "detail": "ok",
+   "elapsed": 0.46,
+   "ok": true
+  },
+  "steven2358/awesome-generative-ai": {
+   "detail": "ok",
+   "elapsed": 0.31,
+   "ok": true
+  },
+  "stoplightio/spectral": {
+   "detail": "ok",
+   "elapsed": 0.29,
+   "ok": true
+  },
+  "storybookjs/storybook": {
+   "detail": "ok",
+   "elapsed": 0.35,
+   "ok": true
+  },
+  "strapi/strapi": {
+   "detail": "ok",
+   "elapsed": 0.63,
+   "ok": true
+  },
+  "stretchr/testify": {
+   "detail": "ok",
+   "elapsed": 0.23,
+   "ok": true
+  },
+  "stripe/openapi": {
+   "detail": "ok",
+   "elapsed": 0.58,
+   "ok": true
+  },
+  "structurizr/dsl": {
+   "detail": "fatal: Authentication failed for 'http://127.0.0.1:41729/git/structurizr/dsl/'",
+   "elapsed": 0.21,
+   "ok": false
+  },
+  "styleguidist/react-styleguidist": {
+   "detail": "ok",
+   "elapsed": 0.42,
+   "ok": true
+  },
+  "supabase/supabase": {
+   "detail": "ok",
+   "elapsed": 0.41,
+   "ok": true
+  },
+  "superagent-ai/superagent": {
+   "detail": "ok",
+   "elapsed": 0.3,
+   "ok": true
+  },
+  "sveltejs/kit": {
+   "detail": "ok",
+   "elapsed": 0.33,
+   "ok": true
+  },
+  "sveltejs/svelte": {
+   "detail": "ok",
+   "elapsed": 0.33,
+   "ok": true
+  },
+  "swagger-api/swagger-core": {
+   "detail": "ok",
+   "elapsed": 0.31,
+   "ok": true
+  },
+  "swc-project/swc": {
+   "detail": "ok",
+   "elapsed": 0.44,
+   "ok": true
+  },
+  "swift-server/swift-service-lifecycle": {
+   "detail": "ok",
+   "elapsed": 0.46,
+   "ok": true
+  },
+  "swisskyrepo/PayloadsAllTheThings": {
+   "detail": "ok",
+   "elapsed": 0.26,
+   "ok": true
+  },
+  "symfony/symfony": {
+   "detail": "ok",
+   "elapsed": 0.44,
+   "ok": true
+  },
+  "system-ui/theme-ui": {
+   "detail": "ok",
+   "elapsed": 0.33,
+   "ok": true
+  },
+  "tailwindlabs/tailwindcss": {
+   "detail": "ok",
+   "elapsed": 0.54,
+   "ok": true
+  },
+  "tanstack/query": {
+   "detail": "ok",
+   "elapsed": 0.44,
+   "ok": true
+  },
+  "tarantool/checks": {
+   "detail": "ok",
+   "elapsed": 0.38,
+   "ok": true
+  },
+  "tauri-apps/tauri": {
+   "detail": "ok",
+   "elapsed": 0.39,
+   "ok": true
+  },
+  "tektoncd/pipeline": {
+   "detail": "ok",
+   "elapsed": 0.37,
+   "ok": true
+  },
+  "temporalio/samples-java": {
+   "detail": "ok",
+   "elapsed": 0.59,
+   "ok": true
+  },
+  "temporalio/samples-python": {
+   "detail": "ok",
+   "elapsed": 0.37,
+   "ok": true
+  },
+  "temporalio/sdk-java": {
+   "detail": "ok",
+   "elapsed": 0.5,
+   "ok": true
+  },
+  "temporalio/temporal": {
+   "detail": "ok",
+   "elapsed": 0.3,
+   "ok": true
+  },
+  "tenable/terrascan": {
+   "detail": "ok",
+   "elapsed": 0.36,
+   "ok": true
+  },
+  "tensorflow/models": {
+   "detail": "ok",
+   "elapsed": 0.34,
+   "ok": true
+  },
+  "tensorflow/tensorflow": {
+   "detail": "ok",
+   "elapsed": 0.61,
+   "ok": true
+  },
+  "tensorflow/tfx": {
+   "detail": "ok",
+   "elapsed": 0.3,
+   "ok": true
+  },
+  "terraform-google-modules/terraform-google-project-factory": {
+   "detail": "ok",
+   "elapsed": 0.5,
+   "ok": true
+  },
+  "tesseract-ocr/tesseract": {
+   "detail": "ok",
+   "elapsed": 0.37,
+   "ok": true
+  },
+  "testcontainers/testcontainers-go": {
+   "detail": "ok",
+   "elapsed": 0.41,
+   "ok": true
+  },
+  "testcontainers/testcontainers-java": {
+   "detail": "ok",
+   "elapsed": 0.36,
+   "ok": true
+  },
+  "testcontainers/testcontainers-python": {
+   "detail": "ok",
+   "elapsed": 0.23,
+   "ok": true
+  },
+  "testing-library/dom-testing-library": {
+   "detail": "ok",
+   "elapsed": 0.42,
+   "ok": true
+  },
+  "testing-library/react-testing-library": {
+   "detail": "ok",
+   "elapsed": 0.53,
+   "ok": true
+  },
+  "tetragon-dev/tetragon": {
+   "detail": "fatal: Authentication failed for 'http://127.0.0.1:41729/git/tetragon-dev/tetragon/'",
+   "elapsed": 0.32,
+   "ok": false
+  },
+  "thoughtbot/guides": {
+   "detail": "ok",
+   "elapsed": 0.3,
+   "ok": true
+  },
+  "thoughtworks/build-your-own-radar": {
+   "detail": "ok",
+   "elapsed": 0.35,
+   "ok": true
+  },
+  "tiangolo/fastapi": {
+   "detail": "ok",
+   "elapsed": 0.27,
+   "ok": true
+  },
+  "tidbcloud/tidb": {
+   "detail": "fatal: Authentication failed for 'http://127.0.0.1:41729/git/tidbcloud/tidb/'",
+   "elapsed": 0.27,
+   "ok": false
+  },
+  "timescale/timescaledb": {
+   "detail": "ok",
+   "elapsed": 0.55,
+   "ok": true
+  },
+  "tobymao/sqlglot": {
+   "detail": "ok",
+   "elapsed": 0.29,
+   "ok": true
+  },
+  "todogroup/ospopolicy": {
+   "detail": "fatal: Authentication failed for 'http://127.0.0.1:41729/git/todogroup/ospopolicy/'",
+   "elapsed": 0.21,
+   "ok": false
+  },
+  "tokens-studio/figma-plugin": {
+   "detail": "ok",
+   "elapsed": 0.24,
+   "ok": true
+  },
+  "tokio-rs/axum": {
+   "detail": "ok",
+   "elapsed": 0.23,
+   "ok": true
+  },
+  "tokio-rs/tokio": {
+   "detail": "ok",
+   "elapsed": 0.32,
+   "ok": true
+  },
+  "traceloop/openllmetry": {
+   "detail": "ok",
+   "elapsed": 0.47,
+   "ok": true
+  },
+  "trailheadapps/dreamhouse-lwc": {
+   "detail": "ok",
+   "elapsed": 0.3,
+   "ok": true
+  },
+  "trailheadapps/lwc-recipes": {
+   "detail": "ok",
+   "elapsed": 0.29,
+   "ok": true
+  },
+  "trekhleb/javascript-algorithms": {
+   "detail": "ok",
+   "elapsed": 0.28,
+   "ok": true
+  },
+  "trinodb/trino": {
+   "detail": "ok",
+   "elapsed": 0.3,
+   "ok": true
+  },
+  "triton-inference-server/server": {
+   "detail": "ok",
+   "elapsed": 0.38,
+   "ok": true
+  },
+  "triton-lang/triton": {
+   "detail": "ok",
+   "elapsed": 0.38,
+   "ok": true
+  },
+  "trpc/trpc": {
+   "detail": "ok",
+   "elapsed": 0.25,
+   "ok": true
+  },
+  "truera/trulens": {
+   "detail": "ok",
+   "elapsed": 0.31,
+   "ok": true
+  },
+  "trufflesecurity/trufflehog": {
+   "detail": "ok",
+   "elapsed": 0.29,
+   "ok": true
+  },
+  "tsenart/vegeta": {
+   "detail": "ok",
+   "elapsed": 0.4,
+   "ok": true
+  },
+  "tuist/tuist": {
+   "detail": "ok",
+   "elapsed": 0.37,
+   "ok": true
+  },
+  "twentyhq/twenty": {
+   "detail": "ok",
+   "elapsed": 0.47,
+   "ok": true
+  },
+  "typescript-eslint/typescript-eslint": {
+   "detail": "ok",
+   "elapsed": 0.36,
+   "ok": true
+  },
+  "typesense/typesense": {
+   "detail": "ok",
+   "elapsed": 0.35,
+   "ok": true
+  },
+  "uber-go/guide": {
+   "detail": "ok",
+   "elapsed": 0.29,
+   "ok": true
+  },
+  "unclecode/crawl4ai": {
+   "detail": "ok",
+   "elapsed": 0.26,
+   "ok": true
+  },
+  "unslothai/unsloth": {
+   "detail": "ok",
+   "elapsed": 0.42,
+   "ok": true
+  },
+  "upgundecha/howtheysre": {
+   "detail": "ok",
+   "elapsed": 0.27,
+   "ok": true
+  },
+  "usnistgov/OSCAL": {
+   "detail": "ok",
+   "elapsed": 0.41,
+   "ok": true
+  },
+  "usnistgov/oscal-content": {
+   "detail": "ok",
+   "elapsed": 0.23,
+   "ok": true
+  },
+  "valkey-io/valkey": {
+   "detail": "ok",
+   "elapsed": 0.33,
+   "ok": true
+  },
+  "vapor/vapor": {
+   "detail": "ok",
+   "elapsed": 0.29,
+   "ok": true
+  },
+  "vectordotdev/vector": {
+   "detail": "ok",
+   "elapsed": 0.49,
+   "ok": true
+  },
+  "vendure-ecommerce/vendure": {
+   "detail": "ok",
+   "elapsed": 0.56,
+   "ok": true
+  },
+  "vercel/next.js": {
+   "detail": "ok",
+   "elapsed": 0.51,
+   "ok": true
+  },
+  "verify-tests/Verify": {
+   "detail": "fatal: Authentication failed for 'http://127.0.0.1:41729/git/verify-tests/Verify/'",
+   "elapsed": 0.27,
+   "ok": false
+  },
+  "vespa-engine/vespa": {
+   "detail": "ok",
+   "elapsed": 0.75,
+   "ok": true
+  },
+  "vinta/awesome-python": {
+   "detail": "ok",
+   "elapsed": 0.38,
+   "ok": true
+  },
+  "visenger/awesome-mlops": {
+   "detail": "ok",
+   "elapsed": 0.42,
+   "ok": true
+  },
+  "vitejs/vite": {
+   "detail": "ok",
+   "elapsed": 0.35,
+   "ok": true
+  },
+  "vitest-dev/vitest": {
+   "detail": "ok",
+   "elapsed": 0.27,
+   "ok": true
+  },
+  "vllm-project/vllm": {
+   "detail": "ok",
+   "elapsed": 0.42,
+   "ok": true
+  },
+  "volatilityfoundation/volatility3": {
+   "detail": "ok",
+   "elapsed": 0.29,
+   "ok": true
+  },
+  "vsouza/awesome-ios": {
+   "detail": "ok",
+   "elapsed": 0.34,
+   "ok": true
+  },
+  "vuejs/awesome-vue": {
+   "detail": "ok",
+   "elapsed": 0.32,
+   "ok": true
+  },
+  "vuejs/core": {
+   "detail": "ok",
+   "elapsed": 0.39,
+   "ok": true
+  },
+  "w3c/aria-practices": {
+   "detail": "ok",
+   "elapsed": 0.34,
+   "ok": true
+  },
+  "w3c/rdf-star": {
+   "detail": "ok",
+   "elapsed": 0.28,
+   "ok": true
+  },
+  "w3c/wcag": {
+   "detail": "ok",
+   "elapsed": 0.26,
+   "ok": true
+  },
+  "wandb/wandb": {
+   "detail": "ok",
+   "elapsed": 0.4,
+   "ok": true
+  },
+  "watson-developer-cloud/python-sdk": {
+   "detail": "ok",
+   "elapsed": 0.59,
+   "ok": true
+  },
+  "weaviate/weaviate": {
+   "detail": "ok",
+   "elapsed": 0.38,
+   "ok": true
+  },
+  "web-platform-tests/wpt": {
+   "detail": "ok",
+   "elapsed": 0.89,
+   "ok": true
+  },
+  "webpack/webpack": {
+   "detail": "ok",
+   "elapsed": 0.43,
+   "ok": true
+  },
+  "whatwg/html": {
+   "detail": "ok",
+   "elapsed": 0.44,
+   "ok": true
+  },
+  "windmill-labs/windmill": {
+   "detail": "ok",
+   "elapsed": 0.36,
+   "ok": true
+  },
+  "windup/windup": {
+   "detail": "ok",
+   "elapsed": 0.37,
+   "ok": true
+  },
+  "wiremock/wiremock": {
+   "detail": "ok",
+   "elapsed": 0.32,
+   "ok": true
+  },
+  "withastro/astro": {
+   "detail": "ok",
+   "elapsed": 0.35,
+   "ok": true
+  },
+  "wolfi-dev/os": {
+   "detail": "ok",
+   "elapsed": 0.59,
+   "ok": true
+  },
+  "woocommerce/woocommerce": {
+   "detail": "ok",
+   "elapsed": 0.35,
+   "ok": true
+  },
+  "writethedocs/www": {
+   "detail": "ok",
+   "elapsed": 0.43,
+   "ok": true
+  },
+  "wso2/product-apim": {
+   "detail": "ok",
+   "elapsed": 0.49,
+   "ok": true
+  },
+  "wso2/product-is": {
+   "detail": "ok",
+   "elapsed": 0.31,
+   "ok": true
+  },
+  "wwwlicious/servicestack-event-sourcing": {
+   "detail": "fatal: Authentication failed for 'http://127.0.0.1:41729/git/wwwlicious/servicestack-event-sourcing/'",
+   "elapsed": 0.22,
+   "ok": false
+  },
+  "xunit/xunit": {
+   "detail": "ok",
+   "elapsed": 0.25,
+   "ok": true
+  },
+  "yoheinakajima/babyagi": {
+   "detail": "ok",
+   "elapsed": 0.51,
+   "ok": true
+  },
+  "yugabyte/yugabyte-db": {
+   "detail": "ok",
+   "elapsed": 0.39,
+   "ok": true
+  },
+  "zalando/restful-api-guidelines": {
+   "detail": "ok",
+   "elapsed": 0.3,
+   "ok": true
+  },
+  "zammad/zammad": {
+   "detail": "ok",
+   "elapsed": 0.24,
+   "ok": true
+  },
+  "zaproxy/zaproxy": {
+   "detail": "ok",
+   "elapsed": 0.33,
+   "ok": true
+  },
+  "zeebe-io/zeebe": {
+   "detail": "ok",
+   "elapsed": 0.47,
+   "ok": true
+  },
+  "zilliztech/GPTCache": {
+   "detail": "ok",
+   "elapsed": 0.4,
+   "ok": true
+  },
+  "zowe/api-layer": {
+   "detail": "ok",
+   "elapsed": 0.46,
+   "ok": true
+  },
+  "zowe/zowe-cli": {
+   "detail": "ok",
+   "elapsed": 0.33,
+   "ok": true
+  },
+  "zowe/zowe-client-python-sdk": {
+   "detail": "ok",
+   "elapsed": 0.43,
+   "ok": true
+  },
+  "zowe/zowe-explorer-vscode": {
+   "detail": "ok",
+   "elapsed": 0.31,
+   "ok": true
+  }
+ }
+}

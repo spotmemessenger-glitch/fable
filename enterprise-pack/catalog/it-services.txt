@@ -1,0 +1,85 @@
+// domain: it-services
+// title: IT Services Delivery Stack — ERP/CRM platforms, RPA, integration, and the
+// title: public GitHub organisations of the large systems integrators
+// note: these firms' internal delivery playbooks are NOT public. What IS public is
+// note: the platform tooling they staff around, plus their own open source output.
+// format: owner/repo | tags | why it matters
+
+Accenture/mercury | accenture,eventdriven,java | Composable event-driven Java platform, open sourced by Accenture
+Accenture/reactive-interaction-gateway | accenture,reactive,gateway | Push events to frontends over SSE/WebSocket
+Accenture/AmpliGraph | accenture,knowledge-graph,ml | Knowledge graph embeddings library
+Accenture/sfmc-devtools | accenture,salesforce,devops | Marketing Cloud deployment automation
+Accenture/adop-docker-compose | accenture,devops,platform | The DevOps Platform reference stack
+CognizantOneDevOps/Insights | cognizant,devops,metrics | DevOps intelligence and metrics platform
+salesforce/lwc | salesforce,components,frontend | Lightning Web Components framework
+forcedotcom/salesforcedx-vscode | salesforce,tooling,ide | The Salesforce developer toolchain
+forcedotcom/cli | salesforce,cli,devops | The sf CLI used in every Salesforce pipeline
+trailheadapps/lwc-recipes | salesforce,samples,patterns | The canonical LWC pattern corpus
+trailheadapps/dreamhouse-lwc | salesforce,reference,app | Reference Salesforce application
+salesforce/design-system-react | salesforce,design-system,react | Lightning Design System in React
+salesforce/policy_sentry | salesforce,security,iam | Least-privilege IAM generation
+salesforce/sloop | salesforce,kubernetes,observability | Kubernetes history visualisation
+salesforce/base-components-recipes | salesforce,components,samples | Base component implementations
+mulesoft/mule | integration,esb,java | The Mule runtime; core to a large integration practice
+ballerina-platform/ballerina-lang | integration,language,cloud-native | A language designed for integration
+wso2/product-apim | integration,api-management,opensource | Open API management platform
+wso2/product-is | identity,sso,opensource | Open identity server
+apache/camel-k | integration,kubernetes,eip | Camel on Kubernetes
+apache/camel-quarkus | integration,native,performance | Camel on Quarkus
+apache/synapse | integration,esb,mediation | ESB mediation engine
+apache/servicecomb-java-chassis | microservices,integration,java | Microservice chassis
+zeebe-io/zeebe | workflow,orchestration,scale | Horizontally scalable workflow engine
+camunda/camunda-platform | bpmn,automation,enterprise | The BPM platform most integrators deploy
+camunda/camunda-bpm-examples | bpmn,samples,patterns | Worked BPMN automation examples
+flowable/flowable-engine | bpmn,cmmn,dmn | Process, case and decision automation
+pegasystems/pega-helm-charts | pega,kubernetes,deployment | Deploy Pega on Kubernetes
+robocorp/rpaframework | rpa,python,automation | The open RPA library set
+robocorp/rcc | rpa,environments,reproducible | Reproducible automation environments
+aisingapore/TagUI | rpa,automation,opensource | Open RPA tool with a readable DSL
+open-rpa/openrpa | rpa,windows,workflow | Open source Windows RPA
+pywinauto/pywinauto | automation,windows,ui | Windows UI automation from Python
+asweigart/pyautogui | automation,desktop,input | Cross-platform desktop input control
+microsoft/RulesEngine | rules,dotnet,configuration | JSON-configured rules engine
+Netflix/conductor | orchestration,workflow,microservices | Workflow orchestration
+temporalio/temporal | durable-execution,workflows,reliability | The modern durable workflow engine
+temporalio/samples-java | workflows,samples,java | Temporal patterns in Java
+temporalio/samples-python | workflows,samples,python | Temporal patterns in Python
+odoo/odoo | erp,opensource,python | Full open source ERP; the best readable ERP model
+frappe/erpnext | erp,opensource,python | Open ERP with a strong data model
+frappe/frappe | framework,lowcode,python | The framework under ERPNext
+dolibarr/dolibarr | erp,crm,php | Long-running open ERP/CRM
+Tryton/tryton | erp,modular,python | Modular ERP platform
+metasfresh/metasfresh | erp,opensource,java | Open ERP in Java
+SuiteCRM/SuiteCRM | crm,opensource,php | Open CRM
+espocrm/espocrm | crm,opensource,php | Lightweight open CRM
+twentyhq/twenty | crm,modern,typescript | Modern open CRM
+chatwoot/chatwoot | support,omnichannel,ruby | Customer engagement platform
+zammad/zammad | helpdesk,ticketing,ruby | Open helpdesk
+apache/ofbiz-framework | erp,java,apache | Apache ERP framework
+medusajs/medusa | commerce,headless,node | Headless commerce platform
+saleor/saleor | commerce,graphql,python | GraphQL-first commerce
+vendure-ecommerce/vendure | commerce,typescript,headless | Headless commerce in TypeScript
+magento/magento2 | commerce,php,enterprise | The commerce platform many integrators staff
+woocommerce/woocommerce | commerce,wordpress,php | The largest commerce install base
+strapi/strapi | cms,headless,node | Headless CMS
+directus/directus | cms,data-platform,node | Data platform over any SQL database
+payloadcms/payload | cms,typescript,headless | TypeScript-native CMS
+apache/unomi | cdp,personalization,java | Customer data platform
+apache/streampipes | iiot,integration,flows | Industrial IoT data flows
+eclipse-ditto/ditto | iot,digital-twin,java | Digital twin framework
+eclipse-hono/hono | iot,connectivity,protocols | IoT device connectivity
+eclipse-milo/milo | iot,opcua,java | OPC UA stack for industrial integration
+node-red/node-red | integration,lowcode,flows | Flow-based integration; ubiquitous in operations
+n8n-io/n8n | automation,workflows,integration | Workflow automation with hundreds of connectors
+activepieces/activepieces | automation,workflows,opensource | Open automation platform
+windmill-labs/windmill | automation,scripts,workflows | Scripts and flows as an internal platform
+appsmithorg/appsmith | lowcode,internal-tools,ui | Internal tool builder
+ToolJet/ToolJet | lowcode,internal-tools,ui | Internal tools platform
+budibase/budibase | lowcode,apps,data | Low-code app builder
+baserow/baserow | database,nocode,collaboration | Open Airtable alternative
+nocodb/nocodb | database,nocode,ui | Turn any database into a spreadsheet UI
+apache/superset | bi,dashboards,sql | The BI layer integrators deploy
+jenkinsci/pipeline-model-definition-plugin | cicd,jenkins,declarative | Declarative Jenkins pipelines
+jenkins-x/jx | cicd,gitops,kubernetes | Opinionated CI/CD for Kubernetes
+sonarsource/sonarqube | quality,gates,static-analysis | The quality gate most enterprise contracts require
+sonarsource/sonar-scanner-cli | quality,cicd,scanner | Scanner for pipelines

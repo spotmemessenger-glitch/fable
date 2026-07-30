@@ -1,0 +1,66 @@
+// domain: sap-ibm-legacy
+// title: SAP, IBM, Red Hat, Mainframe and Legacy Modernisation
+// format: owner/repo | tags | why it matters
+
+SAP/ui5-webcomponents | sap,ui,webcomponents | Fiori UI as framework-agnostic web components
+SAP/openui5 | sap,ui5,frontend | The OpenUI5 framework source
+SAP/ui5-tooling | sap,build,tooling | UI5 build and development tooling
+SAP/cloud-sdk | sap,btp,sdk | SDK for extending SAP from BTP
+SAP/cloud-sdk-js | sap,btp,javascript | Cloud SDK for JavaScript
+SAP/cloud-sdk-java | sap,btp,java | Cloud SDK for Java
+SAP/cloud-mta-build-tool | sap,build,mta | Multi-target application builds
+SAP-samples/cap-sflight | sap,cap,reference | The reference CAP application
+SAP-samples/cloud-cap-samples | sap,cap,samples | CAP sample corpus
+SAP-samples/btp-developer-guide-cap | sap,btp,guide | End-to-end BTP developer guide
+SAP-samples/abap-platform-rap-opensap | sap,abap,rap | RESTful ABAP Programming model course code
+SAP-samples/abap-cheat-sheets | sap,abap,reference | Dense ABAP reference; rare public ABAP corpus
+SAP/abap-file-formats | sap,abap,formats | ABAP object file format specifications
+SAP/styleguides | sap,abap,standards | Official Clean ABAP style guide
+abapGit/abapGit | sap,abap,git | Git for ABAP; the modernisation enabler
+SAP/fundamental-styles | sap,design-system,css | Fiori design system styles
+SAP/luigi | sap,micro-frontend,ui | Micro-frontend framework
+SAP/jenkins-library | sap,cicd,jenkins | SAP's shared CI/CD library
+SAP/project-piper-action | sap,cicd,github | Piper CI/CD in GitHub Actions
+SAP/machine-learning-lab | sap,ml,platform | ML tooling from SAP
+SAP/spartacus | sap,commerce,angular | Composable storefront for SAP Commerce
+SAP/odata-vocabularies | sap,odata,metadata | OData annotation vocabularies
+oasis-tcs/odata-specs | standards,odata,oasis | The OData specification
+IBM/ibm-cos-sdk-python | ibm,storage,sdk | IBM Cloud Object Storage SDK
+IBM/platform-services-python-sdk | ibm,cloud,sdk | IBM Cloud platform services
+watson-developer-cloud/python-sdk | ibm,watson,sdk | Watson service SDKs
+IBM/watsonx-ai-samples | ibm,watsonx,samples | watsonx sample notebooks
+IBM/openapi-validator | api,linting,openapi | Opinionated OpenAPI linting
+IBM/sarama | kafka,go,client | Widely used Go Kafka client
+IBM/fp-go | functional,go,library | Functional programming for Go
+IBM/CodeEngine | ibm,serverless,samples | Code Engine samples
+IBM/japan-technology | ibm,education,samples | Broad IBM technical sample corpus
+IBM/mainframe-downloads | mainframe,tooling,zos | z/OS developer downloads and tooling
+zowe/zowe-client-python-sdk | mainframe,python,zos | Python for z/OS automation
+zowe/zowe-cli | mainframe,cli,zos | The open mainframe CLI; the modern z/OS entry point
+zowe/zowe-explorer-vscode | mainframe,ide,vscode | Mainframe development in VS Code
+zowe/api-layer | mainframe,api,gateway | API gateway for z/OS services
+openmainframeproject/cobol-programming-course | mainframe,cobol,education | The public COBOL course
+openmainframeproject/software-discovery-tool | mainframe,discovery,linux | Discover software available for Z
+IBM/Db2 | ibm,database,samples | Db2 samples and tooling
+IBM/db2-python | ibm,database,python | Db2 Python connectivity
+ibm-messaging/mq-container | ibm,messaging,containers | IBM MQ in containers
+ibm-messaging/mq-golang | ibm,messaging,go | MQ client for Go
+IBM/blockchain-network-on-kubernetes | ibm,blockchain,kubernetes | Hyperledger deployment reference
+hyperledger/fabric | blockchain,permissioned,enterprise | Permissioned ledger used in enterprise consortia
+openliberty/open-liberty | java,runtime,ibm | IBM's open Java runtime
+OpenLiberty/guide-getting-started | java,education,ibm | Liberty getting-started guides
+eclipse/microprofile | standards,java,microservices | MicroProfile specifications
+smallrye/smallrye-config | configuration,java,microprofile | Config implementation used by Quarkus
+openshift/origin | redhat,kubernetes,platform | The OpenShift platform source
+openshift/installer | redhat,kubernetes,install | OpenShift installer
+operator-framework/operator-sdk | kubernetes,operators,redhat | Build Kubernetes operators
+redhat-developer/vscode-java | java,ide,tooling | Java language support for VS Code
+ansible/ansible | automation,configuration,redhat | Agentless configuration management
+ansible/awx | automation,platform,ui | The upstream of Ansible Automation Platform
+ansible-lockdown/RHEL9-STIG | compliance,hardening,stig | STIG hardening automation
+ComplianceAsCode/content | compliance,hardening,scap | The SCAP content corpus behind most hardening
+konveyor/tackle2-hub | modernization,assessment,kubernetes | Application modernisation assessment
+konveyor/move2kube | modernization,kubernetes,migration | Move workloads to Kubernetes
+windup/windup | modernization,java,analysis | Migration analysis for Java estates
+apache/incubator-kie-drools | rules,decisions,java | Business rules engine
+kiegroup/kogito-runtimes | rules,processes,cloud-native | Cloud-native business automation

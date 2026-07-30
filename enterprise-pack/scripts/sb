@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# superbrain launcher — no install step, no virtualenv, stdlib only.
+set -euo pipefail
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PYTHONPATH="${HERE}/../src${PYTHONPATH:+:$PYTHONPATH}" exec "${PYTHON:-python3}" -m superbrain "$@"

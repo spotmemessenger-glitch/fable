@@ -1,0 +1,109 @@
+// domain: cloud-devops
+// title: Cloud, Kubernetes, IaC, CI/CD, GitOps, SRE and Observability
+// format: owner/repo | tags | why it matters
+
+kubernetes/kubernetes | kubernetes,orchestration,core | The control plane source
+kubernetes/enhancements | kubernetes,design,keps | KEPs; where behaviour is actually decided
+kubernetes/client-go | kubernetes,client,go | The Go client and informer patterns
+kubernetes-sigs/kubebuilder | operators,controllers,sdk | Build controllers the supported way
+kubernetes-sigs/controller-runtime | operators,library,go | The controller library under most operators
+kubernetes-sigs/kustomize | manifests,overlays,config | Overlay-based manifest management
+helm/helm | packaging,kubernetes,charts | The chart package manager
+kubernetes-sigs/kind | testing,kubernetes,local | Kubernetes in Docker for CI
+k3s-io/k3s | kubernetes,edge,lightweight | Lightweight distribution for edge and CI
+kubernetes/autoscaler | autoscaling,kubernetes,cost | Cluster and pod autoscalers
+kubernetes-sigs/karpenter | autoscaling,nodes,cost | Just-in-time node provisioning
+kubernetes-sigs/external-dns | dns,kubernetes,automation | Sync DNS from cluster resources
+kubernetes-sigs/gateway-api | networking,standard,ingress | The successor to Ingress
+kubernetes/ingress-nginx | ingress,networking,kubernetes | The most deployed ingress controller
+envoyproxy/envoy | proxy,l7,service-mesh | The data plane under most meshes and gateways
+istio/istio | service-mesh,traffic,security | Full-featured service mesh
+linkerd/linkerd2 | service-mesh,simple,rust | Simpler mesh with a strong operational story
+cilium/cilium | networking,ebpf,security | eBPF networking, policy and observability
+cilium/hubble | observability,network,ebpf | Network flow visibility
+projectcalico/calico | networking,policy,kubernetes | Network policy implementation
+containerd/containerd | runtime,containers,core | The container runtime under most clusters
+opencontainers/runc | runtime,oci,low-level | The OCI reference runtime
+opencontainers/image-spec | standards,containers,oci | The image format specification
+moby/moby | containers,docker,engine | The Docker engine
+containers/podman | containers,daemonless,rootless | Rootless daemonless containers
+docker/compose | containers,local,orchestration | Local multi-container development
+GoogleContainerTools/distroless | containers,security,minimal | Minimal base images; the cheapest CVE reduction
+wolfi-dev/os | containers,security,distro | Distro built for low-CVE container images
+chainguard-dev/melange | containers,builds,apk | Build declarative, signed APK packages
+hashicorp/terraform | iac,provisioning,multicloud | The IaC baseline
+hashicorp/terraform-provider-aws | iac,aws,provider | The AWS provider
+hashicorp/terraform-provider-azurerm | iac,azure,provider | The Azure provider
+hashicorp/terraform-provider-google | iac,gcp,provider | The GCP provider
+opentofu/opentofu | iac,fork,openSource | The open fork; know the licence context
+hashicorp/packer | images,builds,immutable | Build machine images
+hashicorp/vault | secrets,encryption,identity | Secrets management
+hashicorp/consul | discovery,config,mesh | Service discovery and configuration
+hashicorp/nomad | orchestration,simple,workloads | Simpler scheduler than Kubernetes
+hashicorp/vagrant | environments,local,dev | Reproducible dev environments
+pulumi/pulumi | iac,generalpurpose,languages | IaC in real programming languages
+aws/aws-cdk | iac,aws,constructs | AWS CDK
+aws-cloudformation/aws-cloudformation-templates | iac,aws,templates | Template corpus
+aws/aws-cli | cloud,cli,aws | The AWS CLI
+aws/aws-sdk-go-v2 | aws,sdk,go | AWS SDK for Go
+boto/boto3 | aws,sdk,python | AWS SDK for Python
+aws/aws-sdk-js-v3 | aws,sdk,javascript | AWS SDK for JavaScript
+awsdocs/aws-doc-sdk-examples | aws,samples,polyglot | Official AWS code examples in every language
+aws-samples/aws-serverless-workshops | aws,serverless,workshops | Serverless workshop material
+aws/serverless-application-model | serverless,iac,aws | SAM templates
+aws-powertools/powertools-lambda-python | serverless,observability,python | Lambda best practices as a library
+localstack/localstack | testing,aws,local | Run AWS locally for tests
+aws/karpenter-provider-aws | autoscaling,aws,nodes | Karpenter on AWS
+awslabs/aws-lambda-powertools-typescript | serverless,typescript,observability | Powertools for TypeScript
+argoproj/argo-cd | gitops,delivery,kubernetes | The dominant GitOps controller
+argoproj/argo-workflows | workflows,kubernetes,pipelines | Container-native workflow engine
+argoproj/argo-rollouts | progressive-delivery,canary,kubernetes | Canary and blue/green releases
+fluxcd/flux2 | gitops,delivery,kubernetes | GitOps toolkit
+tektoncd/pipeline | cicd,kubernetes,pipelines | Kubernetes-native CI/CD
+jenkinsci/jenkins | cicd,legacy,plugins | Still the largest installed CI base in enterprises
+actions/runner | cicd,github,agent | The GitHub Actions runner
+actions/checkout | cicd,actions,github | The most-used action; read its inputs properly
+actions/cache | cicd,actions,performance | Caching in Actions
+actions/runner-images | cicd,images,github | What is actually installed on hosted runners
+github/super-linter | cicd,linting,polyglot | One linter container for many languages
+goreleaser/goreleaser | release,go,automation | Release automation for Go
+semantic-release/semantic-release | release,versioning,automation | Automated semantic versioning
+googleapis/release-please | release,changelog,automation | Release PRs from conventional commits
+conventional-changelog/commitlint | commits,standards,linting | Enforce commit conventions
+pre-commit/pre-commit | hooks,quality,git | The standard pre-commit framework
+prometheus/prometheus | monitoring,metrics,timeseries | The metrics standard
+prometheus/alertmanager | alerting,routing,monitoring | Alert routing and silencing
+prometheus-operator/kube-prometheus | monitoring,kubernetes,stack | The batteries-included monitoring stack
+grafana/grafana | dashboards,visualization,observability | The dashboard layer
+grafana/loki | logs,aggregation,observability | Log aggregation that indexes labels, not content
+grafana/tempo | tracing,storage,observability | Trace storage
+grafana/mimir | metrics,scale,storage | Long-term metrics at scale
+grafana/k6 | load-testing,performance,scripting | Scriptable load testing
+open-telemetry/opentelemetry-collector | observability,pipeline,otel | The telemetry pipeline
+open-telemetry/opentelemetry-specification | observability,standards,otel | The specification
+open-telemetry/opentelemetry-demo | observability,reference,microservices | Reference instrumented application
+jaegertracing/jaeger | tracing,distributed,observability | Distributed tracing backend
+openobserve/openobserve | observability,storage,cost | Cost-focused observability stack
+netdata/netdata | monitoring,realtime,agent | Real-time host monitoring
+elastic/beats | shipping,logs,metrics | Log and metric shippers
+fluent/fluentd | logs,routing,cncf | Log collection and routing
+fluent/fluent-bit | logs,lightweight,edge | Lightweight log processor
+vectordotdev/vector | logs,pipeline,rust | High-performance observability pipeline
+chaos-mesh/chaos-mesh | chaos,kubernetes,resilience | Chaos engineering on Kubernetes
+Netflix/chaosmonkey | chaos,resilience,history | Where the discipline started
+keptn/lifecycle-toolkit | sre,slo,automation | SLO-driven delivery
+dastergon/awesome-sre | sre,catalog,awesome | Curated SRE reading list
+upgundecha/howtheysre | sre,practice,corpus | How real companies run SRE
+backstage/backstage | platform,catalog,developer-portal | The developer portal standard
+crossplane/crossplane | platform,control-plane,kubernetes | Cloud resources as Kubernetes APIs
+external-secrets/external-secrets | secrets,kubernetes,sync | Sync secrets from cloud stores
+bitnami-labs/sealed-secrets | secrets,gitops,encryption | Encrypted secrets that can live in git
+getsops/sops | secrets,encryption,files | Encrypt values in config files
+open-policy-agent/opa | policy,rego,authorization | General policy engine
+open-policy-agent/gatekeeper | policy,kubernetes,admission | OPA as an admission controller
+kyverno/kyverno | policy,kubernetes,yaml | Policy as Kubernetes resources
+stakater/Reloader | kubernetes,config,restarts | Restart workloads on config change
+kubernetes-sigs/descheduler | kubernetes,scheduling,balance | Rebalance pods after the fact
+robusta-dev/krr | cost,rightsizing,kubernetes | Right-size resource requests from real usage
+kubecost/cost-analyzer-helm-chart | cost,kubernetes,finops | Kubernetes cost visibility
+opencost/opencost | cost,finops,cncf | Vendor-neutral cost allocation

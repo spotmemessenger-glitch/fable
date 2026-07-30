@@ -1,0 +1,102 @@
+// domain: google
+// title: Google Stack — GCP, Android, Kotlin, Go, Angular, Flutter, Engineering Practice
+// format: owner/repo | tags | why it matters
+
+golang/go | language,runtime,tooling | The language, compiler and stdlib in one tree
+golang/tools | tooling,analysis,gopls | gopls and static analysis tooling
+google/go-cloud | portability,cloud,go | Portable cloud APIs from Go
+googleapis/google-cloud-go | gcp,sdk,go | Official GCP client libraries for Go
+googleapis/google-cloud-python | gcp,sdk,python | Official GCP client libraries for Python
+googleapis/google-cloud-java | gcp,sdk,java | Official GCP client libraries for Java
+googleapis/google-cloud-node | gcp,sdk,node | Official GCP client libraries for Node
+googleapis/googleapis | api,protos,specs | Every Google API as protobuf; the API design source of truth
+googleapis/google-cloud-cpp | gcp,sdk,cpp | GCP client libraries for C++
+GoogleCloudPlatform/python-docs-samples | gcp,samples,python | The largest official GCP sample corpus
+GoogleCloudPlatform/golang-samples | gcp,samples,go | Official Go samples
+GoogleCloudPlatform/java-docs-samples | gcp,samples,java | Official Java samples
+GoogleCloudPlatform/nodejs-docs-samples | gcp,samples,node | Official Node samples
+GoogleCloudPlatform/microservices-demo | reference,microservices,kubernetes | Online Boutique; the standard GKE demo architecture
+GoogleCloudPlatform/bank-of-anthos | reference,microservices,java | Reference banking microservices on GKE
+terraform-google-modules/terraform-google-project-factory | terraform,gcp,modules | Curated Terraform modules for GCP
+GoogleCloudPlatform/cloud-foundation-fabric | landing-zone,terraform,gcp | Opinionated GCP landing zones
+GoogleCloudPlatform/professional-services | gcp,solutions,reference | Field-built solution code
+GoogleCloudPlatform/generative-ai | genai,vertex,samples | Vertex AI generative samples and notebooks
+GoogleCloudPlatform/cloud-sql-proxy | database,connectivity,gcp | Secure Cloud SQL connectivity
+GoogleCloudPlatform/gcsfuse | storage,filesystem,gcp | Mount GCS as a filesystem
+GoogleCloudPlatform/kubernetes-engine-samples | gke,samples,kubernetes | GKE reference samples
+GoogleContainerTools/skaffold | kubernetes,workflow,cicd | Inner-loop workflow for Kubernetes
+GoogleContainerTools/kaniko | containers,builds,daemonless | Build images without a Docker daemon
+GoogleContainerTools/jib | java,containers,builds | Container images for Java without Dockerfiles
+google/ko | containers,go,builds | Build Go container images fast
+bazelbuild/bazel | build,scale,hermetic | Hermetic builds at monorepo scale
+bazelbuild/bazelisk | build,versioning | Bazel version manager
+bazelbuild/rules_docker | build,containers,bazel | Container rules for Bazel
+google/gvisor | sandbox,security,runtime | Userspace kernel; the container isolation option
+google/nsjail | sandbox,isolation,security | Process isolation tool
+google/tink | crypto,library,safe-defaults | Misuse-resistant cryptography
+google/zx | scripting,javascript,shell | JavaScript for shell scripting
+google/guava | java,library,core | Core Java libraries
+google/gson | java,json,serialization | JSON for Java
+google/protobuf | serialization,schema,ipc | Protocol buffers
+grpc/grpc | rpc,protocols,polyglot | The RPC framework
+grpc/grpc-go | rpc,go | gRPC for Go
+grpc/grpc-java | rpc,java | gRPC for Java
+grpc/grpc-web | rpc,browser | gRPC from the browser
+google/googletest | testing,cpp | The C++ test framework
+google/benchmark | benchmarking,cpp,microbench | Microbenchmark library; pairs with the perf discipline
+google/sanitizers | debugging,memory,security | ASan/TSan/MSan; find the bug before the customer does
+google/oss-fuzz | fuzzing,security,continuous | Continuous fuzzing for open source
+google/AFL | fuzzing,security,classic | The classic fuzzer
+google/clusterfuzz | fuzzing,infrastructure,scale | Fuzzing infrastructure at scale
+google/styleguide | standards,style,polyglot | Google's public style guides
+google/eng-practices | code-review,standards,practice | The code review guidance worth adopting verbatim
+google/skills | skills,agents,catalog | Official Google skills corpus for agent harnesses
+google/adk-python | agents,sdk,google | Agent Development Kit
+google/adk-samples | agents,samples,google | ADK reference agents
+google-gemini/cookbook | genai,recipes,gemini | Gemini API recipes
+google-gemini/gemini-cli | cli,agents,gemini | Gemini command line agent
+google-deepmind/deepmind-research | research,papers,code | Research code accompanying DeepMind papers
+google-research/google-research | research,breadth,code | Very large research code monorepo
+google-research/tuning_playbook | training,practice,deeplearning | The deep learning tuning playbook; unusually practical
+tensorflow/tensorflow | ml,framework,production | TensorFlow
+tensorflow/tfx | mlops,pipelines,production | Production ML pipelines
+tensorflow/models | models,reference,zoo | Reference model implementations
+jax-ml/jax | autodiff,xla,research | JAX
+google/flax | neural-nets,jax | Neural network library for JAX
+google-deepmind/alphafold | science,protein,research | AlphaFold; the flagship applied research codebase
+google/mediapipe | vision,ondevice,pipelines | On-device perception pipelines
+google-ai-edge/mediapipe | ondevice,ml,edge | Edge ML pipelines
+google-ai-edge/LiteRT | ondevice,inference,mobile | On-device runtime formerly TFLite
+android/architecture-samples | android,architecture,samples | The official Android architecture reference
+android/nowinandroid | android,reference,compose | The flagship modern Android sample app
+android/compose-samples | android,compose,ui | Jetpack Compose samples
+android/platform-samples | android,platform,api | Platform capability samples
+androidx/androidx | android,jetpack,libraries | The AndroidX library source
+android/android-ktx | android,kotlin,extensions | Kotlin extensions for Android
+android/skills | android,skills,agents | Official Android skills for agent harnesses
+JetBrains/kotlin | language,kotlin,compiler | The Kotlin compiler
+Kotlin/kotlinx.coroutines | concurrency,kotlin,async | Structured concurrency for Kotlin
+Kotlin/kotlinx.serialization | serialization,kotlin | Multiplatform serialization
+square/okhttp | networking,android,java | The HTTP client the Android world uses
+square/retrofit | networking,api,android | Type-safe REST client
+square/moshi | json,kotlin,android | JSON for Kotlin and Java
+InsertKoinIO/koin | di,kotlin,lightweight | Lightweight dependency injection
+google/dagger | di,java,compile-time | Compile-time dependency injection
+angular/angular | frontend,framework,typescript | Angular
+angular/angular-cli | frontend,tooling,scaffolding | Angular CLI
+angular/components | frontend,material,components | Angular Material components
+flutter/flutter | mobile,crossplatform,dart | Flutter
+flutter/samples | mobile,samples,dart | Official Flutter samples
+dart-lang/sdk | language,dart,runtime | The Dart SDK
+material-components/material-web | design-system,web,material | Material Web components
+material-foundation/material-color-utilities | design,color,accessibility | Material color algorithms
+GoogleChrome/lighthouse | performance,audit,web | Web quality auditing; the number reviewers cite
+GoogleChrome/web-vitals | performance,metrics,web | Core Web Vitals measurement
+GoogleChrome/puppeteer | browser,automation,chrome | Chrome automation
+GoogleChromeLabs/quicklink | performance,prefetch,web | Prefetch links in the viewport
+google/site-kit-wp | analytics,wordpress | Site Kit; a large real-world WordPress plugin
+google/or-tools | optimization,solver,operations | Operations research solvers
+google/leveldb | storage,keyvalue,cpp | The embedded store many others descend from
+google/highway | simd,portability,cpp | Portable SIMD
+abseil/abseil-cpp | cpp,library,core | Google's C++ common libraries
+google/sqlcommenter | observability,sql,orm | Correlate ORM queries with traces

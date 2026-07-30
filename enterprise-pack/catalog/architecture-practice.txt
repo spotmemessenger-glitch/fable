@@ -1,0 +1,96 @@
+// domain: architecture-practice
+// title: Architecture, Engineering Practice, Standards and Curated Indexes
+// format: owner/repo | tags | why it matters
+
+donnemartin/system-design-primer | architecture,education,interviews | The most widely used system design reference
+ByteByteGoHq/system-design-101 | architecture,visual,education | Visual explanations of common architectures
+karanpratapsingh/system-design | architecture,education,notes | Structured system design notes
+binhnguyennus/awesome-scalability | architecture,catalog,realworld | Real-world scalability case studies
+mhadidg/software-architecture-books | architecture,reading,catalog | Curated architecture reading list
+kamranahmedse/developer-roadmap | learning,roadmaps,catalog | Role-by-role skill maps; useful as a competency spine
+practical-tutorials/project-based-learning | learning,projects,catalog | Build-to-learn project index
+codecrafters-io/build-your-own-x | learning,fundamentals,catalog | Rebuild the tools you depend on
+jwasham/coding-interview-university | learning,fundamentals,cs | Structured CS fundamentals
+TheAlgorithms/Python | algorithms,reference,python | Algorithm implementations
+trekhleb/javascript-algorithms | algorithms,javascript,education | Annotated algorithm implementations
+ashishps1/awesome-system-design-resources | architecture,catalog,awesome | System design resource index
+ashishps1/awesome-low-level-design | design,oop,catalog | Object-level design problems and solutions
+DovAmir/awesome-design-patterns | patterns,catalog,awesome | Design pattern index across paradigms
+kamranahmedse/design-patterns-for-humans | patterns,education,readable | Patterns explained plainly
+iluwatar/java-design-patterns | patterns,java,implementations | Runnable pattern implementations
+mehdihadeli/awesome-software-architecture | architecture,catalog,awesome | Broad architecture index
+ddd-crew/ddd-starter-modelling-process | ddd,process,modelling | A usable DDD starting process
+ddd-crew/bounded-context-canvas | ddd,design,canvas | Bounded context design tool
+ddd-crew/context-mapping | ddd,integration,patterns | Context mapping patterns
+EventStore/EventStore | event-sourcing,database,streams | Purpose-built event store
+oskardudycz/EventSourcing.NetCore | event-sourcing,dotnet,samples | Extensive event sourcing samples
+microservices-patterns/ftgo-application | microservices,patterns,saga | The reference saga/microservices application
+GoogleCloudPlatform/microservices-demo | microservices,reference,kubernetes | Polyglot microservices reference
+dotnet/eShop | microservices,dotnet,reference | Modern .NET reference architecture
+spring-petclinic/spring-petclinic-microservices | microservices,spring,reference | The Spring reference decomposition
+mingrammer/diagrams | diagrams,architecture,code | Architecture diagrams as Python
+plantuml/plantuml | diagrams,uml,text | Diagrams from text
+mermaid-js/mermaid | diagrams,markdown,docs | Diagrams inside documentation
+excalidraw/excalidraw | diagrams,whiteboard,collaboration | Fast architecture sketching
+joelparkerhenderson/architecture-decision-record | adr,decisions,templates | ADR templates and examples
+npryce/adr-tools | adr,cli,workflow | Manage ADRs from the command line
+thoughtworks/build-your-own-radar | strategy,radar,visualization | Build a technology radar
+github/gitignore | standards,git,templates | Canonical ignore templates
+github/docs | documentation,platform,reference | GitHub's own documentation
+readthedocs/readthedocs.org | documentation,hosting,platform | Documentation hosting
+squidfunk/mkdocs-material | documentation,static,theme | The documentation site standard
+sphinx-doc/sphinx | documentation,python,api | Python documentation generation
+slatedocs/slate | documentation,api,static | API documentation
+docsifyjs/docsify | documentation,lightweight,markdown | Docs without a build step
+evildmp/diataxis-documentation-framework | documentation,framework,structure | The four-mode documentation framework
+google/season-of-docs | documentation,practice,program | Documentation practice material
+writethedocs/www | documentation,community,practice | Documentation community knowledge
+RichardLitt/standard-readme | documentation,standard,readme | README standard
+conventional-commits/conventionalcommits.org | standards,commits,automation | Commit convention specification
+semver/semver.org | standards,versioning | Semantic versioning specification
+olivierlacan/keep-a-changelog | standards,changelog | Changelog conventions
+github/opensource.guide | practice,community,maintenance | Maintaining projects sustainably
+kubernetes/community | governance,process,community | How a very large project is actually run
+cncf/landscape | ecosystem,catalog,cloudnative | The cloud native landscape data
+cncf/toc | governance,architecture,review | Technical oversight and project reviews
+thoughtbot/guides | standards,practice,style | Engineering guides worth copying
+airbnb/javascript | standards,style,javascript | The most-adopted JS style guide
+google/styleguide | standards,style,polyglot | Google style guides
+uber-go/guide | standards,style,go | Uber's Go style guide
+golang-standards/project-layout | standards,structure,go | The layout convention Go teams argue about and then adopt
+rust-lang/api-guidelines | standards,api,rust | Rust API design guidance
+microsoft/api-guidelines | standards,api,rest | Microsoft REST API guidelines
+zalando/restful-api-guidelines | standards,api,rest | Zalando's detailed REST guidelines
+adidas/api-guidelines | standards,api,enterprise | Enterprise API guidance
+stripe/openapi | api,specs,quality | A gold-standard public API spec
+OAI/OpenAPI-Specification | standards,api,openapi | The OpenAPI specification
+json-schema-org/json-schema-spec | standards,schema,validation | JSON Schema specification
+protocolbuffers/protobuf | serialization,schema,rpc | Protocol buffers
+grpc/grpc | rpc,polyglot,standard | gRPC
+cloudevents/spec | standards,events,interop | Event metadata standard
+arc42/arc42-template | architecture,documentation,template | Architecture documentation template
+Azure/review-checklists | review,architecture,checklists | Ready-made architecture review checklists
+mspnp/architecture-center | architecture,patterns,azure | Reference architectures
+awslabs/aws-well-architected-labs | architecture,labs,aws | Hands-on Well-Architected labs
+GoogleCloudPlatform/cloud-foundation-fabric | landing-zone,architecture,gcp | Opinionated landing zones
+sindresorhus/awesome | catalog,index,awesome | The root index of curated lists
+vinta/awesome-python | catalog,python,awesome | Python ecosystem index
+avelino/awesome-go | catalog,go,awesome | Go ecosystem index
+rust-unofficial/awesome-rust | catalog,rust,awesome | Rust ecosystem index
+akullpp/awesome-java | catalog,java,awesome | Java ecosystem index
+sorrycc/awesome-javascript | catalog,javascript,awesome | JavaScript ecosystem index
+enaqx/awesome-react | catalog,react,awesome | React ecosystem index
+vuejs/awesome-vue | catalog,vue,awesome | Vue ecosystem index
+ramitsurana/awesome-kubernetes | catalog,kubernetes,awesome | Kubernetes ecosystem index
+shuaibiyy/awesome-tf | catalog,terraform,awesome | Terraform ecosystem index
+0PandaDEV/awesome-windows | catalog,windows,awesome | Windows tooling index
+jaywcjlove/awesome-mac | catalog,macos,awesome | macOS tooling index
+Solido/awesome-flutter | catalog,flutter,awesome | Flutter ecosystem index
+JStumpp/awesome-android | catalog,android,awesome | Android ecosystem index
+vsouza/awesome-ios | catalog,ios,awesome | iOS ecosystem index
+visenger/awesome-mlops | catalog,mlops,awesome | MLOps index
+kelvins/awesome-mlops | catalog,mlops,awesome | Alternative MLOps index
+josephmisiti/awesome-machine-learning | catalog,ml,awesome | Machine learning index
+Hannibal046/Awesome-LLM | catalog,llm,awesome | LLM research and tooling index
+e2b-dev/awesome-ai-agents | catalog,agents,awesome | AI agent landscape index
+steven2358/awesome-generative-ai | catalog,genai,awesome | Generative AI index

@@ -1,0 +1,68 @@
+// domain: apple
+// title: Apple Platforms — Swift, iOS/macOS, on-device ML, developer tooling
+// format: owner/repo | tags | why it matters
+
+apple/swift | language,compiler,core | The Swift compiler and stdlib
+apple/swift-evolution | language,design,proposals | Language evolution in the open; read proposals before arguing style
+apple/swift-package-manager | packaging,dependencies,swift | SwiftPM
+apple/swift-nio | networking,async,server | Event-driven networking; the base of server-side Swift
+apple/swift-log | logging,api,swift | The logging API server Swift standardised on
+apple/swift-metrics | metrics,observability,swift | Metrics API for Swift
+apple/swift-distributed-tracing | tracing,observability,swift | Distributed tracing API
+apple/swift-async-algorithms | concurrency,async,sequences | Async sequence algorithms
+apple/swift-collections | datastructures,swift | Additional data structures
+apple/swift-algorithms | algorithms,sequences,swift | Sequence and collection algorithms
+apple/swift-numerics | numerics,math,swift | Numerical protocols and types
+apple/swift-argument-parser | cli,swift,parsing | Build command line tools properly
+apple/swift-format | formatting,style,swift | Official formatter
+apple/swift-syntax | parsing,macros,tooling | SwiftSyntax; the basis of macros and linters
+apple/swift-testing | testing,swift,modern | The modern Swift testing framework
+apple/swift-docc | documentation,tooling,swift | DocC documentation compiler
+apple/swift-crypto | crypto,swift,security | Crypto APIs matching CryptoKit
+apple/swift-certificates | security,x509,swift | X.509 handling
+apple/swift-openapi-generator | api,openapi,codegen | Generate Swift clients and servers from OpenAPI
+apple/swift-protobuf | serialization,protobuf,swift | Protocol buffers for Swift
+apple/swift-markdown | parsing,markdown,swift | Markdown parsing
+apple/swift-http-types | http,api,swift | Shared HTTP currency types
+swift-server/swift-service-lifecycle | server,lifecycle,swift | Graceful startup and shutdown
+apple/swift-nio-ssl | tls,networking,swift | TLS for SwiftNIO
+apple/sourcekit-lsp | lsp,tooling,ide | Language server for Swift
+apple/swift-corelibs-foundation | foundation,crossplatform,swift | Foundation on non-Apple platforms
+apple/ml-stable-diffusion | ml,coreml,ondevice | Stable Diffusion on Apple silicon
+apple/coremltools | ml,conversion,coreml | Convert and optimise models for Core ML
+ml-explore/mlx | ml,apple-silicon,array | Array framework designed for unified memory
+ml-explore/mlx-examples | ml,examples,apple-silicon | Working MLX examples
+ml-explore/mlx-swift | ml,swift,apple-silicon | MLX from Swift
+apple/ml-ferret | ml,multimodal,research | Multimodal grounding research
+apple/ml-4m | ml,multimodal,research | Massively multimodal masked modelling
+apple/axlearn | ml,training,jax | Large-scale training library on JAX
+apple/foundationdb | database,distributed,transactions | Strictly serialisable distributed KV; the deterministic-testing story alone is worth reading
+apple/pkl | configuration,language,typed | Typed configuration language
+apple/container | containers,macos,virtualization | Run Linux containers on macOS
+apple/darwin-xnu | kernel,macos,source | The XNU kernel source
+apple/password-manager-resources | security,passwords,rules | Site-specific password rules; unusually practical
+apple/app-store-server-library-python | payments,iap,server | App Store server notifications in Python
+apple/app-store-server-library-java | payments,iap,server | App Store server notifications in Java
+apple/app-store-server-library-node | payments,iap,server | App Store server notifications in Node
+apple/sample-food-truck | swiftui,sample,multiplatform | Multiplatform SwiftUI sample
+apple/servicetalk | networking,jvm,reactive | Reactive JVM networking from Apple
+apple/swift-nio-http2 | http2,networking,swift | HTTP/2 for SwiftNIO
+vapor/vapor | server,swift,web | The leading server-side Swift framework
+hummingbird-project/hummingbird | server,swift,lightweight | Lightweight Swift HTTP server
+pointfreeco/swift-composable-architecture | architecture,state,swiftui | The most-adopted SwiftUI architecture
+pointfreeco/swift-snapshot-testing | testing,snapshots,swift | Snapshot testing for UI
+pointfreeco/swift-dependencies | di,testing,swift | Dependency management for testable Swift
+realm/SwiftLint | linting,style,swift | The de facto Swift linter
+nicklockwood/SwiftFormat | formatting,style,swift | Widely used Swift formatter
+Quick/Quick | testing,bdd,swift | BDD testing framework
+Quick/Nimble | testing,matchers,swift | Matcher library
+Alamofire/Alamofire | networking,http,swift | The classic Swift HTTP client
+onevcat/Kingfisher | images,caching,swift | Image loading and caching
+SDWebImage/SDWebImage | images,caching,objc | Long-standing image cache
+airbnb/lottie-ios | animation,ui,ios | Render After Effects animations natively
+ReactiveX/RxSwift | reactive,streams,swift | Reactive extensions for Swift
+CombineCommunity/CombineExt | reactive,combine,swift | Combine operators Apple omitted
+tuist/tuist | tooling,xcode,scale | Manage large Xcode projects as code
+XcodesOrg/xcodes | tooling,xcode,versions | Manage Xcode versions
+fastlane/fastlane | cicd,release,mobile | Mobile release automation; the CI backbone for App Store shipping
+mac-cain13/R.swift | resources,typesafety,swift | Type-safe resource access

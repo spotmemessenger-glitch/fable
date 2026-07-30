@@ -1,0 +1,99 @@
+// domain: security
+// title: Application Security, Supply Chain, Cloud Security, IAM and AI Security
+// format: owner/repo | tags | why it matters
+
+OWASP/CheatSheetSeries | appsec,reference,owasp | The single densest appsec reference
+OWASP/ASVS | standards,verification,requirements | Verification requirements to hold designs against
+OWASP/Top10 | appsec,risks,awareness | The risk list every enterprise review cites
+OWASP/wstg | testing,methodology,web | Web security testing methodology
+OWASP/API-Security | api,risks,owasp | API-specific top ten
+OWASP/www-project-proactive-controls | appsec,controls,guidance | What to build, not just what to avoid
+OWASP/threat-dragon | threat-modeling,tooling,diagrams | Threat modelling tool
+jeremylong/DependencyCheck | sca,dependencies,scanning | Dependency vulnerability scanning
+DependencyTrack/dependency-track | sbom,supply-chain,platform | Continuous SBOM analysis
+OWASP/Nettacker | scanning,network,recon | Automated network reconnaissance
+zaproxy/zaproxy | dast,scanning,web | The open DAST scanner
+sqlmapproject/sqlmap | testing,sqli,offensive | SQL injection testing
+aquasecurity/trivy | scanning,containers,iac | The default all-in-one scanner
+anchore/grype | scanning,vulnerabilities,containers | Container and filesystem vulnerability scanning
+anchore/syft | sbom,inventory,containers | SBOM generation
+CycloneDX/specification | sbom,standard,supply-chain | The CycloneDX SBOM standard
+spdx/spdx-spec | sbom,standard,licensing | The SPDX standard
+sigstore/cosign | signing,supply-chain,containers | Sign and verify artifacts
+sigstore/sigstore | signing,transparency,keyless | Keyless signing infrastructure
+slsa-framework/slsa | supply-chain,levels,framework | Build integrity levels
+in-toto/in-toto | supply-chain,attestation,provenance | Attest each step of the pipeline
+ossf/scorecard | supply-chain,risk,automation | Score dependency projects automatically
+ossf/allstar | policy,github,enforcement | Enforce repo security policy continuously
+github/codeql | sast,queries,semantic | Semantic code analysis; write custom queries
+returntocorp/semgrep | sast,rules,fast | Fast pattern-based static analysis
+semgrep/semgrep-rules | sast,rules,corpus | The community rule corpus
+PyCQA/bandit | sast,python,security | Python security linting
+gitleaks/gitleaks | secrets,scanning,git | Secret detection in history
+trufflesecurity/trufflehog | secrets,verification,scanning | Secret scanning that verifies liveness
+Yelp/detect-secrets | secrets,baseline,precommit | Baseline-driven secret prevention
+aquasecurity/tfsec | iac,scanning,terraform | Terraform security scanning
+bridgecrewio/checkov | iac,policy,scanning | Policy-as-code scanning for IaC
+tenable/terrascan | iac,compliance,scanning | IaC compliance scanning
+aquasecurity/kube-bench | kubernetes,cis,benchmark | CIS benchmark checks for clusters
+aquasecurity/kube-hunter | kubernetes,pentest,discovery | Cluster attack surface discovery
+controlplaneio/kubesec | kubernetes,manifests,risk | Score manifest security
+falcosecurity/falco | runtime,detection,ebpf | Runtime threat detection
+cilium/tetragon | runtime,ebpf,enforcement | eBPF observability and enforcement
+kubearmor/KubeArmor | runtime,policy,enforcement | Runtime policy enforcement
+open-policy-agent/opa | policy,authorization,rego | Policy decisions as data
+ory/keto | authorization,zanzibar,rbac | Zanzibar-style permissions
+ory/hydra | oauth2,oidc,server | OAuth2 and OIDC provider
+ory/kratos | identity,auth,api | Identity management API
+keycloak/keycloak | iam,sso,enterprise | The self-hosted enterprise IAM default
+authelia/authelia | auth,gateway,2fa | Authentication gateway
+dexidp/dex | oidc,federation,connector | OIDC federation
+openid/AppAuth-Android | oauth,mobile,android | Correct OAuth on Android
+openid/AppAuth-iOS | oauth,mobile,ios | Correct OAuth on iOS
+panva/node-oidc-provider | oidc,node,certified | Certified OIDC provider for Node
+IdentityServer/IdentityServer4 | oidc,dotnet,history | The .NET identity server lineage
+prowler-cloud/prowler | cloud,audit,multicloud | Multi-cloud security assessment
+aquasecurity/cloudsploit | cloud,scanning,config | Cloud configuration scanning
+nccgroup/ScoutSuite | cloud,audit,multicloud | Multi-cloud auditing
+Netflix/security_monkey | cloud,monitoring,history | Historical but instructive cloud posture monitoring
+salesforce/policy_sentry | iam,least-privilege,aws | Generate least-privilege IAM policies
+duo-labs/cloudmapper | aws,visualization,audit | Visualise AWS environments
+aws-samples/aws-security-reference-architecture-examples | aws,architecture,security | AWS SRA implementations
+awslabs/aws-security-hub-automated-response-and-remediation | aws,soar,automation | Automated remediation patterns
+usnistgov/oscal-content | compliance,nist,catalog | NIST control catalogues in machine-readable form
+CISAgov/development-guide | standards,government,practice | Public sector engineering standards
+center-for-threat-informed-defense/attack-flow | threat,modeling,attack | Model attack sequences
+mitre/cti | threat,intel,attack | ATT&CK as structured data
+mitre-attack/attack-navigator | threat,coverage,visualization | Map detection coverage
+Neo23x0/sigma | detection,rules,siem | Vendor-neutral detection rules
+SigmaHQ/sigma | detection,rules,corpus | The Sigma rule corpus
+elastic/detection-rules | detection,siem,rules | Elastic's detection content
+splunk/security_content | detection,splunk,rules | Splunk security content
+redcanaryco/atomic-red-team | testing,detection,adversary | Test whether detections actually fire
+mitre/caldera | adversary-emulation,automation | Automated adversary emulation
+projectdiscovery/nuclei | scanning,templates,fast | Template-driven vulnerability scanning
+projectdiscovery/nuclei-templates | scanning,templates,corpus | The template corpus
+projectdiscovery/subfinder | recon,dns,discovery | Subdomain discovery
+projectdiscovery/httpx | recon,http,probing | HTTP probing toolkit
+OJ/gobuster | recon,bruteforce,discovery | Content and DNS discovery
+danielmiessler/SecLists | wordlists,testing,corpus | The standard wordlist collection
+swisskyrepo/PayloadsAllTheThings | payloads,testing,reference | Payload and bypass reference
+rapid7/metasploit-framework | exploitation,framework,testing | The exploitation framework
+sleuthkit/autopsy | forensics,investigation | Digital forensics platform
+volatilityfoundation/volatility3 | forensics,memory,analysis | Memory forensics
+google/tsunami-security-scanner | scanning,network,google | Google's network scanner
+google/oss-fuzz | fuzzing,continuous,security | Continuous fuzzing for open source
+google/security-research | research,advisories,poc | Published vulnerability research
+cloudflare/quiche | tls,quic,rust | QUIC and HTTP/3 implementation
+openssl/openssl | crypto,tls,library | The TLS library most estates depend on
+jedisct1/libsodium | crypto,library,safe | Misuse-resistant cryptography
+pyca/cryptography | crypto,python,library | The correct Python crypto library
+RustCrypto/traits | crypto,rust,traits | Rust cryptography traits
+protectai/modelscan | ai-security,models,scanning | Scan model files for unsafe payloads
+protectai/llm-guard | ai-security,filtering,prompts | Input and output filtering for LLM apps
+leondz/garak | ai-security,redteam,scanning | LLM vulnerability probes
+Azure/PyRIT | ai-security,redteam,microsoft | Generative AI risk identification
+NVIDIA/garak | ai-security,scanning,llm | LLM security probing (NVIDIA-maintained line)
+mlcommons/croissant | ai,metadata,datasets | Dataset metadata for provenance
+OWASP/www-project-top-10-for-large-language-model-applications | ai-security,owasp,risks | The LLM top ten
+cncf/tag-security | security,cloud-native,guidance | Cloud-native security guidance

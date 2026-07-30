@@ -1,0 +1,68 @@
+// domain: rag-knowledge
+// title: RAG, Vector Search, Embeddings, Document Parsing and Knowledge Graphs
+// format: owner/repo | tags | why it matters
+
+facebookresearch/faiss | vectors,ann,library | The ANN baseline; understand it before choosing a database
+nmslib/hnswlib | vectors,hnsw,library | Reference HNSW implementation
+spotify/annoy | vectors,ann,memory-mapped | Memory-mapped ANN; still excellent for static indexes
+qdrant/qdrant | vectordb,rust,filtering | Vector DB with strong payload filtering
+milvus-io/milvus | vectordb,scale,distributed | Distributed vector DB for large corpora
+weaviate/weaviate | vectordb,hybrid,modules | Hybrid search with pluggable vectorizers
+chroma-core/chroma | vectordb,embedded,dx | Embedded vector store; correct default for prototypes
+pgvector/pgvector | postgres,vectors,extension | Vectors inside Postgres; usually the right enterprise answer
+lancedb/lancedb | vectordb,columnar,embedded | Columnar embedded vector store on Lance format
+lancedb/lance | format,columnar,ml | ML-native columnar format with fast random access
+vespa-engine/vespa | search,serving,ranking | Search plus ML ranking at scale
+opensearch-project/OpenSearch | search,apache2,fork | Apache-2 search engine with vector support
+elastic/elasticsearch | search,enterprise,ecosystem | The incumbent enterprise search engine
+apache/lucene | search,library,core | The engine under most of the above
+apache/solr | search,enterprise | Enterprise search server on Lucene
+typesense/typesense | search,typo-tolerant,dx | Fast typo-tolerant search
+meilisearch/meilisearch | search,instant,dx | Instant-search engine with great defaults
+valkey-io/valkey | cache,keyvalue,fork | Community fork of Redis; note the licence history
+redis/redis | cache,keyvalue,vectors | In-memory store with vector search modules
+UKPLab/sentence-transformers | embeddings,training,library | The standard embedding toolkit
+FlagOpen/FlagEmbedding | embeddings,bge,multilingual | BGE embedding and reranking family
+embeddings-benchmark/mteb | embeddings,benchmark,evaluation | Massive text embedding benchmark; check before picking a model
+qdrant/fastembed | embeddings,onnx,light | Lightweight ONNX embedding inference
+neuml/txtai | embeddings,workflows,database | All-in-one embeddings database and workflows
+jina-ai/jina | multimodal,serving,cloud-native | Cloud-native multimodal serving
+castorini/pyserini | ir,reproducible,research | Reproducible IR baselines; sparse and dense
+AmenRa/ranx | ir,evaluation,fusion | Ranking evaluation and fusion
+stanford-futuredata/ColBERT | retrieval,late-interaction | Late interaction retrieval; strong quality/cost tradeoff
+microsoft/graphrag | rag,graph,summarization | Graph-structured RAG for global questions
+HKUDS/LightRAG | rag,graph,efficient | Lighter graph RAG variant
+infiniflow/ragflow | rag,pipeline,parsing | Deep document parsing plus RAG workflow
+QuivrHQ/quivr | rag,assistant,storage | Personal knowledge assistant
+danswer-ai/danswer | rag,enterprise-search,connectors | Enterprise search over company tools
+langchain-ai/rag-from-scratch | rag,education | Step-by-step RAG teaching repo
+NirDiamant/RAG_Techniques | rag,techniques,catalog | Broad catalogue of RAG techniques with code
+explodinggradients/ragas | rag,evaluation,metrics | RAG-specific evaluation metrics
+Unstructured-IO/unstructured | parsing,documents,pipeline | Ingest almost any document format
+py-pdf/pypdf | pdf,parsing,python | Pure-Python PDF manipulation
+pymupdf/PyMuPDF | pdf,parsing,fast | Fast, accurate PDF text and layout extraction
+opendatalab/MinerU | pdf,extraction,layout | High-quality PDF to structured markdown
+DS4SD/docling | documents,parsing,ibm | IBM document conversion with layout understanding
+microsoft/markitdown | conversion,markdown,office | Office and PDF to markdown for LLM ingestion
+jsvine/pdfplumber | pdf,tables,extraction | Precise table and word extraction
+tesseract-ocr/tesseract | ocr,classic | The classic OCR engine
+PaddlePaddle/PaddleOCR | ocr,multilingual,layout | Strong multilingual OCR and layout analysis
+JaidedAI/EasyOCR | ocr,simple,pytorch | Simple OCR; slower, good as fallback
+mindee/doctr | ocr,documents,dl | Document text recognition
+VikParuchuri/marker | pdf,markdown,quality | PDF to markdown with high fidelity
+VikParuchuri/surya | ocr,layout,multilingual | Layout analysis and OCR toolkit
+neo4j/neo4j | graph,database,cypher | The incumbent graph database
+apache/age | graph,postgres,extension | Graph queries inside Postgres
+memgraph/memgraph | graph,inmemory,streaming | In-memory graph with streaming
+kuzudb/kuzu | graph,embedded,columnar | Embedded analytical graph database
+RDFLib/rdflib | rdf,semantic,python | RDF and SPARQL in Python
+eclipse-rdf4j/rdf4j | rdf,java,sparql | Java RDF framework
+apache/jena | rdf,java,reasoning | Semantic web toolkit with reasoning
+w3c/rdf-star | standards,rdf,w3c | Standards work for statement-level metadata
+usnistgov/OSCAL | standards,compliance,catalog | Machine-readable control catalogues; the bridge to security automation
+schemaorg/schemaorg | vocabulary,structured-data | Shared vocabulary for structured data
+OWASP/CheatSheetSeries | security,knowledge,reference | Dense, high-signal reference corpus worth indexing
+open-metadata/OpenMetadata | metadata,catalog,lineage | Metadata platform with lineage
+linkedin/datahub | metadata,catalog,linkedin | Metadata search and discovery at scale
+apache/atlas | metadata,governance,hadoop | Governance and lineage in the Hadoop estate
+amundsen-io/amundsen | discovery,metadata,lyft | Data discovery portal

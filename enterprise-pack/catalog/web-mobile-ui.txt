@@ -1,0 +1,98 @@
+// domain: web-mobile-ui
+// title: Frontend, Backend Frameworks, Design Systems and Mobile
+// format: owner/repo | tags | why it matters
+
+facebook/react | frontend,library,ui | The UI library the enterprise defaults to
+vercel/next.js | frontend,ssr,fullstack | The dominant React meta-framework
+remix-run/react-router | routing,react,web | Routing and the Remix lineage
+vuejs/core | frontend,framework,reactive | Vue 3
+nuxt/nuxt | frontend,ssr,vue | The Vue meta-framework
+sveltejs/svelte | frontend,compiler,ui | Compile-time reactivity
+sveltejs/kit | frontend,fullstack,svelte | SvelteKit
+solidjs/solid | frontend,fine-grained,performance | Fine-grained reactivity
+withastro/astro | frontend,content,islands | Content-first sites with islands
+angular/angular | frontend,enterprise,typescript | The enterprise-standard framework
+preactjs/preact | frontend,small,react-compat | Small React-compatible runtime
+lit/lit | webcomponents,standards,light | Standards-based components
+microsoft/fast | webcomponents,design-system,microsoft | Web components and design tooling
+vitejs/vite | build,dev-server,speed | The modern build baseline
+webpack/webpack | build,bundler,legacy | Still the bundler most enterprise apps are on
+evanw/esbuild | build,speed,go | Extremely fast bundling
+swc-project/swc | compiler,rust,speed | Rust-based TS/JS compilation
+rollup/rollup | bundler,libraries,esm | Library bundling
+babel/babel | transpiler,plugins,ecosystem | Transpilation and plugin ecosystem
+biomejs/biome | linting,formatting,rust | Fast unified lint and format
+eslint/eslint | linting,javascript,rules | The lint standard
+prettier/prettier | formatting,opinionated,polyglot | Formatting arguments, ended
+typescript-eslint/typescript-eslint | linting,typescript,rules | TypeScript-aware linting
+tailwindlabs/tailwindcss | css,utility,design | Utility CSS
+shadcn-ui/ui | components,react,copyable | Copy-in component patterns
+radix-ui/primitives | accessibility,primitives,react | Unstyled accessible primitives
+mui/material-ui | components,react,material | The most-deployed React component library
+ant-design/ant-design | components,react,enterprise | Enterprise-shaped component set
+chakra-ui/chakra-ui | components,react,accessible | Accessible component system
+adobe/react-spectrum | accessibility,components,adobe | Adobe's accessibility-first system
+salesforce/design-system-react | design-system,enterprise,react | Lightning Design System components
+carbon-design-system/carbon | design-system,ibm,enterprise | IBM's design system
+alphagov/govuk-design-system | design-system,accessibility,public | Accessibility-first public sector system
+primer/react | design-system,github,react | GitHub's design system
+storybookjs/storybook | components,docs,testing | Component workshop and visual review
+styleguidist/react-styleguidist | components,docs | Component documentation
+system-ui/theme-ui | theming,design-tokens | Themeable design systems
+amzn/style-dictionary | design-tokens,build,platform | Tokens compiled to every platform
+design-tokens/community-group | design-tokens,standard,w3c | The token specification work
+tokens-studio/figma-plugin | design-tokens,figma,workflow | Tokens between design and code
+tanstack/query | data-fetching,cache,react | Server state done properly
+pmndrs/zustand | state,react,minimal | Minimal state management
+reduxjs/redux-toolkit | state,react,enterprise | The enterprise Redux path
+statelyai/xstate | state-machines,statecharts | Statecharts for complex flows
+trpc/trpc | api,typescript,endtoend | End-to-end type safety without codegen
+graphql/graphql-js | graphql,reference,spec | Reference GraphQL implementation
+apollographql/apollo-server | graphql,server,federation | GraphQL server and federation
+graphql/graphql-spec | graphql,standard,spec | The specification
+hasura/graphql-engine | graphql,database,instant | Instant GraphQL over Postgres
+expressjs/express | backend,node,minimal | The Node incumbent
+fastify/fastify | backend,node,performance | Faster Node server with schema validation
+nestjs/nest | backend,node,enterprise | Opinionated enterprise Node architecture
+honojs/hono | backend,edge,light | Edge-first web framework
+tiangolo/fastapi | backend,python,openapi | Typed Python APIs with generated docs
+pallets/flask | backend,python,minimal | Minimal Python web framework
+django/django | backend,python,batteries | Batteries-included Python framework
+encode/starlette | backend,python,asgi | The ASGI core under FastAPI
+encode/httpx | http,python,async | Modern Python HTTP client
+psf/requests | http,python,classic | The classic HTTP client
+gin-gonic/gin | backend,go,fast | The common Go HTTP framework
+labstack/echo | backend,go,minimal | Minimal Go framework
+go-chi/chi | routing,go,idiomatic | Idiomatic Go routing
+actix/actix-web | backend,rust,performance | High-performance Rust web framework
+tokio-rs/axum | backend,rust,ergonomic | Ergonomic Rust web framework
+tokio-rs/tokio | async,rust,runtime | The Rust async runtime
+rails/rails | backend,ruby,convention | Convention over configuration
+laravel/laravel | backend,php,ecosystem | The PHP enterprise default
+symfony/symfony | backend,php,components | Component-based PHP
+phoenixframework/phoenix | backend,elixir,realtime | Real-time framework on the BEAM
+facebook/react-native | mobile,crossplatform,react | The dominant cross-platform runtime
+expo/expo | mobile,tooling,react-native | The React Native toolchain that actually ships
+flutter/flutter | mobile,crossplatform,dart | Flutter
+ionic-team/capacitor | mobile,web,native-bridge | Web apps in native shells
+NativeScript/NativeScript | mobile,crossplatform,javascript | Native APIs from JavaScript
+electron/electron | desktop,crossplatform,web | Desktop apps from web tech
+tauri-apps/tauri | desktop,rust,small | Smaller, safer desktop shells
+microsoft/react-native-windows | mobile,windows,crossplatform | React Native on Windows
+software-mansion/react-native-reanimated | animation,mobile,performance | Native-thread animation
+react-navigation/react-navigation | navigation,mobile,react-native | Navigation for React Native
+realm/realm-swift | database,mobile,sync | Mobile database with sync
+Tencent/MMKV | storage,mobile,performance | Fast mobile key-value storage
+square/leakcanary | debugging,android,memory | Memory leak detection on Android
+airbnb/lottie-android | animation,mobile,design | Designer animations rendered natively
+bumptech/glide | images,android,loading | Image loading on Android
+coil-kt/coil | images,kotlin,android | Kotlin-first image loading
+JetBrains/compose-multiplatform | ui,kotlin,crossplatform | Compose beyond Android
+w3c/wcag | accessibility,standard,w3c | The accessibility standard itself
+dequelabs/axe-core | accessibility,testing,automation | Automated accessibility checks
+pa11y/pa11y | accessibility,cicd,testing | Accessibility in CI
+GoogleChrome/lighthouse | performance,accessibility,audit | The audit reviewers quote
+w3c/aria-practices | accessibility,patterns,aria | Correct ARIA patterns
+mdn/content | documentation,web,reference | The web platform reference
+web-platform-tests/wpt | standards,testing,browsers | Cross-browser conformance tests
+whatwg/html | standards,html,spec | The HTML specification

@@ -1,0 +1,60 @@
+// domain: nvidia-gpu
+// title: NVIDIA, CUDA, GPU Computing, HPC and Accelerated Data Science
+// format: owner/repo | tags | why it matters
+
+NVIDIA/cuda-samples | cuda,samples,official | Official CUDA sample corpus; the canonical kernel idioms
+NVIDIA/cccl | cuda,thrust,cub | CUDA C++ Core Libraries: Thrust, CUB, libcudacxx unified
+NVIDIA/cutlass | cuda,gemm,templates | Template abstractions for high-performance GEMM
+NVIDIA/TensorRT | inference,optimization,nvidia | The production inference optimizer
+NVIDIA/TensorRT-LLM | inference,llm,nvidia | LLM-specific TensorRT runtime
+triton-inference-server/server | serving,nvidia,multi-framework | Production model server
+NVIDIA/DALI | data-loading,gpu,pipeline | GPU data loading; removes the CPU input bottleneck
+NVIDIA/apex | mixed-precision,training | Mixed precision and fused optimizers
+NVIDIA/TransformerEngine | fp8,transformer,hopper | FP8 transformer training and inference
+NVIDIA/Megatron-LM | training,parallelism,scale | Large-scale model parallelism reference
+NVIDIA/NeMo | speech,llm,framework | End-to-end conversational AI framework
+NVIDIA/NeMo-Guardrails | safety,dialogue | Programmable rails for LLM dialogue
+NVIDIA/nccl | collectives,multi-gpu,communication | Multi-GPU collective communication
+NVIDIA/nvidia-container-toolkit | containers,gpu,runtime | GPUs inside containers; required for any k8s GPU story
+NVIDIA/gpu-operator | kubernetes,gpu,operator | GPU lifecycle management on Kubernetes
+NVIDIA/k8s-device-plugin | kubernetes,gpu,scheduling | Expose GPUs to the kubelet
+NVIDIA/dcgm-exporter | monitoring,gpu,prometheus | GPU telemetry into Prometheus
+NVIDIA/DCGM | monitoring,health,gpu | Data centre GPU manager
+NVIDIA/open-gpu-kernel-modules | drivers,linux,open | Open GPU kernel modules
+NVIDIA/warp | simulation,differentiable,python | Differentiable simulation kernels in Python
+NVIDIA/PhysicsNeMo | physics-ml,simulation | Physics-informed ML framework
+NVIDIA/Cosmos | world-models,robotics | World foundation models for physical AI
+NVIDIA/Isaac-GR00T | robotics,foundation-model | Humanoid robot foundation model
+isaac-sim/IsaacLab | robotics,simulation,rl | Robot learning environments on Isaac Sim
+NVIDIA-Omniverse/PhysX | physics,engine,simulation | The physics engine itself
+PixarAnimationStudios/OpenUSD | usd,scene,interchange | The scene description standard Omniverse builds on
+AcademySoftwareFoundation/MaterialX | materials,shading,standard | Portable material definitions
+rapidsai/cudf | dataframe,gpu,pandas | GPU dataframes with a pandas-shaped API
+rapidsai/cuml | ml,gpu,sklearn | GPU machine learning with a scikit-learn API
+rapidsai/cugraph | graph,gpu,analytics | GPU graph analytics
+rapidsai/raft | primitives,gpu,ann | Shared GPU primitives including ANN
+rapidsai/cuspatial | geospatial,gpu | GPU geospatial operations
+rapidsai/cuvs | vector-search,gpu,ann | GPU vector search library
+NVIDIA/cuQuantum | quantum,simulation,gpu | Quantum circuit simulation on GPU
+NVIDIA/cuda-python | cuda,bindings,python | Official Python bindings to the CUDA driver API
+cupy/cupy | numpy,gpu,array | NumPy-compatible GPU arrays
+numba/numba | jit,python,cuda | JIT compile Python to CPU and CUDA
+openai/triton | kernels,dsl | Kernel DSL that made custom kernels approachable
+Dao-AILab/flash-attention | attention,kernels,io-aware | The reference IO-aware attention kernels
+NVIDIA/nvbench | benchmarking,cuda | CUDA kernel benchmarking harness
+ROCm/ROCm | amd,gpu,alternative | The AMD alternative; know it exists before locking in
+intel/intel-extension-for-pytorch | intel,gpu,acceleration | Intel accelerator support for PyTorch
+oneapi-src/oneAPI-samples | intel,oneapi,heterogeneous | Heterogeneous compute samples
+kokkos/kokkos | hpc,portability,cpp | Performance portability across accelerators
+ROCm-Developer-Tools/HIP | portability,cuda,amd | CUDA-to-AMD portability layer
+spack/spack | hpc,packaging,builds | The HPC package manager
+open-mpi/ompi | mpi,hpc,communication | MPI implementation
+horovod/horovod | distributed,training,mpi | Distributed training over MPI/NCCL
+mpi4py/mpi4py | mpi,python,hpc | MPI from Python
+dask/dask | parallel,python,scaling | Scale Python without rewriting it
+modin-project/modin | pandas,scaling,drop-in | Drop-in pandas scaling
+NVIDIA/spark-rapids | spark,gpu,acceleration | GPU acceleration for Spark SQL
+NVIDIA/nvidia-docker | containers,gpu,legacy | Historical GPU container tooling; superseded but still referenced
+NVIDIA/aistore | storage,ai,scale | Scalable storage for AI workloads
+NVIDIA/Fuser | compiler,fusion,pytorch | Kernel fusion compiler for deep learning
+NVIDIA/thrust | cuda,parallel,stl | Parallel algorithms with an STL shape
