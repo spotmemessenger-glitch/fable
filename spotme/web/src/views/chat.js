@@ -11,7 +11,7 @@ import { rooms } from '../lib/rooms.js'
 import { lobby, distanceM, fmtDistance } from '../lib/discovery.js'
 import { translateText, transliterateRemote, detectLanguage, readMessage, SCRIPT_MAP, warmup, langName, speak, dictate } from '../lib/translate.js'
 import { sttBlob, ttsClone } from '../lib/voice.js'
-import { compressImage, fileToDataURL, recordVoice, currentLocation, mapLink, fileFromDataURL, downloadFile, shareOut, VIDEO_CAP_BYTES } from '../lib/media.js'
+import { compressImage, fileToDataURL, recordVoice, currentLocation, mapLink, fileFromDataURL, downloadFile, shareOut, maskDataURL, VIDEO_CAP_BYTES } from '../lib/media.js'
 import { openPhotoEditor, closePhotoEditor } from '../lib/photoedit.js'
 import { el, clear, avatar, fmtTime, fmtDay, actionSheet } from '../lib/ui.js'
 import { isPlainEnglish } from '../lib/english.js'
@@ -305,6 +305,15 @@ const burstChip = (m) => {
   return `🔥 ${secs >= 60 ? `${secs / 60}m` : `${secs}s`}`
 }
 
+/** The masked bubble's caption. Says "video" when it is one — the view-once
+ *  path is kind-agnostic now, and calling a clip a photo would be a lie in the
+ *  one place the user is deciding whether to spend their single view. */
+const privateLabel = (m) => {
+  const noun = m.kind === 'video' ? 'Private video' : 'Private photo'
+  if (!m.burst) return `${noun} — tap to open`
+  return `${noun} · ${m.burst >= 60 ? `${m.burst / 60}m` : `${m.burst}s`} — tap to open`
+}
+
 /** Eight tiny ✦ particles twinkling over a burst card. Positions and
  * staggered delays live in chat.css (nth-of-type) — pure CSS, GPU-cheap.
  * <i> on purpose: the legacy `.vonce span` blanket rule must not hit these. */
@@ -358,6 +367,10 @@ export function render (root, ctx, roomId) {
   /* ------------------------------------------------------------- state */
   let mounted = true
   let lastDayKey = null
+  /* Timestamp of the last row appended to the thread. Attachments finish out
+   * of order, and appending each one wherever the thread currently ends
+   * scrambled the transcript — five notes sent A..E rendered E,B,D,C,A. */
+  let lastTs = null
   let replyTarget = null
   let viewOncePick = false
   let recording = null
@@ -382,6 +395,11 @@ export function render (root, ctx, roomId) {
   let idleTimer = null
   let statusTimer = null
   const msgEls = new Map()      // id -> { wrap, message }
+  /* Attachments whose bytes are going out RIGHT NOW, in this page life. The
+   * progress chip is keyed off this rather than off the message, because a
+   * chip drawn from persisted state has nothing left alive to remove it: every
+   * attachment ever sent came back from a reload wearing a permanent "…". */
+  const inFlight = new Set()
   const trCache = new Map()     // id -> {text, engine} | 'pending'
   const timers = new Set()
   const countdowns = new Set()  // 1s intervals behind live ttl chips
@@ -447,8 +465,13 @@ export function render (root, ctx, roomId) {
     // never opens a list. The language is chosen on the chip beside it, the
     // same arrangement 文A already uses.
     const remembered = (db.convo(roomId) || convo).langTo
+    /* Turning the globe OFF used to null composeMode unconditionally, which
+     * silently killed 文A as well: the switch still read on, `xlit` was still
+     * true, and the composer did nothing at all until the user toggled 文A
+     * twice. The two features own separate switches, so turning one off hands
+     * the composer back to the other rather than emptying it. */
     setCompose({
-      composeMode: on ? 'translate' : null,
+      composeMode: on ? 'translate' : (xlitOn() ? 'translit' : null),
       langTo: on ? (remembered || 'en') : null
     })
     ctx.toast(on ? `Translating into ${langName(remembered || 'en')}` : 'Translation off')
@@ -749,7 +772,13 @@ export function render (root, ctx, roomId) {
    * message becomes readable in English letters. The words never change;
    * that is translation's job.
    */
-  const xlitCache = new Map()          // id -> {text, lang} | 'pending' | null
+  const xlitCache = new Map()          // id|text -> {text, lang} | 'pending' | null
+
+  /* Keyed on the text as well as the id, because a message can be EDITED.
+   * Keyed on the id alone, `refreshRow` rebuilt the bubble after an edit and
+   * `applyXlit` found a cache hit — so the reading under the new words was
+   * still the old words' reading, and nothing ever recomputed it. */
+  const xlitKey = (m) => `${m.id}|${m.text || ''}`
 
   /**
    * Owner's rule (2026-07-25): "enga iruka ?" → "where are you" — English
@@ -937,8 +966,8 @@ export function render (root, ctx, roomId) {
     const existing = bub.querySelector('.xl')
     if (!xlitOn() || !m.text || (m.kind && m.kind !== 'text')) { existing?.remove(); return }
 
-    if (!xlitCache.has(m.id)) {
-      xlitCache.set(m.id, 'pending')
+    if (!xlitCache.has(xlitKey(m))) {
+      xlitCache.set(xlitKey(m), 'pending')
       // onEarly paints the fast chain's answer the moment it lands, seconds
       // before the LLM replies; the final .then then supersedes it.
       /* Three stages land in order, each better than the last:
@@ -948,9 +977,9 @@ export function render (root, ctx, roomId) {
        * A stage only paints if nothing better is already showing. */
       computeXlit(m, (early) => {
         if (!mounted || !early) return
-        const cur = xlitCache.get(m.id)
+        const cur = xlitCache.get(xlitKey(m))
         if (cur !== 'pending' && (cur?.rank ?? 9) >= (early.rank ?? 0)) return
-        xlitCache.set(m.id, early)
+        xlitCache.set(xlitKey(m), early)
         const stick = nearBottom()
         applyXlit(m)
         if (stick) scrollBottom()
@@ -962,16 +991,16 @@ export function render (root, ctx, roomId) {
            * after it appeared, and an LLM answer carrying no script line
            * deleted the script the classic chain had already produced.
            * Nothing here may take information away. */
-          const cur = xlitCache.get(m.id)
+          const cur = xlitCache.get(xlitKey(m))
           const showing = cur && cur !== 'pending' ? cur : null
-          if (!res) { if (!showing) xlitCache.set(m.id, null); return }
-          xlitCache.set(m.id, {
+          if (!res) { if (!showing) xlitCache.set(xlitKey(m), null); return }
+          xlitCache.set(xlitKey(m), {
             ...res,
             script: res.script || showing?.script || null,
             rank: 9
           })
         })
-        .catch(() => { if (xlitCache.get(m.id) === 'pending') xlitCache.set(m.id, null) })
+        .catch(() => { if (xlitCache.get(xlitKey(m)) === 'pending') xlitCache.set(xlitKey(m), null) })
         .then(() => {
           if (!mounted) return
           const stick = nearBottom()
@@ -980,7 +1009,7 @@ export function render (root, ctx, roomId) {
         })
     }
 
-    const cur = xlitCache.get(m.id)
+    const cur = xlitCache.get(xlitKey(m))
     if (cur === null) { existing?.remove(); return }
     const pending = cur === 'pending'
     /* Three layers, in the order they are useful:
@@ -1191,8 +1220,40 @@ export function render (root, ctx, roomId) {
       durEl.classList.add('loading')
     }
 
+    /**
+     * How many seconds of this note never arrived, or 0 if it looks whole.
+     *
+     * The sender declared the length when they recorded it. When the file
+     * turns out to be materially shorter, it was cut in transit — and the old
+     * code silently ADOPTED the short duration: 40 seconds of a five-minute
+     * note drew a full 28-bar waveform, labelled itself "1s", played for 1.2s
+     * and stopped, with no signal anywhere that two thirds of the message was
+     * missing. That is how someone ends up sure they heard the whole thing.
+     *
+     * The threshold is ABSOLUTE, not a ratio, because the noise it has to
+     * clear is absolute: `dur` is wall-clock seconds rounded to an integer
+     * (media.js), so it can sit up to half a second above the encoded length,
+     * and Opus container framing adds tens of milliseconds on top — a real 3s
+     * note measures 2.941s. A ratio would either flag those or miss 40
+     * seconds cut off a five-minute note, which is 13%.
+     */
+    function missingSecs () {
+      const declared = Number(m.dur) || 0
+      const real = Number.isFinite(audio.duration) ? audio.duration : 0
+      if (!declared || !real) return 0
+      const short = declared - real
+      return short > 1.5 ? short : 0
+    }
+
     function showDuration () {
       durEl.classList.remove('loading')
+      if (missingSecs()) {
+        durEl.textContent = `${Math.round(effDur())}s of ${Math.round(m.dur)}s`
+        durEl.classList.add('damaged')
+        durEl.title = 'This voice note did not arrive in full'
+        return
+      }
+      durEl.classList.remove('damaged')
       durEl.textContent = `${Math.round(effDur())}s`
     }
 
@@ -1301,7 +1362,19 @@ export function render (root, ctx, roomId) {
       if (!wantPlay) return
       wantPlay = false
       showDuration()
-      audio.play().catch(() => ctx.toast('Could not play this voice note'))
+      /* Same guard as start(), because this path skipped it. The context can
+       * suspend between the tap and the bytes landing — an audio-session
+       * interruption, a Bluetooth route change, backgrounding — and by then
+       * the element is permanently rerouted into the Web Audio graph, so
+       * playing into a suspended context is silence with a moving timer. That
+       * is the original bug, reached through a narrower door.
+       *
+       * No gesture is left to lose here (this is an async event either way),
+       * so the resume is free: if the browser refuses it, play anyway. */
+      const go = () => audio.play().catch(() => ctx.toast('Could not play this voice note'))
+      const ac = getAudioCtx()
+      if (ac && ac.state === 'suspended') ac.resume().then(go, go)
+      else go()
     })
     audio.addEventListener('loadedmetadata', () => { if (!wantPlay) showDuration(); paintBars() })
     audio.addEventListener('error', () => {
@@ -1385,18 +1458,48 @@ export function render (root, ctx, roomId) {
   }
 
   /**
+   * Tap a private photo. The bytes are fetched if this device does not hold
+   * them (they are never persisted, so a reload loses them — deliberately),
+   * and only then is anything shown.
+   *
+   * The server serves them exactly once, to the person who claimed the view,
+   * and destroys them the moment openViewOnce reports the open. A photo that
+   * has already burned answers "no longer available", which is the truth.
+   */
+  function tapViewOnce (m, button) {
+    if (m.data) { openViewOnce(m); return }
+    button?.classList.add('loading')
+    rooms.fetchAttachment(roomId, m.id)
+      .then((data) => { if (mounted) openViewOnce({ ...m, data }) })
+      .catch(() => ctx.toast('That private photo is no longer available'))
+      .finally(() => button?.classList.remove('loading'))
+  }
+
+  /**
    * The burst viewer. A countdown ring runs for the sender-chosen time while
    * the photo shows; at zero (or on early close) the photo bursts into
-   * particles and is deleted without trace — tombstoned, gone from both ends.
+   * particles.
+   *
+   * THE BURN IS COMMITTED HERE, AT OPEN — before a pixel is drawn — not when
+   * the countdown ends. It used to be the other way round, and that made
+   * "exactly one view" false: killing the app mid-view left the photo intact
+   * and openable again, reproduced end to end with nothing but a reload.
    */
   function openViewOnce (m) {
     const secs = Math.max(1, m.burst || 10)
-    /* Tell them NOW, not when it burns. The sender used to learn only after
-     * the photo was already gone, which is the least interesting moment. */
-    try { rooms.viewOnceOpening(roomId, m.id, secs) } catch { /* offline */ }
+    /* One call does three things, in this order and before anything renders:
+     * tombstone it locally, tell the server to delete the stored slices, and
+     * tell the sender their countdown has started. Everything below is
+     * animation over a copy that exists only in this function's scope. */
+    try { rooms.viewOnceOpen(roomId, m.id, secs) } catch { /* offline */ }
+    removeRow(m.id)
     const R = 26
     const CIRC = 2 * Math.PI * R
-    const img = el('img', { src: m.data, alt: '' })
+    // Kind-agnostic: a private VIDEO used to fall through to the ordinary
+    // player — permanent, replayable, and listed in the media gallery.
+    const img = m.kind === 'video'
+      ? el('video', { src: m.data, autoplay: '', playsinline: '', loop: '' })
+      : el('img', { src: m.data, alt: '' })
     const count = el('span', { class: 'bcount', text: String(secs) })
     const ringFg = document.createElementNS('http://www.w3.org/2000/svg', 'circle')
     ringFg.setAttribute('cx', '30'); ringFg.setAttribute('cy', '30'); ringFg.setAttribute('r', String(R))
@@ -1422,14 +1525,20 @@ export function render (root, ctx, roomId) {
     ])
     root.appendChild(overlay)
 
-    let left = secs
+    /* Wall clock, not a tick count. An interval is throttled to once a minute
+     * in a backgrounded tab, so counting down by one per fire stretched a
+     * 10-second photo across many minutes of it being on screen. Ceil of the
+     * remaining time is also exactly what the sender's bubble renders, so the
+     * two clocks now read the same number instead of differing by one. */
+    const endsAt = Date.now() + secs * 1000
+    const remaining = () => Math.max(0, (endsAt - Date.now()) / 1000)
     let done = false
     requestAnimationFrame(() => { ringFg.style.strokeDashoffset = String(CIRC) })
     const tick = setInterval(() => {
-      left -= 1
-      count.textContent = String(Math.max(0, left))
-      if (left <= 0) finish()
-    }, 1000)
+      count.textContent = String(Math.ceil(remaining()))
+      if (remaining() <= 0) finish()
+    }, 250)
+    rowTimers.add(tick)
 
     function burstParticles () {
       const rect = img.getBoundingClientRect()
@@ -1463,8 +1572,15 @@ export function render (root, ctx, roomId) {
       }, 420)
     }
 
-    // Closing early consumes it too, exactly like Telegram.
-    overlay.addEventListener('click', finish)
+    // Closing early consumes it too, exactly like Telegram — but not the
+    // second half of a double-tap on the bubble, which used to land on this
+    // overlay the instant it mounted and burn the photo in ~50ms. Same 400ms
+    // ghost-click armour every other sheet in this file uses.
+    const openedAt = Date.now()
+    overlay.addEventListener('click', () => {
+      if (Date.now() - openedAt < 400) return
+      finish()
+    })
   }
 
   /**
@@ -1557,26 +1673,38 @@ export function render (root, ctx, roomId) {
   }
 
   function buildBubble (m, mine) {
-    if (m.data === null && m.detached && m.kind !== 'text') return buildDetached(m)
-    if (m.kind === 'image' && m.viewOnce && !mine) {
-      // Masked until opened — the photo never shows in the thread.
+    /* View-once is checked BEFORE `detached`, and without asking what kind it
+     * is. Both orderings were bugs: a shed or replayed private photo rendered
+     * as a generic "Photo — tap to load" that fetched and displayed it with no
+     * mask, no countdown and no burn; and a private VIDEO skipped this branch
+     * entirely and became an ordinary permanent player. */
+    if (m.viewOnce && !mine) {
+      /* The mask is a 16-pixel thumbnail the SENDER made and sent alongside
+       * the photo (media.js maskDataURL). It used to be `src: m.data` — the
+       * full-resolution original, blurred by a CSS filter, which leaves every
+       * pixel intact in the DOM for anyone who opens devtools. Nothing here
+       * may ever reference m.data: this bubble is what is on screen before
+       * the decision to spend the one view has been made. */
       const b = el('button', { class: 'vonce', type: 'button' }, [
         el('span', { class: 'vmask' }, [
-          // Telegram reference: the photo shows through, heavily blurred,
+          // Telegram reference: a smear of the photo's colours shows through,
           // under a dense field of sparkling grain.
-          m.data ? el('img', { class: 'vblur', src: m.data, alt: '' }) : null,
+          m.mask ? el('img', { class: 'vblur', src: m.mask, alt: '' }) : null,
           el('span', { class: 'vgrain' }),
           el('span', { class: 'vshimmer' }),
           ...sparkEls(),
           el('b', { class: 'bchip', text: burstChip(m) }),
           el('span', { class: 'vfire', text: '🔥' })
         ]),
-        el('span', { text: m.burst ? `Private photo · ${m.burst >= 60 ? `${m.burst / 60}m` : `${m.burst}s`} — tap to open` : 'Private photo — tap to open' })
+        el('span', { text: privateLabel(m) })
       ])
-      b.addEventListener('click', () => openViewOnce(m))
+      b.addEventListener('click', () => tapViewOnce(m, b))
       return b
     }
-    if (m.kind === 'image' && m.viewOnce && mine) {
+    if (m.viewOnce && mine) {
+      // Also above the `detached` check: my own private photo's bytes are not
+      // persisted either, so after a reload it must still read "Private photo"
+      // rather than offering to load one back.
       // They are looking at it right now — show the same clock they are under.
       const live = conn.openingByPeer?.get(m.id)
       if (live) return buildWatchingNow(m, live)
@@ -1590,6 +1718,7 @@ export function render (root, ctx, roomId) {
         })
       ])
     }
+    if (m.data === null && m.detached && m.kind !== 'text') return buildDetached(m)
     if (m.kind === 'image') {
       const img = el('img', { src: m.data, alt: 'Photo' })
       img.addEventListener('load', () => { if (nearBottom()) scrollBottom() })
@@ -1731,7 +1860,16 @@ export function render (root, ctx, roomId) {
     // after a reload — and a photo that silently went nowhere sitting there
     // reading "Sent" is the whole complaint.
     if (m.failed) {
-      return el('div', { class: 'readRow failed', html: IC.check1 }, ['Not delivered'])
+      const row = el('div', { class: 'readRow failed', html: IC.check1 }, ['Not delivered'])
+      // A failed send used to be the end of the road — the only remedy on
+      // offer was to record the whole note again. The bytes are still here.
+      if (m.kind && m.kind !== 'text' && m.data) {
+        row.appendChild(el('button', {
+          class: 'retryTx', type: 'button', text: 'Retry',
+          onclick (e) { e.stopPropagation(); retrySend(m) }
+        }))
+      }
+      return row
     }
     const read = conn.readUpTo >= m.ts
     return el('div', {
@@ -1836,8 +1974,8 @@ export function render (root, ctx, roomId) {
       ? el('div', { class: 'rowOut' }, [time, bubble])
       : el('div', { class: 'rowIn' }, [bubble, (m.kind && m.kind !== 'text') ? time : null])
     wrap.appendChild(row)
-    // Outgoing attachments carry a live progress ring until delivered.
-    if (mine && m.kind && m.kind !== 'text' && m.kind !== 'location' && m.data) {
+    // Outgoing attachments carry a live progress ring while they are going out.
+    if (mine && inFlight.has(m.id)) {
       bubble.style.position = 'relative'
       bubble.appendChild(el('span', { class: 'txprog', text: '…' }))
     }
@@ -1892,8 +2030,6 @@ export function render (root, ctx, roomId) {
     if (!entry || !fresh) return
     if (entry.album) { renderList(); return }
     const wrap = buildRowAny(fresh)
-    // A delivered row needs no progress ring.
-    wrap.querySelector('.txprog')?.remove()
     entry.wrap.replaceWith(wrap)
     msgEls.set(id, { wrap, message: fresh })
     if (fresh.from !== myId && (!fresh.kind || fresh.kind === 'text')) applyTranslation(fresh)
@@ -1907,6 +2043,18 @@ export function render (root, ctx, roomId) {
       renderList()
       return
     }
+    /* This message belongs before one already on screen. That happens whenever
+     * attachments complete out of order — a one-slice voice note overtakes a
+     * six-slice one — and appending it anyway is what scrambled the transcript
+     * while the user was reading it. The store is already sorted by (ts, id),
+     * so hand it to the rebuild: it is the only path that also gets day
+     * separators and photo albums right. Cannot recurse — the rebuild appends
+     * in ascending ts, so this branch is never taken from inside it. */
+    if (lastTs != null && m.ts < lastTs) {
+      renderList()
+      return
+    }
+    lastTs = m.ts
     const dayKey = new Date(m.ts).toDateString()
     if (dayKey !== lastDayKey) {
       thread.appendChild(el('div', { class: 'day', text: dayLabel(m.ts) }))
@@ -2064,6 +2212,7 @@ export function render (root, ctx, roomId) {
     clear(thread)
     msgEls.clear()
     lastDayKey = null
+    lastTs = null
     const list = conn.store.list()
     if (!list.length) { thread.appendChild(sysLine()); return }
     for (const group of groupForRender(list)) {
@@ -2388,11 +2537,13 @@ export function render (root, ctx, roomId) {
     return null
   }
 
-  /** This chat's revisitable media: plain photos with bytes (view-once burst
-   * photos are one-shot by contract) and videos. */
+  /** This chat's revisitable media: plain photos and videos with bytes.
+   * Anything view-once is one-shot by contract — the `!m.viewOnce` guard used
+   * to sit only on the image arm, so a private VIDEO was listed in the gallery
+   * and replayable there forever. */
   function mediaMessages () {
     return conn.store.list().filter((m) =>
-      (m.kind === 'image' && m.data && !m.viewOnce) || (m.kind === 'video' && m.data))
+      (m.kind === 'image' || m.kind === 'video') && m.data && !m.viewOnce)
   }
 
   /** Plain-text export of this thread — same line grammar as the inbox export. */
@@ -2404,7 +2555,8 @@ export function render (root, ctx, roomId) {
         const when = new Date(m.ts).toLocaleString()
         const who = m.from === myId ? 'You' : (m.name || convo.peer?.name || 'Unknown')
         let body = m.text || ''
-        if (m.kind === 'image') body = '[photo]'
+        if (m.viewOnce) body = m.kind === 'video' ? '[private video]' : '[private photo]'
+        else if (m.kind === 'image') body = '[photo]'
         else if (m.kind === 'voice') body = `[voice note ${m.dur || 0}s]`
         else if (m.kind === 'video') body = '[video]'
         else if (m.kind === 'file') body = `[file] ${m.fileName || ''}`.trim()
@@ -2673,49 +2825,128 @@ export function render (root, ctx, roomId) {
   let lastDetect = null        // translit: { src, base, romanized } last detection
 
   /**
-   * Transliteration mode: DETECT the language of the draft, say which it is,
-   * then show that same sentence in its own script. Never translates — the
-   * words are unchanged, only the letters they are written in.
+   * Which language this draft should be written in.
    *
-   * Order matters to the reader: the tag line names the detected language,
-   * the hero line carries the converted text.
+   * The pinned ▾ chip wins outright — the owner said so, and detection must
+   * not argue. Otherwise the last detection for this exact draft, then the
+   * conversation's own language. `chatLang()` ends at `myLang`, which is a
+   * poor guess for an INCOMING message but the right one here: I am the person
+   * typing, so my language is a fact rather than a claim.
+   */
+  function translitTarget (raw) {
+    const pinned = (db.convo(roomId) || convo).xlitLang
+    if (pinned && pinned !== 'en') return pinned
+    if (lastDetect?.src === raw && lastDetect.base && lastDetect.base !== 'en') return lastDetect.base
+    // "en" is not a transliteration target — English is already in its own
+    // script. `chatLang()` ends at myLang, and someone whose profile says
+    // English typing Tanglish is the single most common user of this feature,
+    // so an English answer here means "unknown", not "done".
+    const learned = chatLang()
+    return learned && learned !== 'en' ? learned : null
+  }
+
+  const translitTag = (lang, converted) => {
+    if (!converted) return '文A Reading…'
+    /* Never print a raw ISO code at a person. Typing Malayalam once produced
+     * the tag "文A it → English" because detection said Italian and langName()
+     * hands back whatever it does not recognise. readingTag() already knows to
+     * fall back to the bare mode, so use it. */
+    return `文A ${readingTag(lang, 'Transliterated')}`
+  }
+
+  /**
+   * Transliteration mode: the SAME words, in their own script.
+   *
+   * 文A means one thing — "same words, the other script" — and that is exactly
+   * what it does in the message bubbles. In the composer it used to do
+   * something else entirely: detect the language, then TRANSLATE the draft into
+   * English. One toggle, two meanings, and the one the button's own aria-label
+   * promises was the one it did not do.
+   *
+   * It was also the slowest thing in the app, for no reason. The on-device
+   * engine is pure and measured at ~5 µs for a typed sentence — 0.03% of a
+   * 60 fps frame — but nothing called it: `convertDraft` was defined and never
+   * used. So the preview blanked to "…" on EVERY keystroke and settled
+   * 1.2-4.9 s after the last one, at roughly one API call per keystroke, each
+   * carrying a growing prefix of a draft that had not been sent to anybody.
+   *
+   * Now: convert locally on the same frame as the keypress, and let the
+   * debounced remote transliteration upgrade that and cover the languages the
+   * built-in engine has no table for.
    */
   function runTranslit (raw) {
     tlMain.style.display = ''
-    const known = lastDetect?.src === raw ? lastDetect : null
-    tlTag.textContent = known ? translitTag(known) : '文A Reading…'
-    tlMain.textContent = (bestConvert?.src === raw ? bestConvert.text : '…')
+
+    /* English is settled deterministically and for free, exactly as it is on
+     * the reading side — no network, and no chance of an engine deciding that
+     * a sentence containing the word "Kannada" is Kannada. */
+    if (isPlainEnglish(raw)) {
+      lastDetect = null
+      bestConvert = null
+      tlTag.textContent = '文A Already English'
+      tlMain.textContent = raw
+      return
+    }
+
+    const target = translitTarget(raw)
+    const local = target ? convertDraft(raw, target) : null
+    /* Leftover ASCII is the tell that the guess was wrong: Tamil has no
+     * f/x/z key, so a real transliteration consumes every Latin letter.
+     * Without this, "Netflix and chill" in a Tamil chat painted instantly and
+     * confidently as ணெட்fலிx அந்ட் சில்ல். */
+    if (local && !/[a-z]/i.test(local.text) &&
+        !(bestConvert?.src === raw && bestConvert.engine === 'azure')) {
+      bestConvert = { src: raw, text: local.text, lang: target, engine: 'local' }
+    }
+
+    const showing = bestConvert?.src === raw ? bestConvert : null
+    tlTag.textContent = translitTag(showing?.lang || target, Boolean(showing))
+    // Never blank. The draft itself is a truthful placeholder; an ellipsis is
+    // not, and `blanks == chars` on every measured run was this one line.
+    tlMain.textContent = showing?.text || raw
 
     const seq = ++cvSeq
     cvTimer = later(async () => {
-      const hit = await detectLanguage(raw)
-      if (!mounted || seq !== cvSeq) return
-      if (hit && hit.base === 'en') {
-        lastDetect = null
-        bestConvert = null
-        tlTag.textContent = '文A Already English'
-        tlMain.textContent = raw
+      // Detection is only needed when nothing else knows the language, which
+      // after the first exchange in a chat is never.
+      let lang = target
+      if (!lang) {
+        const hit = await detectLanguage(raw)
+        if (!mounted || seq !== cvSeq) return
+        if (hit?.base === 'en') {
+          lastDetect = null
+          bestConvert = null
+          tlTag.textContent = '文A Already English'
+          tlMain.textContent = raw
+          return
+        }
+        lang = hit?.base || null
+        if (lang) lastDetect = { src: raw, base: lang, romanized: Boolean(hit?.romanized) }
+      }
+      if (!lang || lang === 'en') {
+        if (!showing) tlTag.textContent = '文A Could not read that one'
         return
       }
-      const res = await translateText(raw, null, 'en')
+      if (lang !== chatLang()) rememberChatLang(lang)
+
+      // The remote transliterator knows real WORDS, so it beats the rule
+      // engine on ear-spelled input and covers every SCRIPT_MAP language.
+      // A failure keeps whatever is already painted — it never blanks it.
+      const native = await transliterateRemote(raw, lang)
       if (!mounted || seq !== cvSeq) return
-      if (!res?.text || res.text === raw) {
-        tlTag.textContent = '文A Could not read that one'
-        tlMain.textContent = raw
-        bestConvert = null
+      if (!native || native === raw) {
+        if (!bestConvert || bestConvert.src !== raw) {
+          tlTag.textContent = navigator.onLine === false
+            ? '文A Offline — showing what you typed'
+            : '文A Could not read that one'
+        }
         return
       }
-      const base = (hit?.base || String(res.detected || '').split('-')[0] || '')
-      lastDetect = { src: raw, base, romanized: Boolean(hit?.romanized) }
-      if (base) rememberChatLang(base)
-      bestConvert = { src: raw, text: res.text, lang: 'en', engine: 'cloud' }
-      tlTag.textContent = translitTag(lastDetect)
-      if (input.value.trim() === raw) tlMain.textContent = res.text
+      bestConvert = { src: raw, text: native, lang, engine: 'azure' }
+      tlTag.textContent = translitTag(lang, true)
+      if (input.value.trim() === raw) tlMain.textContent = native
     }, 260)
   }
-
-  const translitTag = (hit) =>
-    `文A ${hit.base ? langName(hit.base) : 'Detected'} → English`
 
   function updatePreview () {
     const raw = input.value.trim()
@@ -3107,22 +3338,43 @@ export function render (root, ctx, roomId) {
           activityPingAt = Date.now()
         }
       }
-      const entry = sent && msgEls.get(sent.id)
-      const ring = entry?.wrap.querySelector('.txprog')
-      if (!ring) return
-      if (p === -1) {
-        ring.classList.add('failed')
-        ring.textContent = '!'
-        ring.title = 'Delivery failed'
-      } else if (p >= 1) {
-        ring.remove()
-      } else {
-        ring.textContent = `${Math.round(p * 100)}%`
-      }
+      if (sent) paintProgress(sent.id, p)
     })
     sent = message
     if (!message && actKind) rooms.typing(roomId, false)
-    if (message) { appendMessage(message); scrollBottom() }
+    if (message) {
+      inFlight.add(message.id)
+      appendMessage(message)
+      scrollBottom()
+    }
+  }
+
+  /** Move one outgoing attachment's progress chip, and retire it when done. */
+  function paintProgress (id, p) {
+    if (p >= 1 || p === -1) inFlight.delete(id)
+    const ring = msgEls.get(id)?.wrap.querySelector('.txprog')
+    if (p === -1) {
+      // A failure belongs on the read row — "Not delivered", with Retry — which
+      // is persisted and survives a reload. The chip is in-flight state only,
+      // so it goes with the flight.
+      ring?.remove()
+      refreshRow(id)
+      return
+    }
+    if (!ring) return
+    if (p >= 1) ring.remove()
+    else ring.textContent = `${Math.round(p * 100)}%`
+  }
+
+  /** Push a failed attachment's bytes again — they never left this device. */
+  function retrySend (m) {
+    inFlight.add(m.id)
+    if (!rooms.retryAttachment(roomId, m.id, (p) => paintProgress(m.id, p))) {
+      inFlight.delete(m.id)
+      ctx.toast('Those bytes are no longer on this device')
+      return
+    }
+    refreshRow(m.id)
   }
 
   /**
@@ -3208,10 +3460,16 @@ export function render (root, ctx, roomId) {
       : photosOrURL
     if (!photos?.length) { stopEarlyActivity(); return }
     const back = el('div', { class: 'psheet-back' })
-    const sendAll = (extra) => {
+    const sendAll = async (extra) => {
       for (const p of photos) {
         const partial = { kind: 'image', data: p.dataURL, ...extra }
         if (p.caption) partial.text = p.caption
+        /* A private photo carries its own mask: a 16px thumbnail made here,
+         * on the sender's device, so the recipient's masked bubble has
+         * something to blur that is NOT the photo. The detail has to be
+         * destroyed before transmission — a CSS blur over the real bytes is a
+         * rendering instruction, not a redaction. */
+        if (partial.viewOnce) partial.mask = await maskDataURL(p.dataURL)
         sendAttachmentWithUI(partial)
       }
     }
@@ -4018,6 +4276,15 @@ export function render (root, ctx, roomId) {
         break
       case 'typing':
         updateStatus()
+        break
+      /* This device ran out of storage and had to drop media from the saved
+       * copy. It used to happen in complete silence — the tab kept showing
+       * audio it had already dropped, and the user met "tap to load" on their
+       * own voice note days later with no idea why. */
+      case 'shed':
+        ctx.toast(event.own
+          ? 'Storage full — your own media was moved off this device. Tap to load it back.'
+          : 'Storage full — older media was moved off this device. Tap to load it back.')
         break
       case 'read':
         updateReadTicks()
