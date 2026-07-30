@@ -27,6 +27,46 @@ from .vad import UtteranceSegmenter, VADConfig
 
 HOST, PORT = "127.0.0.1", 8765
 
+# Virtual-key codes for the keys a push-to-talk combo is likely to use.
+# https://learn.microsoft.com/windows/win32/inputdev/virtual-key-codes
+_VK = {
+    "ctrl": 0x11, "control": 0x11, "shift": 0x10, "alt": 0x12, "menu": 0x12,
+    "space": 0x20, "tab": 0x09, "capslock": 0x14, "esc": 0x1B, "escape": 0x1B,
+    "f1": 0x70, "f2": 0x71, "f3": 0x72, "f4": 0x73, "f5": 0x74, "f6": 0x75,
+    "f7": 0x76, "f8": 0x77, "f9": 0x78, "f10": 0x79, "f11": 0x7A, "f12": 0x7B,
+}
+
+
+def _vk_for(name: str) -> int:
+    """Virtual-key code for one key name; single characters map by ordinal."""
+    key = name.strip().lower()
+    if key in _VK:
+        return _VK[key]
+    if len(key) == 1:
+        return ord(key.upper())
+    raise ValueError(f"unknown key {name!r} in push-to-talk combo")
+
+
+def _win_key_held(combo: str):  # noqa: ANN202
+    """Return a predicate: are ALL keys in this combo held down right now?
+
+    GetAsyncKeyState's high bit is the "currently down" flag. The low bit means
+    "pressed since the last call" and is deliberately ignored — it would latch
+    a single tap into an open microphone, which is the opposite of a hold gate.
+    """
+    import ctypes
+
+    user32 = ctypes.windll.user32          # noqa: SLF001 - the Win32 surface
+    codes = [_vk_for(part) for part in combo.split("+") if part.strip()]
+    if not codes:
+        raise ValueError(f"empty push-to-talk combo: {combo!r}")
+
+    def held(_combo: str | None = None) -> bool:
+        return all(user32.GetAsyncKeyState(c) & 0x8000 for c in codes)
+
+    held()          # probe now rather than mid-conversation
+    return held
+
 
 @dataclass
 class VoiceConfig:
@@ -65,25 +105,32 @@ class VoiceService:
         self._ptt = self._load_ptt()
 
     def _load_ptt(self):  # noqa: ANN202
-        """Resolve the push-to-talk key checker, or None if unavailable.
+        """Resolve the push-to-talk key checker, or None when disabled.
 
-        `keyboard` needs elevated rights for global hooks on Windows. Failing
-        to get them must not silently flip the microphone to always-on — that
-        would be the opposite of the setting's intent — so the caller is told
-        and the service refuses to start rather than guessing.
+        Uses GetAsyncKeyState, not a keyboard hook and not RegisterHotKey.
+
+        The distinction matters for HOLD-to-talk specifically. Win32's hotkey
+        APIs — RegisterHotKey, and the older WM_SETHOTKEY — deliver a message
+        when a key is PRESSED; neither tells you when it is released, so a
+        "hold to speak" gate built on them has to guess when you stopped, and
+        guesses wrong. Low-level hooks (what the `keyboard` package installs)
+        do see both edges but want elevated rights on Windows, which is a
+        miserable requirement for a desktop assistant.
+
+        GetAsyncKeyState answers a different question — "is this key down right
+        now" — which is exactly the question a hold gate asks, needs no
+        elevation, and no dependency beyond ctypes.
         """
         if not self.cfg.ptt_key:
             return None
         try:
-            import keyboard
-
-            keyboard.is_pressed(self.cfg.ptt_key)   # probe now, not mid-conversation
-            return keyboard.is_pressed
+            return _win_key_held(self.cfg.ptt_key)
         except Exception as exc:                      # noqa: BLE001
             raise RuntimeError(
-                f"push-to-talk key {self.cfg.ptt_key!r} unavailable ({exc}). "
-                "Run as administrator, or set YBOT_PTT_KEY='' to listen "
-                "continuously — an always-open microphone should be a choice."
+                f"push-to-talk key {self.cfg.ptt_key!r} unusable ({exc}). "
+                "Set YBOT_PTT_KEY='' to listen continuously — an always-open "
+                "microphone should be a deliberate choice, so this will not "
+                "quietly fall back to one."
             ) from exc
 
     # ---------------------------------------------------------------- providers

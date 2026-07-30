@@ -1,0 +1,5 @@
+# The 33MB FBX + textures are the source of truth for rebuilding avatar.glb,
+# but they are a download, not code. Keep the repo light; build_glb.py names
+# exactly what it expects and where it came from.
+source/
+node_modules/

@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Ybot</title>
+<style>
+  :root { color-scheme: dark; }
+  html, body { margin: 0; height: 100%; background: #0f0f10; overflow: hidden; }
+  #stage { position: fixed; inset: 0; }
+  /* Status readout. Small on purpose — the avatar should carry the state, this
+     is for when you need to know exactly what it thinks it is doing. */
+  #hud {
+    position: fixed; left: 12px; bottom: 12px; font: 12px/1.5 ui-sans-serif, system-ui;
+    color: #8e8e96; letter-spacing: .02em; pointer-events: none;
+  }
+  #hud b { color: #e9e9ec; font-weight: 600; text-transform: capitalize; }
+  #err {
+    position: fixed; inset: auto 12px 12px auto; max-width: 42ch; color: #e5342b;
+    font: 12px/1.5 ui-monospace, monospace; white-space: pre-wrap;
+  }
+</style>
+</head>
+<body>
+  <canvas id="stage"></canvas>
+  <div id="hud"><b id="state">loading</b> <span id="detail"></span></div>
+  <div id="err"></div>
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "./node_modules/three/build/three.module.js",
+      "three/addons/": "./node_modules/three/examples/jsm/"
+    }
+  }
+  </script>
+  <script type="module" src="./avatar.js"></script>
+</body>
+</html>
