@@ -137,11 +137,27 @@ const b64 = (bytes) => {
 }
 const unb64 = (s) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0))
 
-/** Metadata rides encrypted except the three routing fields fetch needs. */
+/**
+ * Metadata rides encrypted except the routing fields the server must act on.
+ *
+ * `once` and `burn` are the two view-once flags, and they are cleartext for a
+ * reason that is worth stating plainly: deleting bytes is something only
+ * whoever HOLDS the bytes can do, and that is the server. Sealed inside `cm`
+ * they were invisible to it, which is exactly why a "burned" private photo sat
+ * in Postgres forever and could be re-downloaded after the burst animation.
+ *
+ * What they leak is that SOME attachment in this room is view-once, and which
+ * id it is — the same routing-level metadata `{id, seq, total}` already
+ * exposes. Nothing about the photo itself crosses; the envelope, the caption
+ * and the burst duration all stay inside `cm`.
+ */
 async function wrapMeta (key, metadata) {
   if (!metadata) return undefined
   const cm = b64(await seal(key, enc(JSON.stringify(metadata))))
-  return { id: metadata.id, seq: metadata.seq, total: metadata.total, cm }
+  const meta = { id: metadata.id, seq: metadata.seq, total: metadata.total, cm }
+  if (metadata.viewOnce) meta.once = true
+  if (metadata.burn) meta.burn = String(metadata.burn)
+  return meta
 }
 
 async function unwrapMeta (key, meta) {
@@ -437,12 +453,22 @@ function serverRoom (config, roomId) {
     if (data?.id) {
       const first = await emitAck(socket, 'fetch', { roomId, attachId: data.id, seq: 0 })
       if (!first.missing && first.payload) {
+        /* `total` is what the sender declared; `held` is what the log actually
+         * has. An upload that died mid-flight leaves a short TAIL, and a short
+         * tail is the one truncation that is invisible downstream: the bytes
+         * decode, the waveform draws, the clip just stops early. Refuse it
+         * here, loudly, rather than hand back a convincing fragment. */
+        const total = first.total || 1
+        if (Number.isFinite(first.held) && first.held < total) {
+          throw new Error(`transfer incomplete on server (${first.held}/${total} slices)`)
+        }
         const slices = [await openSealed(key, first.payload)]
-        for (let seq = 1; seq < (first.total || 1); seq++) {
+        for (let seq = 1; seq < total; seq++) {
           const r = await emitAck(socket, 'fetch', { roomId, attachId: data.id, seq })
           if (r.missing || !r.payload) throw new Error('transfer incomplete on server')
           slices.push(await openSealed(key, r.payload))
         }
+        if (slices.length !== total) throw new Error('transfer incomplete on server')
         return concatBytes(slices)
       }
     }

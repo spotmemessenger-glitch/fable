@@ -69,6 +69,39 @@ export function compressImage (file, maxEdge = IMAGE_MAX_EDGE, quality = IMAGE_Q
   })
 }
 
+/**
+ * The blurred stand-in for a private photo, made ON THE SENDER'S DEVICE.
+ *
+ * The masked bubble used to be the real photo behind `filter: blur(22px)`. A
+ * CSS filter is a rendering instruction — the pixels are untouched, so one
+ * devtools line, or simply unticking the filter, recovered the original before
+ * it was ever opened, and no `seen` was sent so the sender was never told.
+ *
+ * 16 pixels on the long edge at quality 0.4 is a few hundred bytes of colour
+ * smear: enough for the mask to feel like it belongs to the photo, far too
+ * little to reconstruct anything. The detail is destroyed before transmission,
+ * which is the only place destroying it means anything.
+ */
+export const MASK_EDGE = 16
+
+export function maskDataURL (dataURL, maxEdge = MASK_EDGE) {
+  return new Promise((resolve) => {
+    const img = new Image()
+    img.onload = () => {
+      const scale = Math.min(1, maxEdge / Math.max(img.width, img.height))
+      const canvas = document.createElement('canvas')
+      canvas.width = Math.max(1, Math.round(img.width * scale))
+      canvas.height = Math.max(1, Math.round(img.height * scale))
+      canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height)
+      resolve(canvas.toDataURL('image/jpeg', 0.4))
+    }
+    // No mask is fine — the bubble falls back to grain and sparkles. Sending
+    // the real photo as its own mask is what must never happen.
+    img.onerror = () => resolve(null)
+    img.src = dataURL
+  })
+}
+
 /** Read any file as a data URL, enforcing the size cap. */
 export function fileToDataURL (file, cap = FILE_CAP_BYTES) {
   return new Promise((resolve, reject) => {

@@ -48,6 +48,10 @@ const ACK_TIMEOUT_MS = 90_000
 /** Half-received attachments are dropped rather than held forever. */
 const ASSEMBLY_TTL_MS = 5 * 60_000
 
+/** The longest burst the wheel offers (chat.js BURST_OPTIONS ends at 3 min).
+ *  A peer-supplied duration is clamped to it — see onSeen. */
+const MAX_BURST_SECS = 180
+
 function concatSlices (slices) {
   const total = slices.reduce((sum, s) => sum + s.byteLength, 0)
   const out = new Uint8Array(total)
@@ -130,7 +134,14 @@ function applyTimerControl (roomId, message) {
 }
 
 function createConnection (convo) {
-  const store = createStore(convo.roomId, ROOM_PREFIX)
+  /* The store needs to know who "I" am for two reasons: so a quota shed
+   * sacrifices what the other person can re-send before it touches what only
+   * this device holds, and so the shed can be reported honestly instead of
+   * discovered on a reload. */
+  const store = createStore(convo.roomId, ROOM_PREFIX, {
+    selfId: () => db.profile()?.id,
+    onShed: (info) => emit({ type: 'shed', ...info })
+  })
   const listeners = new Set()
   const seenByPeer = new Set()   // my view-once messages the peer has opened
   /* my view-once messages the peer is opening RIGHT NOW: id -> {secs, at}.
@@ -289,8 +300,12 @@ function createConnection (convo) {
          * sender's bubble springs back into a countdown for a photo that is
          * already gone. Burned is final; nothing revives it. */
         if (seenByPeer.has(payload.id)) return
+        /* Clamped at both ends to what the burst wheel can actually produce.
+         * Unbounded above, a peer sending secs=86400 pinned the sender's UI in
+         * "Viewing now" for a day — a countdown is a claim about the other
+         * person's screen, so it may only say what this app can mean. */
         openingByPeer.set(payload.id, {
-          secs: Math.max(1, Number(payload.secs) || 10),
+          secs: Math.min(MAX_BURST_SECS, Math.max(1, Number(payload.secs) || 10)),
           at: Date.now()
         })
         emit({ type: 'viewing', id: payload.id })
@@ -386,7 +401,11 @@ function createConnection (convo) {
     onFetch (data) {
       const m = data?.id ? store.list().find((x) => x.id === data.id) : null
       if (!m?.data) return null
-      if (m.viewOnce && seenByPeer.has(m.id)) return null
+      /* From the first OPEN, not from the burn. The gate used to key on
+       * seenByPeer alone, which is only populated when the countdown ends, so
+       * for the whole viewing window a second request was served the bytes in
+       * full — and a burn signal lost on the way left them servable forever. */
+      if (m.viewOnce && (seenByPeer.has(m.id) || openingByPeer.has(m.id))) return null
       return dataURLToBuffer(m.data).buffer
     },
     /** A live-location share moved (or ended) — patch the message in place. */
@@ -470,6 +489,14 @@ function createConnection (convo) {
         onProgress: (pr) => onProgress?.(Math.min((seq + pr) / total, 0.99))
       })
     }
+    /* Every slice is in the server log now, and on a durable transport that IS
+     * the upload finished. Holding the bar at 99% until the receipt arrived
+     * meant an upload that completed in 250ms displayed "99%" for the next 85
+     * seconds whenever the recipient simply had the app closed — which is the
+     * normal case, and the whole reason the transport was made durable. What
+     * is still outstanding at this point is DELIVERY, and delivery belongs on
+     * the tick row, not on an upload percentage. */
+    if (conn.net.DURABLE) onProgress?.(1)
     try {
       await awaitAck(message.id)
       store.patch(message.id, { delivered: true, failed: false })
@@ -712,6 +739,35 @@ export const rooms = {
   },
 
   /**
+   * Send a failed attachment again from the bytes still in the local store.
+   *
+   * A failed send used to be terminal: a socket blip 150ms into a 37-slice
+   * voice note left the row reading "Not delivered" forever, with the only
+   * remedy being to record the whole thing over. The bytes never went anywhere
+   * — they are right here — so the honest recovery is to push them again.
+   *
+   * This resends from slice 0 rather than resuming at the last acknowledged
+   * seq. Resuming needs the server to answer "which slices do you have", which
+   * it does not do yet; duplicate slices are already harmless (the receiver
+   * ignores a seq it holds, and the log now reports DISTINCT seqs held).
+   */
+  retryAttachment (roomId, id, onProgress) {
+    const conn = this.ensure(roomId)
+    if (!conn) return false
+    const message = conn.store.list().find((m) => m.id === id)
+    if (!message?.data || !message.kind || message.kind === 'text') return false
+    conn.store.patch(id, { failed: false })
+    const { buffer, mime } = dataURLToBuffer(message.data)
+    Promise.resolve()
+      .then(() => conn.deliverAttachment(message, buffer, mime, onProgress))
+      .catch(() => {
+        conn.store.patch(id, { delivered: false, failed: true })
+        onProgress?.(-1)
+      })
+    return true
+  },
+
+  /**
    * Pull detached attachment bytes from whoever is online and holds them.
    *
    * Asking only the first peer and giving up was wrong twice over: a group may
@@ -802,19 +858,36 @@ export const rooms = {
     db.clearUnread(roomId)
   },
 
-  /** Tell the sender the countdown has STARTED, so they can watch it run.
-   *  Sent the instant it is tapped, not when it finishes. */
-  viewOnceOpening (roomId, id, secs) {
+  /**
+   * The photo has been opened. THE BURN HAPPENS HERE, not when the countdown
+   * reaches zero.
+   *
+   * "Exactly one view" used to rest entirely on finish() completing inside the
+   * same page session: opening wrote nothing durable, so killing the app
+   * mid-view left the photo intact, masked and openable again — reproduced end
+   * to end, and it needed no tooling at all. Ten to sixty seconds is a very
+   * long time to leave a promise resting on the tab staying alive.
+   *
+   * So the moment the photo is opened, before a pixel is shown:
+   *   - the local copy is removed and TOMBSTONED, which no history backlog,
+   *     re-send or replay can undo;
+   *   - `burn` goes to the server, which deletes the stored slices.
+   * `opening` still rides along so the sender sees the live countdown.
+   */
+  viewOnceOpen (roomId, id, secs) {
     const conn = connections.get(roomId)
     if (!conn) return
-    conn.net.sendSeen({ id, opening: true, secs })
+    conn.net.sendSeen({ id, opening: true, secs, burn: true })
+    conn.store.remove(id)
   },
 
-  /** Tell the sender their view-once was opened (and delete locally after). */
+  /** The countdown finished (or they closed early) — the sender's bubble stops
+   *  watching. The burn already happened at open; this repeats it because the
+   *  delete is idempotent and a lost `opening` frame must not leave bytes. */
   viewOnceOpened (roomId, id) {
     const conn = connections.get(roomId)
     if (!conn) return
-    conn.net.sendSeen({ id })
+    conn.net.sendSeen({ id, burn: true })
     conn.store.remove(id)
   },
 

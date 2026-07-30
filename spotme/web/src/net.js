@@ -201,7 +201,16 @@ export function createNet (roomId, secret, handlers, getHistory) {
     sendEdit: (data) => msgSafe(edit.send(data)),
     sendTyping: (data) => msgSafe(typing.send(data)),
     sendRead: (data) => msgSafe(read.send(data)),
-    sendSeen: (data) => msgSafe(seen.send(data)),
+    /**
+     * View-once signal. `{id, opening, secs}` is sealed as usual, but a burn
+     * ALSO puts the attachment id in cleartext routing meta, because the
+     * server is the only party that can delete the stored slices and it cannot
+     * read the sealed payload. Without this the burst was an animation over a
+     * photo the recipient could fetch again a minute later.
+     */
+    sendSeen: (data) => msgSafe(
+      seen.send(data, data?.burn ? { metadata: { id: data.id, burn: data.id } } : {})
+    ),
     /** Binary with envelope metadata + progress. Returns the send promise. */
     sendBinary: (buffer, options) => bin.send(buffer, options),
     sendBinAck: (data, options) => msgSafe(binack.send(data, options)),
