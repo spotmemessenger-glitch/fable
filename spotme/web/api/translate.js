@@ -70,6 +70,60 @@ async function azureTranslate (q, source, target) {
   return { text, detected: item?.detectedLanguage?.language || source || null, engine: 'azure' }
 }
 
+/**
+ * Sarvam — built specifically for Indian languages, which is most of what this
+ * app carries. It speaks BCP-47-with-region codes (ta-IN, not ta), so anything
+ * outside this table is not Sarvam's problem and falls through to Google/Azure.
+ */
+const SARVAM_LANGS = {
+  en: 'en-IN', hi: 'hi-IN', bn: 'bn-IN', gu: 'gu-IN', kn: 'kn-IN',
+  ml: 'ml-IN', mr: 'mr-IN', od: 'od-IN', or: 'od-IN', pa: 'pa-IN',
+  ta: 'ta-IN', te: 'te-IN'
+}
+
+const sarvamCode = (lang) => SARVAM_LANGS[String(lang || '').toLowerCase().split('-')[0]]
+
+async function sarvamPost (path, body) {
+  const key = process.env.SARVAM_API_KEY
+  if (!key) throw new Error('no sarvam key')
+  const res = await fetch(`https://api.sarvam.ai/${path}`, {
+    method: 'POST',
+    // Header name matters: this API rejects Bearer and Ocp-Apim styles alike.
+    headers: { 'api-subscription-key': key, 'content-type': 'application/json' },
+    body: JSON.stringify(body)
+  })
+  const json = await res.json().catch(() => null)
+  if (!res.ok) throw new Error(`sarvam ${res.status}: ${JSON.stringify(json)?.slice(0, 160)}`)
+  return json
+}
+
+async function sarvamTranslate (q, source, target) {
+  const to = sarvamCode(target)
+  const from = sarvamCode(source)
+  if (!to) throw new Error(`sarvam does not speak ${target}`)
+  const json = await sarvamPost('translate', {
+    input: q,
+    // "auto" lets Sarvam detect, which it does well on Indic text; naming a
+    // language it does not support would fail the call outright.
+    source_language_code: from || 'auto',
+    target_language_code: to
+  })
+  const text = json?.translated_text
+  if (!text) throw new Error('sarvam empty')
+  return { text, detected: json?.source_language_code || source || null, engine: 'sarvam' }
+}
+
+async function sarvamTransliterate (q, lang) {
+  const to = sarvamCode(lang)
+  if (!to) throw new Error(`sarvam does not speak ${lang}`)
+  const json = await sarvamPost('transliterate', {
+    input: q, source_language_code: 'en-IN', target_language_code: to
+  })
+  const text = json?.transliterated_text
+  if (!text) throw new Error('sarvam empty')
+  return { text, engine: 'sarvam' }
+}
+
 async function azureTransliterate (q, lang, toScript, fromScript = 'Latn') {
   if (!process.env.AZURE_TRANSLATOR_KEY) throw new Error('no azure key')
   const res = await fetch(
@@ -332,6 +386,98 @@ async function llmRead (q, hint) {
   }
 }
 
+/**
+ * Do two engines agree? Compared on meaning-bearing characters only.
+ *
+ * Engines differ constantly in ways a reader would not notice — a trailing
+ * full stop, ஒரு vs ஓர், a space before a question mark. Treating those as
+ * disagreement would send almost every message to the adjudicator and triple
+ * the cost for nothing.
+ */
+function agree (a, b) {
+  const norm = (s) => String(s || '')
+    .toLowerCase()
+    .replace(/[\s‌‍]+/g, '')      // whitespace + zero-width joiners
+    .replace(/[.,!?;:''""()।]/g, '')   // punctuation, incl. the danda
+  return norm(a) === norm(b) && norm(a).length > 0
+}
+
+/**
+ * Ask a language model which of two translations is right.
+ *
+ * Reached only when the specialist and the general engine actually disagree,
+ * which is where the accuracy is won: one of them is usually wrong in a way
+ * the other is not, and a model that reads both plus the original can tell.
+ * Any failure here falls back to the specialist rather than erroring — a
+ * second opinion is an improvement, never a dependency.
+ */
+async function adjudicate (original, target, a, b) {
+  const system = [
+    'You judge translations into Indian languages.',
+    'You are given the ORIGINAL text and two candidate translations, A and B.',
+    'Pick the one that a native speaker would actually say: correct meaning first,',
+    'then natural phrasing and register. Ignore trivial punctuation differences.',
+    'If both are wrong, write a better translation yourself.',
+    'Reply ONLY as compact JSON: {"pick":"A"|"B"|"other","text":"<the winning translation>","why":"<8 words max>"}'
+  ].join(' ')
+  const user = `ORIGINAL: ${original}\nTARGET LANGUAGE: ${target}\nA: ${a}\nB: ${b}`
+
+  const judges = []
+  if (process.env.GEMINI_API_KEY) judges.push(['gemini', askGemini])
+  if (process.env.OPENAI_API_KEY) judges.push(['openai', askOpenAI])
+  if (process.env.ANTHROPIC_API_KEY) judges.push(['anthropic', askAnthropic])
+
+  for (const [name, ask] of judges) {
+    try {
+      const parsed = jsonFrom(await ask(system, user))
+      const text = String(parsed.text || '').trim()
+      if (text) return { text, judge: name, pick: String(parsed.pick || '') }
+    } catch { /* next judge */ }
+  }
+  return null
+}
+
+/**
+ * Translate, then have a second engine confirm it.
+ *
+ * Sarvam is trained specifically for Indian languages; Google and Azure are
+ * general. Running both and comparing catches the case where one is confidently
+ * wrong — which a single engine can never tell you about. They run in PARALLEL,
+ * so confirmation costs roughly nothing in wall-clock time; only a genuine
+ * disagreement costs an extra call.
+ */
+async function confirmedTranslate (q, source, target, primary) {
+  if (!process.env.SARVAM_API_KEY || !sarvamCode(target)) return null
+  const [first, second] = await Promise.allSettled([
+    primary(),
+    sarvamTranslate(q, source, target)
+  ])
+  const a = first.status === 'fulfilled' ? first.value : null
+  const b = second.status === 'fulfilled' ? second.value : null
+  if (!a && !b) return null
+  if (!a) return { ...b, confirmed: false, note: 'single engine' }
+  if (!b) return { ...a, confirmed: false, note: 'single engine' }
+
+  if (agree(a.text, b.text)) {
+    // Two independent engines landing on the same words is the strongest
+    // signal available without a human.
+    return { ...b, confirmed: true, engine: `${b.engine}+${a.engine}` }
+  }
+
+  const verdict = await adjudicate(q, target, a.text, b.text)
+  if (!verdict) {
+    // No judge available: prefer the specialist for its own languages.
+    return { ...b, confirmed: false, alternative: a.text, note: 'engines differ, unjudged' }
+  }
+  return {
+    text: verdict.text,
+    detected: b.detected || a.detected || null,
+    engine: `${b.engine}+${a.engine}/${verdict.judge}`,
+    confirmed: true,
+    alternative: verdict.pick === 'A' ? b.text : a.text
+  }
+}
+
 async function azureDetect (q) {
   if (!process.env.AZURE_TRANSLATOR_KEY) throw new Error('no azure key')
   let res = await fetch(`${azureBase()}/detect?api-version=3.0`, {
@@ -379,10 +525,30 @@ export default async function handler (req, res) {
         return
       }
       if (fromScript === 'Latn') {
-        try {
-          res.status(200).json(await googleTransliterate(q, lang))
+        // Google Input Tools and Sarvam, in parallel, then compared. Input
+        // Tools is the engine behind Gboard's Indic typing and knows real
+        // WORDS; Sarvam is trained for these languages specifically. When both
+        // spell a name the same way it is almost certainly right, and when
+        // they differ that is exactly where transliteration goes wrong.
+        const [g, s] = await Promise.allSettled([
+          googleTransliterate(q, lang),
+          sarvamTransliterate(q, lang)
+        ])
+        const gv = g.status === 'fulfilled' ? g.value : null
+        const sv = s.status === 'fulfilled' ? s.value : null
+        if (gv && sv && agree(gv.text, sv.text)) {
+          res.status(200).json({ ...gv, engine: 'google+sarvam', confirmed: true })
           return
-        } catch { /* fall through to Azure */ }
+        }
+        if (gv || sv) {
+          // Input Tools leads on disagreement: it is word-aware, so it handles
+          // the ear-spelled input people actually type. The other reading is
+          // returned too rather than thrown away.
+          const win = gv || sv
+          const other = gv && sv ? (win === gv ? sv.text : gv.text) : undefined
+          res.status(200).json({ ...win, confirmed: false, alternative: other })
+          return
+        }
       }
       res.status(200).json(await azureTransliterate(q, lang, toScript, fromScript))
       return
@@ -403,10 +569,28 @@ export default async function handler (req, res) {
     const target = String(body.target || '')
     if (!target) { res.status(400).json({ error: 'need target' }); return }
 
-    // No dead ends: two engines, ordered by who is better at this input.
+    // No dead ends: engines ordered by who is better at THIS input.
+    //
+    // Sarvam leads whenever an Indian language is involved — it is trained for
+    // exactly those, and this app's traffic is mostly Indic. It is skipped
+    // silently for pairs it does not speak (sarvamCode returns undefined and
+    // the attempt throws), so a French message still goes to Google/Azure.
+    const indic = sarvamCode(target) && sarvamCode(target) !== 'en-IN'
+      ? true
+      : Boolean(source && sarvamCode(source) && sarvamCode(source) !== 'en-IN')
     const engines = source
       ? [() => googleTranslate(q, source, target), () => azureTranslate(q, source, target)]
       : [() => azureTranslate(q, null, target), () => googleTranslate(q, null, target)]
+    // Cross-confirmation for Indian languages: the specialist and a general
+    // engine both translate, and they only disagree when one of them is wrong.
+    // Opt out with {verify:false} for a latency-critical path.
+    if (indic && body.verify !== false) {
+      const checked = await confirmedTranslate(q, source, target, engines[0])
+      if (checked) { res.status(200).json(checked); return }
+    }
+    if (indic && process.env.SARVAM_API_KEY) {
+      engines.unshift(() => sarvamTranslate(q, source, target))
+    }
     let lastError = null
     for (const attempt of engines) {
       try { res.status(200).json(await attempt()); return } catch (e) { lastError = e }
