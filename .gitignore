@@ -171,3 +171,7 @@ PentestingEverything/
 # become GPL-3.0. BluetoothChat is Apache-2.0 and safe to borrow from.
 bitchat-android/
 BluetoothChat/
+
+# Telegram Desktop, kept as an interaction reference. GPL-3.0 with an OpenSSL
+# exception: read it for BEHAVIOUR, never copy its code into Spot Me.
+tdesktop/
