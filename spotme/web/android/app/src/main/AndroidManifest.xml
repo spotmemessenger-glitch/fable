@@ -1,8 +1,23 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!--
+      allowBackup was "true" with no exclusion rules, which is the default-unsafe
+      configuration: Android Auto Backup then uploads the app's data directory to
+      the user's Google Drive, and for a Capacitor app that directory is
+      app_webview/Local Storage — every message, every photo data URL (including
+      view-once photos that were never opened), every room secret, and the server
+      auth tokens. All of it outside the end-to-end boundary, restorable by anyone
+      who holds the Google account rather than the phone.
+
+      "false" is the right default for an encrypted messenger; Signal and WhatsApp
+      both handle backup explicitly instead of letting the platform do it. The
+      dataExtractionRules file closes the Android 12+ device-transfer path, which
+      allowBackup alone does not govern.
+    -->
     <application
-        android:allowBackup="true"
+        android:allowBackup="false"
+        android:dataExtractionRules="@xml/data_extraction_rules"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"

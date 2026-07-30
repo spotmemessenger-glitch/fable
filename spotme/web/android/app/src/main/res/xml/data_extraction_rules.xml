@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Spot Me holds every message, every photo data URL, every room secret and the
+  server auth tokens inside the WebView's Local Storage (app_webview/, under the
+  app's root directory). None of that may leave the device.
+
+  android:allowBackup="false" already stops Android Auto Backup on every API
+  level. This file closes the other half on Android 12+ (API 31+), where
+  device-to-device transfer is governed separately and would otherwise still
+  copy the app's data directory to a new phone during setup.
+
+  "root" is the app's root directory, which is what contains app_webview; the
+  rest are listed so that a future feature adding a database or a shared
+  preference does not quietly re-open the channel.
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="root" />
+        <exclude domain="file" />
+        <exclude domain="database" />
+        <exclude domain="sharedpref" />
+        <exclude domain="external" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="root" />
+        <exclude domain="file" />
+        <exclude domain="database" />
+        <exclude domain="sharedpref" />
+        <exclude domain="external" />
+    </device-transfer>
+</data-extraction-rules>

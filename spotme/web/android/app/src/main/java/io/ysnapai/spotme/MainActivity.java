@@ -3,6 +3,7 @@ package io.ysnapai.spotme;
 import android.Manifest;
 import android.content.pm.PackageManager;
 import android.os.Bundle;
+import android.view.WindowManager;
 import android.webkit.PermissionRequest;
 import android.webkit.WebChromeClient;
 import androidx.core.app.ActivityCompat;
@@ -26,6 +27,26 @@ public class MainActivity extends BridgeActivity {
   @Override
   public void onCreate (Bundle savedInstanceState) {
     super.onCreate(savedInstanceState);
+
+    /*
+     * The web app is right that a BROWSER cannot detect or prevent screenshots
+     * (main.js:498) — but the packaged app is not a browser, and FLAG_SECURE is
+     * a platform capability we were simply not using. It blocks screenshots and
+     * screen recording, and blanks the app-switcher preview at the OS level,
+     * which is the same thing the JS `appBlur` setting approximates.
+     *
+     * Honest limits: a second phone pointed at the screen defeats it, and on a
+     * rooted device it is advisory. It also blocks LEGITIMATE screenshots of
+     * ordinary chats, which is a product decision — this is the safe default,
+     * not the only option. To narrow it to the view-once overlay later, drop
+     * this call and expose the two setFlags/clearFlags lines through a small
+     * Capacitor plugin that openViewOnce()/finish() can call; nothing else in
+     * this file has to change.
+     */
+    getWindow().setFlags(
+      WindowManager.LayoutParams.FLAG_SECURE,
+      WindowManager.LayoutParams.FLAG_SECURE
+    );
 
     // Ask up front rather than on first use: getUserMedia() has no good way
     // to pause mid-call while a system dialog resolves.
