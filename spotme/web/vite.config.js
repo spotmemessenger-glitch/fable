@@ -1,6 +1,28 @@
 import { defineConfig } from 'vite'
+import { fileURLToPath } from 'node:url'
+import { dirname, resolve } from 'node:path'
+
+const here = dirname(fileURLToPath(import.meta.url))
 
 export default defineConfig({
+  resolve: {
+    alias: {
+      /*
+       * spotme-core used to resolve through `"spotme-core": "file:.."`, which
+       * points at spotme/ — OUTSIDE this directory. Vercel uploads only the
+       * directory it deploys from, so the package was simply absent there and
+       * every production build died on:
+       *
+       *   Rolldown failed to resolve import "spotme-core/core/translit.js"
+       *
+       * which is why the site served a 404 for days. `npm run prebuild` copies
+       * core/ in beside the source (the same trick the backend uses for
+       * web/api), and this alias points at that copy. vendor/ must therefore
+       * NOT be gitignored, or the upload would drop it all over again.
+       */
+      'spotme-core': resolve(here, 'vendor/spotme-core')
+    }
+  },
   // Vercel serves `dist/` as a static site — there is no server side to this
   // app at all. Peer discovery rides public infrastructure and messages go
   // directly between browsers.
@@ -21,8 +43,9 @@ export default defineConfig({
     }
   },
   optimizeDeps: {
-    // spotme-core is CommonJS and lives outside the web root. Pre-bundling it
-    // lets Vite apply its CJS interop so `transliterate` imports cleanly.
-    include: ['spotme-core/core/translit.js', '@trystero-p2p/torrent']
+    // spotme-core is no longer a dependency — it is vendored source reached
+    // through the alias above, so it needs no pre-bundling. Vite still applies
+    // CJS interop to it as ordinary source.
+    include: ['@trystero-p2p/torrent']
   }
 })
