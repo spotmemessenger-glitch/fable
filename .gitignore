@@ -165,3 +165,9 @@ OpenWA/
 # Pentesting knowledge base — its own repo, 264MB of which ~all is reference
 # PDFs. The skill that reads it lives in ~/.claude/skills/pentesting-everything.
 PentestingEverything/
+
+# Bluetooth reference apps, each its own repo. bitchat-android is GPL-3.0:
+# read it for ARCHITECTURE only — copying its code would force Spot Me to
+# become GPL-3.0. BluetoothChat is Apache-2.0 and safe to borrow from.
+bitchat-android/
+BluetoothChat/
