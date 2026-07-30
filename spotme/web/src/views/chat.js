@@ -14,6 +14,7 @@ import { sttBlob, ttsClone } from '../lib/voice.js'
 import { compressImage, fileToDataURL, recordVoice, currentLocation, mapLink, fileFromDataURL, downloadFile, shareOut, VIDEO_CAP_BYTES } from '../lib/media.js'
 import { openPhotoEditor, closePhotoEditor } from '../lib/photoedit.js'
 import { el, clear, avatar, fmtTime, fmtDay, actionSheet } from '../lib/ui.js'
+import { isPlainEnglish } from '../lib/english.js'
 import { transliterate, supportedScripts } from 'spotme-core/core/translit.js'
 
 const LONG_PRESS_MS = 420
@@ -436,10 +437,40 @@ export function render (root, ctx, roomId) {
   trBtn.addEventListener('click', () => {
     const { mode } = composeState()
     const on = mode !== 'translate'
-    // English is the default target while translation is parked; no language
-    // sheet, because a switch that opens a list cannot be switched off.
-    setCompose({ composeMode: on ? 'translate' : null, langTo: on ? 'en' : null })
-    ctx.toast(on ? 'Translation on for this chat' : 'Translation off')
+    // The switch stays a switch — it must be turn-off-able in one tap, so it
+    // never opens a list. The language is chosen on the chip beside it, the
+    // same arrangement 文A already uses.
+    const remembered = (db.convo(roomId) || convo).langTo
+    setCompose({
+      composeMode: on ? 'translate' : null,
+      langTo: on ? (remembered || 'en') : null
+    })
+    ctx.toast(on ? `Translating into ${langName(remembered || 'en')}` : 'Translation off')
+  })
+
+  /** Languages worth offering as a translation target. English first because
+   *  it is the common bridge; the rest are the Indic set the app is built for,
+   *  then the widely-typed others. */
+  const TR_LANGS = ['en', 'ta', 'te', 'ml', 'kn', 'hi', 'mr', 'bn', 'gu', 'pa', 'ur',
+    'ar', 'zh-Hans', 'es', 'fr', 'de', 'ja', 'ko', 'pt', 'ru']
+
+  const trChip = el('button', {
+    class: 'xchip', type: 'button', 'aria-label': 'Translate their messages into',
+    onclick () {
+      const cur = (db.convo(roomId) || convo).langTo || 'en'
+      actionSheet(
+        TR_LANGS.map((code) => ({
+          label: (cur === code ? '✓ ' : '') + langName(code),
+          fn () {
+            // Choosing a language also turns translation on: picking a target
+            // and then finding it off would be a dead choice.
+            setCompose({ composeMode: 'translate', langTo: code })
+            ctx.toast(`Translating into ${langName(code)}`)
+          }
+        })),
+        'Translate into…'
+      )
+    }
   })
 
   const txBtn = featureCtl('tx', el('span', { class: 'xa', text: '文A' }), 'Transliteration')
@@ -538,7 +569,7 @@ export function render (root, ctx, roomId) {
 
   const top = el('div', { class: 'top' }, [
     backBtn, avBtn, who,
-    el('div', { class: 'hact' }, [txBtn, xlitChip, trBtn])
+    el('div', { class: 'hact' }, [txBtn, xlitChip, trBtn, trChip])
   ])
 
   const thread = el('div', { class: 'thread' })
@@ -653,6 +684,12 @@ export function render (root, ctx, roomId) {
     xlitChip.textContent = (pinned ? langName(pinned) : 'Auto') + ' ▾'
     xlitChip.style.display = txOn ? '' : 'none'
     xlitChip.dataset.pinned = String(Boolean(pinned))
+
+    // Same rule as the 文A chip: the target only appears once the feature it
+    // belongs to is on, so the header does not fill with inert controls.
+    trChip.textContent = langName(langTo || 'en') + ' ▾'
+    trChip.style.display = trOn ? '' : 'none'
+    trChip.dataset.pinned = 'true'
   }
 
   function updateStatus () {
@@ -723,6 +760,15 @@ export function render (root, ctx, roomId) {
 
   async function computeXlit (m) {
     const text = m.text
+
+    /* Plain English leaves before anything can form an opinion about it —
+     * not the LLM below, not the pinned chat language, not detection. This
+     * message was delivered to the recipient as Kannada:
+     *   "Type something in Kannada in English and send me"
+     *      -> "It's been so many days since I saw you, how are you?"
+     * The LLM read the word "Kannada" inside an English sentence and obliged.
+     * A deterministic test cannot be talked into that. */
+    if (isPlainEnglish(text)) return null
 
     /* One LLM call answers language + script + English together, and handles
      * the ear-spelling the classic chain cannot ("Ippo variya" → "Are you
