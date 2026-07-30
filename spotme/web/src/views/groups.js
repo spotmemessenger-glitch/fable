@@ -1,19 +1,29 @@
 /**
- * Spot Me — Groups. A group is a shared P2P room: everyone with the link is
- * in, no admin, no server. Same design grammar as the inbox
+ * Spot Me — Groups. Same design grammar as the inbox
  * (design/01-messages.html): header bar, big title, search well, rows with
  * 78px-indented dividers and blue unread state.
+ *
+ * A group is a room with a roster. The roster, the roles and the bans live on
+ * the server (it never sees message content); the room key lives here. So this
+ * list is the union of two truths: the server's groups, and the local convo
+ * that holds unread counts, the last line, and — for a private group — the key
+ * without which the room cannot be opened at all.
+ *
+ * A server group with no local convo is one this device has been added to but
+ * has no key for yet. It is shown, and says so, because hiding it would leave
+ * someone waiting for an invite that already arrived.
  */
 import './groups.css'
-import { db, randomHex } from '../lib/db.js'
+import { db } from '../lib/db.js'
 import { lobby } from '../lib/discovery.js'
 import { rooms } from '../lib/rooms.js'
+import { groupsApi } from '../lib/groups-api.js'
+import { openGroupWizard } from './group-new.js'
 import { el, clear, avatar, actionSheet, fmtDay } from '../lib/ui.js'
 
 const STAGGER_MS = 32
 const STAGGER_CAP = 12
-const NAME_MAX = 40
-const EXPLAINER = 'A group is a shared room. Everyone with the link is in — no admin, no server.'
+const EXPLAINER = 'A group is a shared room. Roles and bans are enforced by the server; your messages are not read by it.'
 
 const ICON_SEARCH = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M20.5 20.5l-4-4" stroke-linecap="round"/></svg>'
 const ICON_MORE = '<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.9"/><circle cx="12" cy="12" r="1.9"/><circle cx="19" cy="12" r="1.9"/></svg>'
@@ -42,78 +52,119 @@ async function shareLink (url, toast) {
 }
 
 export function render (root, ctx) {
-  let sheetEl = null
+  let closeWizard = null
+  let serverGroups = []
+  let loadError = null
+  let dead = false
 
   /* ------------------------------------------------------------- actions */
 
-  function groupMenu (convo) {
-    actionSheet([
-      { label: 'Share invite link', fn: () => shareLink(groupLink(convo), ctx.toast) },
-      {
+  function groupMenu (entry) {
+    const { group, convo } = entry
+    const items = []
+
+    if (group) {
+      items.push({ label: 'Manage group', fn: () => ctx.nav(`#/group/${group.id}`) })
+    }
+    if (convo) {
+      items.push({ label: 'Share invite link', fn: () => shareLink(groupLink(convo), ctx.toast) })
+      items.push({
         label: 'Archive',
         fn () { db.setArchived(convo.roomId, true); ctx.toast('Group archived') }
-      },
-      {
-        label: 'Leave group',
-        danger: true,
-        fn () {
+      })
+    }
+    items.push({
+      label: 'Leave group',
+      danger: true,
+      async fn () {
+        // Server first: dropping it locally while the roster still holds you is
+        // the state where a group you "left" keeps waking your phone.
+        if (group) {
+          try {
+            await groupsApi.leave(group.id)
+          } catch (err) {
+            ctx.toast(String(err?.message || 'Could not leave'))
+            return
+          }
+        }
+        if (convo) {
           try { rooms.leave(convo.roomId) } catch { /* room may never have connected */ }
           db.removeConvo(convo.roomId)
-          ctx.toast('You left the group')
         }
+        ctx.toast('You left the group')
+        loadServer()
       }
-    ], convo.title || 'Group')
+    })
+
+    actionSheet(items, group?.name || convo?.title || 'Group')
   }
 
-  function openNewGroup () {
-    if (sheetEl) return
-    const input = el('input', {
-      class: 'ng-input',
-      type: 'text',
-      maxlength: String(NAME_MAX),
-      placeholder: 'Group name',
-      autocomplete: 'off'
+  /** Join a public group by @handle — the response carries the room key. */
+  async function joinByHandle () {
+    const handle = await promptHandle()
+    if (!handle) return
+    try {
+      const joined = await groupsApi.joinPublic(handle)
+      const roomId = joined.roomId ?? joined.group?.roomId
+      const secret = joined.secretKey ?? joined.key ?? joined.group?.secretKey
+      if (!roomId || !secret) {
+        // Joined the roster but got no key: the group is reachable for
+        // management, not for reading. Say so rather than opening a dead room.
+        ctx.toast('Joined, but the server sent no key for this group')
+        loadServer()
+        return
+      }
+      const name = joined.name ?? joined.group?.name ?? `@${handle}`
+      db.upsertConvo({
+        roomId,
+        secret,
+        kind: 'group',
+        mode: 'meet',
+        title: name,
+        groupId: joined.id ?? joined.group?.id,
+        peer: { id: null, name, avatar: null, lang: 'en' }
+      })
+      rooms.ensure(roomId)
+      ctx.openThread(roomId)
+    } catch (err) {
+      ctx.toast(String(err?.message || 'Could not join that group'))
+    }
+  }
+
+  /** Tiny one-field sheet; the wizard is overkill for a single handle. */
+  function promptHandle () {
+    return new Promise((resolve) => {
+      const input = el('input', {
+        class: 'gw-input',
+        type: 'text',
+        maxlength: '16',
+        placeholder: 'group_handle',
+        autocomplete: 'off'
+      })
+      const backdrop = el('div', { class: 'as-backdrop' })
+      const close = (value) => {
+        backdrop.classList.add('closing')
+        setTimeout(() => { backdrop.remove(); resolve(value) }, 160)
+      }
+      const submit = () => close(input.value.trim().toLowerCase().replace(/^@/, '') || null)
+      input.addEventListener('keydown', (e) => { if (e.key === 'Enter') submit() })
+      backdrop.addEventListener('click', (e) => { if (e.target === backdrop) close(null) })
+      backdrop.appendChild(el('div', { class: 'as-sheet gw' }, [
+        el('div', { class: 'gw-title', text: 'Join a public group' }),
+        el('p', { class: 'gw-hint', text: 'Public groups are joinable by handle. The server holds their key.' }),
+        input,
+        el('button', { class: 'pill ok', type: 'button', text: 'Join', onclick: submit }),
+        el('button', { class: 'as-item cancel', type: 'button', text: 'Cancel', onclick: () => close(null) })
+      ]))
+      wrap.appendChild(backdrop)
+      input.focus()
     })
-    const backdrop = el('div', { class: 'as-backdrop' })
+  }
 
-    const close = () => {
-      sheetEl = null
-      backdrop.classList.add('closing')
-      setTimeout(() => backdrop.remove(), 160)
-    }
-
-    const create = () => {
-      const name = input.value.trim()
-      if (!name) { ctx.toast('Give the group a name first'); input.focus(); return }
-      try {
-        const roomId = randomHex(8)
-        const secret = randomHex(16)
-        db.upsertConvo({
-          roomId,
-          secret,
-          kind: 'group',
-          mode: 'meet',
-          title: name,
-          peer: { id: null, name, avatar: null, lang: 'en' }
-        })
-        rooms.ensure(roomId)
-        close()
-        ctx.openThread(roomId)
-      } catch { ctx.toast('Could not create the group') }
-    }
-
-    input.addEventListener('keydown', (e) => { if (e.key === 'Enter') create() })
-    backdrop.addEventListener('click', (e) => { if (e.target === backdrop) close() })
-    backdrop.appendChild(el('div', { class: 'as-sheet ng' }, [
-      el('div', { class: 'ng-title', text: 'New group' }),
-      el('p', { class: 'ng-hint', text: EXPLAINER }),
-      input,
-      el('button', { class: 'pill ok ng-create', type: 'button', text: 'Create', onclick: create }),
-      el('button', { class: 'as-item cancel', type: 'button', text: 'Cancel', onclick: () => close() })
-    ]))
-    wrap.appendChild(backdrop)
-    sheetEl = backdrop
-    input.focus()
+  function openWizard () {
+    if (closeWizard) return
+    const close = openGroupWizard(wrap, ctx)
+    closeWizard = () => { close(); closeWizard = null }
   }
 
   /* ------------------------------------------------------------ skeleton */
@@ -123,8 +174,9 @@ export function render (root, ctx) {
 
   const wrap = el('div', { class: 'v-groups' }, [
     el('div', { class: 'bar' }, [
+      el('button', { class: 'pill', type: 'button', text: 'Join', onclick: joinByHandle }),
       el('span', { class: 'sp' }),
-      el('button', { class: 'pill ok', type: 'button', text: 'New group', onclick: openNewGroup })
+      el('button', { class: 'pill ok', type: 'button', text: 'New group', onclick: openWizard })
     ]),
     el('h1', { class: 'h1', text: 'Groups' }),
     el('div', { class: 'search', html: ICON_SEARCH }, [search]),
@@ -133,48 +185,65 @@ export function render (root, ctx) {
 
   /* ---------------------------------------------------------------- draw */
 
+  /** One row per group, keyed by roomId so the two sources line up. */
+  function entries () {
+    const convos = new Map(
+      db.convos().filter((c) => c.kind === 'group' && !c.archived).map((c) => [c.roomId, c])
+    )
+    const rows = serverGroups.map((group) => {
+      const convo = convos.get(group.roomId) || null
+      convos.delete(group.roomId)
+      return { group, convo, roomId: group.roomId, title: group.name }
+    })
+    // Groups made before the server existed, or made offline, still show.
+    for (const convo of convos.values()) {
+      rows.push({ group: null, convo, roomId: convo.roomId, title: convo.title || 'Group' })
+    }
+    return rows.sort((a, b) =>
+      (b.convo?.last?.ts || b.convo?.created || 0) - (a.convo?.last?.ts || a.convo?.created || 0))
+  }
+
   function draw () {
     const q = search.value.trim().toLowerCase()
-    const groups = db.convos()
-      .filter((c) => c.kind === 'group' && !c.archived)
-      .filter((c) => !q || (c.title || '').toLowerCase().includes(q))
+    const rows = entries().filter((r) => !q || r.title.toLowerCase().includes(q))
 
     clear(listEl)
 
-    if (!groups.length) {
-      const bits = [el('p', { text: q ? 'No group matches your search.' : EXPLAINER })]
+    if (!rows.length) {
+      const bits = [el('p', { text: q ? 'No group matches your search.' : (loadError || EXPLAINER) })]
       if (!q) {
-        bits.push(el('button', {
-          class: 'pill ok',
-          type: 'button',
-          text: 'New group',
-          onclick: openNewGroup
-        }))
+        bits.push(el('button', { class: 'pill ok', type: 'button', text: 'New group', onclick: openWizard }))
       }
       listEl.appendChild(el('div', { class: 'empty' }, bits))
       return
     }
 
-    groups.forEach((convo, i) => {
-      const title = convo.title || 'Group'
-      const unread = convo.unread || 0
-      const preview = convo.last
+    rows.forEach((entry, i) => {
+      const { group, convo, title } = entry
+      const unread = convo?.unread || 0
+      const preview = convo?.last
         ? `${convo.last.fromMe ? 'You: ' : ''}${convo.last.text}`
-        : 'Shared P2P room'
+        : (convo ? 'No messages yet' : 'Invite pending — open the invite link to get the key')
 
       listEl.appendChild(el('div', {
-        class: 'row' + (unread ? ' unread' : ''),
+        class: 'row' + (unread ? ' unread' : '') + (convo ? '' : ' pending'),
         style: `animation-delay:${Math.min(i, STAGGER_CAP) * STAGGER_MS}ms`,
-        onclick: () => ctx.openThread(convo.roomId)
+        onclick: () => {
+          if (convo) ctx.openThread(convo.roomId)
+          else if (group) ctx.nav(`#/group/${group.id}`)
+        }
       }, [
-        avatar({ name: title }, 52),
+        avatar({ name: title, avatar: group?.avatarUrl }, 52),
         el('div', { class: 'mid' }, [
           el('div', { class: 'l1' }, [
             el('span', { class: 'nm', text: title }),
-            convo.last ? el('span', { class: 'tm', text: fmtDay(convo.last.ts) }) : null
+            convo?.last ? el('span', { class: 'tm', text: fmtDay(convo.last.ts) }) : null
           ]),
           el('div', { class: 'l2' }, [
             el('span', { class: 'pv', text: preview }),
+            group?.visibility === 'PUBLIC'
+              ? el('span', { class: 'gm-mark', text: `@${group.username}` })
+              : null,
             unread ? el('span', { class: 'bdg', text: unread > 99 ? '99+' : String(unread) }) : null
           ])
         ]),
@@ -183,7 +252,7 @@ export function render (root, ctx) {
           type: 'button',
           'aria-label': 'Group options',
           html: ICON_MORE,
-          onclick (e) { e.stopPropagation(); groupMenu(convo) }
+          onclick (e) { e.stopPropagation(); groupMenu(entry) }
         })
       ]))
     })
@@ -191,16 +260,32 @@ export function render (root, ctx) {
 
   /* ---------------------------------------------------------------- wire */
 
+  async function loadServer () {
+    try {
+      const list = await groupsApi.listMine()
+      if (dead) return
+      serverGroups = Array.isArray(list) ? list : []
+      loadError = null
+    } catch {
+      if (dead) return
+      // Local groups still render; only the server half is missing.
+      loadError = 'Could not reach the group server — showing what is on this device.'
+    }
+    draw()
+  }
+
   const unsubDb = db.subscribe(draw)
   const unsubLobby = lobby.subscribe(draw)
   search.addEventListener('input', draw)
 
   root.appendChild(wrap)
   draw()
+  loadServer()
 
   return () => {
+    dead = true
     unsubDb()
     unsubLobby()
-    if (sheetEl) { sheetEl.remove(); sheetEl = null }
+    if (closeWizard) closeWizard()
   }
 }

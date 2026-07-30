@@ -50,7 +50,11 @@ const PURGE_SWEEP_MS = 6 * 60 * 60 * 1000;
 
 const memberInclude = {
   members: {
-    where: { leftAt: null },
+    // Banned members stay in the payload even though setBan also stamps
+    // leftAt. Filtering on leftAt alone hid them from every response, which
+    // made setBan(banned:false) unreachable — no client could learn who to
+    // un-ban. Members who genuinely left stay hidden.
+    where: { OR: [{ leftAt: null }, { bannedAt: { not: null } }] },
     include: { user: { select: { id: true, username: true, name: true, avatarUrl: true } } },
     orderBy: [{ role: 'asc' }, { joinedAt: 'asc' }],
   },
@@ -431,11 +435,23 @@ export class GroupsService implements OnModuleInit {
     }
     await this.prisma.groupMember.update({
       where: { id: target.id },
-      data: banned ? { bannedAt: new Date(), leftAt: new Date() } : { bannedAt: null },
+      data: banned
+        ? { bannedAt: new Date(), leftAt: new Date() }
+        // Lifting a ban has to undo BOTH stamps. Clearing bannedAt alone left
+        // leftAt set, so the person stayed filtered out of every payload and
+        // was un-banned into invisibility.
+        : { bannedAt: null, leftAt: null },
     });
     if (banned) {
       // Drop the room row too, or the ban would not stop delivery.
       await this.prisma.roomMember.deleteMany({ where: { roomId: group.roomId, userId: targetId } });
+    } else {
+      // ...and restore it, or they are back on the roster but still receive
+      // nothing, which reads as the ban never having been lifted.
+      await this.prisma.roomMember.createMany({
+        data: [{ roomId: group.roomId, userId: targetId }],
+        skipDuplicates: true,
+      });
     }
     return this.getOne(groupId, byUserId);
   }
@@ -606,7 +622,14 @@ export class GroupsService implements OnModuleInit {
     const target = await this.prisma.groupMember.findUnique({
       where: { groupId_userId: { groupId, userId } },
     });
-    if (!target || target.leftAt) throw new NotFoundException('that person is not in this group');
+    // Ban is checked before leftAt, exactly as requireMember does: setBan
+    // stamps BOTH, so testing leftAt first reported a banned person as "not in
+    // this group" — which made lifting their ban impossible, since every route
+    // that could unban them goes through here. Someone who genuinely left is
+    // still absent.
+    if (!target || (target.leftAt && !target.bannedAt)) {
+      throw new NotFoundException('that person is not in this group');
+    }
     return target;
   }
 

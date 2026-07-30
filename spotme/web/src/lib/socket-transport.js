@@ -193,7 +193,7 @@ let cachedTokens = null
 let cachedAt = 0
 const TOKEN_REUSE_MS = 8 * 60_000
 
-async function freshTokens () {
+export async function freshTokens () {
   if (cachedTokens && Date.now() - cachedAt < TOKEN_REUSE_MS) return cachedTokens
   cachedTokens = await guestAuth()
   cachedAt = Date.now()

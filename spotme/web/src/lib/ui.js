@@ -11,6 +11,12 @@ export const el = (tag, props = {}, children = []) => {
     else if (key === 'html') node.innerHTML = value   // trusted, app-authored markup only (icons)
     else if (key === 'style') node.style.cssText = value
     else if (key.startsWith('on')) node.addEventListener(key.slice(2).toLowerCase(), value)
+    // A boolean false means the attribute is ABSENT. setAttribute(k, false)
+    // writes the string "false", and HTML reads any present `disabled` as
+    // disabled — so `disabled: false` used to render a permanently dead
+    // button. Attributes that genuinely want the word (spellcheck, draggable)
+    // pass it as the string 'false' and are unaffected.
+    else if (value === false) { /* omitted */ }
     else if (value !== null && value !== undefined) node.setAttribute(key, value)
   }
   for (const child of [].concat(children)) {

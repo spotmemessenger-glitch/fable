@@ -168,42 +168,255 @@
 
 .v-groups .empty p { margin: 0; max-width: 32ch; line-height: 1.5; }
 
-/* New-group bottom sheet (inside the shared .as-backdrop/.as-sheet chrome). */
-.v-groups .ng {
+/* A group the server knows about but this device has no key for. */
+.v-groups .row.pending .nm { color: var(--ink2); }
+.v-groups .row.pending .pv { font-style: italic; }
+
+/* ------------------------------------------------- creation wizard sheet */
+/* Lives inside the shared .as-backdrop/.as-sheet chrome. */
+
+.as-sheet.gw {
   display: flex;
   flex-direction: column;
   gap: 10px;
   padding: 16px 16px calc(18px + env(safe-area-inset-bottom));
 }
 
-.v-groups .ng-title {
+.gw-step {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  /* 150-250ms: long enough to read as a step change, short enough that
+   * tapping Next three times never feels like waiting. */
+  animation: gw-step .18s ease;
+}
+
+@keyframes gw-step { from { opacity: 0; transform: translateX(10px); } }
+
+.gw-title {
   font-size: 20px;
   font-weight: 700;
   letter-spacing: -.03em;
 }
 
-.v-groups .ng-hint {
+.gw-hint,
+.gw-note {
   margin: 0;
   font-size: 12px;
   color: var(--muted);
   line-height: 1.45;
 }
 
-.v-groups .ng-input {
+.gw-note {
+  background: var(--well);
+  border-radius: 11px;
+  padding: 10px 12px;
+}
+
+.gw-sec {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-top: 4px;
+}
+
+.gw-input {
   border: 1px solid var(--line);
   background: var(--well);
   border-radius: 13px;
   padding: 12px 14px;
+  /* 16px floor: anything smaller makes iOS Safari zoom the whole app on focus. */
   font-size: 16px;
   outline: none;
   color: var(--ink);
   font-family: var(--font);
 }
 
-.v-groups .ng-input:focus { border-color: var(--ink); background: var(--surface); }
+.gw-input:focus { border-color: var(--ink); background: var(--surface); }
 
-.v-groups .ng-create { padding: 12px; font-size: 14.5px; }
+.gw-list {
+  max-height: 46vh;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  display: flex;
+  flex-direction: column;
+}
+
+.gw-pick {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 8px 4px;
+  cursor: pointer;
+  border-radius: 11px;
+  transition: background .16s ease;
+}
+
+.gw-pick:hover,
+.gw-pick.on { background: var(--well); }
+
+.gw-pick-nm {
+  flex: 1;
+  min-width: 0;
+  font-size: 14.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.gw-tick {
+  width: 22px;
+  flex: none;
+  text-align: center;
+  color: var(--blue);
+  font-weight: 700;
+}
+
+.gw-seg {
+  display: flex;
+  gap: 6px;
+  background: var(--well);
+  border-radius: 999px;
+  padding: 4px;
+}
+
+.gw-seg-b {
+  flex: 1;
+  border: none;
+  background: none;
+  border-radius: 999px;
+  padding: 9px 12px;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 620;
+  color: var(--muted);
+  cursor: pointer;
+  transition: background .18s ease, color .18s ease;
+}
+
+.gw-seg-b.on { background: var(--surface); color: var(--ink); }
+
+.gw-toggle {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 2px;
+  cursor: pointer;
+}
+
+.gw-toggle-text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.gw-toggle-nm { font-size: 14.5px; font-weight: 600; }
+.gw-toggle-note { font-size: 11.5px; color: var(--muted); }
+
+.gw-switch {
+  width: 42px;
+  height: 25px;
+  border-radius: 999px;
+  background: var(--line);
+  flex: none;
+  position: relative;
+  transition: background .18s ease;
+}
+
+.gw-switch::after {
+  content: "";
+  position: absolute;
+  top: 2.5px;
+  left: 2.5px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform .18s ease;
+}
+
+.gw-toggle.on .gw-switch { background: var(--blue); }
+.gw-toggle.on .gw-switch::after { transform: translateX(17px); }
+
+.gw-actions { display: flex; gap: 8px; margin-top: 6px; }
+.gw-actions > * { flex: 1; }
+.gw-actions .pill { padding: 12px; font-size: 14.5px; }
+.gw-actions .pill:disabled { opacity: .5; cursor: default; }
+
+/* --------------------------------------------------------- manage screen */
+
+.v-gm .gm-sub {
+  margin: 0;
+  padding: 0 18px 10px;
+  font-size: 13px;
+  color: var(--muted);
+  flex: none;
+}
+
+.v-gm .gm-back {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: none;
+  background: none;
+  color: var(--ink);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  flex: none;
+}
+
+.v-gm .gm-back:hover { background: var(--well); }
+.v-gm .gm-back svg { width: 20px; height: 20px; }
+
+.v-gm .gm-settings { padding: 0 18px; display: flex; flex-direction: column; gap: 2px; }
+
+.gm-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 18px;
+  cursor: pointer;
+  position: relative;
+  animation: vg-fade .28s ease backwards;
+}
+
+.gm-row:hover { background: var(--well); }
+.gm-row.out { opacity: .5; }
+
+.gm-row + .gm-row::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 74px;
+  right: 0;
+  height: 1px;
+  background: var(--hair);
+}
+
+.gm-role {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--muted);
+  flex: none;
+}
+
+.gm-mark {
+  font-size: 11px;
+  color: var(--muted);
+  flex: none;
+  align-self: center;
+}
+
+.gm-danger {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 22px 18px calc(24px + env(safe-area-inset-bottom));
+}
 
 @media (prefers-reduced-motion: reduce) {
-  .v-groups .row { animation: none; }
+  .v-groups .row,
+  .gm-row,
+  .gw-step { animation: none; }
 }

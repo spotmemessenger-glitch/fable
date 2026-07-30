@@ -28,6 +28,7 @@ import * as bluetooth from './views/bluetooth.js'
 import * as profile from './views/profile.js'
 import * as contacts from './views/contacts.js'
 import * as groups from './views/groups.js'
+import * as groupManage from './views/group-manage.js'
 import * as notifications from './views/notifications.js'
 import * as stories from './views/stories.js'
 
@@ -193,6 +194,15 @@ function render () {
   if (threadMatch) {
     navEl.style.display = 'none'
     currentCleanup = chat.render(viewContainer, ctx, decodeURIComponent(threadMatch[1]))
+    return
+  }
+
+  // Group management is a full screen like a thread, not a tab: it is entered
+  // from one group and its back button returns to the list.
+  const groupMatch = hash.match(/^#\/group\/(.+)$/)
+  if (groupMatch) {
+    navEl.style.display = 'none'
+    currentCleanup = groupManage.render(viewContainer, ctx, decodeURIComponent(groupMatch[1]))
     return
   }
 
