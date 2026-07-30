@@ -4020,6 +4020,11 @@ export function render (root, ctx, roomId) {
         break
       case 'seen':
         updateSeen(event.id)
+        /* updateSeen only un-hides a .cap node, which the watching bubble does
+         * not render — so a viewer who closed early left the sender's
+         * countdown ticking on a photo that had already burned. The row has to
+         * be rebuilt, exactly as 'viewing' does. */
+        refreshRow(event.id)
         break
       /* They just opened a view-once of mine — swap that bubble for the live
        * countdown so the wait is something to watch rather than sit through. */

@@ -284,6 +284,11 @@ function createConnection (convo) {
        * sender watch the same countdown instead of waiting blind. The plain
        * form still means it is over. */
       if (payload.opening) {
+        /* A burned photo cannot be being viewed. Replay can deliver an
+         * "opening" that was overtaken by its own burn, and without this the
+         * sender's bubble springs back into a countdown for a photo that is
+         * already gone. Burned is final; nothing revives it. */
+        if (seenByPeer.has(payload.id)) return
         openingByPeer.set(payload.id, {
           secs: Math.max(1, Number(payload.secs) || 10),
           at: Date.now()
