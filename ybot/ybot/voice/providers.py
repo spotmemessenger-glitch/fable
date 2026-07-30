@@ -59,15 +59,28 @@ def register_tts(name: str) -> Callable[[Callable[[], TTSProvider]], Callable[[]
     return deco
 
 
+def _default_provider(local: str) -> str:
+    """Cloud when a key is present, local otherwise.
+
+    Defaulting to whisper/piper meant a first run failed on a model download
+    and an unset voice file even though a working ElevenLabs key sat right
+    there. The env vars still win, so choosing the local path stays one
+    setting away — but nobody should have to configure anything to be heard.
+    """
+    return "elevenlabs" if os.environ.get("ELEVENLABS_API_KEY") else local
+
+
 def get_stt(name: str | None = None) -> STTProvider:
-    key = (name or os.environ.get("YBOT_STT_PROVIDER", "whisper")).strip().lower()
+    key = (name or os.environ.get("YBOT_STT_PROVIDER") or _default_provider("whisper"))
+    key = key.strip().lower()
     if key not in _STT:
         raise KeyError(f"unknown STT provider {key!r}; have {sorted(_STT)}")
     return _STT[key]()
 
 
 def get_tts(name: str | None = None) -> TTSProvider:
-    key = (name or os.environ.get("YBOT_TTS_PROVIDER", "piper")).strip().lower()
+    key = (name or os.environ.get("YBOT_TTS_PROVIDER") or _default_provider("piper"))
+    key = key.strip().lower()
     if key not in _TTS:
         raise KeyError(f"unknown TTS provider {key!r}; have {sorted(_TTS)}")
     return _TTS[key]()
