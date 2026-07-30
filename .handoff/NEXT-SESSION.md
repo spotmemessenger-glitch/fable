@@ -1,8 +1,53 @@
 # START HERE — pickup brief
 
 **Written:** 2026-07-29, end of session (~$341 spent).
-**Updated:** 2026-07-30 evening (~$745 spent that day). Everything below was
-verified by RUNNING it, not by exit codes.
+**Updated:** 2026-07-30 late evening. Everything below was verified by RUNNING
+it, not by exit codes.
+
+---
+
+## 00. LATEST (2026-07-30 late evening) — read this first
+
+**The Vercel 404 had a root cause nobody had found, and it was not the code.**
+The Vercel project is git-linked to `spotmemessenger-glitch/fable` with **no
+Root Directory set**, so every push to master built the REPO ROOT: no app
+there, empty `/vercel/output`, a 1-second "success", and that empty deployment
+then took the production alias away from the good CLI deploy. That is why the
+site went 404 within minutes of each `git push` — including right after the
+"fix" commit `c76f097`. Root Directory is now set to `spotme/web` via the
+Vercel API. A git-triggered deploy was then run and verified: root **200**,
+real HTML, `api/*` lambdas built, `/api/translate` returning
+`{"engine":"sarvam+azure/openai","confirmed":true}`.
+**If the site 404s again, check that setting before touching any code.**
+
+**Groups v2 P3 (web UI) is BUILT and verified** — see
+`spotme/docs/GROUPS-BUILD.md` for the full record. New: `lib/groups-api.js`,
+`lib/group-perms.js`, `views/group-new.js` (3-step wizard),
+`views/group-manage.js`, rewritten `views/groups.js`, route `#/group/<id>`.
+Driven in a real browser against the local backend: wizard create → 3 members
++ OWNER on the server, promote to ADMIN, permission toggle persisted, ban,
+lift ban. Backend 26/26, web +11 new tests. Commit is local — **not pushed**.
+
+**Three bugs found by building it, all fixed:**
+1. `ui.js el()` wrote `disabled="false"`, which HTML reads as disabled — the
+   wizard's Create button was dead from first paint.
+2. **Un-banning was impossible**: `setBan` stamps `leftAt` too, `memberInclude`
+   filtered on it and `requireTarget` rejected it, so banned members vanished
+   from every payload and the unban route 404'd.
+3. Lifting a ban cleared only `bannedAt`, leaving `leftAt` set and the
+   `RoomMember` row deleted — restored to the roster but still receiving
+   nothing.
+
+**New trap — `nest build` can exit 0 and emit NOTHING.** `deleteOutDir: true`
+wipes `dist/` while `incremental: true` makes tsc decide there is nothing to
+emit, so you get an empty `dist` and a 0 exit code. Worse: a stale backend may
+still hold :4000, so you are testing hours-old code. Delete
+`tsconfig.build.tsbuildinfo` before building, and prove a route you just added
+actually answers (404 on a new route = stale process).
+
+**Still needs the user:** nothing has been pushed or deployed. `git push` now
+auto-deploys the web app to production; the backend change needs
+`cd spotme/backend && npm run deploy` separately.
 
 ---
 
@@ -40,6 +85,12 @@ token (`@qa_probe_02`, the Android emulator) and ZERO web-push subscriptions.
 The whole chain is verified on the emulator — real chat message → server → FCM
 → tray notification on an idle, screen-off device — but never on a real handset.
 Getting one notification onto a real phone is the next milestone.
+
+This route was IMPOSSIBLE until 2026-07-30 late evening — the site was 404, so
+there was nothing to add to a Home Screen. It is live now (see section 00), and
+the PWA prerequisites were checked on the live site: `display: standalone`,
+`apple-mobile-web-app-capable`, `/sw.js` 200, `/api/push` reports
+`enabled:true` with a VAPID public key.
 
 Fastest route on iPhone, needing no build at all: open
 https://spotme-messenger.vercel.app in Safari → **Add to Home Screen** → open
