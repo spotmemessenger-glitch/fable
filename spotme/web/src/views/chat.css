@@ -2406,6 +2406,18 @@
 }
 .v-chat .xl.pend .xlText { opacity: .4; }
 
+/* The middle layer: the same words in their own script. Set slightly larger
+   than the meaning below it and at full opacity, because for a reader of that
+   language this line — not the English — is the message. Indic scripts carry
+   tall matras, so the line-height is looser than the Latin lines around it. */
+.v-chat .xlScript {
+  display: block;
+  font-size: 14px;
+  line-height: 1.5;
+  margin-bottom: 3px;
+  overflow-wrap: anywhere;
+}
+
 /* Same caption as the translation line, so the two readings are told apart by
    their words rather than by two different-looking labels. */
 .v-chat .xlTag {

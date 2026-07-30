@@ -820,7 +820,10 @@ export function render (root, ctx, roomId) {
     if (!native || native === text) return null
     const res = await translateText(native, lang, 'en')
     if (!res?.text || res.text === native) return null
-    return { text: res.text, lang, viaChat }
+    // `native` is the message in its own script — the actual transliteration.
+    // It used to be discarded as a mere step on the way to English, which is
+    // why the bubble could only ever show two of the three layers.
+    return { text: res.text, lang, script: native, viaChat }
   }
 
   function rememberChatLang (base) {
@@ -881,11 +884,22 @@ export function render (root, ctx, roomId) {
     const cur = xlitCache.get(m.id)
     if (cur === null) { existing?.remove(); return }
     const pending = cur === 'pending'
+    /* Three layers, in the order they are useful:
+     *   the bubble's own text  — what was typed ("Aparam enga iruka?")
+     *   .xlScript              — the same words in their own script
+     *   .xlText                — what it means
+     * The middle line is the transliteration itself. It was being computed and
+     * then thrown away, so the feature called "Transliterated" never actually
+     * showed one. It is skipped when it would only repeat the original. */
+    const script = !pending && cur.script && flatten(cur.script) !== flatten(m.text)
+      ? cur.script
+      : null
     const node = el('div', { class: 'xl' + (pending ? ' pend' : '') }, [
       el('span', {
         class: 'xlTag',
         text: pending ? 'Reading…' : readingTag(cur.lang, 'Transliterated')
       }),
+      script ? el('span', { class: 'xlScript', lang: cur.lang, text: script }) : null,
       el('span', { class: 'xlText', text: pending ? '…' : cur.text })
     ])
     if (existing) existing.replaceWith(node)
@@ -1055,7 +1069,12 @@ export function render (root, ctx, roomId) {
       } catch { return 0 }
     }
 
+    /** Buffered rarely lands exactly on the duration, so a strict ratio parks
+     *  at 99% forever. Once the browser says it can play through, it is done. */
+    const fullyLoaded = () => audio.readyState >= 3 || loadedFrac() >= 0.98
+
     function showLoading () {
+      if (fullyLoaded()) { showDuration(); return }
       const pct = Math.round(loadedFrac() * 100)
       // A percentage that says nothing is worse than a plain word.
       durEl.textContent = pct > 0 ? `${pct}%` : 'Loading…'
@@ -1069,11 +1088,22 @@ export function render (root, ctx, roomId) {
 
     const effDur = () => (Number.isFinite(audio.duration) && audio.duration) || clipDur || 1
 
+    /**
+     * Wire the waveform analyser — but ONLY onto a context that is actually
+     * running.
+     *
+     * createMediaElementSource permanently reroutes this element's audio into
+     * the Web Audio graph. On iOS a suspended context then outputs SILENCE:
+     * the note "plays" (time advances, bars animate) and nothing can be heard,
+     * for that tap and every tap after it. The breathing-bar effect is not
+     * worth that trade, so when the context will not run we simply never
+     * connect and let the plain <audio> element make the sound.
+     */
     function setupAnalyser () {
       if (analyser || !bars) return
       try {
         const ac = getAudioCtx()
-        if (!ac) return
+        if (!ac || ac.state !== 'running') return
         let entry = mediaSources.get(audio)
         if (!entry) {
           // A MediaElementSource can only ever be created once per element.
@@ -1125,8 +1155,17 @@ export function render (root, ctx, roomId) {
 
     /** Start now if we can, otherwise remember the intent and start the moment
      *  there is audio. Either way the FIRST tap is the one that plays. */
-    function start () {
+    async function start () {
+      /* Resume FIRST, and wait for it. A tap is the only moment iOS will let
+       * an AudioContext start, and resume() is asynchronous — the old code
+       * fired it and carried on, so the analyser got attached to a context
+       * that was still suspended and the note played silently. */
+      try {
+        const ac = getAudioCtx()
+        if (ac && ac.state === 'suspended') await ac.resume()
+      } catch { /* no Web Audio here; the plain element still plays */ }
       setupAnalyser()
+
       if (!ready()) {
         wantPlay = true
         showLoading()
@@ -1196,6 +1235,8 @@ export function render (root, ctx, roomId) {
       else if (e.key === ' ' || e.key === 'Enter') { audio.paused ? start() : audio.pause(); e.preventDefault() }
     })
     audio.addEventListener('play', () => {
+      // Playing and "99%" cannot both be true; the duration is the honest label.
+      showDuration()
       btn.innerHTML = IC.pause
       btn.classList.add('playing')
       stopLoop()
