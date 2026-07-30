@@ -156,20 +156,34 @@ These two models are the persistence layer behind the server-backed transport. `
 
 Per-room **append-only** log. Every persistent action a client sends is appended here and broadcast; on join, the client sends its last seen `seq` and the server replays everything after it — this is what turns the P2P prototype's "both online or nothing" into true offline delivery and durable knocks.
 
+As built (`spotme/backend/prisma/schema.prisma`, migration
+`20260729204652_room_events_and_guest_claims`):
+
 ```prisma
 model RoomEvent {
-  seq       BigInt   @id @default(autoincrement()) // global, monotonic
-  roomId    String   // opaque room identifier (hash of the room name, not the secret)
+  id        Int      @id @default(autoincrement()) // global, monotonic; the replay cursor
+  roomId    String   // opaque room identifier (never the room secret)
+  type      String   // msg | react | profile | del | edit | read | seen | knock | knockAck | bin | binack
   senderId  String   // User.id of the author
-  action    String   // action type: msg | react | del | edit | read | seen | profile | knock | knockAck | bin
-  payload   String   // AES-GCM ciphertext, base64 — key derived client-side from the room secret
+  payload   Bytes    // AES-GCM ciphertext — key derived client-side from the room secret
+  meta      Json?    // cleartext routing only (attachment id / slice seq / total) — never content
+  attachId  String?  // set on bin slices so fetch can serve one attachment by id
   createdAt DateTime @default(now())
-  expiresAt DateTime? // set for disappearing content; TTL sweep deletes past-due rows
 
-  @@index([roomId, seq])
-  @@index([expiresAt])
+  @@index([roomId, id])
+  @@index([roomId, attachId])
 }
 ```
+
+Two deliberate differences from the sketch this document first carried: the
+cursor column is `id` (not `seq`) because it doubles as the primary key, and
+ciphertext is stored as `Bytes` rather than base64 text — base64 is the **wire**
+encoding only (see §7.2), so the database keeps the compact form.
+
+`expiresAt` is **not** implemented on this model yet; disappearing-message TTLs
+are enforced client-side, exactly as they were over P2P, and the retention
+sweep in §9 is still to be written. Recorded as missing rather than described as
+present.
 
 Design decisions:
 
@@ -178,29 +192,36 @@ Design decisions:
 - **Append-only.** Edits and deletes are new events (`edit`, `del` tombstones), exactly as the P2P protocol already models them in `spotme/web/src/net.js`. The log is never updated in place; "delete for everyone" appends a tombstone that clients apply, and the original row is physically removed only by the TTL/retention sweeps (§9).
 - **`roomId` is not a foreign key** in P1. Rooms are client-named (secret-derived); they do not need a `Conversation` row to exist. The `Conversation`/`Message` models (§5) remain the account-backed track used by the NestJS chat gateway; the event log is the transport-compatible track. Converging them is a **P2** decision, made deliberately rather than forced by a constraint tonight.
 
-### 7.2 `RoomBlob`
+### 7.2 Media slices (no separate blob model)
 
-Media bodies, kept out of the event log so replay stays cheap. The P2P transport moved media as 128 KB slices with per-slice acks (`bin`/`binack` in `spotme/web/src/net.js`) because that was a transport-truncation fix; server-side, the slices are reassembled into one ciphertext blob and the corresponding `RoomEvent` carries only the blob reference.
+**There is no `RoomBlob` table.** An earlier draft of this document proposed one;
+the shipped design stores media as `bin` slices in `RoomEvent` itself, because
+that let the existing client protocol move to the server unchanged.
 
-```prisma
-model RoomBlob {
-  id        String   @id @default(cuid())
-  roomId    String
-  senderId  String
-  bytes     Bytes    // ciphertext blob (client-encrypted before upload)
-  size      Int      // ciphertext size in bytes
-  mime      String?  // declared type; server never inspects content
-  createdAt DateTime @default(now())
-  expiresAt DateTime? // follows the referencing event's TTL
+The P2P transport already sliced attachments into 128 KB pieces with per-slice
+acks (`bin`/`binack` in `spotme/web/src/net.js`) to fix a transport truncation
+bug. Server-side each slice is one `RoomEvent` row sharing an `attachId`, with
+`meta.seq`/`meta.total` giving its position. Nothing is reassembled on the
+server — it cannot be, since every slice is ciphertext.
 
-  @@index([roomId, createdAt])
-  @@index([expiresAt])
-}
-```
+Two consequences worth stating plainly:
 
-- **P1:** blobs live in Postgres (`Bytes`). This is deliberately the lazy correct choice for one developer on Railway/Fly-class hosting — one datastore, one backup, transactional with the event row.
-- **P2:** blob bodies move to Cloudflare R2 (chosen over S3 for egress cost, per `spotme/docs` architecture notes and the media-transfer analysis); `RoomBlob` shrinks to a metadata row holding the R2 object key, matching how `Message.mediaKey` already works. The event-log API does not change.
-- Server-side persistence is also what fixes the P0 "video kills chat" class of bug from the P2P transport — but that must be **re-verified** against the new transport, not assumed fixed.
+- Replay stays cheap **because `bin` rows are excluded from it**
+  (`rooms.service.ts`). A joining client receives the seq-0 envelope of each
+  attachment, renders the bubble as "tap to load", and pulls the slices on
+  demand through `fetch`. That is the path that makes a photo sent to an
+  offline device arrive at all.
+- **Payloads cross the wire as base64 text, never as binary attachments.**
+  socket.io frames each `Buffer` separately and its decoder then requires those
+  frames next; anything interleaving (a heartbeat, another emit) makes it read
+  text where it expects binary and drop the socket with `parse error`. Measured:
+  a replay of ~8–11 binary payloads killed the connection every time. The
+  ~33% base64 overhead buys a frame that cannot be split. Regression test:
+  `spotme/backend/test/rooms.gateway.e2e-spec.ts`.
+
+- **P1:** slice ciphertext lives in Postgres (`Bytes`). This is deliberately the lazy correct choice for one developer on Railway/Fly-class hosting — one datastore, one backup, transactional with the event row.
+- **P2:** slice bodies move to Cloudflare R2 (chosen over S3 for egress cost, per the architecture notes and the media-transfer analysis); the `bin` event shrinks to a reference holding the R2 object key, matching how `Message.mediaKey` already works, and the base64 overhead above disappears with them. The event-log API does not change.
+- Server-side persistence is what fixes the P0 "video kills chat" class of bug from the P2P transport. **Verified for photos** on 2026-07-30 (live transfer, and an offline transfer recovered by envelope replay + lazy fetch — see `spotme/docs/verification/`); **video specifically has not been re-tested**, so treat that half as open.
 
 ### 7.3 Ephemeral vs. persistent actions
 

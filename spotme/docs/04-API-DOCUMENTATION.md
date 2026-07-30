@@ -319,27 +319,44 @@ The backend-track gateway. Handshake auth per §2.1; on connect the socket joins
 
 | Event | Payload | Ack / effect |
 |-------|---------|--------------|
-| `join` | `{ roomId, sinceSeq }` | Ack `{ peers: [<selfId>...], events: [<RoomEvent>...] }` — current occupants plus every persistent event with `seq > sinceSeq`, in order. Socket joins the Socket.IO room. `sinceSeq: 0` replays the full room log. |
-| `action` | `{ roomId, type, cipher, meta?, target? }` | Persistent types: append to the `RoomEvent` log (assigning `seq`), then broadcast to the room. Ephemeral types: broadcast only, never stored. `target` (a `selfId`) restricts delivery to one peer — used for directed acks, history serving, and RTC signalling. `cipher` is the AES-GCM payload; `meta` is the small unencrypted routing envelope (action type, media slice counters). |
-| `leave` | `{ roomId }` | Leaves the room; peers get `peer:leave`. |
+| `join` | `{ roomId, since }` | Ack `{ peers: [<userId>...], events: [...], envelopes: [...], lastEventId }` — current occupants, every persistent event with `id > since` in order, and one seq-0 envelope per attachment that started after `since` (bodies are **not** replayed; the client renders "tap to load" and pulls slices with `fetch`). Socket joins the Socket.IO room. `since: 0` replays the full room log. |
+| `action` | `{ roomId, type, payload, meta?, target?, attachId? }` | Persistent types: append to the `RoomEvent` log (ack returns the assigned `seq`), then broadcast to the room. Ephemeral types: broadcast only, never stored. `target` (a `userId`) restricts delivery to one peer — used for directed acks, history serving, and RTC signalling. `payload` is **base64 AES-GCM ciphertext**; `meta` is the small cleartext routing envelope (attachment id, slice seq/total). |
+| `fetch` | `{ roomId, attachId, seq }` | Ack `{ payload, meta, total }` for one attachment slice, or `{ missing: true }`. This is what lets a device fetch media whose sender has since gone offline. |
+| `leave` | `{ roomId }` | Leaves the room; peers get a `peer` event with `action: 'leave'`. |
+
+> **Payloads are base64 text, never binary attachments.** socket.io frames each
+> `Buffer` separately after the JSON packet and its decoder then requires those
+> frames next, so anything interleaving (a heartbeat, another emit) makes it read
+> text where it expects binary and drop the socket with `parse error` — measured
+> at ~8–11 payloads in one join replay. The ~33% overhead buys a frame that
+> cannot be split. Guarded by `spotme/backend/test/rooms.gateway.e2e-spec.ts`.
 
 #### Server → client events
 
 | Event | Payload | Notes |
 |-------|---------|-------|
-| `peer:join` | `{ roomId, peerId }` | A peer joined (maps to Trystero's `onPeerJoin`) |
-| `peer:leave` | `{ roomId, peerId }` | Maps to `onPeerLeave` |
-| `action` | `{ roomId, type, cipher, meta?, from, seq? }` | Relayed action; `seq` present only on persistent events |
+| `peer` | `{ roomId, peerId, action: 'join' \| 'leave' }` | One event for both directions (maps to Trystero's `onPeerJoin`/`onPeerLeave`). Fired on a user's *first* socket joining and *last* socket leaving, so a second tab does not read as a second peer. |
+| `action` | `{ roomId, type, payload, meta?, from, seq? }` | Relayed action; `payload` is base64 ciphertext and `seq` is present only on persistent events |
 
 #### Action types (carried over from the P2P protocol in `web/src/lib/rooms.js` / `reach.js`)
 
 | Class | Types | Persisted? |
 |-------|-------|-----------|
+As implemented in `rooms.service.ts` (`PERSISTED`) and `rooms.gateway.ts`
+(`EPHEMERAL`). Anything in neither set is refused with
+`{ error: 'unknown action type: …' }` rather than silently stored.
+
+| Class | Types | Persisted? |
+|-------|-------|-----------|
 | Messaging | `msg`, `react`, `del`, `edit`, `read`, `seen` | Yes |
-| Profile/state | `profile`, `history` | Yes |
-| Media transfer | `bin`, `binack`, `fetch` | `bin` yes; `binack`/`fetch` ephemeral |
+| Profile | `profile` | Yes |
+| Media transfer | `bin`, `binack` | Yes (`bin` bodies are excluded from replay and served via `fetch`) |
 | Knock protocol | `knock`, `knockAck` | Yes (durable knocks) |
-| Ephemeral | `typing`, `locup` (live location), `call` (+ RTC negotiation) | No — relay only |
+| Ephemeral | `typing`, `locup` (live location), `call`, `rtc` (negotiation), `history` (peer-to-peer backfill), `fetchreq`/`fetchres` (peer lazy-fetch fallback), `hello` (discovery presence) | No — relay only |
+
+`history` and `hello` are deliberately ephemeral: both assert something about
+*now*. A replayed "I am nearby" would be a false statement to the user, which the
+product's honesty rules forbid.
 
 #### Binary media slices
 
@@ -347,11 +364,28 @@ Media (photos, private view-once photos, video, voice notes, documents) is encry
 
 #### RTC signalling relay
 
-Calls remain **peer-to-peer WebRTC — media never touches the server.** The `/rooms` socket replaces Trystero as the signalling channel only: SDP offers/answers and ICE candidates travel as ephemeral, `target`-directed `call` actions. ICE servers come from `GET /api/turn` (§5.1). Call flow (offer, ringing, accept, decline/busy, end, PiP, mute) is unchanged from the live web app.
+Calls remain **peer-to-peer WebRTC — media never touches the server.** The `/rooms` socket replaces Trystero as the signalling channel only: call intent (ring/accept/decline/end) travels as ephemeral `call` actions, while SDP offers/answers and ICE candidates travel as ephemeral `rtc` actions carrying `{ to, description | candidate }`. The transport builds the `RTCPeerConnection` mesh itself using perfect negotiation, with politeness decided by comparing the two `userId`s. ICE servers come from `GET /api/turn` (§5.1).
+
+**Status: unverified.** The machinery is implemented (`socket-transport.js`, `handleRtcSignal`) but no call has been placed over it — headless verification needs fake media devices. Treat call support as open until a real two-device call is made.
 
 #### Reconnection contract
 
-Clients persist the highest `seq` seen per room. On reconnect: `join {roomId, sinceSeq}` → gap replay → resume. There is no server-side session to expire; the JWT in the handshake is the only credential.
+Clients persist the highest `seq` seen per room, keyed by **profile id and room**
+(`spotme.cursor.<profileId>.<roomId>`). On reconnect: `join {roomId, since}` → gap
+replay → resume. Replay is idempotent — the client store dedupes by message id and
+honours tombstones — so an unknown cursor costs a heavier rejoin and nothing else,
+which is why "start from 0" is always the safe answer.
+
+Two contract details that exist because their absence caused real failures:
+
+- **The handshake mints a fresh token every attempt** (socket.io's `auth`
+  callback form). Access tokens are short-lived; a tab that slept past expiry
+  would otherwise retry forever with a dead token while the server accepted the
+  handshake and immediately dropped the socket — indistinguishable, from the UI,
+  from "the app stopped working".
+- **A send that arrives before its room's post-reconnect rejoin retries once.**
+  The server answers `{ error: 'not joined' }`; dropping it there would lose a
+  message the sender had already been shown as sent.
 
 ### 6.3 Scaling phases for realtime
 
