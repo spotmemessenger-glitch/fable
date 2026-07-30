@@ -931,16 +931,25 @@ export function render (root, ctx, roomId) {
     /* Short messages ("vanakkam", "enga iruka?") give up when the chat has no
      * known language yet. Learning one makes them answerable, so drop those
      * give-ups and let them run again — otherwise the first lines of every
-     * conversation stay blank forever. */
+     * conversation stay blank forever.
+     *
+     * Capped, because this used to re-read the WHOLE thread. renderList()
+     * renders the entire store with no virtualisation and MAX_STORED is 500,
+     * so one language-learn event could fire up to 500 `?op=read` calls — 500
+     * LLM completions — in a burst. Now it re-reads the tail of the
+     * conversation, which is the part anyone is looking at and the part the
+     * give-ups are actually in; scrolling back further is not a use case that
+     * justifies a five-hundred-call fan-out. */
+    const RETRY_TAIL = 30
+    const recent = Array.from(msgEls.values())
+      .map(({ message }) => message)
+      .filter((m) => m && (!m.kind || m.kind === 'text'))
+      .slice(-RETRY_TAIL)
     let retried = false
-    for (const [id, value] of xlitCache) {
-      if (value === null) { xlitCache.delete(id); retried = true }
+    for (const m of recent) {
+      if (xlitCache.get(xlitKey(m)) === null) { xlitCache.delete(xlitKey(m)); retried = true }
     }
-    if (retried && mounted) {
-      for (const { message } of msgEls.values()) {
-        if (message && (!message.kind || message.kind === 'text')) applyXlit(message)
-      }
-    }
+    if (retried && mounted) for (const m of recent) applyXlit(m)
   }
 
   /**

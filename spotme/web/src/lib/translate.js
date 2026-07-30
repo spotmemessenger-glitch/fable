@@ -11,12 +11,23 @@
  * Messages carry the sender's language tag, so there is no detection step.
  */
 
-const memory = new Map()               // "from|to|text" -> {text, engine}
-// v1 held low-quality MyMemory entries; v2 held wrong-source passthroughs
-// ("Unga Peru enna?" cached as its own translation), which outlived the fix
-// because a cache hit short-circuits it.
-const CACHE_KEY = 'spotme:tcache:v3'
-const CACHE_MAX = 400
+/**
+ * "from|to|text" -> {text, engine}.
+ *
+ * IN MEMORY ONLY, for the same reason `readCache` below is: the key contains
+ * the original message and the value contains its translation, so persisting
+ * it wrote message plaintext to disk. It did — 400 entries deep, with no TTL
+ * and no clear-on-logout — and it outlived the messages themselves. Timer
+ * messages expire by removing the message from the store (lib/rooms.js) and
+ * nothing touched this cache, so a disappearing message that had been
+ * translated left its plaintext sitting in localStorage after the user was
+ * told it was gone. For an app that markets end-to-end encryption and
+ * view-once, that is a broken promise, not a caching detail.
+ *
+ * A session-lifetime cache still does the job it was added for: the same
+ * message is not re-translated while you scroll past it.
+ */
+const memory = new Map()
 const translators = new Map()          // "from|to" -> Translator instance
 
 /** Languages offered across the app. Indian languages are first-class. */
@@ -52,20 +63,11 @@ export const LANGS = [
 
 export const langName = (code) => LANGS.find((l) => l.code === code)?.name || code
 
-function loadCache () {
-  try {
-    const raw = localStorage.getItem(CACHE_KEY)
-    if (raw) for (const [k, v] of JSON.parse(raw)) memory.set(k, v)
-  } catch { /* start cold */ }
-}
-loadCache()
-
-function persistCache () {
-  try {
-    const entries = Array.from(memory.entries()).slice(-CACHE_MAX)
-    localStorage.setItem(CACHE_KEY, JSON.stringify(entries))
-  } catch { /* full or private — cache stays in memory */ }
-}
+/* Anything already written to disk by an earlier build is deleted once, here,
+ * rather than left to rot: the whole point of not persisting message text is
+ * undone if yesterday's copy is still sitting there. wipeDevice() also clears
+ * it, but that only runs when the user asks. */
+try { localStorage.removeItem('spotme:tcache:v3') } catch { /* private mode */ }
 
 /** A hung engine must never strand a chat bubble on "…". */
 function withTimeout (promise, ms) {
@@ -264,11 +266,13 @@ export async function translateText (text, from, to) {
     } catch { /* keep whatever the declared source produced */ }
   }
 
-  // Never persist a no-op: a wrong-source passthrough would otherwise stick
-  // in the cache (and in localStorage) and poison every later attempt.
+  // Never cache a no-op: a wrong-source passthrough would otherwise stick and
+  // poison every later attempt.
   if (result.text && !unchanged(result.text, text)) {
+    // Bounded, so a long session cannot grow this without limit — the same
+    // ceiling readCache uses.
+    if (memory.size > 500) memory.clear()
     memory.set(key, result)
-    persistCache()
   }
   return result
 }
