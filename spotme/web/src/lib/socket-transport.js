@@ -99,14 +99,37 @@ async function seal (key, bytes) {
 }
 
 async function openSealed (key, frame) {
-  const bytes = toBytes(frame)
+  // Wire frames are base64 text; local callers may still hand over bytes.
+  const bytes = typeof frame === 'string' ? unb64(frame) : toBytes(frame)
   if (!bytes || bytes.byteLength < 13) throw new Error('bad frame')
   const iv = bytes.slice(0, 12)
   const ct = bytes.slice(12)
   return new Uint8Array(await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, ct))
 }
 
-const b64 = (bytes) => btoa(String.fromCharCode(...bytes))
+/**
+ * Payloads cross the wire as base64 TEXT, never as binary attachments.
+ *
+ * socket.io splits every Buffer/Uint8Array into its own WebSocket frame after
+ * the JSON packet, and the decoder then demands exactly those frames next.
+ * Anything that interleaves — a heartbeat ping, another emit — makes it read
+ * text where it expects binary and it drops the connection with `parse error`.
+ * A join replay carrying ~10 payloads killed the socket every time, and because
+ * sends fail asynchronously the only symptom was screens quietly not updating.
+ * One unsplittable text frame is worth the ~33% overhead; Phase 2 moves media
+ * to signed R2 URLs and takes most of that back.
+ *
+ * Chunked so a multi-megabyte slice cannot blow the argument limit that
+ * String.fromCharCode(...bytes) would hit on a spread of ~128k elements.
+ */
+const b64 = (bytes) => {
+  let out = ''
+  const CHUNK = 0x8000
+  for (let i = 0; i < bytes.length; i += CHUNK) {
+    out += String.fromCharCode.apply(null, bytes.subarray(i, i + CHUNK))
+  }
+  return btoa(out)
+}
 const unb64 = (s) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0))
 
 /** Metadata rides encrypted except the three routing fields fetch needs. */
@@ -164,6 +187,19 @@ async function guestAuth () {
   return tokens
 }
 
+/** Reuse a token while it is comfortably inside its TTL: the auth callback
+ *  runs on every handshake, and each mint also writes a refresh-token row. */
+let cachedTokens = null
+let cachedAt = 0
+const TOKEN_REUSE_MS = 8 * 60_000
+
+async function freshTokens () {
+  if (cachedTokens && Date.now() - cachedAt < TOKEN_REUSE_MS) return cachedTokens
+  cachedTokens = await guestAuth()
+  cachedAt = Date.now()
+  return cachedTokens
+}
+
 const activeRooms = new Map()   // roomId -> room internals (for rejoin/dispatch)
 
 function ensureSocket () {
@@ -171,21 +207,36 @@ function ensureSocket () {
   socketPromise = (async () => {
     const tokens = await guestAuth()
     const socket = io(`${SERVER}/rooms`, {
-      auth: { token: tokens.accessToken },
+      // Callback form, not a fixed value: access tokens are short-lived, so a
+      // tab that sleeps past expiry would otherwise retry forever with a dead
+      // token — the server accepts the handshake, rejects the JWT, and drops
+      // the socket, which looks exactly like "the app stopped working".
+      // socket.io calls this before every attempt, including reconnects.
+      auth: (cb) => {
+        freshTokens()
+          .then((fresh) => cb({ token: fresh.accessToken }))
+          .catch(() => cb({ token: tokens.accessToken }))
+      },
       transports: ['websocket'],
-      reconnection: true
+      reconnection: true,
+      reconnectionDelayMax: 5000
     })
     socket.on('action', (frame) => activeRooms.get(frame?.roomId)?.onFrame(frame))
     socket.on('peer', (frame) => activeRooms.get(frame?.roomId)?.onPeer(frame))
-    socket.io.on('reconnect_attempt', async () => {
-      // Tokens are short-lived; mint a fresh one for every handshake.
-      try { socket.auth = { token: (await guestAuth()).accessToken } } catch { /* keep old */ }
-    })
     socket.on('connect', () => {
       // First connect resolves the promise; later connects are reconnects —
       // every active room rejoins from its cursor and diffs its peer set.
       for (const room of activeRooms.values()) room.rejoin()
     })
+    // Debug handle in the spirit of window.__rooms / window.__lobby: a dead
+    // socket is otherwise invisible, because sends fail asynchronously and the
+    // UI just stops updating. Carries no secrets the page does not already have.
+    if (typeof window !== 'undefined') {
+      window.__transport = { socket, activeRooms, drops: [] }
+      socket.on('disconnect', (reason, details) => {
+        window.__transport.drops.push({ reason, at: Date.now(), detail: details?.description })
+      })
+    }
     await new Promise((resolve, reject) => {
       socket.once('connect', resolve)
       socket.once('connect_error', (e) => reject(new Error(`socket connect failed: ${e?.message || e}`)))
@@ -217,9 +268,20 @@ function serverRoom (config, roomId) {
   const localStreams = new Set()
   let left = false
 
-  const cursorKey = CURSOR_PREFIX + roomId
-  const readCursor = () => { try { return Number(localStorage.getItem(cursorKey)) || 0 } catch { return 0 } }
-  const writeCursor = (n) => { try { localStorage.setItem(cursorKey, String(n)) } catch { /* private mode */ } }
+  /**
+   * Replay cursors are per PROFILE, not just per room.
+   *
+   * db.wipeDevice() only sweeps `spotme:`-prefixed keys, so a cursor written
+   * under one identity outlives a "Clear all data" or ?fresh. Keyed by room
+   * alone, the next identity would inherit it and its first join would start
+   * mid-history — re-opening an invite link after a reset would show a chat
+   * with everything before the reset missing. Replaying from 0 costs a heavier
+   * rejoin and nothing else (store.add() dedupes by id and honours
+   * tombstones), so an unknown cursor is always the safe answer.
+   */
+  const cursorKey = () => `${CURSOR_PREFIX}${db.profile()?.id || 'anon'}.${roomId}`
+  const readCursor = () => { try { return Number(localStorage.getItem(cursorKey())) || 0 } catch { return 0 } }
+  const writeCursor = (n) => { try { localStorage.setItem(cursorKey(), String(n)) } catch { /* private mode */ } }
 
   const keyPromise = roomKey(roomId, password)
 
@@ -337,11 +399,19 @@ function serverRoom (config, roomId) {
     const socket = await join()
     const key = await keyPromise
     const bytes = toBytes(data)
-    const payload = await seal(key, bytes || enc(JSON.stringify(data ?? null)))
+    const payload = b64(await seal(key, bytes || enc(JSON.stringify(data ?? null))))
     const meta = await wrapMeta(key, sendOpts.metadata)
-    const ack = await emitAck(socket, 'action', {
-      roomId, type, payload, meta, target: sendOpts.target, attachId
-    })
+    const body = { roomId, type, payload, meta, target: sendOpts.target, attachId }
+    let ack
+    try {
+      ack = await emitAck(socket, 'action', body)
+    } catch (error) {
+      // A send can beat this room's post-reconnect rejoin to the server, and
+      // dropping it there would lose a message the sender already saw as sent.
+      if (!/not joined/.test(String(error?.message))) throw error
+      await rejoin()
+      ack = await emitAck(socket, 'action', body)
+    }
     sendOpts.onProgress?.(1, sendOpts.target, sendOpts.metadata)
     return ack
   }
@@ -391,7 +461,7 @@ function serverRoom (config, roomId) {
       await emitAck(socket, 'action', {
         roomId,
         type: 'fetchres',
-        payload: await seal(key, body),
+        payload: b64(await seal(key, body)),
         meta: { id: req.reqId },
         target: frame.from
       })

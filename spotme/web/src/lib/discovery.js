@@ -12,7 +12,12 @@
  * figure, and ghost mode (settings.showOnMap=false) withholds position while
  * still allowing chat requests by name.
  */
-import { joinRoom } from '@trystero-p2p/torrent'
+// Server-backed transport, same as chat and knocks. Discovery gains the most
+// from the move: tracker-based peer discovery took ~25s and failed outright
+// behind carrier NAT, which is exactly when "nobody is nearby" was a lie.
+// Presence stays ephemeral server-side (see the gateway's EPHEMERAL set), and
+// one global lobby room is a Phase-1 shape — geo-sharded presence is Phase 2.
+import { joinRoom } from './socket-transport.js'
 import { RTC_CONFIG, readyRTC } from '../net.js'
 import { db } from './db.js'
 import { pushNote } from './notify.js'

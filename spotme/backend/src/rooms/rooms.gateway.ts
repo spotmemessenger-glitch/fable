@@ -19,7 +19,8 @@ interface JoinPayload {
 interface ActionPayload {
   roomId: string;
   type: string;
-  payload?: Buffer | ArrayBuffer | null;
+  /** base64 ciphertext — see the binary-framing note below. */
+  payload?: string | null;
   meta?: Record<string, unknown>;
   target?: string; // userId — targeted send, mirrors Trystero's {target}
   attachId?: string;
@@ -32,11 +33,33 @@ interface FetchPayload {
 }
 
 /** Ephemeral action types relayed but never persisted (no ghost replays).
- * fetchreq/fetchres are the transport's peer-to-peer lazy-fetch fallback. */
-const EPHEMERAL = new Set(['typing', 'call', 'locup', 'rtc', 'history', 'fetchreq', 'fetchres']);
+ * fetchreq/fetchres are the transport's peer-to-peer lazy-fetch fallback.
+ * `hello` is the discovery lobby's presence heartbeat: replaying an old
+ * "I am nearby" would tell the user something untrue, so it must never
+ * reach the log. */
+const EPHEMERAL = new Set([
+  'typing', 'call', 'locup', 'rtc', 'history', 'fetchreq', 'fetchres', 'hello',
+]);
 
-const toBuffer = (data: Buffer | ArrayBuffer | null | undefined): Buffer =>
-  Buffer.isBuffer(data) ? data : data ? Buffer.from(new Uint8Array(data)) : Buffer.alloc(0);
+/**
+ * PAYLOADS TRAVEL AS BASE64 TEXT, NEVER AS BINARY ATTACHMENTS.
+ *
+ * socket.io encodes a Buffer as a placeholder in the JSON packet plus one
+ * separate binary frame per Buffer, and the client's decoder then expects
+ * exactly those frames next. That sequence is NOT atomic: a heartbeat ping or
+ * another emit can land between the frames, the decoder receives text where it
+ * expects binary, and it kills the connection with `parse error`. Measured
+ * here: a join whose replay carried ~8-11 Buffers dropped the socket every
+ * time, and the failure threshold moved with unrelated traffic — which is what
+ * proves it is interleaving rather than size.
+ *
+ * A dead socket is near-invisible from the UI (sends fail asynchronously and
+ * screens simply stop updating), so the protocol trades ~33% on ciphertext for
+ * a single text frame that cannot be split. Media moves to signed R2 URLs in
+ * Phase 2, which removes the bulk of this cost.
+ */
+const decodeB64 = (data: string | null | undefined): Buffer =>
+  typeof data === 'string' && data.length ? Buffer.from(data, 'base64') : Buffer.alloc(0);
 
 /**
  * Server-backed rooms for the web client — the drop-in replacement for
@@ -133,7 +156,7 @@ export class RoomsGateway implements OnGatewayConnection, OnGatewayDisconnect {
         seq: e.id,
         type: e.type,
         from: e.senderId,
-        payload: e.payload,
+        payload: Buffer.from(e.payload).toString('base64'),
         meta: e.meta,
       })),
       envelopes: envelopes.map((e) => ({ seq: e.id, from: e.senderId, meta: e.meta, attachId: e.attachId })),
@@ -157,7 +180,7 @@ export class RoomsGateway implements OnGatewayConnection, OnGatewayDisconnect {
     if (!roomId || !type) return { error: 'bad action' };
     if (!(client.data.joined as Set<string>)?.has(roomId)) return { error: 'not joined' };
 
-    const payload = toBuffer(body.payload);
+    const payload = decodeB64(body.payload);
     let seq: number | undefined;
     if (this.roomsService.isPersisted(type)) {
       const created = await this.roomsService.append(
@@ -168,7 +191,9 @@ export class RoomsGateway implements OnGatewayConnection, OnGatewayDisconnect {
       return { error: `unknown action type: ${type}` };
     }
 
-    const frame = { roomId, seq, type, from: userId, payload, meta: body.meta };
+    // Relay the base64 the sender gave us, untouched — no re-encode, and no
+    // Buffer on the wire (see decodeB64's note).
+    const frame = { roomId, seq, type, from: userId, payload: body.payload ?? '', meta: body.meta };
     if (target) {
       // Targeted send — deliver to every live socket of that user in this room.
       const sockets = this.rooms.get(roomId)?.get(target);
@@ -186,6 +211,11 @@ export class RoomsGateway implements OnGatewayConnection, OnGatewayDisconnect {
     const slice = await this.roomsService.fetchSlice(
       body.roomId, body.attachId, Number(body.seq) || 0,
     );
-    return slice ?? { missing: true };
+    if (!slice) return { missing: true };
+    return {
+      payload: Buffer.from(slice.payload).toString('base64'),
+      meta: slice.meta,
+      total: slice.total,
+    };
   }
 }
