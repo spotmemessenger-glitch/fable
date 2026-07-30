@@ -6,7 +6,6 @@
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
-    "newArchEnabled": true,
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "io.ysnapai.spotme"
@@ -35,7 +34,8 @@
             "minSdkVersion": 29
           }
         }
-      ]
+      ],
+      "expo-sqlite"
     ]
   }
 }

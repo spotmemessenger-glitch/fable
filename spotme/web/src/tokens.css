@@ -594,3 +594,27 @@ input, textarea, select { font-family: var(--font); }
 .pullref.spinning .pullref-ic { animation: pullref-spin .7s linear infinite; }
 
 @keyframes pullref-spin { to { transform: rotate(360deg); } }
+
+/* ── No auto-zoom when a field takes focus ──────────────────────────────
+ *
+ * Safari and Chrome on touch devices zoom the page in whenever a focused
+ * field's text is under 16px — which is what made tapping the composer shove
+ * the whole app sideways and leave it scaled after the keyboard closed.
+ *
+ * The trigger is the FONT SIZE, not the viewport. A `user-scalable=no` lock is
+ * the usual suggestion and it is the wrong fix twice over: iOS Safari has
+ * ignored it since iOS 10, so the zoom would still happen on iPhone, and it
+ * takes pinch-zoom away from anyone who needs to magnify text. See the note in
+ * index.html — that decision stands.
+ *
+ * 16px is therefore a floor, applied only on coarse pointers so the tighter
+ * desktop type is untouched. `pointer: coarse` rather than a width query: a
+ * touch laptop zooms too, and a narrow desktop window does not.
+ */
+@media (pointer: coarse) {
+  input:not([type='checkbox']):not([type='radio']):not([type='range']),
+  textarea,
+  select {
+    font-size: max(16px, 1em);
+  }
+}
