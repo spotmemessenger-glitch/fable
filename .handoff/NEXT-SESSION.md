@@ -9,6 +9,14 @@ anything. Everything below was verified by RUNNING it, not by exit codes.
 
 ## 0. LATEST (2026-07-30 overnight): Spot Me now runs on a server backend
 
+**IT IS LIVE.** Web: https://spotme-messenger.vercel.app — Backend API +
+`/rooms` socket: https://api-production-0a4ca.up.railway.app (Railway project
+`spotme-backend`, services `api` + `Postgres`). Deploy commands and the reasons
+behind them are in `spotme/web/DEPLOY.md`. Verified in production: username
+availability + search, knock opens the chat on both devices, and a message sent
+while the recipient's tab was CLOSED arrived on reopen. Note: a Railway "Deploy
+Crashed" email refers to the FIRST attempt (Prisma/libssl), fixed in `8e734e2`.
+
 **What happened:** the web app's Trystero/BitTorrent-tracker transport was
 replaced by a server-backed one. Commits `7aad447` (backend), `43cfc02` (web),
 `9603543` (docs). The UI is UNTOUCHED (user: "stick to this UI").
