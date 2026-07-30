@@ -157,3 +157,7 @@ ybot/voice_memory/
 
 # vendored reference clones (have their own .git)
 awesome-llm-apps/
+
+# Self-hosted WhatsApp gateway — its own repo, and its data/ holds live
+# WhatsApp session state, the sqlite DB and the API key. Never commit it.
+OpenWA/
