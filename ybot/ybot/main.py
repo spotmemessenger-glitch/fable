@@ -1,5 +1,10 @@
-"""Entry point: `python run.py` (or `python -m operator_agent.main`)."""
+"""Entry point: `python run.py` (or `python -m operator_agent.main`).
+
+`python run.py --voice` starts the speech loop instead of the typed one.
+"""
 from __future__ import annotations
+
+import sys
 
 from . import charts, crash_reporter
 from .agent import Operator
@@ -16,6 +21,14 @@ def main() -> None:
     crash_reporter.install()  # every uncaught exception -> crashes/ + auto-triage
     set_dpi_awareness()  # MUST run before pyautogui / mss initialize
     SETTINGS.validate()
+
+    # Voice runs its own loop: the speech stack needs Python 3.11, so it lives
+    # in a child process and this one just follows the conversation.
+    if "--voice" in sys.argv:
+        from .voice_mode import run as run_voice
+
+        run_voice()
+        return
 
     print("=" * 64)
     print(" Ybot — Phase 1")

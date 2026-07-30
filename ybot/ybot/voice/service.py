@@ -11,19 +11,18 @@ Run:
 from __future__ import annotations
 
 import json
+import os
 import socket
 import threading
 from dataclasses import dataclass
 from typing import Callable
-
-import numpy as np
-import sounddevice as sd
 
 from . import style as style_mod
 from .intent import Domain, IntentManager
 from .memory import MemoryManager
 from .mic import SAMPLE_RATE, MicrophoneManager
 from .orchestrator import Orchestrator
+from .player import BargeInWatcher, Speaker
 from .vad import UtteranceSegmenter, VADConfig
 
 HOST, PORT = "127.0.0.1", 8765
@@ -36,6 +35,10 @@ class VoiceConfig:
     tts_provider: str | None = None
     speak: bool = True
     vad: VADConfig | None = None
+    # Push-to-talk: audio is only considered while this key is held. Default ON
+    # because an always-open microphone is a decision the user should opt into,
+    # not inherit. Set ptt_key to "" for continuous listening.
+    ptt_key: str = os.environ.get("YBOT_PTT_KEY", "ctrl+space")
 
 
 class VoiceService:
@@ -52,10 +55,36 @@ class VoiceService:
         self.intents = IntentManager()
         self.orch = Orchestrator(approver=approver)
         self.segmenter = UtteranceSegmenter(self.cfg.vad)
+        self.speaker = Speaker(SAMPLE_RATE)
+        self.barge = BargeInWatcher(self.speaker, self.segmenter)
         self._stt = None
         self._tts = None
         self._stop = threading.Event()
+        self._speaking: threading.Thread | None = None
         self._subscribers: list[socket.socket] = []
+        self._ptt = self._load_ptt()
+
+    def _load_ptt(self):  # noqa: ANN202
+        """Resolve the push-to-talk key checker, or None if unavailable.
+
+        `keyboard` needs elevated rights for global hooks on Windows. Failing
+        to get them must not silently flip the microphone to always-on — that
+        would be the opposite of the setting's intent — so the caller is told
+        and the service refuses to start rather than guessing.
+        """
+        if not self.cfg.ptt_key:
+            return None
+        try:
+            import keyboard
+
+            keyboard.is_pressed(self.cfg.ptt_key)   # probe now, not mid-conversation
+            return keyboard.is_pressed
+        except Exception as exc:                      # noqa: BLE001
+            raise RuntimeError(
+                f"push-to-talk key {self.cfg.ptt_key!r} unavailable ({exc}). "
+                "Run as administrator, or set YBOT_PTT_KEY='' to listen "
+                "continuously — an always-open microphone should be a choice."
+            ) from exc
 
     # ---------------------------------------------------------------- providers
     def stt(self):  # noqa: ANN201
@@ -83,16 +112,30 @@ class VoiceService:
         print(f"[{payload.get('type')}] {payload.get('text', '')}")
 
     def speak(self, text: str, st: style_mod.SpeakingStyle) -> None:
+        """Start speaking and return immediately.
+
+        Non-blocking on purpose. The old version played to completion inside the
+        turn, which meant the microphone loop stopped pulling frames for the
+        duration — so nothing could hear an interruption, and "barge-in" was
+        structurally impossible no matter what flags were checked. Playback now
+        runs alongside listening, and player.Speaker is what actually cuts it.
+        """
         if not self.cfg.speak or not text.strip():
             return
-        try:
-            with sd.OutputStream(samplerate=SAMPLE_RATE, channels=1, dtype="float32") as out:
-                for chunk in self.tts().stream(text, st):
-                    if self._stop.is_set():
-                        break            # barge-in: stop mid-sentence
-                    out.write(np.asarray(chunk, dtype=np.float32))
-        except Exception as exc:                      # noqa: BLE001
-            self._emit({"type": "error", "text": f"TTS unavailable: {exc}"})
+        self.speaker.interrupt()          # never let two replies overlap
+        if self._speaking and self._speaking.is_alive():
+            self._speaking.join(timeout=1.0)
+
+        def _play() -> None:
+            try:
+                finished = self.speaker.play(self.tts().stream(text, st))
+                if not finished:
+                    self._emit({"type": "interrupted", "text": text})
+            except Exception as exc:                  # noqa: BLE001
+                self._emit({"type": "error", "text": f"TTS unavailable: {exc}"})
+
+        self._speaking = threading.Thread(target=_play, daemon=True)
+        self._speaking.start()
 
     # ---------------------------------------------------------------- turn
     def handle(self, transcript: str) -> None:
@@ -144,11 +187,48 @@ class VoiceService:
             except OSError:
                 break
 
+    def _listen_frames(self, mic):  # noqa: ANN001, ANN202
+        """Mic frames, with playback echo held back and barge-in watched for.
+
+        While the assistant is talking, an open speaker feeds its own voice
+        straight back into the microphone. Passing those frames to the segmenter
+        would make it transcribe itself and answer its own reply. So during
+        playback frames go only to the barge-in watcher, which is deliberately
+        stricter (energy floor plus consecutive speech frames). The moment it
+        fires, playback is cut and frames flow normally again — that frame
+        included, so the interrupting words start the next utterance.
+
+        Cost, stated plainly: the first few frames of an interruption are spent
+        deciding it IS an interruption, so a barged-in sentence can lose its
+        first word. Headphones remove the whole problem; real echo cancellation
+        (RNNoise/Krisp) is the fix that would let this be less cautious.
+        """
+        for frame in mic.frames():
+            if not self._mic_open():
+                continue
+            if self.speaker.playing:
+                if not self.barge.feed(frame):
+                    continue
+                self._emit({"type": "barge_in", "text": ""})
+            yield frame
+
+    def _mic_open(self) -> bool:
+        """Push-to-talk gate. Always true when no key is configured.
+
+        The audio stream stays running either way — starting and stopping the
+        device on every keypress costs hundreds of milliseconds and would clip
+        the first word. Frames are simply discarded while the key is up, so
+        nothing unspoken reaches the segmenter, the network or the log.
+        """
+        if not self.cfg.ptt_key or self._ptt is None:
+            return True
+        return bool(self._ptt(self.cfg.ptt_key))
+
     def run(self) -> None:
         threading.Thread(target=self.serve_subscribers, daemon=True).start()
         print(f"voice service listening on {HOST}:{PORT}; speak into the mic.")
         with MicrophoneManager(self.cfg.device) as mic:
-            for utterance in self.segmenter.segment(mic.frames()):
+            for utterance in self.segmenter.segment(self._listen_frames(mic)):
                 try:
                     text = self.stt().transcribe(utterance)
                 except Exception as exc:              # noqa: BLE001

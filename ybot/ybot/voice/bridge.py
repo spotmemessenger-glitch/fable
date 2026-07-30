@@ -44,11 +44,15 @@ def start_service(cwd: Path | None = None) -> subprocess.Popen[bytes]:
             "py -3.11 -m venv %USERPROFILE%\\.venvs\\voice"
         )
     root = cwd or Path(__file__).resolve().parents[2]
+    # stdout is DISCARDED, not piped. The service prints a line per event, and
+    # a PIPE nobody drains fills its ~64 KB buffer and then blocks the child
+    # mid-conversation — a hang that would look like the microphone dying.
+    # Events arrive over the socket anyway; stderr stays attached so a
+    # traceback or a setup error is still visible in the console.
     return subprocess.Popen(
         [str(VOICE_PYTHON), "-m", "ybot.voice.service"],
         cwd=str(root),
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
+        stdout=subprocess.DEVNULL,
     )
 
 
