@@ -161,3 +161,7 @@ awesome-llm-apps/
 # Self-hosted WhatsApp gateway — its own repo, and its data/ holds live
 # WhatsApp session state, the sqlite DB and the API key. Never commit it.
 OpenWA/
+
+# Pentesting knowledge base — its own repo, 264MB of which ~all is reference
+# PDFs. The skill that reads it lives in ~/.claude/skills/pentesting-everything.
+PentestingEverything/
