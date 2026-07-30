@@ -37,12 +37,35 @@ never sees plaintext); clients replay from a per-room cursor. Calls remain
 true P2P (WebRTC, signalling relayed). `web/src/lib/socket-transport.js` is a
 drop-in for the Trystero API; `localStorage['spotme.transport']='p2p'` reverts.
 
+**Morning session (2026-07-30 ~10:30-11:30) — one serious bug found and fixed.**
+Commit `8e1853c`. Symptom: chat silently stopped delivering. Cause: payloads
+crossed the wire as Buffers, and socket.io frames each Buffer separately after
+the JSON packet; when anything interleaves (a heartbeat, another emit) the
+client decoder reads text where it expects binary and drops the socket with
+`parse error`. A join replaying ~8-11 events did that every time, then sat in a
+permanent reconnect loop — invisible because sends fail asynchronously.
+Fix: base64 text payloads end to end, token minted per handshake (so a tab that
+slept past the 15-min TTL can reconnect), one retry when a send beats its
+room's rejoin, per-profile replay cursors (a stale cursor used to survive
+Clear-all-data and start the next identity mid-history). Also moved the
+Discovery lobby onto the same transport — it was still on BitTorrent trackers;
+nearby peers now appear in ~1s instead of ~25s, and `hello` is ephemeral so no
+replayed "I am nearby" can lie. **Backend now has its first 4 tests**
+(`spotme/backend/test/rooms.gateway.e2e-spec.ts`), the first of which fails if
+payload framing ever regresses to binary. `npx jest` in spotme/backend.
+Additionally verified live: reaction, edit (with the "edited" label on the
+receiver), delete-for-everyone, peer-to-peer history backfill, nearby discovery.
+
 **UNPROVEN / open:** calls over the new signalling path (machinery written,
-never dialed); groups/discovery/bluetooth screens on server transport;
-multi-tab same-profile; knock payloads are server-readable (Phase 2: seal to
-recipient publicKey — field already in schema); RoomEvent retention job not
-written; translate/voice/push bridges return 400 locally until their vendor
-env keys are set in backend/.env (client degrades gracefully).
+never dialed — needs fake media devices to test headless); **video** media
+specifically (photos are verified both live and offline); groups/bluetooth
+screens on server transport; multi-tab same-profile; knock payloads are
+server-readable (Phase 2: seal to recipient publicKey — field already in
+schema); RoomEvent retention/TTL job not written (disappearing messages are
+still client-enforced only); translate/voice/push bridges return 400 locally
+until their vendor env keys are set in backend/.env (client degrades
+gracefully). One global lobby room is Phase-1 only — presence needs geo-
+sharding before it scales.
 
 **Deploy decision (deliberate):** spotme-messenger.vercel.app is still 404 and
 was NOT redeployed — the new build needs a hosted backend first (Railway/Fly +
