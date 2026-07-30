@@ -49,6 +49,10 @@ const TAMIL = {
     zh: 'ழ', L: 'ள', R: 'ற', sh: 'ஷ', h: 'ஹ',
     t: 'ட', d: 'ட'
   },
+  // A vowel written straight after another vowel becomes a glide consonant,
+  // never a second independent letter. Keyed on the following vowel's first
+  // letter: the i/e/a family glides to ய, the u/o family to வ.
+  glides: { i: 'ய', e: 'ய', a: 'ய', u: 'வ', o: 'வ' },
   virama: '்'
 }
 
@@ -56,14 +60,17 @@ const TAMIL = {
 const DEVANAGARI = {
   name: 'Devanagari',
   code: 'hi',
+  // `ee` and `oo` are how people actually spell the long vowels by ear
+  // ("meena", "moorthy"). Without them the walk matched `e`+`e` and the second
+  // one fell out as a standalone ए in the middle of the word.
   vowels: {
-    a: 'अ', aa: 'आ', A: 'आ', i: 'इ', ii: 'ई', I: 'ई',
-    u: 'उ', uu: 'ऊ', U: 'ऊ', e: 'ए', ai: 'ऐ', o: 'ओ', au: 'औ',
+    a: 'अ', aa: 'आ', A: 'आ', i: 'इ', ii: 'ई', I: 'ई', ee: 'ई',
+    u: 'उ', uu: 'ऊ', U: 'ऊ', oo: 'ऊ', e: 'ए', ai: 'ऐ', o: 'ओ', au: 'औ',
     ri: 'ऋ'
   },
   signs: {
-    a: '', aa: 'ा', A: 'ा', i: 'ि', ii: 'ी', I: 'ी',
-    u: 'ु', uu: 'ू', U: 'ू', e: 'े', ai: 'ै', o: 'ो', au: 'ौ',
+    a: '', aa: 'ा', A: 'ा', i: 'ि', ii: 'ी', I: 'ी', ee: 'ी',
+    u: 'ु', uu: 'ू', U: 'ू', oo: 'ू', e: 'े', ai: 'ै', o: 'ो', au: 'ौ',
     ri: 'ृ'
   },
   consonants: {
@@ -75,6 +82,7 @@ const DEVANAGARI = {
     y: 'य', r: 'र', l: 'ल', v: 'व', w: 'व',
     sh: 'श', Sh: 'ष', s: 'स', h: 'ह'
   },
+  glides: { i: 'य', e: 'य', a: 'य', u: 'व', o: 'व' },
   virama: '्'
 }
 
@@ -145,23 +153,52 @@ function matchAt (input, index, keys) {
 }
 
 /**
+ * Split a token into (leading punctuation, the word itself, trailing
+ * punctuation).
+ *
+ * Chat messages end in punctuation constantly, and splitting the message on
+ * whitespace alone handed `vanakkam!` — mark and all — to the dictionary,
+ * which of course missed. Every one of the COMMON entries was defeated by a
+ * single `!`, `?` or `.`: `vanakkam` -> வணக்கம் but `vanakkam!` -> வநக்கம்!.
+ */
+const EDGES = /^([^\p{L}\p{N}]*)([\s\S]*?)([^\p{L}\p{N}]*)$/u
+
+/**
  * Convert one romanised word.
  *
  * Walks left to right: at each position take the longest consonant or vowel
  * match, then decide between a standalone vowel letter, a vowel sign, or a
  * virama, per the abugida rules described at the top of this file.
  */
-function convertWord (word, script) {
-  const keys = keysFor(script)
-  const lower = word.toLowerCase()
+function convertWord (token, script) {
+  const [, lead, core, tail] = EDGES.exec(token) || [null, '', token, '']
+  if (!core) return token
 
   const dictionary = COMMON[script.code]
-  if (dictionary && dictionary[lower]) return dictionary[lower]
+  const known = dictionary && dictionary[core.toLowerCase()]
+  if (known) return lead + known + tail
 
+  /* Case is meaningful in both tables (N = ண but n = ந, E = ஏ but e = எ), and
+   * the walk used to read the ORIGINAL case while the dictionary above
+   * lowercased. Every mobile keyboard autocapitalises the first letter of a
+   * sentence, so `Enga` matched the `E` key and came out ஏங instead of எங.
+   * Fold a leading capital — and an all-caps word — so both halves agree,
+   * while leaving a deliberate mid-word capital (`paNam`, `kaTTu`) alone. */
+  const word = /[a-z]/.test(core)
+    ? core.replace(/^[A-Z]/, (c) => c.toLowerCase())
+    : core.toLowerCase()
+
+  const keys = keysFor(script)
   let out = ''
   let i = 0
   // True when the previous emission was a consonant still awaiting its vowel.
   let pendingConsonant = false
+  /* True when the previous emission was a vowel. A vowel written straight
+   * after another vowel must NOT become a second independent letter — that is
+   * the same class of bug as emitting க இ for "ki", and it is what produced
+   * `poi` -> பொஇ and `seiya` -> ஸெஇய. Indic spelling turns it into the
+   * matching glide consonant instead: பொய், செய்ய, நாய். */
+  let pendingVowel = false
 
   while (i < word.length) {
     const consonant = matchAt(word, i, keys.consonants)
@@ -172,6 +209,7 @@ function convertWord (word, script) {
       if (pendingConsonant) out += script.virama
       out += script.consonants[consonant]
       pendingConsonant = true
+      pendingVowel = false
       i += consonant.length
       continue
     }
@@ -179,13 +217,20 @@ function convertWord (word, script) {
     const vowel = matchAt(word, i, keys.vowels)
 
     if (vowel) {
+      const glide = script.glides?.[vowel[0]]
       if (pendingConsonant) {
         // Attach as a SIGN, never as a standalone letter. Inherent 'a' is the
         // empty string, so "ka" correctly emits just க.
         out += script.signs[vowel]
         pendingConsonant = false
+        pendingVowel = true
+      } else if (pendingVowel && glide) {
+        out += glide
+        pendingConsonant = true
+        pendingVowel = false
       } else {
         out += script.vowels[vowel]
+        pendingVowel = true
       }
       i += vowel.length
       continue
@@ -197,6 +242,7 @@ function convertWord (word, script) {
       out += script.virama
       pendingConsonant = false
     }
+    pendingVowel = false
     out += word[i]
     i += 1
   }
@@ -204,7 +250,7 @@ function convertWord (word, script) {
   // A word ending on a consonant takes a virama: "vanakkam" ends ...ம், not ...ம.
   if (pendingConsonant) out += script.virama
 
-  return out
+  return lead + out + tail
 }
 
 /**
