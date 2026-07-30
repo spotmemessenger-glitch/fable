@@ -293,6 +293,19 @@ export class RoomsGateway implements OnGatewayConnection, OnGatewayDisconnect {
       return { error: `unknown action type: ${type}` };
     }
 
+    /* A view-once photo was opened. `meta.burn` carries the attachment id in
+     * cleartext — routing only, the same channel a bin slice's {id,seq} uses —
+     * because deleting the bytes is something only the holder of the bytes can
+     * do, and the holder is this server. The client fires it the INSTANT the
+     * photo is opened, not when its countdown finishes, so killing the app
+     * mid-view cannot cancel the burn. Idempotent: the final `seen` repeats it.
+     */
+    if (type === 'seen' && typeof body.meta?.burn === 'string') {
+      await this.roomsService
+        .burnAttachment(roomId, body.meta.burn, userId)
+        .catch(() => 0);
+    }
+
     // Relay the base64 the sender gave us, untouched — no re-encode, and no
     // Buffer on the wire (see decodeB64's note).
     const frame = { roomId, seq, type, from: userId, payload: body.payload ?? '', meta: body.meta };
@@ -354,13 +367,18 @@ export class RoomsGateway implements OnGatewayConnection, OnGatewayDisconnect {
     if (!body?.roomId || !body?.attachId) return { error: 'bad fetch' };
     if (!(client.data.joined as Set<string>)?.has(body.roomId)) return { error: 'not joined' };
     const slice = await this.roomsService.fetchSlice(
-      body.roomId, body.attachId, Number(body.seq) || 0,
+      body.roomId, body.attachId, Number(body.seq) || 0, client.data.userId as string,
     );
+    // Someone else already claimed this view-once photo's single view. Said
+    // out loud rather than disguised as "missing": the caller is a legitimate
+    // room member, and a client that cannot tell the two apart retries forever.
+    if (slice === 'denied') return { error: 'that private photo was not sent to you' };
     if (!slice) return { missing: true };
     return {
       payload: Buffer.from(slice.payload).toString('base64'),
       meta: slice.meta,
       total: slice.total,
+      held: slice.held,
     };
   }
 }

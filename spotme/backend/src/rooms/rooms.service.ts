@@ -82,14 +82,129 @@ export class RoomsService {
     return { events, envelopes: [...envelopes.values()], lastEventId };
   }
 
-  /** One attachment slice by (room, attachment, seq) — the lazy-fetch path. */
-  async fetchSlice(roomId: string, attachId: string, seq: number) {
+  /**
+   * One attachment slice by (room, attachment, seq) — the lazy-fetch path.
+   *
+   * `total` is the total the SENDER DECLARED, read back out of the routing meta
+   * every slice carries, never the number of rows we happen to hold. Returning
+   * the row count was a data-integrity bug: an upload killed at slice 5 of 37
+   * answered "total: 5", so the client's own "transfer incomplete" guard could
+   * not fire and 13.6% of a voice note was handed over as the whole thing —
+   * and played back as a perfectly valid shorter note.
+   *
+   * `held` is the count of DISTINCT seqs actually stored, so the client can
+   * refuse a short tail in one round trip instead of walking to the gap. It
+   * counts distinct rather than raw rows because a retried send appends its
+   * slices again rather than replacing them.
+   *
+   * VIEW-ONCE IS ENFORCED HERE, because here is the only place it can be. The
+   * client's own "already burned" guard lives in the SENDER's peer-to-peer
+   * fetch handler, and the transport asks this server first, unconditionally —
+   * so on the durable transport that guard never ran at all. A recipient could
+   * re-download a photo the app had already told the sender was gone.
+   *
+   * `once: true` in the seq-0 slice's cleartext meta marks the attachment. The
+   * first non-sender to fetch it claims the single view; anyone else is
+   * refused while the bytes still exist, and the bytes stop existing the moment
+   * that viewer confirms the open (see burnAttachment).
+   */
+  async fetchSlice(roomId: string, attachId: string, seq: number, userId: string) {
     const slices = await this.prisma.roomEvent.findMany({
       where: { roomId, attachId, type: 'bin' },
       orderBy: { id: 'asc' },
-      select: { id: true, payload: true, meta: true },
+      select: { id: true, senderId: true, payload: true, meta: true },
     });
+    const envelope = slices.find((s) => (s.meta as { seq?: number } | null)?.seq === 0);
+    if ((envelope?.meta as { once?: boolean } | null)?.once === true) {
+      const viewer = await this.claimView(roomId, attachId, envelope!.senderId, userId);
+      if (viewer !== userId) return 'denied' as const;
+    }
     const slice = slices.find((s) => (s.meta as { seq?: number } | null)?.seq === seq);
-    return slice ? { payload: slice.payload, meta: slice.meta, total: slices.length } : null;
+    if (!slice) return null;
+    const held = new Set<number>();
+    let declared = 0;
+    for (const s of slices) {
+      const meta = s.meta as { seq?: number; total?: number } | null;
+      held.add(Number(meta?.seq) || 0);
+      declared = Math.max(declared, Number(meta?.total) || 0);
+    }
+    return {
+      payload: slice.payload,
+      meta: slice.meta,
+      total: declared || held.size,
+      held: held.size,
+    };
+  }
+
+  /**
+   * Who is allowed to see this view-once attachment — the first non-sender to
+   * ask, and nobody else. Returns the winning viewer id.
+   *
+   * The insert IS the lock: attachId is the primary key, so a second claimant
+   * racing the first loses on the unique constraint and reads back the winner.
+   * The sender is exempt (they authored the bytes and already hold them), which
+   * also stops their own re-fetch consuming the recipient's one view.
+   */
+  private async claimView(
+    roomId: string,
+    attachId: string,
+    senderId: string,
+    userId: string,
+  ): Promise<string> {
+    if (userId === senderId) return userId;
+    try {
+      const created = await this.prisma.viewOnce.create({
+        data: { attachId, roomId, senderId, viewerId: userId },
+        select: { viewerId: true },
+      });
+      return created.viewerId ?? userId;
+    } catch {
+      const existing = await this.prisma.viewOnce.findUnique({
+        where: { attachId },
+        select: { viewerId: true },
+      });
+      return existing?.viewerId ?? userId;
+    }
+  }
+
+  /**
+   * The recipient confirmed the view — destroy the bytes.
+   *
+   * This is the single highest-value change in the whole feature: until it
+   * existed, the burst was an animation over a photo that stayed in Postgres
+   * forever. Every slice goes, the seq-0 envelope included, so replay stops
+   * advertising the message to devices that never saw it.
+   *
+   * Guarded on `once: true` so a stray meta.burn cannot delete an ordinary
+   * attachment. Anyone in the room may trigger it: whoever holds the roomId can
+   * already read the room, and destroying a private photo early is a far
+   * smaller harm than keeping it. Returns how many slices were destroyed.
+   */
+  async burnAttachment(roomId: string, attachId: string, userId: string): Promise<number> {
+    const envelope = await this.prisma.roomEvent.findFirst({
+      where: { roomId, attachId, type: 'bin' },
+      orderBy: { id: 'asc' },
+      select: { senderId: true, meta: true },
+    });
+    if (!envelope || (envelope.meta as { once?: boolean } | null)?.once !== true) return 0;
+    const { count } = await this.prisma.roomEvent.deleteMany({
+      where: { roomId, attachId, type: 'bin' },
+    });
+    // Recorded even when no claim row exists — the common case is a recipient
+    // who received the bytes live and never had to fetch them at all.
+    await this.prisma.viewOnce
+      .upsert({
+        where: { attachId },
+        create: {
+          attachId,
+          roomId,
+          senderId: envelope.senderId,
+          viewerId: userId === envelope.senderId ? null : userId,
+          burnedAt: new Date(),
+        },
+        update: { burnedAt: new Date() },
+      })
+      .catch(() => undefined);
+    return count;
   }
 }

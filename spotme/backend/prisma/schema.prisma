@@ -466,6 +466,27 @@ model RoomEvent {
   @@index([roomId, attachId])
 }
 
+// One row per view-once ("Private photo") attachment the server has been asked
+// to hold. WHY IT EXISTS: RoomEvent has no expiry and the fetch endpoint used
+// to serve any slice by attachId forever, so a "burned" photo was still
+// downloadable by anyone who knew the room. The client cannot enforce that —
+// only whoever holds the bytes can.
+//
+// attachId is the primary key so the first fetcher CLAIMS the view atomically:
+// a concurrent second fetcher loses the insert and is refused. The row
+// deliberately outlives the RoomEvent rows it guards, so a fetch after the
+// burn is answered "gone" rather than "unknown".
+model ViewOnce {
+  attachId  String    @id
+  roomId    String
+  senderId  String
+  viewerId  String?   // whoever claimed the single view; null until first fetch
+  createdAt DateTime  @default(now())
+  burnedAt  DateTime? // set when the slices were deleted — audit, not a gate
+
+  @@index([roomId])
+}
+
 // A device's Web Push subscription. Endpoint is the natural key: browsers mint
 // a new one per install, and re-subscribing after a permission reset produces
 // a different endpoint rather than a duplicate of the old one.
