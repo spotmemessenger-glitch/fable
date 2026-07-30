@@ -375,6 +375,7 @@ export function render (root, ctx, roomId) {
    * there is room, and the pill stays short. */
   let confStatus = null
   const voiceStops = new Set()   // live waveform loops to halt on unmount
+  const rowTimers = new Set()    // per-row intervals (view-once countdown)
   let dictating = null
   let dictBase = ''         // composer text that predates the dictation session
   let lastTypingSent = 0
@@ -1356,6 +1357,9 @@ export function render (root, ctx, roomId) {
    */
   function openViewOnce (m) {
     const secs = Math.max(1, m.burst || 10)
+    /* Tell them NOW, not when it burns. The sender used to learn only after
+     * the photo was already gone, which is the least interesting moment. */
+    try { rooms.viewOnceOpening(roomId, m.id, secs) } catch { /* offline */ }
     const R = 26
     const CIRC = 2 * Math.PI * R
     const img = el('img', { src: m.data, alt: '' })
@@ -1429,6 +1433,72 @@ export function render (root, ctx, roomId) {
     overlay.addEventListener('click', finish)
   }
 
+  /**
+   * The sender's side while the other person is actually looking.
+   *
+   * Telegram's own view-once bubble does this: the moment it is opened the
+   * sender stops seeing a static "sent" state and starts watching the same
+   * clock the viewer is under. Waiting with no feedback is the boring part,
+   * and it is also the part that matters most — this is the only window in
+   * which the photo still exists on their device.
+   *
+   * The ring is driven by a CSS transition rather than a per-frame timer, so
+   * it stays smooth while the thread scrolls and costs nothing when the tab is
+   * backgrounded. Only the digit is repainted, once a second.
+   */
+  function buildWatchingNow (m, live) {
+    const R = 13
+    const CIRC = 2 * Math.PI * R
+    const elapsed = (Date.now() - live.at) / 1000
+    const left = Math.max(0, live.secs - elapsed)
+
+    const ns = 'http://www.w3.org/2000/svg'
+    const ring = document.createElementNS(ns, 'circle')
+    ring.setAttribute('cx', '15'); ring.setAttribute('cy', '15'); ring.setAttribute('r', String(R))
+    ring.setAttribute('class', 'vw-fg')
+    ring.style.strokeDasharray = String(CIRC)
+    // Start from wherever they actually are: a late-arriving signal, or a
+    // re-render mid-view, must not restart the clock at full.
+    ring.style.strokeDashoffset = String(CIRC * (1 - left / live.secs))
+    const bg = document.createElementNS(ns, 'circle')
+    bg.setAttribute('cx', '15'); bg.setAttribute('cy', '15'); bg.setAttribute('r', String(R))
+    bg.setAttribute('class', 'vw-bg')
+    const svg = document.createElementNS(ns, 'svg')
+    svg.setAttribute('viewBox', '0 0 30 30')
+    svg.setAttribute('class', 'vw-ring')
+    svg.appendChild(bg); svg.appendChild(ring)
+
+    const digit = el('b', { class: 'vw-num', text: String(Math.ceil(left)) })
+    const wrap = el('div', { class: 'voMine watching' }, [
+      el('span', { class: 'vw-orbit', 'aria-hidden': 'true' },
+        Array.from({ length: 5 }, () => el('i', { text: '✦' }))),
+      el('span', { class: 'vw-clock' }, [svg, digit]),
+      el('span', { class: 'vw-label', text: 'Viewing now' }),
+      el('span', { class: 'vw-flame', text: '🔥' })
+    ])
+
+    // Hand the ring its final value on the next frame so the browser animates
+    // between the two; setting both in one frame would just snap.
+    requestAnimationFrame(() => {
+      ring.style.transition = `stroke-dashoffset ${left}s linear`
+      ring.style.strokeDashoffset = String(CIRC)
+    })
+
+    const tick = setInterval(() => {
+      const now = Math.max(0, live.secs - (Date.now() - live.at) / 1000)
+      digit.textContent = String(Math.ceil(now))
+      if (now > 0) return
+      clearInterval(tick)
+      // The burn signal usually beats this; this is the fallback for a viewer
+      // who went offline mid-view, so the sender is never left mid-countdown.
+      conn.openingByPeer?.delete(m.id)
+      wrap.classList.add('spent')
+      setTimeout(() => refreshRow(m.id), 600)
+    }, 250)
+    rowTimers.add(tick)
+    return wrap
+  }
+
   /** History gave us the envelope but not the bytes — fetch on tap. */
   function buildDetached (m) {
     const label = m.kind === 'voice' ? 'Voice note'
@@ -1473,6 +1543,9 @@ export function render (root, ctx, roomId) {
       return b
     }
     if (m.kind === 'image' && m.viewOnce && mine) {
+      // They are looking at it right now — show the same clock they are under.
+      const live = conn.openingByPeer?.get(m.id)
+      if (live) return buildWatchingNow(m, live)
       return el('div', { class: 'voMine' }, [
         ...sparkEls(),
         el('span', { text: 'Private photo' }),
@@ -3921,6 +3994,11 @@ export function render (root, ctx, roomId) {
       case 'seen':
         updateSeen(event.id)
         break
+      /* They just opened a view-once of mine — swap that bubble for the live
+       * countdown so the wait is something to watch rather than sit through. */
+      case 'viewing':
+        refreshRow(event.id)
+        break
       /* Their name or picture arrived (or changed) over the handshake. */
       case 'peer':
         if (event.peer) convo.peer = event.peer
@@ -4006,6 +4084,10 @@ export function render (root, ctx, roomId) {
     pendingClip = null
     for (const stop of voiceStops) { try { stop() } catch { /* detached */ } }
     voiceStops.clear()
+    // Countdown intervals outlive their rows otherwise, ticking against nodes
+    // that are no longer on screen.
+    for (const t of rowTimers) clearInterval(t)
+    rowTimers.clear()
     if (dictating) { try { dictating.abort() } catch { /* ended */ } dictating = null }
     // The call itself lives at the rooms layer and keeps running; only the
     // overlay is torn down. Re-entering the thread rebuilds it.

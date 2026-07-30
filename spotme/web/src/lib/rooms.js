@@ -133,6 +133,10 @@ function createConnection (convo) {
   const store = createStore(convo.roomId, ROOM_PREFIX)
   const listeners = new Set()
   const seenByPeer = new Set()   // my view-once messages the peer has opened
+  /* my view-once messages the peer is opening RIGHT NOW: id -> {secs, at}.
+   * Without this the sender learned nothing until the photo was already gone —
+   * the one moment they most want to see is the one they were not told about. */
+  const openingByPeer = new Map()
   const timers = new Map()       // message id -> ttl timer
   const assembling = new Map()   // message id -> partially received attachment
   const pendingAcks = new Map()  // message id -> {resolve, reject, timer}
@@ -145,6 +149,7 @@ function createConnection (convo) {
     typing: null,                // {name, until}
     readUpTo: 0,
     seenByPeer,
+    openingByPeer,
     call: { state: 'idle', video: false, local: null, remote: null },
     on (fn) { listeners.add(fn); return () => listeners.delete(fn) }
   }
@@ -273,10 +278,22 @@ function createConnection (convo) {
       }
     },
     onSeen (payload) {
-      if (payload?.id) {
-        seenByPeer.add(payload.id)
-        emit({ type: 'seen', id: payload.id })
+      if (!payload?.id) return
+      /* Two distinct moments arrive on this channel now. "opening" fires the
+       * instant they tap, carrying how long they have — that is what lets the
+       * sender watch the same countdown instead of waiting blind. The plain
+       * form still means it is over. */
+      if (payload.opening) {
+        openingByPeer.set(payload.id, {
+          secs: Math.max(1, Number(payload.secs) || 10),
+          at: Date.now()
+        })
+        emit({ type: 'viewing', id: payload.id })
+        return
       }
+      openingByPeer.delete(payload.id)
+      seenByPeer.add(payload.id)
+      emit({ type: 'seen', id: payload.id })
     },
     onPeers (count) {
       // Track when the peer was last connected, so the header can say
@@ -778,6 +795,14 @@ export const rooms = {
     const conn = connections.get(roomId)
     if (conn) conn.net.sendRead({ upTo: Date.now() })
     db.clearUnread(roomId)
+  },
+
+  /** Tell the sender the countdown has STARTED, so they can watch it run.
+   *  Sent the instant it is tapped, not when it finishes. */
+  viewOnceOpening (roomId, id, secs) {
+    const conn = connections.get(roomId)
+    if (!conn) return
+    conn.net.sendSeen({ id, opening: true, secs })
   },
 
   /** Tell the sender their view-once was opened (and delete locally after). */
