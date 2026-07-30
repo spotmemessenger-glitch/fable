@@ -14,11 +14,11 @@ import { reach } from './lib/reach.js'
 import { rooms } from './lib/rooms.js'
 import { readyRTC } from './net.js'
 import { attachPullRefresh } from './lib/pullrefresh.js'
-import { el, clear, toast, avatar } from './lib/ui.js'
+import { el, clear, toast, avatar, actionSheet } from './lib/ui.js'
 import { compressImage, shrinkDataURL, AVATAR_EDGE, AVATAR_QUALITY } from './lib/media.js'
 import { openCrop } from './lib/crop.js'
 import { readLink } from './net.js'
-import { primeAudio, startNotifier } from './lib/notify.js'
+import { primeAudio, startNotifier, notifyState, enableNotify, notifyBlockedReason } from './lib/notify.js'
 import { subscribePush, isNative as isNativeShell } from './lib/push.js'
 
 import * as inbox from './views/inbox.js'
@@ -322,6 +322,10 @@ function renderOnboarding () {
         : 'Username registry unreachable — you can claim it later in Settings.')
     }
     boot()
+    // A brand-new device reaches the startup offer while db.ready() is still
+    // false, so it bails there. This is the moment a profile first exists —
+    // ask now, or a fresh install would never be asked at all.
+    offerNotifications()
     // Land on Messages — never on whatever screen the hash pointed at before
     // onboarding (after "Clear all data" it was #/settings, which stuck).
     if (readLink()) {
@@ -502,6 +506,47 @@ window.addEventListener('hashchange', render)
 // races the lobby would announce the identity it is about to delete.
 if (RESETTING) maybeFreshStart()
 
+/**
+ * Ask, once, whether this device should be woken for messages.
+ *
+ * Until now nothing ever asked. Startup only RE-subscribed when permission was
+ * already granted, and the only place that called requestPermission() was a
+ * toggle buried in profile settings — so a person installed the app, never
+ * found that switch, and silently never received a notification. Production
+ * bore this out exactly: zero push subscriptions, for every user, ever.
+ *
+ * It has to be a sheet with a button rather than an automatic call, because
+ * browsers only honour requestPermission() from a user gesture — the tap IS
+ * the gesture. Asked at most once: `notifyAsked` is set whatever the answer,
+ * since re-prompting someone who declined is how an app gets muted for good.
+ * Anyone who changes their mind still has the settings toggle.
+ */
+async function offerNotifications () {
+  if (!db.ready()) return                       // still onboarding
+  if (db.settings().notifyAsked) return
+  if (notifyState() !== 'default') return       // already granted or denied
+
+  // On iOS, Web Push exists ONLY for a PWA opened from the Home Screen. Asking
+  // in Safari would fail and burn the one prompt, so point at the real fix.
+  if (notifyBlockedReason() === 'ios-needs-install') {
+    db.setSettings({ notifyAsked: true })
+    toast('Add Spot Me to your Home Screen to get alerts when the app is closed')
+    return
+  }
+
+  db.setSettings({ notifyAsked: true })
+  const yes = await actionSheet(
+    [{ label: 'Turn on alerts', fn: () => true }, { label: 'Not now', fn: () => false }],
+    'Get told when a message arrives, even with Spot Me closed?'
+  )
+  if (!yes) return
+
+  const result = await enableNotify()
+  if (result !== 'granted') return
+  const push = await subscribePush().catch(() => ({ ok: false }))
+  toast(push.ok ? 'Alerts on — you can be reached with the app closed' : 'Alerts on')
+}
+
 /* Deliberately outside boot(), which stands down until onboarding is complete.
  * The worker is what puts alerts in the phone's notification tray, and it takes
  * a moment to activate — waiting for a finished profile would mean the first
@@ -519,6 +564,8 @@ if (!RESETTING) {
      * itself, so it must bypass this browser-only check entirely. */
     if (isNativeShell() || (typeof Notification !== 'undefined' && Notification.permission === 'granted')) {
       subscribePush().catch(() => {})
+    } else {
+      offerNotifications()
     }
   })
 }

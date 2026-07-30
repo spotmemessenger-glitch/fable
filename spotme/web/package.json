@@ -8,7 +8,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "prebuild": "node -e \"const{cpSync,rmSync}=require('fs');rmSync('vendor/spotme-core',{recursive:true,force:true});cpSync('../core','vendor/spotme-core/core',{recursive:true});console.log('vendored ../core -> vendor/spotme-core/core')\""
+    "prebuild": "node -e \"const{cpSync,rmSync}=require('fs');rmSync('vendor/spotme-core/core',{recursive:true,force:true});cpSync('../core','vendor/spotme-core/core',{recursive:true});console.log('vendored ../core')\""
   },
   "keywords": [],
   "author": "",
@@ -18,7 +18,8 @@
     "@capacitor/push-notifications": "^8.1.2",
     "@trystero-p2p/torrent": "^0.25.3",
     "socket.io-client": "^4.8.3",
-    "trystero": "^0.25.3"
+    "trystero": "^0.25.3",
+    "spotme-core": "file:vendor/spotme-core"
   },
   "devDependencies": {
     "@capacitor/android": "^8.4.2",
