@@ -454,10 +454,21 @@ export function render (root, ctx, roomId) {
   })
 
   /** Languages worth offering as a translation target. English first because
-   *  it is the common bridge; the rest are the Indic set the app is built for,
-   *  then the widely-typed others. */
-  const TR_LANGS = ['en', 'ta', 'te', 'ml', 'kn', 'hi', 'mr', 'bn', 'gu', 'pa', 'ur',
-    'ar', 'zh-Hans', 'es', 'fr', 'de', 'ja', 'ko', 'pt', 'ru']
+   *  it is the common bridge, then EVERY South Indian language — the four
+   *  Dravidian majors plus Tulu, Konkani and Kodava, which the four-language
+   *  shortlist quietly excluded — then the rest of India, then the widely
+   *  typed others. Coverage varies by engine: the majors are supported
+   *  everywhere, while Tulu and Kodava reach only the LLM engines, which is
+   *  precisely why Gemini now leads. */
+  const TR_LANGS = [
+    'en',
+    // South India, in full.
+    'ta', 'te', 'kn', 'ml', 'tcy', 'gom',
+    // The rest of India.
+    'hi', 'mr', 'bn', 'gu', 'pa', 'ur', 'or', 'as',
+    // Widely typed elsewhere.
+    'ar', 'zh', 'es', 'fr', 'de', 'ja', 'ko', 'pt', 'ru'
+  ]
 
   const trChip = el('button', {
     class: 'xchip', type: 'button', 'aria-label': 'Translate their messages into',

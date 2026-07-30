@@ -241,7 +241,13 @@ function jsonFrom (raw) {
 async function askGemini (system, user) {
   const key = process.env.GEMINI_API_KEY
   if (!key) throw new Error('no gemini key')
-  const model = process.env.GEMINI_MODEL || 'gemini-2.0-flash'
+  /* 'gemini-2.0-flash' and every pinned 2.x id now answer
+   *   404 "This model is no longer available to new users"
+   * for this key, so Gemini had been silently dead: adjudicate() lists it
+   * first among the judges, threw every time, and quietly fell through to
+   * OpenAI. Only the floating aliases still resolve. Measured on this key:
+   * flash-lite ~0.8s, flash ~3.5s (it thinks before answering), so lite. */
+  const model = process.env.GEMINI_MODEL || 'gemini-flash-lite-latest'
   const res = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
     {
@@ -403,6 +409,31 @@ function agree (a, b) {
 }
 
 /**
+ * Translate with Gemini.
+ *
+ * The engines above are statistical translators; this one reads the sentence.
+ * That matters most for the traffic this app actually carries — short,
+ * context-dependent Indic chat where the right answer depends on who is
+ * speaking to whom ("varen" is a promise to come, not a description).
+ *
+ * It returns the same shape as every other engine, so it drops into the
+ * existing cross-confirmation without the callers knowing which engine ran.
+ */
+async function geminiTranslate (q, source, target) {
+  const system = [
+    'You are a translation engine. Translate the user text into the target language.',
+    'Preserve meaning, tone and register; keep names, numbers, emoji and @handles as they are.',
+    'Write what a native speaker would actually say, not a word-for-word gloss.',
+    'Reply ONLY as compact JSON: {"text":"<translation>"} with no commentary.'
+  ].join(' ')
+  const user = `TARGET LANGUAGE: ${target}${source ? `\nSOURCE LANGUAGE: ${source}` : ''}\nTEXT: ${q}`
+  const parsed = jsonFrom(await askGemini(system, user))
+  const text = String(parsed.text || '').trim()
+  if (!text) throw new Error('gemini translate empty')
+  return { text, detected: source || null, engine: 'gemini' }
+}
+
+/**
  * Ask a language model which of two translations is right.
  *
  * Reached only when the specialist and the general engine actually disagree,
@@ -411,7 +442,7 @@ function agree (a, b) {
  * Any failure here falls back to the specialist rather than erroring — a
  * second opinion is an improvement, never a dependency.
  */
-async function adjudicate (original, target, a, b) {
+async function adjudicate (original, target, a, b, exclude = []) {
   const system = [
     'You judge translations into Indian languages.',
     'You are given the ORIGINAL text and two candidate translations, A and B.',
@@ -422,12 +453,15 @@ async function adjudicate (original, target, a, b) {
   ].join(' ')
   const user = `ORIGINAL: ${original}\nTARGET LANGUAGE: ${target}\nA: ${a}\nB: ${b}`
 
+  /* OpenAI supervises. It is deliberately first now that Gemini can be one of
+   * the translators: a model marking its own homework is not a second opinion,
+   * and `exclude` drops any judge that wrote one of the candidates. */
   const judges = []
-  if (process.env.GEMINI_API_KEY) judges.push(['gemini', askGemini])
   if (process.env.OPENAI_API_KEY) judges.push(['openai', askOpenAI])
+  if (process.env.GEMINI_API_KEY) judges.push(['gemini', askGemini])
   if (process.env.ANTHROPIC_API_KEY) judges.push(['anthropic', askAnthropic])
 
-  for (const [name, ask] of judges) {
+  for (const [name, ask] of judges.filter(([n]) => !exclude.includes(n))) {
     try {
       const parsed = jsonFrom(await ask(system, user))
       const text = String(parsed.text || '').trim()
@@ -464,7 +498,9 @@ async function confirmedTranslate (q, source, target, primary) {
     return { ...b, confirmed: true, engine: `${b.engine}+${a.engine}` }
   }
 
-  const verdict = await adjudicate(q, target, a.text, b.text)
+  // A candidate's own author never judges the comparison it is part of.
+  const authors = [a.engine, b.engine].map((e) => String(e || '').split('+')[0])
+  const verdict = await adjudicate(q, target, a.text, b.text, authors)
   if (!verdict) {
     // No judge available: prefer the specialist for its own languages.
     return { ...b, confirmed: false, alternative: a.text, note: 'engines differ, unjudged' }
@@ -585,7 +621,16 @@ export default async function handler (req, res) {
     // engine both translate, and they only disagree when one of them is wrong.
     // Opt out with {verify:false} for a latency-critical path.
     if (indic && body.verify !== false) {
-      const checked = await confirmedTranslate(q, source, target, engines[0])
+      /* Gemini leads when it is configured: measured against the statistical
+       * engines it reads context that they cannot, which is most of what this
+       * app carries. Sarvam still runs beside it as an INDEPENDENT second
+       * opinion — two engines of the same kind agreeing proves little, so the
+       * pairing is deliberately one reader and one specialist. Gemini failing
+       * (dead model, no credit) falls back to the previous lead untouched. */
+      const lead = process.env.GEMINI_API_KEY
+        ? () => geminiTranslate(q, source, target).catch(() => engines[0]())
+        : engines[0]
+      const checked = await confirmedTranslate(q, source, target, lead)
       if (checked) { res.status(200).json(checked); return }
     }
     if (indic && process.env.SARVAM_API_KEY) {

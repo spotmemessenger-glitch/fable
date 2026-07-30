@@ -29,6 +29,13 @@ export const LANGS = [
   { code: 'mr', name: 'Marathi', native: 'मराठी' },
   { code: 'kn', name: 'Kannada', native: 'ಕನ್ನಡ' },
   { code: 'ml', name: 'Malayalam', native: 'മലയാളം' },
+  /* The rest of South India. The four majors above are carried by every
+   * engine; these two are not, which is part of why the LLM engine now leads —
+   * Tulu and Konkani reach Google and Gemini but not the statistical pair. */
+  { code: 'tcy', name: 'Tulu', native: 'ತುಳು' },
+  { code: 'gom', name: 'Konkani', native: 'कोंकणी' },
+  { code: 'or', name: 'Odia', native: 'ଓଡ଼ିଆ' },
+  { code: 'as', name: 'Assamese', native: 'অসমীয়া' },
   { code: 'gu', name: 'Gujarati', native: 'ગુજરાતી' },
   { code: 'pa', name: 'Punjabi', native: 'ਪੰਜਾਬੀ' },
   { code: 'ur', name: 'Urdu', native: 'اردو' },
