@@ -17,6 +17,34 @@ availability + search, knock opens the chat on both devices, and a message sent
 while the recipient's tab was CLOSED arrived on reopen. Note: a Railway "Deploy
 Crashed" email refers to the FIRST attempt (Prisma/libssl), fixed in `8e734e2`.
 
+**FIRST TASK NEXT SESSION (one command, then one check):**
+```
+cd spotme/backend && npm run deploy
+curl -s -X POST https://api-production-0a4ca.up.railway.app/api/translate \
+  -H "content-type: application/json" -d '{"q":"are you coming tonight?","target":"ta"}'
+```
+Expect a `"confirmed"` field. At the end of 2026-07-30 production was still
+answering `{"engine":"azure"}` with no `confirmed` — the cross-confirmation
+deploy had not taken effect. Code and keys are committed and set; it just needs
+the deploy to land. **Never plain `railway up`** — `npm run deploy` stages
+`web/api` into the image, and without it every /api/* route 404s.
+
+**Also done 2026-07-30 (all committed):**
+- **Push notifications** live: the server pushes when an event lands for
+  someone not connected. Only msg/knock, never the sender, no text in the
+  payload. Real-device delivery still unverified.
+- **Translation + transliteration fixed** after five packaging faults —
+  see the memory note `spotme-language-pipeline`. Engines now cross-confirm:
+  Sarvam in parallel with Azure/Google, LLM adjudicates disagreements. User
+  confirmed Google Input Tools should win transliteration disputes.
+- **ybot**: voice loop (ElevenLabs streaming, real barge-in, ctrl+space
+  push-to-talk) and a 3D saree avatar with 15-viseme lip sync, wired live to
+  the voice service. Run: `python run.py --voice` plus
+  `python -m ybot.avatar_server`. Never tested with a real microphone — that
+  needs the user.
+- Working keys: Sarvam `sk_w64e4low…`, OpenAI `sk-proj-OrZ…`. Gemini
+  authenticates but its AI Studio project has no credit (429).
+
 **What happened:** the web app's Trystero/BitTorrent-tracker transport was
 replaced by a server-backed one. Commits `7aad447` (backend), `43cfc02` (web),
 `9603543` (docs). The UI is UNTOUCHED (user: "stick to this UI").
