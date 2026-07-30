@@ -45,9 +45,21 @@ still hold :4000, so you are testing hours-old code. Delete
 `tsconfig.build.tsbuildinfo` before building, and prove a route you just added
 actually answers (404 on a new route = stale process).
 
-**Still needs the user:** nothing has been pushed or deployed. `git push` now
-auto-deploys the web app to production; the backend change needs
-`cd spotme/backend && npm run deploy` separately.
+**Google Maps was dead in production for the same class of reason.**
+`VITE_GMAPS_KEY` lives only in `spotme/web/.env.local` (gitignored, correctly),
+and it had never been added to Vercel — the only `VITE_*` var there was
+`VITE_SPOTME_SERVER`. Vite inlines `import.meta.env.*` at BUILD time, so every
+production bundle shipped `maps/api/js?key=` with nothing after it and Google
+refused the script; the app fell back to its drawn map. Fixed by adding
+`VITE_GMAPS_KEY` to the Vercel project (production+preview+development) and
+redeploying; the live bundle now carries the real key and the Maps API
+authenticates on the Vercel origin with no `gm_authFailure`. **Rule: any new
+`VITE_*` var must be added to Vercel too — `.env.local` never travels.**
+
+**Everything above is pushed and deployed.** Web is live; the backend ban/unban
+fix was confirmed in production by running a real ban → unban round trip
+(Railway served the PREVIOUS container for ~4 minutes after `npm run deploy`
+reported success — a health check cannot tell the difference).
 
 ---
 
