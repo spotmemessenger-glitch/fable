@@ -1,9 +1,81 @@
 # START HERE — pickup brief
 
 **Written:** 2026-07-29, end of session (~$341 spent).
-**Updated:** 2026-07-30 ~03:00 (overnight autonomous session — Spot Me P2P→server migration).
-**Read this file first.** It exists so the user does not have to re-explain
-anything. Everything below was verified by RUNNING it, not by exit codes.
+**Updated:** 2026-07-30 evening (~$745 spent that day). Everything below was
+verified by RUNNING it, not by exit codes.
+
+---
+
+## 0a. IF YOU ARE ON THE MacBOOK — this is your task
+
+The Windows PC cannot do iOS at all (verified: `MINGW64_NT-10.0-19045`, no
+`/System/Library`, no `sw_vers`). Xcode is macOS-only, so everything iOS was
+blocked until now. The user has a MacBook AND an Apple Developer account, and
+both an Android and an iOS device connected **to the Mac**.
+
+**There is no `spotme/web/ios/` directory yet.** First commands:
+
+```bash
+cd spotme/web && npm install && npx cap add ios && npx cap sync ios
+```
+
+Then, for iOS push:
+1. Apple Developer → Keys → create an **APNs key** (`.p8`).
+2. Upload it into the Firebase project **`spot-messenger-48a74`**
+   (Project Settings → Cloud Messaging → APNs Authentication Key).
+3. Build/run on the connected iPhone from Xcode.
+
+**The server needs NO changes for iOS.** Already deployed and live: the `apns`
+block (`apns-priority: 10`, `content-available`, `thread-id`),
+`DeviceToken.platform` accepts `'ios'`, and the client's `registerNativePush()`
+already reports `ios` via `Capacitor.getPlatform()`.
+
+**Do not commit `.keys/`** — gitignored, and the Mac does not need it. Only the
+server does, and Railway already holds it.
+
+## 0b. THE ONE THING STILL UNPROVEN
+
+**No real phone has ever received a push.** Production holds exactly ONE device
+token (`@qa_probe_02`, the Android emulator) and ZERO web-push subscriptions.
+The whole chain is verified on the emulator — real chat message → server → FCM
+→ tray notification on an idle, screen-off device — but never on a real handset.
+Getting one notification onto a real phone is the next milestone.
+
+Fastest route on iPhone, needing no build at all: open
+https://spotme-messenger.vercel.app in Safari → **Add to Home Screen** → open
+**from the icon** → allow notifications. iOS 16.4+ supports Web Push only for a
+Home Screen install, and the first-run prompt now asks directly.
+
+## 0c. What landed 2026-07-30 (6 commits, `8fe2753..47247d5`, pushed)
+
+- **The Railway deploy had been silently failing for a DAY.** `.deploy/` was
+  gitignored and `railway up` skips gitignored paths, so the staged `web/api`
+  never reached the build context, the Dockerfile's own assert failed the
+  build, and Railway kept serving the PREVIOUS container. Staging is now
+  `deploy-api/` (untracked but NOT ignored). A `.railwayignore` does not help —
+  it only ADDS exclusions. Production now returns
+  `{"engine":"sarvam+azure/openai","confirmed":true}`.
+- **The Vercel site had been 404 for days**, same class of bug: `spotme-core`
+  was `"file:.."`, outside the only directory Vercel uploads. Now a real local
+  package at `web/vendor/spotme-core` — which must NEVER be gitignored.
+- **Azure Translator key was dead** (401 everywhere). Replaced; the new key
+  works ONLY against the resource endpoint
+  (`ytranslator-yuvraj-2026.cognitiveservices.azure.com`) — the global host
+  `api.cognitive.microsofttranslator.com` 401s for every region. Do not
+  "simplify" `azureBase()` to the global host.
+- **Groups v2**: roles (OWNER/ADMIN/MODERATOR/MEMBER), granular grants,
+  ban/mute, transfer, public groups with @username, 30-day soft delete. 26
+  tests pass. **The rooms gateway previously authorised NOTHING** — knowing a
+  roomId was the whole access model, so a ban was decorative; join/send are now
+  policy-checked. Delete-permission is only partly enforceable (the target id
+  is inside the ciphertext — clients must send cleartext `meta.owner`).
+- **FCM push** built and verified on the emulator. Web Push can NEVER work in
+  the packaged app: Capacitor's WebView has no `PushManager` and no
+  `Notification` (verified on-device).
+- Composer no longer zooms the app on mobile (16px floor on coarse pointers).
+
+**Groups has NO web UI yet** — `groups.js` still says "no admin, no server".
+The 3-step wizard, roles screens and chat-list integration are unbuilt.
 
 ---
 
