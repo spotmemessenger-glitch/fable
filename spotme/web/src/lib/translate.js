@@ -111,8 +111,7 @@ async function fetchJson (url, timeoutMs = 8000) {
   }
 }
 
-/** Same-origin: the backend bridges the /api functions (vite proxies in dev). */
-const API_BASE = ''
+import { API_BASE } from './api.js'
 
 /**
  * Cloud fallback, tried in quality order:

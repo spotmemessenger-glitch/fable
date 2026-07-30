@@ -61,8 +61,7 @@ const APP_ID = 'io.ysnapai.spotme'
 const HEARTBEAT_MS = 10_000
 const OUTBOX_TTL_MS = 24 * 60 * 60_000   // 24 hours — was 10 min, which silently abandoned most requests
 
-/** Same origin everywhere — vite proxies /api to the local backend in dev. */
-const API_ORIGIN = ''
+import { API_BASE as API_ORIGIN } from './api.js'
 const KNOCK_ENDPOINT = `${API_ORIGIN}/api/knock`
 
 /** Stable, non-cryptographic string hash — enough to derive a room id/secret

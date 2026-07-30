@@ -23,7 +23,7 @@
  * ------------------------------------------------------------------------- */
 import { db } from './db.js'
 
-const API_ORIGIN = ''  // same-origin: vite proxies /api to the backend in dev
+import { API_BASE as API_ORIGIN } from './api.js'
 
 const ENDPOINT = `${API_ORIGIN}/api/push`
 

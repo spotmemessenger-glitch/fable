@@ -7,8 +7,7 @@
  * Every function throws an Error with a readable message on failure.
  */
 
-/** Same-origin: the backend bridges the /api functions (vite proxies in dev). */
-const API_BASE = ''
+import { API_BASE } from './api.js'
 
 /* Cloning uploads ~0.5 MB and EL processes it — give slow ops more room. */
 const CALL_TIMEOUT_MS = 30_000

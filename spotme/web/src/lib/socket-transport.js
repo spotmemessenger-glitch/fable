@@ -33,7 +33,7 @@ import { io } from 'socket.io-client'
 import * as torrent from '@trystero-p2p/torrent'
 import { db } from './db.js'
 
-const SERVER = import.meta.env?.VITE_SPOTME_SERVER || ''
+import { API_BASE as SERVER } from './api.js'
 const TOKEN_KEY = 'spotme.server.tokens'
 const CURSOR_PREFIX = 'spotme.cursor.'
 const ACK_TIMEOUT_MS = 15_000

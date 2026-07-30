@@ -24,9 +24,7 @@ const SHEET_CLOSE_MS = 160
 const GROUP_NAME_MAX = 40
 const PULL_REVEAL_PX = 48      // pull-down distance that reveals the Archived row
 const USERNAME_RE = /^[a-z0-9_]{2,}$/
-// The username registry now lives on the Spot Me backend — same origin
-// everywhere (vite proxies /api in dev).
-const REGISTRY_API = ''
+import { API_BASE as REGISTRY_API } from '../lib/api.js'
 
 const ICON = {
   plus: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>',

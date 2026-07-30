@@ -4,6 +4,10 @@
 
 generator client {
   provider = "prisma-client-js"
+  // Pinned because auto-detection guessed wrong in the deploy image and the
+  // container died at boot looking for libssl.so.1.1 — node:22-slim is
+  // Debian bookworm (OpenSSL 3). "native" keeps local development working.
+  binaryTargets = ["native", "debian-openssl-3.0.x"]
 }
 
 datasource db {

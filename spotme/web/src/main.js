@@ -7,6 +7,7 @@
  * proven two-phone flow, now joining straight into a conversation.
  */
 import './tokens.css'
+import { API_BASE } from './lib/api.js'
 import { db, wipeDevice } from './lib/db.js'
 import { lobby } from './lib/discovery.js'
 import { reach } from './lib/reach.js'
@@ -203,9 +204,9 @@ function render () {
 
 /* ------------------------------------------------------------ onboarding */
 
-/** Username registry origin: same-origin everywhere — the registry now lives
- *  on the Spot Me backend (vite proxies /api to it in dev). */
-const REGISTRY_API = ''
+/** Username registry origin — the registry lives on the Spot Me backend, so
+ *  this must be the SAME host the rooms use or the two disagree about ids. */
+const REGISTRY_API = API_BASE
 const USERNAME_RE = /^[a-z0-9_]{3,16}$/
 const CHECK_DEBOUNCE_MS = 400
 

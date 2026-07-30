@@ -1,0 +1,10 @@
+# Keep the build context small and, more importantly, keep local secrets out of
+# the image: production values come from the host's environment, never a file.
+node_modules
+dist
+.env
+.env.*
+!.env.example
+*.log
+test
+.git

@@ -74,9 +74,7 @@ export const hasRelay = () =>
   RTC_CONFIG.iceServers.some((s) =>
     (Array.isArray(s.urls) ? s.urls : [s.urls]).some((u) => String(u).startsWith('turn')))
 
-// Same origin everywhere: the vite dev server proxies /api to the local
-// backend, and production serves the API from the app's own host.
-const API_ORIGIN = ''
+import { API_BASE as API_ORIGIN } from './lib/api.js'
 
 const APP_ID = 'io.ysnapai.spotme'
 

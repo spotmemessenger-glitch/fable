@@ -1,6 +1,6 @@
 {
-  "installCommand": "",
-  "buildCommand": "",
+  "installCommand": "npm install",
+  "buildCommand": "vite build",
   "outputDirectory": "dist",
   "headers": [
     {
