@@ -369,6 +369,11 @@ export function render (root, ctx, roomId) {
   let pickerArmed = false   // a native file picker is open (cancel heuristic)
   let pendingClip = null
   let confAudio = null
+  /* The confirm bar's time readout. The Send pill is capped at 92px (a wider
+   * one overflowed the row on a 412px Android), so "Translating…" truncated to
+   * "Tran…" and the step was unreadable. The status goes here instead, where
+   * there is room, and the pill stays short. */
+  let confStatus = null
   const voiceStops = new Set()   // live waveform loops to halt on unmount
   let dictating = null
   let dictBase = ''         // composer text that predates the dictation session
@@ -784,6 +789,19 @@ export function render (root, ctx, roomId) {
      * the ear-spelling the classic chain cannot ("Ippo variya" → "Are you
      * coming now?" vs "Is it tax now?"). It also leaves names and English
      * alone by itself. Everything below is the fallback when it is down. */
+    /* Stage 0, instant and offline: when the language is already known, the
+     * bundled transliterator converts the script here on the device with no
+     * network at all. The script line — the part a reader of that language
+     * actually wants — can therefore appear on the same frame the message
+     * does, while the meaning is still being fetched. */
+    const known = chatLang()
+    if (onEarly && known && hasLocalScript(known) && isLatinScript(text)) {
+      try {
+        const local = transliterate(text, known)
+        if (local && local !== text) onEarly({ lang: known, script: local, text: '', rank: 1 })
+      } catch { /* the network stages still cover it */ }
+    }
+
     const pinned = (db.convo(roomId) || convo).xlitLang
     const readPromise = readMessage(text, pinned ? langName(pinned) : '')
 
@@ -792,7 +810,7 @@ export function render (root, ctx, roomId) {
     let llmSettled = false
     const classicPromise = computeXlitClassic(text).catch(() => null)
     classicPromise.then((early) => {
-      if (early && !llmSettled && onEarly) onEarly(early)
+      if (early && !llmSettled && onEarly) onEarly({ ...early, rank: 2 })
     })
 
     const read = await readPromise
@@ -899,8 +917,15 @@ export function render (root, ctx, roomId) {
       xlitCache.set(m.id, 'pending')
       // onEarly paints the fast chain's answer the moment it lands, seconds
       // before the LLM replies; the final .then then supersedes it.
+      /* Three stages land in order, each better than the last:
+       *   rank 1  on-device script, instant
+       *   rank 2  classic chain, ~1s, adds the meaning
+       *   final   the LLM, ~3.7s, supersedes both if it disagrees
+       * A stage only paints if nothing better is already showing. */
       computeXlit(m, (early) => {
-        if (!mounted || xlitCache.get(m.id) !== 'pending') return
+        if (!mounted || !early) return
+        const cur = xlitCache.get(m.id)
+        if (cur !== 'pending' && (cur?.rank ?? 9) >= (early.rank ?? 0)) return
         xlitCache.set(m.id, early)
         const stick = nearBottom()
         applyXlit(m)
@@ -929,13 +954,17 @@ export function render (root, ctx, roomId) {
     const script = !pending && cur.script && flatten(cur.script) !== flatten(m.text)
       ? cur.script
       : null
-    const node = el('div', { class: 'xl' + (pending ? ' pend' : '') }, [
+    // The instant stage has the script but not yet the meaning; the meaning
+    // line shows an ellipsis rather than collapsing, so nothing shifts when it
+    // arrives a moment later.
+    const meaningPending = !pending && !cur.text
+    const node = el('div', { class: 'xl' + (pending || meaningPending ? ' pend' : '') }, [
       el('span', {
         class: 'xlTag',
         text: pending ? 'Reading…' : readingTag(cur.lang, 'Transliterated')
       }),
       script ? el('span', { class: 'xlScript', lang: cur.lang, text: script }) : null,
-      el('span', { class: 'xlText', text: pending ? '…' : cur.text })
+      el('span', { class: 'xlText', text: pending || meaningPending ? '…' : cur.text })
     ])
     if (existing) existing.replaceWith(node)
     else bub.appendChild(node)
@@ -3409,6 +3438,7 @@ export function render (root, ctx, roomId) {
     confAudio = el('audio', { src: clip.dataURL, preload: 'metadata' })
     const playBtn = el('button', { class: 'vv-play', type: 'button', 'aria-label': 'Preview voice note', html: IC.play })
     const timeEl = el('span', { class: 'vv-time', text: `0:00 / ${fmtClock(clip.dur)}` })
+    confStatus = timeEl
     let raf = 0
     const paint = () => {
       if (!confAudio) return
@@ -3454,6 +3484,10 @@ export function render (root, ctx, roomId) {
   function discardVoice () {
     if (confAudio) { try { confAudio.pause() } catch { /* detached */ } }
     confAudio = null
+    confStatus = null
+    // Nulling this is what aborts an in-flight translation: every step checks
+    // pendingClip still matches, so Cancel stops the pipeline dead and nothing
+    // half-translated is ever sent.
     pendingClip = null
     clear(confbar)
     confbar.classList.remove('busy')
@@ -3479,38 +3513,81 @@ export function render (root, ctx, roomId) {
     const voiceId = db.profile().voiceId
     if (!voiceId) { ctx.toast('Create your voice in Settings first'); return }
     const clip = pendingClip
-    // 'Translating…' state — freeze the bar while the pipeline runs.
+
+    /* Nothing is sent until all three steps finish — that ordering was already
+     * right. What was wrong was the wait itself: Cancel was disabled and there
+     * was no deadline, so a hung step left the bar frozen with no way out, and
+     * the only label was "Translating…" squeezed into a pill that showed
+     * "Tran…". Three network services run here; any of them can stall. */
     confbar.classList.add('busy')
     const sendLabel = sendBtn.textContent
-    sendBtn.textContent = 'Translating…'
     sendBtn.disabled = true
-    cancelBtn.disabled = true
     trSel.disabled = true
+    // Cancel stays LIVE. Being unable to abandon a stuck upload is the worst
+    // state this bar can be in.
+    cancelBtn.disabled = false
+
     let step = 'Transcription'
-    try {
-      const recorded = await (await fetch(clip.dataURL)).blob()
-      const heard = await sttBlob(recorded)
-      if (!heard?.text) throw new Error('nothing heard')
-      step = 'Translation'
-      const from = heard.lang ? String(heard.lang).slice(0, 2) : (db.profile().lang || null)
-      const out = await translateText(heard.text, from, lang)
-      if (!out?.text) throw new Error('no translation')
-      step = 'Voice generation'
-      const spoken = await ttsClone(out.text, voiceId)
-      if (!spoken || !spoken.size) throw new Error('no audio')
-      const dataURL = await blobToDataURL(spoken)
-      const dur = await audioDuration(dataURL, clip.dur)
-      if (!mounted || pendingClip !== clip) return
-      discardVoice()
-      sendAttachmentWithUI({ kind: 'voice', data: dataURL, dur })
-    } catch {
-      if (!mounted || pendingClip !== clip) return
-      ctx.toast(`${step} failed — the original note is still ready to send`)
+    const restore = () => {
       confbar.classList.remove('busy')
       sendBtn.textContent = sendLabel
       sendBtn.disabled = false
       cancelBtn.disabled = false
       trSel.disabled = false
+      // Put the clock back, or the bar keeps reporting a step that has stopped.
+      if (confStatus) confStatus.textContent = `0:00 / ${fmtClock(clip.dur)}`
+    }
+    /** The clip the user is waiting on. If they cancel or re-record, this
+     *  stops matching and every later step becomes a no-op. */
+    const stillWanted = () => mounted && pendingClip === clip
+
+    /** Each step gets its own deadline, so one dead service cannot hold the
+     *  note hostage. Generous, because a slow phone on 5G is not a failure. */
+    const STEP_TIMEOUT_MS = 45_000
+    const withDeadline = (promise, label) => Promise.race([
+      promise,
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error(`${label} timed out`)), STEP_TIMEOUT_MS))
+    ])
+
+    /* The step goes in the time slot, which has room for the whole word; the
+     * capped Send pill just reads "Working". */
+    const say = (label) => {
+      if (!stillWanted()) return
+      sendBtn.textContent = 'Working'
+      if (confStatus) confStatus.textContent = label
+    }
+
+    try {
+      say('Hearing…')
+      const recorded = await (await fetch(clip.dataURL)).blob()
+      const heard = await withDeadline(sttBlob(recorded), step)
+      if (!stillWanted()) return
+      if (!heard?.text) throw new Error('nothing heard')
+
+      step = 'Translation'
+      say('Translating…')
+      const from = heard.lang ? String(heard.lang).slice(0, 2) : (db.profile().lang || null)
+      const out = await withDeadline(translateText(heard.text, from, lang), step)
+      if (!stillWanted()) return
+      if (!out?.text) throw new Error('no translation')
+
+      step = 'Voice generation'
+      say('Voicing…')
+      const spoken = await withDeadline(ttsClone(out.text, voiceId), step)
+      if (!stillWanted()) return
+      if (!spoken || !spoken.size) throw new Error('no audio')
+
+      const dataURL = await blobToDataURL(spoken)
+      const dur = await audioDuration(dataURL, clip.dur)
+      // Last check before it leaves: only a fully voiced note is ever sent.
+      if (!stillWanted()) return
+      discardVoice()
+      sendAttachmentWithUI({ kind: 'voice', data: dataURL, dur })
+    } catch {
+      if (!stillWanted()) return
+      ctx.toast(`${step} failed — the original note is still ready to send`)
+      restore()
     }
   }
 
