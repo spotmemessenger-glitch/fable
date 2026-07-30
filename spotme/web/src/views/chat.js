@@ -758,7 +758,17 @@ export function render (root, ctx, roomId) {
   const DETECT_MIN_WORDS = 3
   const wordCount = (text) => String(text || '').trim().split(/\s+/).filter(Boolean).length
 
-  async function computeXlit (m) {
+  /**
+   * Measured against production: the one-shot LLM read costs ~3.7s, while the
+   * classic chain costs ~1.2-2.4s (detect 1.2s + transliterate 0.6s +
+   * translate 0.6s, and detect is skipped once the language is known).
+   *
+   * Waiting for the better answer before showing any answer meant every
+   * message sat blank for nearly four seconds. Both now run at once: the
+   * classic chain paints as soon as it lands, and the LLM quietly replaces it
+   * if it disagrees. Nobody waits for the slow path to see something true.
+   */
+  async function computeXlit (m, onEarly) {
     const text = m.text
 
     /* Plain English leaves before anything can form an opinion about it —
@@ -775,11 +785,28 @@ export function render (root, ctx, roomId) {
      * coming now?" vs "Is it tax now?"). It also leaves names and English
      * alone by itself. Everything below is the fallback when it is down. */
     const pinned = (db.convo(roomId) || convo).xlitLang
-    const read = await readMessage(text, pinned ? langName(pinned) : '')
+    const readPromise = readMessage(text, pinned ? langName(pinned) : '')
+
+    // Kick the classic chain off NOW rather than only when the LLM fails.
+    // Whatever it finds is shown immediately; the LLM answer supersedes it.
+    let llmSettled = false
+    const classicPromise = computeXlitClassic(text).catch(() => null)
+    classicPromise.then((early) => {
+      if (early && !llmSettled && onEarly) onEarly(early)
+    })
+
+    const read = await readPromise
+    llmSettled = true
     if (read) {
       if (read.lang === 'en' || !read.english) return null
       return { text: read.english, lang: read.lang, script: read.script }
     }
+    return classicPromise
+  }
+
+  /** The deterministic chain: detect -> own script -> English. Slower to be
+   *  wrong than the LLM on ear-spelling, but far quicker to answer. */
+  async function computeXlitClassic (text) {
     const latin = isLatinScript(text)
 
     // Already in a real script: translating it straight is reliable.
@@ -870,7 +897,15 @@ export function render (root, ctx, roomId) {
 
     if (!xlitCache.has(m.id)) {
       xlitCache.set(m.id, 'pending')
-      computeXlit(m)
+      // onEarly paints the fast chain's answer the moment it lands, seconds
+      // before the LLM replies; the final .then then supersedes it.
+      computeXlit(m, (early) => {
+        if (!mounted || xlitCache.get(m.id) !== 'pending') return
+        xlitCache.set(m.id, early)
+        const stick = nearBottom()
+        applyXlit(m)
+        if (stick) scrollBottom()
+      })
         .then((res) => { xlitCache.set(m.id, res) })
         .catch(() => { xlitCache.set(m.id, null) })
         .then(() => {

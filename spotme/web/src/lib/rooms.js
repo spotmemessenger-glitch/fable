@@ -448,8 +448,22 @@ function createConnection (convo) {
         onProgress: (pr) => onProgress?.(Math.min((seq + pr) / total, 0.99))
       })
     }
-    await awaitAck(message.id)
-    store.patch(message.id, { delivered: true, failed: false })
+    try {
+      await awaitAck(message.id)
+      store.patch(message.id, { delivered: true, failed: false })
+    } catch (err) {
+      /* On a durable transport a missing receipt is NOT a failure. Every slice
+       * is already in the server log and will be replayed when they next open
+       * the app — the receipt is merely late, usually because their tab is
+       * backgrounded (iOS suspends them within seconds).
+       *
+       * Calling that "Not delivered" was worse than saying nothing: it told
+       * the sender their voice note had gone nowhere while it sat safely on
+       * the server, and the only remedy it suggested was to send it again.
+       * Failure is now reserved for a send that actually threw. */
+      if (!conn.net.DURABLE) throw err
+      store.patch(message.id, { delivered: false, failed: false })
+    }
     onProgress?.(1)
   }
 
