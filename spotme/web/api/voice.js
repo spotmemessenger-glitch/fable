@@ -12,7 +12,16 @@
  * On ElevenLabs failures we pass through their status code and body text
  * so the client (and Vercel logs) can see exactly what was rejected.
  */
+import { applyCors, gateVendorProxy } from './_auth.js'
+
 const EL_BASE = 'https://api.elevenlabs.io/v1'
+
+/* Per user, per minute. `clone` gets its own, much tighter bucket: every call
+ * creates a real ElevenLabs voice, which is billed AND consumes one of a finite
+ * number of voice slots on the plan — a loop here does not just cost money, it
+ * fills the account up. stt/tts/unclone are ordinary per-message operations. */
+const CLONE_PER_MIN = 5
+const VOICE_PER_MIN = 30
 const MAX_AUDIO_CHARS = 8_000_000   // ~6 MB decoded; fail fast before hitting EL
 const MAX_TTS_CHARS = 2500
 const VOICE_ID_RE = /^[A-Za-z0-9]{8,64}$/
@@ -122,16 +131,12 @@ async function unclone (body, res) {
 }
 
 export default async function handler (req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*')
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS')
-  res.setHeader('Access-Control-Allow-Headers', 'content-type')
+  applyCors(req, res)
   if (req.method === 'OPTIONS') { res.status(204).end(); return }
   if (req.method !== 'POST') { res.status(405).json({ error: 'POST only' }); return }
 
-  let body = req.body
-  if (typeof body === 'string') { try { body = JSON.parse(body) } catch { body = null } }
-
-  /* req.query.op can be undefined in this deploy — fall back to the raw URL. */
+  /* req.query.op can be undefined in this deploy — fall back to the raw URL.
+   * Read before the body because it decides the rate-limit tier. */
   let op = req.query?.op
   if (!op && req.url) {
     try { op = new URL(req.url, 'http://x').searchParams.get('op') } catch { /* no op */ }
@@ -139,6 +144,18 @@ export default async function handler (req, res) {
 
   const ops = { stt, tts, clone, unclone }
   if (!ops[op]) { res.status(400).json({ error: 'unknown op — use stt|tts|clone|unclone' }); return }
+
+  /* THE GATE. Everything below spends the owner's ElevenLabs credit. This was
+   * an open proxy with `ACAO: *` and no credential of any kind — the same hole
+   * /api/translate had, and reachable at the same two deployed hosts. */
+  const userId = gateVendorProxy(req, res, {
+    op: `voice:${op}`,
+    limit: op === 'clone' ? CLONE_PER_MIN : VOICE_PER_MIN
+  })
+  if (!userId) return
+
+  let body = req.body
+  if (typeof body === 'string') { try { body = JSON.parse(body) } catch { body = null } }
 
   try {
     await ops[op](body, res)

@@ -121,38 +121,12 @@ async function fetchJson (url, timeoutMs = 8000) {
 }
 
 import { API_BASE } from './api.js'
-import { freshTokens } from './socket-transport.js'
-
-/**
- * Every /api/translate call carries the same short-lived access token the room
- * socket and the groups API already use.
- *
- * The endpoint proxies Anthropic, OpenAI, Gemini, Sarvam, Azure and Google, and
- * until now it was open to the internet with `ACAO: *` — the URL is in this
- * bundle, so anyone reading it could spend the owner's vendor credit. The token
- * is taken from socket-transport rather than minted here for the same reason
- * groups-api.js does it: two auth paths means two caches and two expiry clocks.
- *
- * The timeout is the important part. `freshTokens()` waits for onboarding to
- * produce a profile and will happily wait forever (socket-transport.js:163-166),
- * and the AbortController below only covers the fetch — so without this race a
- * pre-onboarding translate would hang rather than fail. Going out unauthenticated
- * earns a clean 401, which every caller here already treats as "try the next
- * engine".
- */
-const TOKEN_WAIT_MS = 4000
-
-async function authHeaders () {
-  const headers = { 'content-type': 'application/json' }
-  try {
-    const { accessToken } = await Promise.race([
-      freshTokens(),
-      new Promise((_, reject) => setTimeout(() => reject(new Error('no token yet')), TOKEN_WAIT_MS))
-    ])
-    if (accessToken) headers.authorization = `Bearer ${accessToken}`
-  } catch { /* unauthenticated attempt; the caller falls back on 401 */ }
-  return headers
-}
+/* Every /api/translate call carries the same short-lived access token the room
+ * socket and the groups API already use. The endpoint proxies Anthropic,
+ * OpenAI, Gemini, Sarvam, Azure and Google, and the URL is in this bundle — so
+ * without it, anyone reading the bundle spends the owner's vendor credit.
+ * Shared with lib/voice.js, which fronts ElevenLabs and has the same problem. */
+import { authHeaders } from './auth-headers.js'
 
 /** POST to the proxy, authenticated, with a hard deadline. */
 async function postTranslate (query, body, timeoutMs) {

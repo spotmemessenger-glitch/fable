@@ -8,6 +8,10 @@
  */
 
 import { API_BASE } from './api.js'
+/* /api/voice fronts ElevenLabs, so it is behind the same bearer token as
+ * /api/translate now. Shared helper: it also owns the timeout that stops a
+ * pre-onboarding call hanging on freshTokens(). */
+import { authHeaders } from './auth-headers.js'
 
 /* Cloning uploads ~0.5 MB and EL processes it — give slow ops more room. */
 const CALL_TIMEOUT_MS = 30_000
@@ -39,11 +43,12 @@ export function dataURLToBlob (dataURL) {
 
 async function call (op, payload, timeoutMs = CALL_TIMEOUT_MS) {
   const controller = new AbortController()
+  const headers = await authHeaders()
   const abortTimer = setTimeout(() => controller.abort(), timeoutMs)
   try {
     const res = await fetch(`${API_BASE}/api/voice?op=${op}`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers,
       body: JSON.stringify(payload),
       signal: controller.signal
     })

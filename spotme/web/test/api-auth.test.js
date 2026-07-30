@@ -20,6 +20,7 @@ process.env.JWT_ACCESS_SECRET = 'test-secret-for-the-guard'
 const { verifyAccessToken, applyCors, hitLimit, resetLimits, gateVendorProxy } =
   await import('../api/_auth.js')
 const { default: handler } = await import('../api/translate.js')
+const { default: voiceHandler } = await import('../api/voice.js')
 
 const results = {}
 const check = (name, fn) => {
@@ -241,6 +242,68 @@ await checkAsync('the codes the real client sends are all still accepted', async
     if (res.code === 400) return false
   }
   return true
+})
+
+/* ------------------------------------------- 6. /api/voice — same hole */
+
+/* ELEVENLABS_API_KEY is unset in this process, so a call that gets PAST the
+ * gate dies at elHeaders() with a 500. That is the discriminator: 401 means
+ * refused at the door, 500 means it reached the vendor step. Neither spends. */
+
+await checkAsync('THE HOLE: an anonymous ?op=stt is refused', async () => {
+  resetLimits()
+  const res = fakeRes()
+  await voiceHandler(post('/api/voice?op=stt', { audio: 'data:audio/webm;base64,AAAA' },
+    { origin: 'https://evil.example.com' }), res)
+  return res.code === 401 && res.headers['access-control-allow-origin'] === undefined
+})
+
+await checkAsync('an anonymous ?op=clone is refused — that one creates a paid voice', async () => {
+  resetLimits()
+  const res = fakeRes()
+  await voiceHandler(post('/api/voice?op=clone', { audio: 'data:audio/webm;base64,AAAA', name: 'x' }, {}), res)
+  return res.code === 401
+})
+
+await checkAsync('a forged token cannot reach ElevenLabs either', async () => {
+  resetLimits()
+  const res = fakeRes()
+  const req = post('/api/voice?op=tts', { text: 'hi', voiceId: 'abcdefgh12345678' },
+    { authorization: `Bearer ${mint({}, { secret: 'wrong' })}` })
+  await voiceHandler(req, res)
+  return res.code === 401
+})
+
+await checkAsync('a real token gets through the gate to the vendor step', async () => {
+  resetLimits()
+  const res = fakeRes()
+  const req = post('/api/voice?op=tts', { text: 'hi', voiceId: 'abcdefgh12345678' },
+    { authorization: `Bearer ${mint({})}` })
+  await voiceHandler(req, res)
+  return res.code !== 401 && res.code !== 429
+})
+
+await checkAsync('clone is metered far tighter than stt, because it burns voice slots', async () => {
+  resetLimits()
+  const req = (op, body) => post(`/api/voice?op=${op}`, body, { authorization: `Bearer ${mint({})}` })
+  const clone = { audio: 'data:audio/webm;base64,AAAA', name: 'x' }
+  let cloneLimited = 0
+  for (let i = 0; i < 8; i++) {
+    const res = fakeRes()
+    await voiceHandler(req('clone', clone), res)
+    if (res.code === 429) cloneLimited++
+  }
+  // stt shares neither the bucket nor the ceiling.
+  const sttRes = fakeRes()
+  await voiceHandler(req('stt', { audio: 'data:audio/webm;base64,AAAA' }), sttRes)
+  return cloneLimited === 3 && sttRes.code !== 429
+})
+
+await checkAsync('an unknown op is rejected without costing anyone their budget', async () => {
+  resetLimits()
+  const res = fakeRes()
+  await voiceHandler(post('/api/voice?op=nonsense', {}, {}), res)
+  return res.code === 400
 })
 
 /* --------------------------------------------------------------- report */
