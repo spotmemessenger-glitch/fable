@@ -1005,7 +1005,14 @@ export function render (root, ctx, roomId) {
       script ? el('span', { class: 'xlScript', lang: cur.lang, text: script }) : null,
       el('span', { class: 'xlText', text: pending || meaningPending ? '…' : cur.text })
     ])
-    if (existing) existing.replaceWith(node)
+    /* Re-query rather than trusting the `existing` captured at entry. The
+     * instant stage calls onEarly SYNCHRONOUSLY, which re-enters this function
+     * and appends a block while the outer call is still holding a stale null —
+     * so the outer call appended a second one, and every sent bubble carried a
+     * duplicate reading stuck on "…". Reading the DOM at the moment of writing
+     * makes the order of those calls irrelevant. */
+    const live = bub.querySelector('.xl')
+    if (live) live.replaceWith(node)
     else bub.appendChild(node)
   }
 
