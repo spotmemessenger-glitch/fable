@@ -1,16 +1,27 @@
-# Deploys straight to Railway/Fly with `git push` — no Kubernetes needed at this scale.
+# The language pipeline lives in web/api/translate.js — tuned against a real
+# Tanglish corpus and verified in the field, so it ships AS-IS rather than
+# being rewritten. It sits outside this build context, which is why translation,
+# TURN credentials and voice cloning all 404'd in production while every local
+# test passed: the files were simply not in the image.
+#
+# `npm run deploy` stages them into .deploy/web-api first. Deploying with a
+# bare `railway up` skips that step, so the staging directory is asserted below
+# and the BUILD fails loudly rather than shipping another silent 404.
 FROM node:22-slim AS build
 WORKDIR /app
 # Prisma's engine links against libssl. node:22-slim (bookworm) ships OpenSSL 3
-# but not the headers Prisma probes for, so detection silently falls back to
-# "openssl-1.1.x" and the container dies at boot with
-# `libssl.so.1.1: cannot open shared object file`. Installing openssl here and
+# but not what Prisma probes for, so detection falls back to "openssl-1.1.x"
+# and the container dies at boot on libssl.so.1.1. Installing openssl here and
 # pinning binaryTargets in schema.prisma are the two halves of the fix.
 RUN apt-get update -y && apt-get install -y --no-install-recommends openssl ca-certificates \
   && rm -rf /var/lib/apt/lists/*
 COPY package.json package-lock.json* ./
 RUN npm install
 COPY . .
+# Fail here, not at runtime: a missing handler directory is invisible until a
+# user's message fails to translate.
+RUN test -f .deploy/web-api/translate.js || \
+  (echo "MISSING .deploy/web-api — run 'npm run deploy', not 'railway up'" && exit 1)
 RUN npx prisma generate
 RUN npm run build
 
@@ -23,9 +34,12 @@ COPY --from=build /app/dist ./dist
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/prisma ./prisma
 COPY --from=build /app/package.json ./package.json
+# The serverless-style handlers, mounted at the same /api/* paths they had on
+# Vercel. WEB_API_DIR tells main.ts where they landed.
+COPY --from=build /app/.deploy/web-api ./web-api
+ENV WEB_API_DIR=/app/web-api
 EXPOSE 4000
 # Migrations run at boot, not by hand: a deploy that ships code expecting a
-# column the database does not have is a broken deploy, and there is no human
-# in the loop here to remember the step. `migrate deploy` only applies
-# committed migrations and is a no-op when there is nothing to do.
+# column the database lacks is a broken deploy, and nobody is watching to
+# remember the step. `migrate deploy` is a no-op when there is nothing to do.
 CMD ["sh", "-c", "npx prisma migrate deploy && node dist/main.js"]

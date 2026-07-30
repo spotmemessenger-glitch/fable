@@ -127,20 +127,52 @@ async function askAnthropic (system, user) {
       'content-type': 'application/json'
     },
     body: JSON.stringify({
-      model: 'claude-sonnet-4-5-20250929',
+      // Unpinned alias on purpose: a dated snapshot goes 404 when it retires,
+      // and this feature failing over a model name is a bad trade for the
+      // reproducibility a pin buys.
+      model: process.env.READ_MODEL || 'claude-sonnet-5',
       max_tokens: 300,
-      temperature: 0,
+      // No `temperature`: current Claude models reject it outright
+      // ("`temperature` is deprecated for this model", HTTP 400), which took
+      // the whole reading layer down. Determinism here comes from the rules in
+      // the system prompt and the pre-filled brace below, not a sampling knob.
       system,
-      // Claude has no JSON response mode, so the reply is steered by
-      // pre-filling the opening brace — it then has nowhere to go but JSON.
-      messages: [{ role: 'user', content: user }, { role: 'assistant', content: '{' }]
+      // No assistant prefill. Steering the reply by pre-filling an opening
+      // brace worked on older models and is rejected outright by current ones
+      // ("This model does not support assistant message prefill", HTTP 400),
+      // which took the reading layer offline. The system prompt already
+      // demands bare JSON; jsonFrom() below handles a stray fence or preamble.
+      messages: [{ role: 'user', content: user }]
     })
   })
   if (!res.ok) throw new Error(`anthropic ${res.status}: ${(await res.text()).slice(0, 200)}`)
   const json = await res.json()
-  const body = json?.content?.[0]?.text
+  // NOT content[0]: current models can emit a reasoning block first, so the
+  // answer is the first block that is actually of type "text". Assuming index
+  // zero returned undefined and read as "anthropic empty" — a working reply,
+  // discarded for looking in the wrong slot.
+  const body = (json?.content || []).find((b) => b?.type === 'text')?.text
   if (!body) throw new Error('anthropic empty')
-  return '{' + body          // put back the brace we pre-filled
+  return body
+}
+
+/**
+ * Pull the JSON object out of a model reply.
+ *
+ * Models occasionally wrap JSON in a ```json fence or a line of preamble. That
+ * is a formatting slip, not a failed answer, and throwing it away would drop a
+ * perfectly good translation.
+ */
+function jsonFrom (raw) {
+  const text = String(raw).trim().replace(/^```(?:json)?/i, '').replace(/```$/, '').trim()
+  try {
+    return JSON.parse(text)
+  } catch {
+    const start = text.indexOf('{')
+    const end = text.lastIndexOf('}')
+    if (start === -1 || end <= start) throw new Error('model did not return JSON')
+    return JSON.parse(text.slice(start, end + 1))
+  }
 }
 
 async function askOpenAI (system, user) {
@@ -232,7 +264,7 @@ async function llmRead (q, hint) {
     }
   }
   if (!raw) throw new Error(failures.join(' | ') || 'no llm provider')
-  const parsed = JSON.parse(raw)
+  const parsed = jsonFrom(raw)
   return {
     lang: String(parsed.lang || '').slice(0, 8),
     script: String(parsed.script || ''),

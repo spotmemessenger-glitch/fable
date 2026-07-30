@@ -17,8 +17,17 @@ const dynamicImport = new Function('p', 'return import(p)') as (p: string) => Pr
  * bridged: the registry now lives in the User table (username.controller.ts).
  */
 async function mountWebApiBridge(app: INestApplication) {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const { json } = require('express') as { json: (o?: unknown) => unknown };
+  // Voice cloning posts audio, so the default 100kb limit is too small.
+  const jsonBody = json({ limit: '8mb' });
   const express = app.getHttpAdapter().getInstance();
-  const apiDir = join(process.cwd(), '..', 'web', 'api');
+  // Overridable because the deployed image lays these out differently from the
+  // repo. Getting this wrong is silent: the handlers simply never mount and
+  // every /api/* call 404s at runtime — which is exactly how translation,
+  // TURN credentials and voice cloning were dead in production while every
+  // local test passed.
+  const apiDir = process.env.WEB_API_DIR || join(process.cwd(), '..', 'web', 'api');
   // `push` is NOT bridged: PushController owns /api/push now. The old handler
   // stored subscriptions in Upstash and had the sender poke the recipient,
   // which the server can do better and more honestly from the event log.
@@ -27,7 +36,11 @@ async function mountWebApiBridge(app: INestApplication) {
       const mod = await dynamicImport(pathToFileURL(join(apiDir, `${name}.js`)).href);
       const handler = mod.default;
       if (typeof handler !== 'function') continue;
-      express.all(`/api/${name}`, (req: unknown, res: { status: (n: number) => { json: (b: unknown) => void } }) => {
+      // These routes are registered before Nest installs its own body parser
+      // (that happens during listen()), and Express runs middleware in
+      // registration order — so without this the handlers see req.body
+      // undefined and answer "need q" to a request that plainly had one.
+      express.all(`/api/${name}`, jsonBody, (req: unknown, res: { status: (n: number) => { json: (b: unknown) => void } }) => {
         Promise.resolve((handler as (rq: unknown, rs: unknown) => unknown)(req, res)).catch((e: unknown) => {
           res.status(500).json({ error: e instanceof Error ? e.message : String(e) });
         });

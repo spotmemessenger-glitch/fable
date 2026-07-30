@@ -1,0 +1,16 @@
+{
+  // `nest build` uses this file when present. It exists to keep the OUTPUT
+  // LAYOUT stable: adding test/*.spec.ts widened TypeScript's inferred root, so
+  // the build started emitting dist/src/main.js instead of dist/main.js — while
+  // the Docker image, which excludes test/, still emitted dist/main.js.
+  //
+  // That divergence is worse than a plain break: `node dist/main.js` failed
+  // locally while production kept working, so local verification silently
+  // stopped testing what actually ships.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "dist"
+  },
+  "exclude": ["node_modules", "dist", "test", "**/*.spec.ts"]
+}
