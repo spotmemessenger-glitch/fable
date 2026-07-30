@@ -1,6 +1,13 @@
 // Spot Me — server-tier backend schema.
 // Design constraint from the compliance review: the server never stores message
 // plaintext or holds any key capable of decrypting it. See README.md.
+//
+// ONE DELIBERATE EXCEPTION (product decision, 2026-07-30): PUBLIC groups store
+// their room key in Group.secretKey so a stranger who finds the group by
+// @username can join instantly. The server can therefore decrypt public-group
+// traffic. DMs and PRIVATE groups are unaffected and remain strictly E2E.
+// This narrows the compliance claim above — it must be re-reviewed before any
+// privacy statement repeats the unqualified version. See docs/GROUPS-BUILD.md.
 
 generator client {
   provider = "prisma-client-js"
@@ -60,6 +67,20 @@ enum Sex {
   UNSPECIFIED
 }
 
+// Ranked: OWNER > ADMIN > MODERATOR > MEMBER. Rank order is enforced in
+// groups.service (canActOn) so nobody can act on a peer or a superior.
+enum GroupRole {
+  OWNER
+  ADMIN
+  MODERATOR
+  MEMBER
+}
+
+enum GroupVisibility {
+  PRIVATE // invite-URL only; key lives in the URL fragment, never sent to the server
+  PUBLIC  // discoverable by @username; server holds the key so joins are instant
+}
+
 model User {
   id            String   @id @default(cuid())
   username      String   @unique
@@ -104,6 +125,8 @@ model User {
   presence         Presence?
   installEvents    InstallEvent[]
   groupsOwned      Group[]           @relation("GroupOwner")
+  groupMemberships GroupMember[]
+  deviceTokens     DeviceToken[]
   stories          Story[]
   storyViews       StoryView[]
 
@@ -185,19 +208,83 @@ model Conversation {
   group        Group?
 }
 
-// Metadata layer on top of a kind:"group" Conversation. Membership itself is
-// just ConversationParticipant rows on that conversation — no separate member
-// table, so the existing chat gateway/history/read-receipt code (which already
-// fans a message out to every participant) works for groups with zero changes.
+// A group rides the room transport: `roomId` is the same opaque id used by
+// RoomEvent (ciphertext) and RoomMember, so message fan-out, history replay and
+// read receipts work unchanged. This row is the metadata + authority layer —
+// roles and permissions are enforced here, server-side, without the server ever
+// needing to read message content.
+//
+// `conversationId` is the migration bridge to the retired /api/groups stack
+// (Conversation + ConversationParticipant). Nullable because groups created
+// after the unification never get one; it exists so ported rows keep their
+// history. Drop it once the mobile/admin surfaces are fully migrated.
 model Group {
-  id             String       @id @default(cuid())
-  name           String
-  avatarUrl      String?
-  ownerId        String
-  owner          User         @relation("GroupOwner", fields: [ownerId], references: [id], onDelete: Cascade)
-  conversationId String       @unique
-  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  createdAt      DateTime     @default(now())
+  id        String  @id @default(cuid())
+  roomId    String  @unique
+  name      String
+  avatarUrl String?
+
+  // Set only for PUBLIC groups, and globally unique against User.username —
+  // see AuthService.usernameCheck, which consults both tables so a group can
+  // never shadow a person (or vice versa).
+  username   String?         @unique
+  visibility GroupVisibility @default(PRIVATE)
+
+  // Room key, PUBLIC groups only. NULL for PRIVATE groups, whose key never
+  // leaves the client. See the exception noted in this file's header.
+  secretKey String?
+
+  ownerId String
+  owner   User   @relation("GroupOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+
+  // Defaults applied to MEMBER-role users. Elevated roles bypass these.
+  membersCanAdd     Boolean @default(true)
+  membersCanMessage Boolean @default(true)
+  membersCanMedia   Boolean @default(true)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  // Soft delete: hidden immediately, purged by the 30-day job in groups.service.
+  deletedAt DateTime?
+
+  members GroupMember[]
+
+  conversationId String?       @unique
+  conversation   Conversation? @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+
+  @@index([deletedAt])
+}
+
+// Membership + role + per-member grants. A row is kept after leaving (leftAt
+// set) so joined/left history survives, which means every lookup must filter
+// on leftAt: null — see GroupsService.requireMember.
+model GroupMember {
+  id      String @id @default(cuid())
+  groupId String
+  group   Group  @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  userId  String
+  user    User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  role GroupRole @default(MEMBER)
+
+  // Granular grants the Owner toggles per Admin/Moderator. All default false:
+  // an elevated role confers nothing until it is explicitly granted.
+  canAddAdmin       Boolean @default(false)
+  canBan            Boolean @default(false)
+  canMute           Boolean @default(false)
+  canRemove         Boolean @default(false)
+  canDeleteMessages Boolean @default(false)
+  canControlInvites Boolean @default(false)
+
+  mutedUntil DateTime?
+  bannedAt   DateTime?
+
+  joinedAt DateTime  @default(now())
+  leftAt   DateTime?
+
+  @@unique([groupId, userId])
+  @@index([userId])
+  @@index([groupId, leftAt])
 }
 
 // 24h-expiry story. Text-only for now: media stories need the R2 upload
@@ -388,6 +475,29 @@ model PushSubscription {
   endpoint   String    @unique
   p256dh     String
   auth       String
+  createdAt  DateTime  @default(now())
+  lastUsedAt DateTime?
+
+  @@index([userId])
+}
+
+// A native app's FCM/APNs registration token.
+//
+// Separate from PushSubscription because the two transports share nothing: Web
+// Push addresses a browser endpoint with its own p256dh/auth keypair, while a
+// native app has an opaque token minted by Google or Apple. They are also NOT
+// interchangeable — Capacitor's Android WebView exposes no PushManager and no
+// Notification API at all (verified on-device), so the packaged app can only
+// ever be reached through this table, and a browser PWA only through the other.
+model DeviceToken {
+  id         String    @id @default(cuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // The natural key: a reinstall mints a new token, and re-registering the same
+  // device must update one row rather than accumulate duplicates that would
+  // each fire the same notification.
+  token      String    @unique
+  platform   String // android | ios
   createdAt  DateTime  @default(now())
   lastUsedAt DateTime?
 

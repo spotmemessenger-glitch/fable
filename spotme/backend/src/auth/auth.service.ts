@@ -133,8 +133,17 @@ export class AuthService {
   }
 
   async usernameCheck(username: string) {
-    const existing = await this.prisma.user.findUnique({ where: { username } });
-    return { available: !existing };
+    // Users and groups share ONE namespace. Checking only User would let a
+    // group claim a name a person already holds (and vice versa), so @name
+    // would no longer identify one thing.
+    const [user, group] = await Promise.all([
+      this.prisma.user.findUnique({ where: { username } }),
+      this.prisma.group.findFirst({
+        where: { username: { equals: username, mode: 'insensitive' }, deletedAt: null },
+        select: { id: true },
+      }),
+    ]);
+    return { available: !user && !group };
   }
 
   /** Prefix search for the inbox @username lookup — public-safe fields only. */
