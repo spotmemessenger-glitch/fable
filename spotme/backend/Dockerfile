@@ -4,9 +4,16 @@
 # TURN credentials and voice cloning all 404'd in production while every local
 # test passed: the files were simply not in the image.
 #
-# `npm run deploy` stages them into .deploy/web-api first. Deploying with a
+# `npm run deploy` stages them into ./deploy-api first. Deploying with a
 # bare `railway up` skips that step, so the staging directory is asserted below
 # and the BUILD fails loudly rather than shipping another silent 404.
+#
+# The staging directory MUST NOT be gitignored. It used to be `.deploy/`, which
+# .gitignore excluded — and `railway up` skips gitignored paths, so the files
+# never reached the build context and EVERY deploy failed on the assert below
+# while Railway quietly kept serving the previous container. A `.railwayignore`
+# does not help: it only adds exclusions, it does not override .gitignore.
+# `deploy-api/` is untracked but not ignored, which is exactly what uploads.
 FROM node:22-slim AS build
 WORKDIR /app
 # Prisma's engine links against libssl. node:22-slim (bookworm) ships OpenSSL 3
@@ -20,8 +27,8 @@ RUN npm install
 COPY . .
 # Fail here, not at runtime: a missing handler directory is invisible until a
 # user's message fails to translate.
-RUN test -f .deploy/web-api/translate.js || \
-  (echo "MISSING .deploy/web-api — run 'npm run deploy', not 'railway up'" && exit 1)
+RUN test -f deploy-api/translate.js || \
+  (echo "MISSING deploy-api — run 'npm run deploy', not 'railway up'" && exit 1)
 RUN npx prisma generate
 RUN npm run build
 
@@ -36,7 +43,7 @@ COPY --from=build /app/prisma ./prisma
 COPY --from=build /app/package.json ./package.json
 # The serverless-style handlers, mounted at the same /api/* paths they had on
 # Vercel. WEB_API_DIR tells main.ts where they landed.
-COPY --from=build /app/.deploy/web-api ./web-api
+COPY --from=build /app/deploy-api ./web-api
 ENV WEB_API_DIR=/app/web-api
 EXPOSE 4000
 # Migrations run at boot, not by hand: a deploy that ships code expecting a
