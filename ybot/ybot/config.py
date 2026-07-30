@@ -36,9 +36,13 @@ class Settings:
     ollama_model: str = os.environ.get("OPERATOR_OLLAMA_MODEL", "gemma4:31b")
     ollama_host: str = os.environ.get("OPERATOR_OLLAMA_HOST", "")
     ollama_api_key: str = os.environ.get("OLLAMA_API_KEY", "")
-    # Computer-use tool version + beta header (verified against Anthropic docs).
-    beta_flag: str = "computer-use-2025-11-24"
-    tool_type: str = "computer_20251124"
+    # Computer-use tool version + beta header. These are the CURRENT pair, but
+    # they are not universal — see computer_tool_for(): the accepted version
+    # depends on the model, and sending the wrong one fails the request outright
+    # rather than degrading. Override both together if a new pairing ships
+    # before this code knows about it.
+    beta_flag: str = os.environ.get("OPERATOR_BETA_FLAG", "computer-use-2025-11-24")
+    tool_type: str = os.environ.get("OPERATOR_TOOL_TYPE", "computer_20251124")
     # Screenshots are downscaled to this width before sending (cost + accuracy).
     target_width: int = int(os.environ.get("OPERATOR_TARGET_WIDTH", "1280"))
     # Sleep pyautogui inserts after EVERY input call. Its own default is 0.1 s, which
@@ -65,3 +69,44 @@ class Settings:
 
 
 SETTINGS = Settings()
+
+
+# --------------------------------------------------------------- tool pairing
+#
+# The computer-use tool is versioned, and a model only accepts the version it
+# shipped with. Send the wrong one and the API rejects the request:
+#
+#   400 'claude-sonnet-4-5-20250929' does not support tool types:
+#       computer_20251124
+#
+# That is a hard failure on EVERY step, not a degraded run, so the version has
+# to follow the model rather than sit in one global constant. The newer tool
+# arrived with Opus 4.5; note that "sonnet-4-5" is older than "opus-4-5"
+# despite the matching number, which is exactly the trap a version-number
+# comparison would fall into — hence explicit prefixes.
+NEW_TOOL = ("computer_20251124", "computer-use-2025-11-24")
+LEGACY_TOOL = ("computer_20250124", "computer-use-2025-01-24")
+
+_NEW_TOOL_PREFIXES = (
+    "claude-opus-4-5", "claude-opus-4-6", "claude-opus-4-7", "claude-opus-4-8",
+    "claude-opus-5", "claude-sonnet-5", "claude-haiku-5",
+    "claude-fable-5", "claude-mythos-5",
+)
+
+
+def computer_tool_for(model: str) -> tuple[str, str]:
+    """(tool_type, beta_flag) the given model will actually accept.
+
+    Explicit env overrides win — a new pairing can ship before this list knows
+    about it, and being stuck behind a hardcoded guess is what caused the
+    original outage.
+    """
+    if os.environ.get("OPERATOR_TOOL_TYPE") and os.environ.get("OPERATOR_BETA_FLAG"):
+        return SETTINGS.tool_type, SETTINGS.beta_flag
+    name = (model or "").lower()
+    return NEW_TOOL if name.startswith(_NEW_TOOL_PREFIXES) else LEGACY_TOOL
+
+
+def other_tool_version(tool_type: str) -> tuple[str, str]:
+    """The opposite pairing, for the retry after a version rejection."""
+    return LEGACY_TOOL if tool_type == NEW_TOOL[0] else NEW_TOOL

@@ -15,7 +15,7 @@ from typing import Callable
 from anthropic import Anthropic
 
 from . import actions
-from .config import SETTINGS
+from .config import SETTINGS, computer_tool_for, other_tool_version
 from .guard import evaluate
 from .killswitch import KillSwitch
 from .screen import Frame, Screen
@@ -179,6 +179,9 @@ class Operator:
         self.approver = approver
         self.should_stop = should_stop or (lambda: False)
         self.model = model or SETTINGS.model
+        # The computer-use tool version this model actually accepts. Wrong
+        # version = every step 400s, so it is derived per model, not global.
+        self.tool_type, self.beta_flag = computer_tool_for(self.model)
         self.system = SYSTEM_PROMPT + _env_hint()
         client_kw = {"api_key": SETTINGS.api_key}
         if SETTINGS.anthropic_base_url:          # e.g. ZenMux gateway
@@ -192,7 +195,7 @@ class Operator:
     def _tools(self) -> list[dict]:
         sw, sh = self.screen.sent_size()
         computer = {
-            "type": SETTINGS.tool_type,
+            "type": self.tool_type,
             "name": "computer",
             "display_width_px": sw,
             "display_height_px": sh,
@@ -203,21 +206,49 @@ class Operator:
         batch = dict(BATCH_TOOL, cache_control={"type": "ephemeral"})
         return [computer, UI_INSPECT_TOOL, UI_CLICK_TOOL, batch]
 
+    def _create(self, messages: list[dict]):
+        """One model call, with a self-correcting retry on tool-version rejection.
+
+        computer_tool_for() knows the pairings that exist today; a model released
+        after this code was written can still be refused. Rather than dying on
+        every step — which is what a hardcoded version did — flip to the other
+        version once, keep it for the rest of the run, and say so.
+        """
+        try:
+            return self.client.beta.messages.create(
+                model=self.model,
+                max_tokens=SETTINGS.max_tokens,
+                system=self.system,
+                tools=self._tools(),
+                betas=[self.beta_flag],
+                messages=messages,
+                timeout=120,  # never let one step hang the whole assistant
+            )
+        except Exception as exc:
+            if "does not support tool types" not in str(exc):
+                raise
+            self.tool_type, self.beta_flag = other_tool_version(self.tool_type)
+            print(
+                f"[operator] {self.model} rejected that computer-use version; "
+                f"retrying with {self.tool_type}"
+            )
+            return self.client.beta.messages.create(
+                model=self.model,
+                max_tokens=SETTINGS.max_tokens,
+                system=self.system,
+                tools=self._tools(),
+                betas=[self.beta_flag],
+                messages=messages,
+                timeout=120,
+            )
+
     def run(self, goal: str) -> str:
         messages: list[dict] = [{"role": "user", "content": goal}]
         for _ in range(SETTINGS.max_steps):
             self.kill.check()
             if self.should_stop():
                 return "(stopped by user)"
-            resp = self.client.beta.messages.create(
-                model=self.model,
-                max_tokens=SETTINGS.max_tokens,
-                system=self.system,
-                tools=self._tools(),
-                betas=[SETTINGS.beta_flag],
-                messages=messages,
-                timeout=120,  # never let one step hang the whole assistant
-            )
+            resp = self._create(messages)
             messages.append(
                 {"role": "assistant", "content": [b.model_dump() for b in resp.content]}
             )
