@@ -379,7 +379,31 @@
 
 .v-chat .wave i.played { background: var(--blue); }
 
-.v-chat .vdur { flex: none; }
+/* The waveform IS the seek bar. touch-action:none so dragging along it
+ * scrubs instead of scrolling the thread away under the finger. */
+.v-chat .wave {
+  cursor: pointer;
+  touch-action: none;
+  /* A 28px strip is a hard target mid-conversation; the padding widens the
+   * hit area without moving a single bar. */
+  padding: 6px 0;
+  margin: -6px 0;
+}
+
+.v-chat .wave:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
+.v-chat .vdur { flex: none; font-variant-numeric: tabular-nums; }
+
+/* The loading percentage sits exactly where the duration does, so the row
+ * never jumps when it resolves. */
+.v-chat .vdur.loading {
+  color: var(--blue);
+  font-weight: 650;
+}
 
 .v-chat .file {
   display: flex;

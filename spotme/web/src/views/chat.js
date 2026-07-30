@@ -1009,28 +1009,63 @@ export function render (root, ctx, roomId) {
    * (unsupported codec, blocked AudioContext) the plain player still works.
    */
   function buildVoice (m) {
-    const audio = el('audio', { src: m.data, preload: 'metadata' })
+    /* 'auto', not 'metadata': the note is already on the device or already
+     * arriving, and asking only for metadata is what left the element with no
+     * audio to play — the first tap ran a source that had no samples yet, so
+     * it appeared to play in silence, and only the second tap (by which time
+     * the bytes had landed) made a sound. */
+    const audio = el('audio', { src: m.data, preload: 'auto' })
     const btn = el('button', { class: 'vplay', type: 'button', 'aria-label': 'Play voice note', html: IC.play })
     const durEl = el('span', { class: 'vdur', text: `${m.dur || 0}s` })
-    const wrap = el('div', { class: 'voice' }, [btn, durEl, audio])
+    /* Built up front rather than when the peaks finish decoding, so the bar is
+     * seekable immediately and the row never reflows under the finger. */
+    const wave = el('div', { class: 'wave', role: 'slider', tabindex: '0',
+      'aria-label': 'Seek', 'aria-valuemin': '0', 'aria-valuemax': '100', 'aria-valuenow': '0' })
+    const wrap = el('div', { class: 'voice' }, [btn, wave, durEl, audio])
 
     let bars = null
     let clipDur = m.dur || 0
     let raf = 0
     let analyser = null
     let ampBuf = null
+    let wantPlay = false      // tapped play before there was anything to play
 
     decodePeaks(m).then((decoded) => {
       if (!mounted || !decoded) return
       clipDur = decoded.duration || clipDur
-      const wave = el('div', { class: 'wave', 'aria-hidden': 'true' })
       bars = decoded.peaks.map((p) => {
         const bar = el('i', { style: `height:${Math.round(4 + p * 18)}px` })
         wave.appendChild(bar)
         return bar
       })
-      wrap.insertBefore(wave, durEl)
+      paintBars()
     })
+
+    /* ------------------------------------------------------- readiness */
+
+    /** Enough decoded to make sound. readyState 2 = HAVE_CURRENT_DATA. */
+    const ready = () => audio.readyState >= 2
+
+    /** How much has actually arrived, 0..1 — what the percentage reports. */
+    function loadedFrac () {
+      try {
+        const total = effDur()
+        if (!audio.buffered.length || !total) return 0
+        return Math.min(1, audio.buffered.end(audio.buffered.length - 1) / total)
+      } catch { return 0 }
+    }
+
+    function showLoading () {
+      const pct = Math.round(loadedFrac() * 100)
+      // A percentage that says nothing is worse than a plain word.
+      durEl.textContent = pct > 0 ? `${pct}%` : 'Loading…'
+      durEl.classList.add('loading')
+    }
+
+    function showDuration () {
+      durEl.classList.remove('loading')
+      durEl.textContent = `${Math.round(effDur())}s`
+    }
 
     const effDur = () => (Number.isFinite(audio.duration) && audio.duration) || clipDur || 1
 
@@ -1056,8 +1091,9 @@ export function render (root, ctx, roomId) {
     }
 
     function paintBars (finalFrac) {
-      if (!bars) return
       const frac = finalFrac !== undefined ? finalFrac : Math.min(1, audio.currentTime / effDur())
+      wave.setAttribute('aria-valuenow', String(Math.round((frac || 0) * 100)))
+      if (!bars) return
       const playPos = frac * bars.length
       let amp = 0
       if (analyser && !audio.paused) {
@@ -1087,11 +1123,77 @@ export function render (root, ctx, roomId) {
     const stopAll = () => { stopLoop(); try { audio.pause() } catch { /* detached */ } }
     voiceStops.add(stopAll)
 
+    /** Start now if we can, otherwise remember the intent and start the moment
+     *  there is audio. Either way the FIRST tap is the one that plays. */
+    function start () {
+      setupAnalyser()
+      if (!ready()) {
+        wantPlay = true
+        showLoading()
+        try { audio.load() } catch { /* already loading */ }
+        return
+      }
+      wantPlay = false
+      audio.play().catch(() => {
+        wantPlay = false
+        showDuration()
+        ctx.toast('Could not play this voice note')
+      })
+    }
+
     btn.addEventListener('click', () => {
-      if (audio.paused) {
-        setupAnalyser()
-        audio.play().catch(() => ctx.toast('Could not play this voice note'))
-      } else audio.pause()
+      if (audio.paused) start()
+      else { wantPlay = false; audio.pause() }
+    })
+
+    // Progress while the bytes land, and the deferred start once they have.
+    audio.addEventListener('progress', () => { if (wantPlay) showLoading() })
+    audio.addEventListener('canplay', () => {
+      if (!wantPlay) return
+      wantPlay = false
+      showDuration()
+      audio.play().catch(() => ctx.toast('Could not play this voice note'))
+    })
+    audio.addEventListener('loadedmetadata', () => { if (!wantPlay) showDuration(); paintBars() })
+    audio.addEventListener('error', () => {
+      wantPlay = false
+      durEl.classList.remove('loading')
+      durEl.textContent = 'Unavailable'
+    })
+
+    /* ------------------------------------------------------------ seek */
+
+    /** Fraction of the way across the bar for a pointer at clientX. */
+    function fracAt (clientX) {
+      const rect = wave.getBoundingClientRect()
+      if (!rect.width) return 0
+      return Math.min(1, Math.max(0, (clientX - rect.left) / rect.width))
+    }
+
+    function seekTo (frac) {
+      const target = frac * effDur()
+      if (!Number.isFinite(target)) return
+      try { audio.currentTime = target } catch { /* not seekable yet */ }
+      paintBars(frac)
+      wave.setAttribute('aria-valuenow', String(Math.round(frac * 100)))
+    }
+
+    let scrubbing = false
+    wave.addEventListener('pointerdown', (e) => {
+      scrubbing = true
+      wave.setPointerCapture?.(e.pointerId)
+      seekTo(fracAt(e.clientX))
+    })
+    wave.addEventListener('pointermove', (e) => { if (scrubbing) seekTo(fracAt(e.clientX)) })
+    const endScrub = () => { scrubbing = false }
+    wave.addEventListener('pointerup', endScrub)
+    wave.addEventListener('pointercancel', endScrub)
+    // Keyboard seeking, since the bar is a real slider.
+    wave.addEventListener('keydown', (e) => {
+      const step = 5 / effDur()
+      if (e.key === 'ArrowRight') { seekTo(Math.min(1, audio.currentTime / effDur() + step)); e.preventDefault() }
+      else if (e.key === 'ArrowLeft') { seekTo(Math.max(0, audio.currentTime / effDur() - step)); e.preventDefault() }
+      else if (e.key === ' ' || e.key === 'Enter') { audio.paused ? start() : audio.pause(); e.preventDefault() }
     })
     audio.addEventListener('play', () => {
       btn.innerHTML = IC.pause
