@@ -35,6 +35,11 @@ import { db } from './db.js'
 
 import { API_BASE as SERVER } from './api.js'
 const TOKEN_KEY = 'spotme.server.tokens'
+
+/* Reported at auth so the install table can answer "which build is out there".
+ * Kept literal rather than imported from package.json: a JSON import would pull
+ * the whole manifest into the bundle to read one string. */
+const APP_VERSION = '1.0.0'
 const CURSOR_PREFIX = 'spotme.cursor.'
 const ACK_TIMEOUT_MS = 15_000
 const KEY_ITERATIONS = 60_000
@@ -164,7 +169,13 @@ async function guestAuth () {
     id: me.id,
     username,
     name: me.name || undefined,
-    secret: me.claimSecret || `anon_${me.id}`
+    secret: me.claimSecret || `anon_${me.id}`,
+    // Install telemetry. Without this the server counts sessions but has no
+    // idea what they run on, so "how many phones is this installed on?" has no
+    // answer — which is exactly where we were. Capacitor reports 'android' or
+    // 'ios' inside the packaged app and 'web' in a browser tab.
+    platform: globalThis.Capacitor?.getPlatform?.() || 'web',
+    appVersion: APP_VERSION
   }
   let res = await fetch(`${SERVER}/api/auth/guest`, {
     method: 'POST',

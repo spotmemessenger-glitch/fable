@@ -103,7 +103,49 @@ export class AuthService {
    * no accounts — its device-generated id + claimed username ARE the identity,
    * and the claim secret's hash proves later calls come from the same device.
    */
-  async guestAuth(id: string, username: string, name?: string, secret?: string, publicKey?: string) {
+  /**
+   * Record that a device exists, and that it opened the app for the first time.
+   *
+   * Guest auth is the one call every client makes on every launch, web or
+   * native, so it is the only place that sees all of them. Nothing wrote Device
+   * or InstallEvent before this, which is why "how many phones is the app on?"
+   * had no answer: 228 sessions had been minted and not one recorded what it
+   * came from.
+   *
+   * Telemetry must never cost someone a login, so every failure here is
+   * swallowed — a missing row is a worse metric, not a broken app.
+   */
+  private async trackDevice(userId: string, platform?: string, appVersion?: string) {
+    const plat = platform ?? 'unknown';
+    try {
+      // One row per (user, platform). A guest identity already lives in a
+      // single device's storage, so that pair is effectively the device.
+      const existing = await this.prisma.device.findFirst({ where: { userId, platform: plat } });
+      if (existing) {
+        await this.prisma.device.update({
+          where: { id: existing.id },
+          data: { lastSeenAt: new Date(), appVersion: appVersion ?? existing.appVersion },
+        });
+        return;
+      }
+      await this.prisma.device.create({ data: { userId, platform: plat, appVersion } });
+      await this.prisma.installEvent.create({
+        data: { userId, kind: 'first_open', platform: plat },
+      });
+    } catch {
+      /* metrics are not worth an auth failure */
+    }
+  }
+
+  async guestAuth(
+    id: string,
+    username: string,
+    name?: string,
+    secret?: string,
+    publicKey?: string,
+    platform?: string,
+    appVersion?: string,
+  ) {
     const secretHash = secret ? hash(secret) : null;
     const existing = await this.prisma.user.findUnique({ where: { id } });
     if (existing) {
@@ -121,6 +163,7 @@ export class AuthService {
         await this.prisma.user.update({ where: { id }, data: updates });
       }
       const tokens = await this.issueTokens(existing.id, existing.role, undefined);
+      await this.trackDevice(existing.id, platform, appVersion);
       return { ...tokens, userId: existing.id, username: updates.username || existing.username };
     }
     const taken = await this.prisma.user.findUnique({ where: { username } });
@@ -129,6 +172,7 @@ export class AuthService {
       data: { id, username, name, claimSecretHash: secretHash, publicKey, role: Role.USER },
     });
     const tokens = await this.issueTokens(user.id, user.role, undefined);
+    await this.trackDevice(user.id, platform, appVersion);
     return { ...tokens, userId: user.id, username: user.username };
   }
 

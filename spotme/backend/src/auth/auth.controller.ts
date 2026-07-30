@@ -14,7 +14,15 @@ export class AuthController {
   /** No-account identity for the web client: create-or-reauth in one call. */
   @Post('guest')
   guest(@Body() dto: GuestAuthDto) {
-    return this.auth.guestAuth(dto.id, dto.username, dto.name, dto.secret, dto.publicKey);
+    return this.auth.guestAuth(
+      dto.id,
+      dto.username,
+      dto.name,
+      dto.secret,
+      dto.publicKey,
+      dto.platform,
+      dto.appVersion,
+    );
   }
 
   @Post('otp/request')

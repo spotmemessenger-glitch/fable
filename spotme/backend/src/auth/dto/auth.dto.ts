@@ -40,6 +40,17 @@ export class GuestAuthDto {
   @IsString()
   @Length(1, 512)
   publicKey?: string;
+
+  // Install telemetry. Optional so older clients keep authenticating unchanged;
+  // one that omits them is still counted, just with an unknown platform.
+  @IsOptional()
+  @IsIn(['web', 'android', 'ios'])
+  platform?: string;
+
+  @IsOptional()
+  @IsString()
+  @Length(1, 32)
+  appVersion?: string;
 }
 
 export class RequestOtpDto {
