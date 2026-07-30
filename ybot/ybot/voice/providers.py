@@ -8,6 +8,8 @@ touching the pipeline. Selection is by name via env vars:
 """
 from __future__ import annotations
 
+import base64
+import json
 import os
 from typing import Callable, Iterator, Protocol, runtime_checkable
 
@@ -163,16 +165,67 @@ def _eleven() -> TTSProvider:
                 headers={"xi-api-key": self._key},
             )
 
-        def stream(self, text: str, style: "SpeakingStyle") -> Iterator[np.ndarray]:
-            if not text.strip():
-                return
+        def _settings(self, style: "SpeakingStyle") -> dict:
             # SpeakingStyle is provider-agnostic; map what ElevenLabs accepts and
             # ignore the rest (pitch/pause are Piper-side concepts).
-            settings = {
+            return {
                 "stability": max(0.0, min(1.0, 0.5 / max(style.energy, 0.1))),
                 "similarity_boost": 0.75,
                 "speed": max(0.7, min(1.2, 1.0 / max(style.length_scale, 0.1))),
             }
+
+        def speak_with_visemes(self, text: str, style: "SpeakingStyle"):
+            """Audio plus the mouth track, from ONE synthesis call.
+
+            The avatar's lips are driven by per-character timings the API
+            returns alongside the audio. Asking for them separately would mean
+            synthesising twice — different audio, timings that describe the
+            take you are NOT playing, and lips that drift. So they come back
+            together or not at all.
+
+            Returns (audio, frames): the whole utterance as one array, and the
+            viseme track. This path buffers deliberately, unlike stream():
+            the mouth cannot start before the timings exist.
+            """
+            from .viseme import track as viseme_track
+
+            if not text.strip():
+                return np.zeros(0, dtype=np.float32), []
+            url = (f"{ELEVEN_API}/text-to-speech/{ELEVEN_VOICE}/stream/with-timestamps"
+                   "?output_format=pcm_16000")
+            body = {"text": text, "model_id": ELEVEN_TTS_MODEL,
+                    "voice_settings": self._settings(style)}
+            chunks: list[np.ndarray] = []
+            chars: list[str] = []
+            starts: list[float] = []
+            with self._http.stream("POST", url, json=body) as resp:
+                if resp.status_code != 200:
+                    raise RuntimeError(
+                        f"elevenlabs tts {resp.status_code}: {resp.read()[:200]!r}")
+                for line in resp.iter_lines():
+                    if not line.strip():
+                        continue
+                    frame = json.loads(line)
+                    if frame.get("audio_base64"):
+                        raw = base64.b64decode(frame["audio_base64"])
+                        usable = len(raw) - (len(raw) % 2)
+                        if usable:
+                            chunks.append(
+                                np.frombuffer(raw[:usable], dtype=np.int16)
+                                .astype(np.float32) / 32768.0
+                            )
+                    align = frame.get("alignment") or frame.get("normalized_alignment")
+                    if align:
+                        chars.extend(align["characters"])
+                        starts.extend(align["character_start_times_seconds"])
+            audio = np.concatenate(chunks) if chunks else np.zeros(0, dtype=np.float32)
+            frames = viseme_track(chars, starts, total_s=audio.size / SAMPLE_RATE)
+            return audio, frames
+
+        def stream(self, text: str, style: "SpeakingStyle") -> Iterator[np.ndarray]:
+            if not text.strip():
+                return
+            settings = self._settings(style)
             url = f"{ELEVEN_API}/text-to-speech/{ELEVEN_VOICE}/stream?output_format=pcm_16000"
             body = {"text": text, "model_id": ELEVEN_TTS_MODEL, "voice_settings": settings}
             tail = b""

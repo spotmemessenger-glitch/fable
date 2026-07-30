@@ -175,7 +175,25 @@ class VoiceService:
 
         def _play() -> None:
             try:
-                finished = self.speaker.play(self.tts().stream(text, st))
+                tts = self.tts()
+                # The avatar needs the mouth track and the audio to come from
+                # the same synthesis, or its lips describe a take that is not
+                # playing. Providers that cannot do both fall back to audio
+                # alone — the face simply stays still rather than lying.
+                with_visemes = getattr(tts, "speak_with_visemes", None)
+                if with_visemes is not None:
+                    audio, frames = with_visemes(text, st)
+                    # Emitted immediately before the first sample leaves, so the
+                    # renderer starts its clock with the speaker's.
+                    self._emit({
+                        "type": "speak",
+                        "text": text,
+                        "visemes": [f.as_dict() for f in frames],
+                    })
+                    finished = self.speaker.play([audio])
+                else:
+                    self._emit({"type": "speak", "text": text, "visemes": []})
+                    finished = self.speaker.play(tts.stream(text, st))
                 if not finished:
                     self._emit({"type": "interrupted", "text": text})
             except Exception as exc:                  # noqa: BLE001

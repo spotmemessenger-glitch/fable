@@ -170,6 +170,57 @@ function setState (name) {
   els.state.textContent = face.state
 }
 
+/**
+ * Follow ybot's voice service through the relay.
+ *
+ * EventSource reconnects on its own, which is the behaviour wanted here: the
+ * voice service starts and stops independently of this window, and a face that
+ * froze permanently the first time it did would be worse than useless.
+ */
+function connectEvents () {
+  let source
+  try {
+    source = new EventSource('/events')
+  } catch {
+    els.detail.textContent += ' · offline'
+    return                       // opened as a file:// URL; harness use only
+  }
+
+  source.onmessage = (msg) => {
+    let ev
+    try { ev = JSON.parse(msg.data) } catch { return }
+    switch (ev.type) {
+      case 'speak':
+        // The track and the audio came from one synthesis call, so starting
+        // the clock here keeps the lips on the words.
+        if (ev.visemes && ev.visemes.length) window.__avatar.say(ev.visemes)
+        else setState('speaking')
+        break
+      case 'interrupted':
+      case 'barge_in':
+        window.__avatar.stop()          // mouth shuts the moment you cut in
+        setState('listening')
+        break
+      case 'transcript':
+        setState('thinking')            // heard you; working out the answer
+        break
+      case 'reply':
+        break                           // 'speak' drives the mouth, not this
+      case 'state':
+        setState(ev.text)
+        break
+      case 'error':
+        setState('error')
+        els.err.textContent = ev.text || ''
+        break
+      case 'link':
+        els.detail.textContent = `${VISEMES.filter(hasMorph).length}/15 visemes · ${ev.text}`
+        break
+    }
+  }
+  source.onerror = () => { els.detail.textContent += '' }   // retries on its own
+}
+
 new GLTFLoader().load('./avatar.glb', (gltf) => {
   model = gltf.scene
   scene.add(model)
@@ -228,6 +279,7 @@ new GLTFLoader().load('./avatar.glb', (gltf) => {
       speaking: !!face.track,
     }),
   }
+  connectEvents()
   animate()
 }, undefined, (err) => {
   els.err.textContent = `could not load avatar.glb — ${err?.message || err}`
