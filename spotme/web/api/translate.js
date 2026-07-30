@@ -829,7 +829,10 @@ export default async function handler (req, res) {
      * needed. Ask only when we have nothing better — a declared source or a
      * non-English target already decide it — so genuinely English chatter
      * still costs one detect and stays on the single-engine path. */
-    if (!indic && !from && sarvamCode(target) === 'en-IN') {
+    // `/\p{L}/` because an emoji-only or digits-only message ("😂😂😂", "12345")
+    // is a real and frequent message on a chat app, has no language to detect,
+    // and would otherwise pay for a detect call to be handed straight back.
+    if (!indic && !from && sarvamCode(target) === 'en-IN' && /\p{L}/u.test(q)) {
       try {
         const hit = await azureDetect(q)
         const base = String(hit?.language || '').split('-')[0].toLowerCase()
