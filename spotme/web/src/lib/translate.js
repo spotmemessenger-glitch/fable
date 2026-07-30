@@ -119,6 +119,55 @@ async function fetchJson (url, timeoutMs = 8000) {
 }
 
 import { API_BASE } from './api.js'
+import { freshTokens } from './socket-transport.js'
+
+/**
+ * Every /api/translate call carries the same short-lived access token the room
+ * socket and the groups API already use.
+ *
+ * The endpoint proxies Anthropic, OpenAI, Gemini, Sarvam, Azure and Google, and
+ * until now it was open to the internet with `ACAO: *` — the URL is in this
+ * bundle, so anyone reading it could spend the owner's vendor credit. The token
+ * is taken from socket-transport rather than minted here for the same reason
+ * groups-api.js does it: two auth paths means two caches and two expiry clocks.
+ *
+ * The timeout is the important part. `freshTokens()` waits for onboarding to
+ * produce a profile and will happily wait forever (socket-transport.js:163-166),
+ * and the AbortController below only covers the fetch — so without this race a
+ * pre-onboarding translate would hang rather than fail. Going out unauthenticated
+ * earns a clean 401, which every caller here already treats as "try the next
+ * engine".
+ */
+const TOKEN_WAIT_MS = 4000
+
+async function authHeaders () {
+  const headers = { 'content-type': 'application/json' }
+  try {
+    const { accessToken } = await Promise.race([
+      freshTokens(),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('no token yet')), TOKEN_WAIT_MS))
+    ])
+    if (accessToken) headers.authorization = `Bearer ${accessToken}`
+  } catch { /* unauthenticated attempt; the caller falls back on 401 */ }
+  return headers
+}
+
+/** POST to the proxy, authenticated, with a hard deadline. */
+async function postTranslate (query, body, timeoutMs) {
+  const controller = new AbortController()
+  const headers = await authHeaders()
+  const abortTimer = setTimeout(() => controller.abort(), timeoutMs)
+  try {
+    return await fetch(`${API_BASE}/api/translate${query}`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(body),
+      signal: controller.signal
+    })
+  } finally {
+    clearTimeout(abortTimer)
+  }
+}
 
 /**
  * Cloud fallback, tried in quality order:
@@ -131,15 +180,7 @@ async function cloudTranslate (text, from, to) {
   const clipped = text.slice(0, 480)
 
   try {
-    const controller = new AbortController()
-    const abortTimer = setTimeout(() => controller.abort(), 8000)
-    const res = await fetch(`${API_BASE}/api/translate`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ q: clipped, source: from || undefined, target: to }),
-      signal: controller.signal
-    })
-    clearTimeout(abortTimer)
+    const res = await postTranslate('', { q: clipped, source: from || undefined, target: to }, 8000)
     if (res.ok) {
       const j = await res.json()
       if (j?.text) return { text: j.text, detected: j.detected || from || null }
@@ -261,15 +302,7 @@ export async function readMessage (text, hint) {
   const key = `${hint || ''}|${q}`
   if (readCache.has(key)) return readCache.get(key)
   try {
-    const controller = new AbortController()
-    const abortTimer = setTimeout(() => controller.abort(), 8000)
-    const res = await fetch(`${API_BASE}/api/translate?op=read`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ q, hint: hint || '' }),
-      signal: controller.signal
-    })
-    clearTimeout(abortTimer)
+    const res = await postTranslate('?op=read', { q, hint: hint || '' }, 8000)
     if (!res.ok) return null
     const json = await res.json()
     if (!json?.lang) return null
@@ -294,15 +327,7 @@ export async function detectLanguage (text) {
   if (q.length < 2) return null
   if (detectCache.has(q)) return detectCache.get(q)
   try {
-    const controller = new AbortController()
-    const abortTimer = setTimeout(() => controller.abort(), 6000)
-    const res = await fetch(`${API_BASE}/api/translate?op=detect`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ q }),
-      signal: controller.signal
-    })
-    clearTimeout(abortTimer)
+    const res = await postTranslate('?op=detect', { q }, 6000)
     if (!res.ok) return null
     const json = await res.json()
     if (!json?.language) return null
@@ -334,15 +359,9 @@ export async function transliterateRemote (text, lang, opts = {}) {
   const key = `${lang}|${fromScript}>${toScript}|${text}`
   if (translitCache.has(key)) return translitCache.get(key)
   try {
-    const controller = new AbortController()
-    const abortTimer = setTimeout(() => controller.abort(), 6000)
-    const res = await fetch(`${API_BASE}/api/translate?op=translit`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ q: text.slice(0, 480), lang, toScript, fromScript }),
-      signal: controller.signal
-    })
-    clearTimeout(abortTimer)
+    const res = await postTranslate(
+      '?op=translit', { q: text.slice(0, 480), lang, toScript, fromScript }, 6000
+    )
     if (!res.ok) return null
     const j = await res.json()
     const out = j?.text || null
@@ -367,11 +386,9 @@ export function warmup (myLang, peerLang) {
   }
   if (warmed) return
   warmed = true
-  fetch(`${API_BASE}/api/translate`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ q: 'hi', target: peerLang && peerLang !== myLang ? peerLang : 'es', source: 'en' })
-  }).catch(() => {})
+  postTranslate(
+    '', { q: 'hi', target: peerLang && peerLang !== myLang ? peerLang : 'es', source: 'en' }, 8000
+  ).catch(() => {})
 }
 
 /** Read a message aloud in the listener's language via the Web Speech API. */
