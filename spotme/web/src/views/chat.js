@@ -810,7 +810,19 @@ export function render (root, ctx, roomId) {
     if (onEarly && known && hasLocalScript(known) && isLatinScript(text)) {
       try {
         const local = transliterate(text, known)
-        if (local && local !== text) onEarly({ lang: known, script: local, text: '', rank: 1 })
+        /* The engine converts whatever it is handed — it has no idea whether
+         * the words were ever Indic. "Netflix and chill" came back as
+         * "ணெட்fலிx அந்ட் சில்ல்" and was painted instantly, labelled
+         * "Tamil · Transliterated", because this stage is the fastest and most
+         * confident one in the UI.
+         *
+         * Leftover ASCII letters are the tell: Tamil has no f/x/z, so a real
+         * transliteration consumes every Latin letter. Anything left behind
+         * means the input was not the language we assumed, and the honest
+         * move is to show nothing and let the network stages decide. */
+        if (local && local !== text && !/[a-z]/i.test(local)) {
+          onEarly({ lang: known, script: local, text: '', rank: 1 })
+        }
       } catch { /* the network stages still cover it */ }
     }
 
@@ -943,8 +955,23 @@ export function render (root, ctx, roomId) {
         applyXlit(m)
         if (stick) scrollBottom()
       })
-        .then((res) => { xlitCache.set(m.id, res) })
-        .catch(() => { xlitCache.set(m.id, null) })
+        .then((res) => {
+          /* The final answer must not be strictly worse than what is already
+           * on screen. Setting this unconditionally meant a null result — both
+           * network stages failing — ERASED the good instant reading seconds
+           * after it appeared, and an LLM answer carrying no script line
+           * deleted the script the classic chain had already produced.
+           * Nothing here may take information away. */
+          const cur = xlitCache.get(m.id)
+          const showing = cur && cur !== 'pending' ? cur : null
+          if (!res) { if (!showing) xlitCache.set(m.id, null); return }
+          xlitCache.set(m.id, {
+            ...res,
+            script: res.script || showing?.script || null,
+            rank: 9
+          })
+        })
+        .catch(() => { if (xlitCache.get(m.id) === 'pending') xlitCache.set(m.id, null) })
         .then(() => {
           if (!mounted) return
           const stick = nearBottom()
