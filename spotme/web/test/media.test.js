@@ -183,6 +183,31 @@ async function main () {
   check('a failed transfer is not marked delivered', msg(doomed.id)?.delivered !== true)
   check('a failed transfer is marked failed', msg(doomed.id)?.failed === true)
 
+  /* ----------------------------------------------------------------- 4b */
+  /* "Not delivered" used to be terminal. A socket blip 150ms into a 37-slice
+   * voice note set failed:true at 221ms, and from there the only remedy the
+   * app offered was to record the whole thing again — while the bytes sat
+   * untouched in the local store the entire time. Retry pushes them again. */
+  actions.bin.sends.length = 0
+  const retryProgress = []
+  const accepted = rooms.retryAttachment(ROOM, doomed.id, (p) => retryProgress.push(p))
+  check('a failed attachment can be retried', accepted === true)
+  check('retrying clears the failure while it is back in flight',
+    msg(doomed.id)?.failed === false)
+  await settle()
+  check('the retry actually puts the bytes back on the wire', actions.bin.sends.length === 1)
+  check('the retried slice carries the original message id',
+    actions.bin.sends[0]?.metadata?.id === doomed.id)
+  check('a retry in flight is still not delivered', msg(doomed.id)?.delivered !== true)
+
+  actions.binack.onMessage({ id: doomed.id }, { peerId: 'bob-transport' })
+  await settle()
+  check('a retry that lands is delivered', msg(doomed.id)?.delivered === true)
+  check('a retry that lands leaves nothing marked failed', msg(doomed.id)?.failed === false)
+  check('the retry reports completion to its caller', retryProgress.at(-1) === 1)
+  check('there is nothing to retry for a message this device does not hold',
+    rooms.retryAttachment(ROOM, 'no-such-message') === false)
+
   /* ------------------------------------------------------------------ 5 */
   /* Incoming: slices arriving out of order still reassemble, the sender is
    * acknowledged, and the photo lands byte-exact. */
