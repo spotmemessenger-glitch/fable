@@ -611,9 +611,22 @@ export default async function handler (req, res) {
     // exactly those, and this app's traffic is mostly Indic. It is skipped
     // silently for pairs it does not speak (sarvamCode returns undefined and
     // the attempt throws), so a French message still goes to Google/Azure.
-    const indic = sarvamCode(target) && sarvamCode(target) !== 'en-IN'
-      ? true
-      : Boolean(source && sarvamCode(source) && sarvamCode(source) !== 'en-IN')
+    /* Whether the Indic specialist and the cross-confirmation should run.
+     *
+     * This used to consider only the TARGET, plus a source if the caller
+     * happened to supply one — so translating INTO English (which is what
+     * reading an incoming message is) took neither path. A single general
+     * engine then detected "நான் வருவேன்" as English and returned it
+     * unchanged: the message a user most needs translated was the one case
+     * that silently did nothing.
+     *
+     * Non-Latin characters in the text are decisive on their own. No source
+     * declaration is needed to see that a message is written in an Indic
+     * script. */
+    const hasIndicScript = /[ऀ-෿]/.test(q)
+    const indic = (sarvamCode(target) && sarvamCode(target) !== 'en-IN') ||
+      Boolean(source && sarvamCode(source) && sarvamCode(source) !== 'en-IN') ||
+      hasIndicScript
     const engines = source
       ? [() => googleTranslate(q, source, target), () => azureTranslate(q, source, target)]
       : [() => azureTranslate(q, null, target), () => googleTranslate(q, null, target)]
