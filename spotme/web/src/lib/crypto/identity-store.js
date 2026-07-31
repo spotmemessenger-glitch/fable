@@ -141,20 +141,38 @@ export async function fetchPeerKey (userId, accessToken) {
  * THROWS rather than returning null on failure — a caller that cannot agree
  * must not quietly fall back to the recomputable key.
  *
+ * WHEN THE STORED KEY IS THE PROBLEM, pass `forceRefetch`. Preferring
+ * `convo.peerKey` is what makes a stale key permanent: a peer that republishes
+ * its identity — which is exactly what a device that cannot persist one does on
+ * every launch — leaves every other device deriving against a key that no
+ * longer exists, and no amount of retrying with the stored value can recover.
+ * Forcing skips the stored key and asks the server what the peer is publishing
+ * NOW. `onPeerKeyChanged` hands the new value back so the caller can persist it;
+ * this module deliberately does not reach for `db` itself, because the room
+ * layer imports it and that would close an import cycle.
+ *
+ * A forced re-fetch that comes back empty (offline, server down) falls back to
+ * the stored key rather than throwing. The room then opens exactly as badly as
+ * it did a moment ago, which beats going dark on a transient network error.
+ *
  * @param fetchToken async () => accessToken, injected so this module needs no
  *        dependency on the transport (and so tests need no socket).
+ * @param opts {{forceRefetch?: boolean, onPeerKeyChanged?: (key: string) => void}}
  */
-export async function roomKeyForConvo (convo, fetchToken) {
+export async function roomKeyForConvo (convo, fetchToken, opts = {}) {
   if (convo?.e2eVersion !== E2E_V2) throw new Error('not an e2e_v2 conversation')
   const identity = await loadIdentity()
   if (!identity?.privateKey) throw new Error('this device has no identity key')
 
-  let peerKey = convo.peerKey || null
+  const stored = convo.peerKey || null
+  let peerKey = opts.forceRefetch ? null : stored
   if (!peerKey && convo.peer?.id && typeof fetchToken === 'function') {
     const { accessToken } = (await fetchToken()) || {}
     const found = await fetchPeerKey(convo.peer.id, accessToken)
     peerKey = found?.publicKey || null
+    if (peerKey && peerKey !== stored) opts.onPeerKeyChanged?.(peerKey)
   }
+  if (!peerKey && opts.forceRefetch) peerKey = stored
   if (!peerKey) throw new Error('no peer public key for this conversation')
 
   return deriveRoomKey({ identity, peerPublicKeyB64: peerKey, roomId: convo.roomId })
