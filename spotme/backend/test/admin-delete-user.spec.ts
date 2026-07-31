@@ -112,7 +112,7 @@ describe('admin user deletion — and the auth teeth that make it real', () => {
         expiresAt: new Date(Date.now() + 86_400_000),
       },
     });
-    await expect(auth.refresh(token)).rejects.toBeInstanceOf(UnauthorizedException);
+    await expect(auth.refresh(token)).rejects.toBeInstanceOf(ForbiddenException);
   });
 
   it('…and that refresh token is revoked, so a copy of it cannot be replayed', async () => {
@@ -121,12 +121,25 @@ describe('admin user deletion — and the auth teeth that make it real', () => {
     expect(rows.every((r) => r.revokedAt !== null)).toBe(true);
   });
 
+  /* 403, not 401, and it matters: the client retries a 401 every two seconds
+   * forever. A terminal answer has to LOOK terminal or the loop never stops. */
+  it('the refusal is 403 deleted_account — a retryable-looking 401 is the bug', async () => {
+    await expect(auth.guestAuth(ghostId, ghostName, 'Ghost', `anon_${ghostId}`))
+      .rejects.toBeInstanceOf(ForbiddenException);
+    try {
+      await auth.guestAuth(ghostId, ghostName, 'Ghost', `anon_${ghostId}`);
+    } catch (e: any) {
+      expect(e.getStatus()).toBe(403);
+      expect(e.getResponse()?.error).toBe('deleted_account');
+    }
+  });
+
   it('THE OTHER DOOR: a deleted account cannot walk back in through guest auth', async () => {
     // guestAuth is create-or-reauth; without the check it would hand back
     // tokens and silently undo the deletion on the next app launch.
     await expect(
       auth.guestAuth(ghostId, ghostName, 'Ghost', `anon_${ghostId}`),
-    ).rejects.toBeInstanceOf(UnauthorizedException);
+    ).rejects.toBeInstanceOf(ForbiddenException);
   });
 
   /**

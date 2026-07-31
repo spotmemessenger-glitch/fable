@@ -308,6 +308,32 @@ async function unwrapMeta (key, meta) {
 
 let socketPromise = null
 
+/* Terminal auth — an account the server will never accept again.
+ *
+ * Stopping the retry loop is only half of it. A device that silently stops
+ * trying looks exactly like a device that is quietly working, which is the
+ * failure mode this whole area keeps producing, so the fact has to be
+ * reportable. Registered by the app; announced at most once per page. */
+let onTerminalAuthHandler = null
+let terminalAuthAnnounced = false
+
+/** Called when this identity can never authenticate again. `{code, message}`. */
+export function setTerminalAuthHandler (fn) {
+  onTerminalAuthHandler = typeof fn === 'function' ? fn : null
+}
+
+/** What the app can ask, e.g. before showing a chat that will never connect. */
+export function isTerminalAuth () { return terminalAuthAnnounced }
+
+function onTerminalAuth (error) {
+  if (terminalAuthAnnounced) return
+  terminalAuthAnnounced = true
+  console.warn(`spotme auth: ${error?.message || 'this identity is no longer accepted'}`)
+  try {
+    onTerminalAuthHandler?.({ code: error?.code || 'terminal', message: error?.message || '' })
+  } catch { /* a reporting failure must not resurrect the loop */ }
+}
+
 async function guestAuth () {
   // Wait out onboarding: the profile appears in local storage the moment the
   // user taps Start; nothing joins a room before that anyway.
@@ -342,6 +368,27 @@ async function guestAuth () {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ ...body, username: `${username.slice(0, 11)}_${String(me.id).slice(0, 4)}` })
     })
+  }
+  /* A DELETED ACCOUNT IS TERMINAL. STOP, DO NOT RETRY.
+   *
+   * Everything here used to collapse into one untyped throw, and the callers
+   * treat any failure as transient: `ensureSocket` nulls its promise so the
+   * next call retries, and `join` re-runs itself every two seconds forever.
+   * For a backend blip that is exactly right. For an account that no longer
+   * exists it is a device spinning silently until the battery goes, with the
+   * user told nothing at all.
+   *
+   * The server distinguishes the two now — 403 `deleted_account` rather than a
+   * 401 — so this marks the error `terminal` and the retry paths honour it. */
+  if (res.status === 403) {
+    let code = null
+    try { code = (await res.clone().json())?.error } catch { /* non-JSON body */ }
+    if (code === 'deleted_account') {
+      const dead = new Error('this account has been deleted')
+      dead.terminal = true
+      dead.code = 'deleted_account'
+      throw dead
+    }
   }
   if (!res.ok) throw new Error(`guest auth failed (${res.status})`)
   const tokens = await res.json()
@@ -406,7 +453,11 @@ function ensureSocket () {
     })
     return socket
   })()
-  socketPromise.catch(() => { socketPromise = null })  // allow retry after failure
+  socketPromise.catch((error) => {
+    // Allow a retry after a transient failure — but a terminal one must STAY
+    // failed, or nulling this is just the retry loop by another name.
+    if (!error?.terminal) socketPromise = null
+  })
   return socketPromise
 }
 
@@ -663,9 +714,16 @@ function serverRoom (config, roomId) {
       advanceCursor(ack.lastEventId)
       return socket
     })()
-    joinPromise.catch(() => {
+    joinPromise.catch((error) => {
       // A failed boot (backend briefly down, auth race during onboarding)
       // must not leave the room permanently dead — retry until it lands.
+      // A TERMINAL failure is the exception: retrying a deleted account cannot
+      // succeed, so this is the loop that has to stop rather than the one that
+      // has to persist.
+      if (error?.terminal) {
+        onTerminalAuth(error)
+        return
+      }
       joinPromise = null
       if (!left) setTimeout(() => join(), 2000)
     })

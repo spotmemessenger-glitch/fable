@@ -13,7 +13,7 @@ import { lobby } from './lib/discovery.js'
 import { reach } from './lib/reach.js'
 import { rooms } from './lib/rooms.js'
 import { publishIdentity, identityStatus } from './lib/crypto/identity-store.js'
-import { freshTokens } from './lib/socket-transport.js'
+import { freshTokens, setTerminalAuthHandler } from './lib/socket-transport.js'
 import { readyRTC } from './net.js'
 import { attachPullRefresh } from './lib/pullrefresh.js'
 import { el, clear, toast, avatar, actionSheet } from './lib/ui.js'
@@ -503,6 +503,17 @@ function boot () {
    * than only in the chat means a device in this state says so at launch,
    * before the user has typed a message nobody will be able to read. The chat
    * carries the persistent copy; this is the one that arrives unprompted. */
+  /* An identity the server will never accept again — a deleted account.
+   *
+   * Registered because stopping the retry loop is only half the fix: a device
+   * that quietly stops trying is indistinguishable from one that is quietly
+   * working, and that ambiguity is the exact shape of every bug found here
+   * tonight. The transport reports the fact; this is what turns it into
+   * something the person holding the phone can read. */
+  setTerminalAuthHandler(({ message }) => {
+    toast(message || 'This account has been deleted. Start a new one to keep chatting.')
+  })
+
   publishIdentity(freshTokens)
     .catch(() => {})
     .then(() => {

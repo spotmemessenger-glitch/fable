@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException, ConflictException } from '@nestjs/common';
+import { Injectable, UnauthorizedException, ForbiddenException, ConflictException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as argon2 from 'argon2';
 import * as crypto from 'crypto';
@@ -112,7 +112,16 @@ export class AuthService {
      * so the session cannot be resumed from a copy of it. */
     if (isDeletedAccount(user)) {
       await this.prisma.refreshToken.update({ where: { id: stored.id }, data: { revokedAt: new Date() } });
-      throw new UnauthorizedException('this account has been deleted');
+      /* 403, NOT 401, and the distinction is load-bearing rather than pedantic.
+       * A 401 means "your credentials did not work", which is exactly the case
+       * a client SHOULD retry — and this one did, every two seconds, forever,
+       * because `guestAuth` throws on any non-OK response and the join loop
+       * retries whatever it is handed. The device spun with no explanation.
+       *
+       * 403 means "we know who you are and the answer is still no". Retrying
+       * cannot change it, and `deleted_account` gives the client something
+       * stable to branch on that is not a prose message. */
+      throw new ForbiddenException({ error: 'deleted_account', message: 'this account has been deleted' });
     }
     await this.prisma.refreshToken.update({ where: { id: stored.id }, data: { revokedAt: new Date() } });
     return this.issueTokens(user.id, user.role, stored.deviceId ?? undefined);
@@ -196,7 +205,8 @@ export class AuthService {
        * source of a v2 room key, and quietly minting a different one is how a
        * device ends up unable to read its own conversations. */
       if (isDeletedAccount(existing)) {
-        throw new UnauthorizedException('this account has been deleted');
+        // Same reasoning as `refresh` above: terminal, so it must not look retryable.
+        throw new ForbiddenException({ error: 'deleted_account', message: 'this account has been deleted' });
       }
       const updates: { name?: string; publicKey?: string; username?: string } = {};
       if (name && name !== existing.name) updates.name = name;
