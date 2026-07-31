@@ -80,7 +80,14 @@ async function putSlice (roomId, attachId, seq, sealed) {
   // fetched the same way once resolved against the API origin.
   const target = /^https?:/i.test(uploadUrl) ? uploadUrl : `${API_BASE}${uploadUrl}`
   const put = await fetch(target, {
-    method: 'POST',
+    /* PUT, NOT POST — and this was a live bug until R2 existed to catch it.
+     *
+     * `getUploadUrl` presigns a PutObjectCommand, so the S3/R2 signature covers
+     * the PUT method only; a POST to that URL is rejected outright. It passed
+     * every test up to this point purely because the LOCAL adapter's route
+     * happened to be @Post(), so the mismatch was invisible until the first
+     * real bucket existed. Both sides speak PUT now. */
+    method: 'PUT',
     // Bound into the presigned signature — a mismatch is rejected by the
     // storage provider, which is the point of pinning it.
     headers: { 'Content-Type': 'application/octet-stream' },
