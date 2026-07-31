@@ -208,6 +208,52 @@ export class RoomsService {
   }
 
   /**
+   * May this user be handed a presigned URL for this attachment's bytes?
+   *
+   * WHY THIS HAD TO EXIST BEFORE MEDIA COULD MOVE TO OBJECT STORAGE.
+   * `fetchSlice` says of itself: "VIEW-ONCE IS ENFORCED HERE, because here is
+   * the only place it can be" — the server holds the bytes, so the server is
+   * the only party that can refuse them. The presigned download route bypasses
+   * `fetchSlice` entirely: it hands out a URL and the bytes come from a bucket.
+   * Without this check, migrating media to storage would have silently deleted
+   * server-side view-once enforcement, and a recipient could re-download a
+   * "burned" private photo forever. Nothing would have failed; the burst
+   * animation would still have played.
+   *
+   * Three answers, and the distinction between the last two matters:
+   *   'ok'      — go ahead
+   *   'denied'  — someone else claimed this one view (the bytes may still exist)
+   *   'gone'    — it was opened and destroyed; the ViewOnce row deliberately
+   *               outlives the RoomEvent rows so this stays distinguishable
+   *               from "never existed", which a client would retry forever.
+   */
+  async authorizeAttachmentRead(
+    roomId: string,
+    attachId: string,
+    userId: string,
+  ): Promise<'ok' | 'denied' | 'gone'> {
+    // Checked FIRST, because a burn deletes the RoomEvent rows: after it there
+    // is no envelope left to tell us this was ever view-once.
+    const claim = await this.prisma.viewOnce
+      .findUnique({ where: { attachId }, select: { viewerId: true, senderId: true, burnedAt: true } })
+      .catch(() => null);
+    if (claim?.burnedAt) return 'gone';
+
+    const envelope = await this.prisma.roomEvent.findFirst({
+      where: { roomId, attachId, type: 'bin' },
+      orderBy: { id: 'asc' },
+      select: { senderId: true, meta: true },
+    });
+    // Not view-once (or not ours) — membership, already checked by the caller,
+    // is the whole access model for an ordinary attachment.
+    if (!envelope) return claim ? 'gone' : 'ok';
+    if ((envelope.meta as { once?: boolean } | null)?.once !== true) return 'ok';
+
+    const viewer = await this.claimView(roomId, attachId, envelope.senderId, userId);
+    return viewer === userId ? 'ok' : 'denied';
+  }
+
+  /**
    * Who is allowed to see this view-once attachment — the first non-sender to
    * ask, and nobody else. Returns the winning viewer id.
    *

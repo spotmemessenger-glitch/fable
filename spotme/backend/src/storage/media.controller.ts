@@ -19,6 +19,7 @@ import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { CurrentUser, AuthenticatedPrincipal } from '../common/decorators/current-user.decorator';
 import { PrismaService } from '../prisma/prisma.service';
 import { RoomsAuthService } from '../rooms/rooms-auth.service';
+import { RoomsService } from '../rooms/rooms.service';
 import { LocalStorageAdapter } from './local-storage.adapter';
 import {
   IStorageAdapter,
@@ -55,6 +56,7 @@ export class MediaController {
     @Inject(STORAGE_ADAPTER) private storage: IStorageAdapter,
     private prisma: PrismaService,
     private auth: RoomsAuthService,
+    private rooms: RoomsService,
   ) {}
 
   /** Membership is the RoomMember row `join` writes — HTTP has no handshake. */
@@ -140,6 +142,27 @@ export class MediaController {
     await this.assertMember(parts.roomId, principal.id);
     const refusal = await this.auth.authorizeJoin(parts.roomId, principal.id);
     if (refusal) throw new ForbiddenException(refusal);
+
+    /* VIEW-ONCE IS ENFORCED HERE TOO, and it has to be.
+     *
+     * `RoomsService.fetchSlice` calls itself "the only place it can be" —
+     * true while the server held the bytes. A presigned URL bypasses it
+     * completely, so without this the first migration of media to object
+     * storage would have quietly removed view-once enforcement: the burst
+     * animation would still play and the photo would still be downloadable.
+     * Same claim logic, same table, same atomic first-viewer-wins insert. */
+    const verdict = await this.rooms.authorizeAttachmentRead(
+      parts.roomId, parts.attachId, principal.id,
+    );
+    if (verdict === 'gone') {
+      // Said out loud rather than disguised as "missing": the caller is a
+      // legitimate room member, and a client that cannot tell the two apart
+      // retries forever.
+      throw new NotFoundException('that private photo has been opened and destroyed');
+    }
+    if (verdict === 'denied') {
+      throw new ForbiddenException('that private photo was not sent to you');
+    }
 
     return {
       objectKey,
