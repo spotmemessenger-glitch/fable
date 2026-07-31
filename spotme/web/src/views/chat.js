@@ -15,6 +15,7 @@ import { compressImage, fileToDataURL, recordVoice, currentLocation, mapLink, fi
 import { openPhotoEditor, closePhotoEditor } from '../lib/photoedit.js'
 import { el, clear, avatar, fmtTime, fmtDay, actionSheet } from '../lib/ui.js'
 import { isPlainEnglish } from '../lib/english.js'
+import { identityStatus } from '../lib/crypto/identity-store.js'
 import { transliterate, supportedScripts } from 'spotme-core/core/translit.js'
 
 const LONG_PRESS_MS = 420
@@ -2101,6 +2102,30 @@ export function render (root, ctx, roomId) {
     ])
   }
 
+  /**
+   * The line that says this device cannot hold a key, or null when it can.
+   *
+   * This is not decoration. On a device in either state, `sysLine` above says
+   * "Encrypted with keys made on your devices" — which is precisely backwards:
+   * the key is there but the PEER cannot match it, so every message silently
+   * fails to open at the far end while this screen reassures the sender. The
+   * reassurance is worse than saying nothing.
+   *
+   * Only 'ephemeral' and 'unavailable' warn. 'unknown' does not: the identity
+   * simply has not been asked for yet, and warning on it would fire on every
+   * cold open of a perfectly healthy device.
+   */
+  function keyWarning () {
+    if (convo?.e2eVersion !== 'e2e_v2') return null   // a v1 room never used this key
+    const state = identityStatus()
+    if (state !== 'ephemeral' && state !== 'unavailable') return null
+    return el('div', { class: 'sys warn', html: IC.spark }, [
+      state === 'ephemeral'
+        ? 'This device can’t save its encryption key, so the other person can’t read what you send here. Reloading won’t fix it.'
+        : 'This device can’t store encryption keys at all — private browsing is the usual cause. Open Spot Me in a normal window.'
+    ])
+  }
+
   /* ------------------------------------------------------ photo albums */
   /**
    * A run of photos collapses into one WhatsApp-style album instead of
@@ -2225,7 +2250,14 @@ export function render (root, ctx, roomId) {
     lastDayKey = null
     lastTs = null
     const list = conn.store.list()
-    if (!list.length) { thread.appendChild(sysLine()); return }
+    /* The informational line is a first-run nicety, so an empty thread is the
+     * right and only place for it. A KEY WARNING is the opposite: it explains
+     * why the messages below are going nowhere, so it has to outlive the thread
+     * filling up — which on a broken device it does immediately, with the
+     * user's own sends, each one rendered locally and readable by nobody. */
+    const warning = keyWarning()
+    if (warning) thread.appendChild(warning)
+    if (!list.length) { if (!warning) thread.appendChild(sysLine()); return }
     for (const group of groupForRender(list)) {
       if (group.single) { appendMessage(group.single); continue }
       const first = group.album[0]
