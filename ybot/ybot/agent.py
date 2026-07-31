@@ -14,12 +14,13 @@ from typing import Callable
 
 from anthropic import Anthropic
 
-from . import actions
+from . import actions, verify
 from .config import SETTINGS, computer_tool_for, other_tool_version
 from .guard import evaluate
 from .killswitch import KillSwitch
 from .screen import Frame, Screen
 from .uia import UIA
+from .verify import Snapshot
 
 SYSTEM_PROMPT = (
     "You are a desktop operator controlling a real Windows computer. Work toward the user's "
@@ -51,6 +52,17 @@ SYSTEM_PROMPT = (
     "single calls. Still verify the end state visually before declaring the task done."
 )
 
+EXPECT_DESC = (
+    "What proves this step worked, checked against the accessibility tree — far "
+    "stronger than 'the screen changed', which is also true when the WRONG thing "
+    "happens. One of: 'appears:<text>' (an element with that label is now present, "
+    "e.g. appears:Save As), 'disappears:<text>' (it is gone — use after closing a "
+    "dialog), 'title:<text>' (the foreground window title contains it), or 'changed' "
+    "(any pixel moved — the weak default, use only when nothing better applies). "
+    "Prefer something that is FALSE before the step and TRUE after; an expectation "
+    "that already held proves nothing and you will be told so."
+)
+
 UI_INSPECT_TOOL = {
     "name": "ui_inspect",
     "description": (
@@ -74,7 +86,10 @@ UI_CLICK_TOOL = {
     ),
     "input_schema": {
         "type": "object",
-        "properties": {"ref": {"type": "integer", "description": "ref id from the latest ui_inspect"}},
+        "properties": {
+            "ref": {"type": "integer", "description": "ref id from the latest ui_inspect"},
+            "expect": {"type": "string", "description": EXPECT_DESC},
+        },
         "required": ["ref"],
     },
 }
@@ -109,6 +124,7 @@ BATCH_TOOL = {
                         "scroll_amount": {"type": "integer"},
                         "duration": {"type": "number", "description": "for wait_change: max seconds to wait"},
                         "note": {"type": "string", "description": "what this step should accomplish"},
+                        "expect": {"type": "string", "description": EXPECT_DESC},
                     },
                     "required": ["action"],
                 },
@@ -305,17 +321,53 @@ class Operator:
             return _tool_result(tool_use_id, None, f"Action error: {e}")
         return self._after(tool_use_id, action)
 
-    def _after(self, tool_use_id: str, what: str) -> dict:
-        """Result of an action: pixels as soon as the screen changes (event-ish)."""
-        frame = self.screen.wait_change(timeout=1.2)
-        if frame is None:
-            return _tool_result(
-                tool_use_id, None,
-                f"Screen unchanged after {what} — nothing on screen moved for 1.2s. The "
-                "click may have missed, or the application ignored it. Do not simply "
-                "repeat it; call ui_inspect to find the real target.",
-            )
-        return _tool_result(tool_use_id, frame.png)
+    def _snapshot_for(self, spec: str | None) -> Snapshot:
+        """Pre-action snapshot, taken ONLY when the expectation needs one.
+
+        `changed` is answered from pixels alone, so walking the accessibility tree for
+        it would add a tree read to every step to learn nothing.
+        """
+        return self.uia.snapshot() if verify.parse(spec).kind != "changed" else Snapshot()
+
+    def _verify(self, spec: str | None, before: Snapshot, timeout: float = 1.2):
+        """Poll until the expectation holds or the deadline passes.
+
+        Returns (Expectation, Outcome, Frame|None). Polling rather than one late look
+        because UI is asynchronous: a dialog that takes 300ms to paint is a success, and
+        a single check right after the click would call it a failure.
+        """
+        expect = verify.parse(spec)
+        if expect.kind == "changed":
+            frame = self.screen.wait_change(timeout=timeout)
+            after = Snapshot(pixels_changed=frame is not None)
+            return expect, verify.evaluate(expect, before, after), frame
+
+        deadline = time.monotonic() + timeout
+        frame: Frame | None = None
+        changed = False
+        while True:
+            got = self.screen.capture(only_if_changed=True)
+            if got is not None:
+                # Sticky: capture() only reports the FIRST difference, because it
+                # re-baselines its digest. Without this, "it changed" would be forgotten
+                # on the very next poll.
+                frame, changed = got, True
+            outcome = verify.evaluate(expect, before, self.uia.snapshot(pixels_changed=changed))
+            if outcome.ok or time.monotonic() >= deadline:
+                return expect, outcome, frame
+            time.sleep(0.05)
+
+    def _after(self, tool_use_id: str, what: str,
+               spec: str | None = None, before: Snapshot | None = None) -> dict:
+        """Result of an action: verified against what the step said it expected."""
+        expect, outcome, frame = self._verify(spec, before or Snapshot())
+        if not outcome.ok:
+            # Text only, no screenshot: the detail below already names what IS on
+            # screen, which is the cheap substitute for ~1,230 image tokens and is
+            # what the next attempt actually needs.
+            return _tool_result(tool_use_id, None, f"FAILED after {what} — {outcome.detail}")
+        note = None if expect.kind == "changed" else f"Verified — {outcome.detail}"
+        return _tool_result(tool_use_id, frame.png if frame else None, note)
 
     # --- batch executor: think once, act many -----------------------------------------
     def _batch(self, tool_use_id: str, params: dict) -> dict:
@@ -355,6 +407,8 @@ class Operator:
             self.kill.check()
             act = str(st.get("action", ""))
             note = st.get("note") or ""
+            spec = st.get("expect")
+            before = self._snapshot_for(spec) if act in _UI_CHANGING else Snapshot()
             t0 = time.perf_counter()
             try:
                 if act == "ui_click":
@@ -368,14 +422,20 @@ class Operator:
                 return self._batch_done(tool_use_id, log,
                                         f"stopped at step {i}/{len(steps)} (error). ")
             if act in _UI_CHANGING:
-                changed = self.screen.wait_change(timeout=0.9)
+                expect, outcome, _ = self._verify(spec, before, timeout=0.9)
                 ms = int((time.perf_counter() - t0) * 1000)
-                if changed is None and act in ("ui_click", "left_click", "double_click", "right_click"):
-                    log.append(f"{i} ✗ {act} {note} — screen did NOT change ({ms}ms)")
-                    return self._batch_done(tool_use_id, log,
-                                            f"stopped at step {i}/{len(steps)}: that click "
-                                            "changed nothing (likely missed). ")
-                log.append(f"{i} ✓ {act} {note} ({ms}ms)")
+                # A DECLARED expectation is binding on every action: if the step said
+                # what success looks like and it did not happen, the batch stops there.
+                # With the weak default only a missed CLICK stops it — typing that moves
+                # no pixels is ordinary, and failing it would break working batches.
+                fatal = act in ("ui_click", "left_click", "double_click", "right_click")
+                if not outcome.ok and (expect.kind != "changed" or fatal):
+                    log.append(f"{i} ✗ {act} {note} — {outcome.detail} ({ms}ms)")
+                    return self._batch_done(
+                        tool_use_id, log,
+                        f"stopped at step {i}/{len(steps)}: expectation not met. ")
+                mark = "⚠" if outcome.proved_nothing else "✓"
+                log.append(f"{i} {mark} {act} {note} — {outcome.detail} ({ms}ms)")
             else:
                 log.append(f"{i} ✓ {act} {note}")
         return self._batch_done(tool_use_id, log, "all steps completed. ")
@@ -426,11 +486,13 @@ class Operator:
             return _tool_result(tool_use_id, None, "User declined this action.")
 
         self.kill.check()
+        spec = params.get("expect")
+        before = self._snapshot_for(spec)      # must precede the click, or it proves nothing
         try:
             self.uia.click(ref)
         except Exception as e:
             return _tool_result(tool_use_id, None, f"ui_click error: {e}")
-        return self._after(tool_use_id, f"ui_click on {el.name!r}")
+        return self._after(tool_use_id, f"ui_click on {el.name!r}", spec, before)
 
     def _prune_images(self, messages: list) -> None:
         """Keep only the most recent N screenshots; replace older ones with a stub."""

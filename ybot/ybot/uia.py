@@ -11,6 +11,8 @@ from dataclasses import dataclass
 
 from pywinauto import Desktop
 
+from .verify import Snapshot
+
 # Control types worth surfacing to the model as clickable targets.
 INTERACTIVE = {
     "Button",
@@ -49,14 +51,20 @@ class UIA:
         hwnd = ctypes.windll.user32.GetForegroundWindow()
         return self._desktop.window(handle=hwnd)
 
-    def inspect(self) -> list[Element]:
-        """Return the visible interactive elements of the current foreground window."""
-        self._elements = []
-        self._wrappers = []
+    def _enumerate(self) -> tuple[list[Element], list]:
+        """Walk the foreground window. Returns (elements, wrappers), assigning NOTHING.
+
+        Split out from inspect() because verification reads the tree too, and a read
+        that reassigned `_elements`/`_wrappers` would silently invalidate every ref the
+        model is holding — mid-batch, between the click and the check. The batch would
+        then click the wrong element by the right number.
+        """
+        elements: list[Element] = []
+        wrappers: list = []
         try:
             descendants = self._foreground().descendants()
         except Exception:
-            return self._elements
+            return elements, wrappers
 
         ref = 0
         for d in descendants:
@@ -68,16 +76,41 @@ class UIA:
                 if r.right <= r.left or r.bottom <= r.top:
                     continue
                 name = (d.window_text() or "").strip()[:60]
-                self._elements.append(
+                elements.append(
                     Element(ref, name, ct, (r.left + r.right) // 2, (r.top + r.bottom) // 2)
                 )
-                self._wrappers.append(d)
+                wrappers.append(d)
                 ref += 1
                 if ref >= self.max_elements:
                     break
             except Exception:
                 continue
+        return elements, wrappers
+
+    def inspect(self) -> list[Element]:
+        """Return the visible interactive elements of the current foreground window.
+
+        This is the ONLY method that renumbers refs, because the refs it returns are
+        what the model clicks with.
+        """
+        self._elements, self._wrappers = self._enumerate()
         return self._elements
+
+    def title(self) -> str:
+        """Foreground window title, or '' if it cannot be read."""
+        try:
+            return (self._foreground().window_text() or "").strip()
+        except Exception:
+            return ""
+
+    def snapshot(self, pixels_changed: bool = False) -> Snapshot:
+        """A read-only picture of the screen for verify.py. Leaves refs untouched."""
+        elements, _ = self._enumerate()
+        return Snapshot(
+            title=self.title(),
+            elements=tuple((e.name, e.control_type) for e in elements),
+            pixels_changed=pixels_changed,
+        )
 
     def element(self, ref: int) -> Element:
         if not 0 <= ref < len(self._elements):
