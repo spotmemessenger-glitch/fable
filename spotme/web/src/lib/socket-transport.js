@@ -131,6 +131,36 @@ export function setRoomKeyProvider (roomId, provider) {
   keyCache.delete(cacheKey)
 }
 
+/**
+ * Seal / open bytes with a room's key, WITHOUT handing the key out.
+ *
+ * Phase 5 uploads attachment slices straight to object storage, so the sealing
+ * that used to happen inside `sendAction` has to happen before the bytes ever
+ * reach a socket. This module owns `roomKey()` — the ADR-001 provider lives
+ * here and a v2 room has no password path — so this is the only correct place
+ * to expose that capability from.
+ *
+ * WHAT IS DELIBERATELY NOT EXPORTED: the key. These take bytes and return
+ * bytes. A caller can encrypt for a room it is already in and decrypt what it
+ * is already entitled to read; it cannot obtain, derive, store or forward the
+ * key itself. That distinction is the whole reason FORBIDDEN_KEY_SURFACE bans
+ * `roomKey`/`deriveKey` on adapters while this pair is fine here: adapters move
+ * opaque bytes, this module owns the secret.
+ *
+ * A room with a key provider and no agreed key REJECTS rather than falling back
+ * to a password, exactly as the message path does — an upload must not be the
+ * one door where a v2 room quietly degrades to the cyrb53 secret.
+ */
+export async function sealForRoom (roomId, bytes, password) {
+  const key = await roomKey(roomId, password)
+  return seal(key, toBytes(bytes) || new Uint8Array(0))
+}
+
+export async function openForRoom (roomId, sealed, password) {
+  const key = await roomKey(roomId, password)
+  return openSealed(key, sealed)
+}
+
 /** Forget a room entirely — used when a room is downgraded or wiped. */
 export function clearRoomKey (roomId) {
   const cacheKey = `${roomId}`

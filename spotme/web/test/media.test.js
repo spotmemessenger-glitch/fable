@@ -93,6 +93,11 @@ mock.module(`${SRC}lib/socket-transport.js`, {
     setRoomKey: () => {},
     setRoomKeyProvider: () => {},
     clearRoomKey: () => {},
+    /* Phase 5: media-transfer.js imports these, and a PARTIAL ESM module mock
+     * fails at LINK time with a SyntaxError, not at call time — so every export
+     * the module graph reaches has to be present even when unused here. */
+    sealForRoom: async (_room, bytes) => bytes,
+    openForRoom: async (_room, bytes) => bytes,
     freshTokens: async () => ({ accessToken: 'test-token' })
   }
 })
