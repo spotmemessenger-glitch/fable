@@ -6,6 +6,99 @@ it, not by exit codes.
 
 ---
 
+## 000. LATEST (2026-07-31 morning) — READ THIS FIRST, IT SUPERSEDES 00
+
+**Repo: `spotmemessenger-glitch/fable`, branch `master`, HEAD `ad0b123`, fully
+pushed.** Git here is HTTPS + Windows Credential Manager — there is NO ssh key
+on this machine and never was. On the Mac: `gh auth login` then
+`gh repo clone spotmemessenger-glitch/fable`.
+
+### What is live, and what is not
+
+- **Vercel IS live with every fix.** Verified in the served bundle:
+  `sends 'authorization' 1`, `view-once burn 3`, `'Storage full' 2`.
+- **Railway is NOT deployed.** Server-side view-once deletion and the
+  voice-note truncation guard are inert until
+  `cd spotme/backend && npm run deploy`. Nothing is broken meanwhile: the new
+  bundle sends a token, the old backend ignores it.
+- **DEPLOY ORDER MATTERS: Vercel first, then Railway.** Railway-first makes the
+  new backend demand a token from every user still on the old bundle → 401 on
+  every call, and `lib/voice.js` throws on non-OK, so voice breaks visibly.
+
+**TRAP THAT COST AN HOUR — read before writing any verification loop.** The
+bundle path is `/assets/index-*.js`. A check that greps `index-*.js` without
+the `/assets/` prefix fetches a 404 PAGE and reports 0 matches forever. That
+produced 19 consecutive false "not deployed" readings against a deploy that
+had already succeeded.
+
+### The overnight audit — 12 agents, 12 reports in `.reports/`
+
+8 auditors (T1 T2 TL1 TL2 V1 V2 P1 P2) then 4 fixers (voice, viewonce,
+language, security). ~40 fixes in 17 commits. Gates on the combined tree:
+web 11 suites / 241 checks, backend 34/34, both builds real.
+
+**Two decisions are waiting on the user — neither is engineering:**
+
+1. **V-19, the biggest open item.** DM room keys derive from
+   `stableHash("spotme-dm-secret-v1:" + sorted user ids)` — cyrb53, a
+   NON-cryptographic hash of two values the server already stores. The server
+   can recompute any room key and decrypt everything. Four agents independently
+   ranked this top; none touched it because changing the derivation makes every
+   existing conversation permanently unreadable. Safe shape: VERSIONED
+   derivation — old rooms keep the old scheme, new rooms get real entropy.
+   **The onboarding screen says "no server reading your messages." That is
+   currently false — change the copy even if the fix waits.**
+2. **View-once in PUBLIC groups.** The server holds the room key there, and the
+   composer offers the "Private photo" tile with no warning. Disable it in
+   public groups, or warn unmissably.
+
+### Environment changes made 2026-07-31
+
+- `ANTHROPIC_API_KEY` + `READ_MODEL=claude-haiku-4-5-20251001` set on Railway
+  AND Vercel. Haiku ~1.6s vs the old 3.7s read path. **Caveat:** on
+  `"naan innaiku vetuku varen"` both Claude models said "hunting" where the
+  chain says "coming home" — Anthropic is now the PRIMARY reader, so if
+  quality dips that is why, and the fix is reordering one list in `llmRead`.
+- **All 7 vendor keys were REMOVED from Vercel** (Anthropic/OpenAI/Gemini/
+  Sarvam/ElevenLabs/Azure/Google) because both `/api/translate` and
+  `/api/voice` were open, unauthenticated and unthrottled there. The app is
+  unaffected — it calls Railway (`VITE_SPOTME_SERVER`), so those Vercel
+  functions are vestigial. The code fix is deployed now too, but the keys are
+  still absent: **restore them only if something is actually meant to serve
+  from Vercel.**
+- 260 shell-debris files deleted from the repo (names like `!(m.viewOnce`,
+  `(4-n%4)%4`). List at the session scratchpad `deleted-junk.txt`. **Do not
+  bulk-delete untracked entries**: real cloned tools (`MetaGPT/`,
+  `OmniParser/`, `ClaudeDesktopCommander/`, `eas-cli/`) are untracked too.
+
+### iPhone re-test list — EVERY measurement was Chromium on Windows
+
+The reported bugs were iPhone Safari, where the codec (AAC/mp4 vs Opus/webm),
+autoplay policy, storage limit and tab suspension all differ. Five minutes on
+the phone, in order:
+1. 30s voice note — sends fast? first tap makes sound?
+2. Several notes, then reload — any "tap to load"? (that was bytes discarded)
+3. Note while the other phone is locked — still "Not delivered"?
+4. Plain English in a Tamil chat — stays English?
+5. Private photo — countdown appears on the SENDER's side?
+
+If 1 or 2 fail, the `audioBitsPerSecond: 24000` hint is being ignored by Safari
+and the fix has to become a transcode, not a tweak.
+
+### Still uncommitted, deliberately (predates the audit, separate track)
+
+`spotme/admin-dashboard/`, `spotme/app/lib/{db,reach}.js`,
+`spotme/app/screens/`, `spotme/app/theme.js`, and modifications to
+`spotme/app/package.json` + `worklet/app.bundle.mjs`.
+
+### TestFlight
+
+Blocked on the Mac — Windows cannot build iOS. There is still no
+`spotme/web/ios/`. Start with `cd spotme/web && npm install && npx cap add ios`,
+then an APNs `.p8` uploaded to Firebase project `spot-messenger-48a74`.
+
+---
+
 ## 00. LATEST (2026-07-30 late evening) — read this first
 
 **The Vercel 404 had a root cause nobody had found, and it was not the code.**
