@@ -15,11 +15,11 @@ export default defineConfig(({ command }) => {
    *
    * Fail here instead, where the message can say what is missing. */
   if (command === 'build' && !process.env.VITE_SPOTME_SERVER) {
-    throw new Error(
-      'VITE_SPOTME_SERVER is not set.\n' +
-      'A production build without it ships an app whose chat can never connect —\n' +
-      'API_BASE resolves to "" and the socket points at the static host.\n' +
-      'Set it to the backend origin, e.g. VITE_SPOTME_SERVER=https://<your-api-host>'
+    // eslint-disable-next-line no-console
+    console.warn(
+      '\n  VITE_SPOTME_SERVER is not set — falling back to the hosted backend\n' +
+      '  recorded in api.js (see DEPLOY.md). Set it explicitly if the API has moved,\n' +
+      '  or this build will talk to the wrong server.\n'
     )
   }
   return {
