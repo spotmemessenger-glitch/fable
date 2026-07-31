@@ -11,6 +11,7 @@ import { AuditModule } from './audit/audit.module';
 import { GroupsModule } from './groups/groups.module';
 import { StoriesModule } from './stories/stories.module';
 import { RoomsModule } from './rooms/rooms.module';
+import { RealtimeModule } from './realtime/realtime.module';
 import { PushModule } from './push/push.module';
 
 @Module({
@@ -28,6 +29,7 @@ import { PushModule } from './push/push.module';
     StoriesModule,
     PushModule,
     RoomsModule,
+    RealtimeModule,
   ],
 })
 export class AppModule {}
