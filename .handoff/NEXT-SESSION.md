@@ -6,7 +6,173 @@ it, not by exit codes.
 
 ---
 
-## 0000000. LATEST (2026-07-31 night) — SUPERSEDES EVERYTHING BELOW
+## 00000000. LATEST (2026-07-31, late) — SUPERSEDES EVERYTHING BELOW
+
+**Nothing is merged. Two PRs are open and both are green.**
+
+```
+master   bc4fd92   unchanged this session
+PR #6    claude/next-session-b6ypc5   377372a   DRAFT, CI green, 8 commits
+PR #2    feature/centrifugo-transport ad31fd2   OPEN, mergeable_state clean
+```
+
+### THE HEADLINE: the "notification but no message" bug is FOUND AND FIXED
+
+It was never crypto. The opening line of a chat travels INSIDE the knock, and
+both sides wrote it to the convo's `last` preview and fired `pushNote` with it —
+and **never added it to the message store**. The notification quoted the text,
+the inbox row quoted the text, the thread was empty. `inbox.js` states the
+intent outright ("what both sides see as the first message once the chat
+opens"), so this was a gap, not a decision. Fixed by `rooms.injectLocal` +
+`msgId` in the knock payload (`8848bd5`).
+
+**Found only by driving the real app in a real browser.** Every module test
+passed against it, because no module was wrong.
+
+### SEVEN defects fixed, then FIVE MORE found in those fixes
+
+`377372a` is the important commit — it fixed five bugs introduced by the seven
+before it, and two of those meant a shipped feature was inert:
+
+- `emit({ type: 'undecryptable', ...info })` — `info` carries the FRAME's type,
+  spread wins, event arrived as `{type:'msg'}`. **The room-broken banner was
+  dead code.** `room-broken-alert.test.js` passed because it stops at the
+  transport boundary and never crosses `rooms.js`.
+- `deletedAt` is stamped by BOTH `softDeleteAccount` AND `releaseUsername` (which
+  renames the row and deliberately keeps the user alive). The new auth gates read
+  both as deletion = **permanent lockout of a live user**. `isDeletedAccount`
+  now distinguishes them and fails safe.
+- The replay-cursor hold could stick FOREVER on rooms with no key provider (v1,
+  group, inbox) — a pinned inbox eventually stops delivering chat requests.
+- `unopenedFloor = null` sat above `await currentKey()`, and `join` retries every
+  2s on exactly that throw — burning one held frame per cycle.
+- A dropped network request told users to delete their chat on both phones.
+
+**Every one lived in a seam between two correct pieces.** That is this
+codebase's dominant failure mode — same shape as the original bug.
+
+### The other big one: messages were being DESTROYED
+
+`dispatch`'s `finally` advanced the replay cursor whether or not the frame
+opened, and the server replays strictly `id > since`. One undecryptable frame
+burned its own place in the window, permanently, on both devices. **That is why
+repairing a key never brought a chat back — there was nothing left to bring
+back.** Fixed in `0ea0db5`. Messages lost before that fix are still lost.
+
+### PROVEN by running, not by reading
+
+Local Postgres + the real NestJS backend + two shipping web clients in separate
+processes, and separately two Chromium contexts against the real UI:
+
+| Scenario | Result |
+|---|---|
+| Server, protocol, crypto, key agreement | **all sound** — ruled out by measurement |
+| Normal delivery / origin split / stale peer key | works / self-heals / self-heals |
+| **Own published key overwritten by another origin** | **reproduced, unrecoverable** |
+| Browser E2E (onboard → search → knock → both ways → reload) | **10/11** |
+
+`refreshRoomKey` re-agrees the PEER's key, so it cannot help a device whose OWN
+key was overwritten. **Not fixed — it is a product call.** Republish-on-mismatch
+is the tempting fix and it is a trap: two live origins would fight, each
+overwriting the other every launch.
+
+### Harnesses that now exist — use them, do not rebuild them
+
+- `spotme/web/test/e2e/browser-e2e.mjs` — real Chromium ×2 against the real UI.
+  Needs backend on :4000 and vite on :5173. NOT in `npm test`.
+- Postgres 16 binaries are installed in the cloud container even though the
+  docker daemon is not running:
+  `su postgres -c "/usr/lib/postgresql/16/bin/initdb -D <dir> -U postgres --auth=trust"`
+  then `pg_ctl -o '-p 5433 -k /tmp'`. PGDATA must be somewhere the postgres user
+  can write — /var/lib/postgresql, NOT the root-owned scratchpad.
+- Chromium is at `/opt/pw-browsers/chromium-1194/chrome-linux/chrome`; the
+  `playwright` npm package is not installed, install it with
+  `PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1`.
+- To run the shipping web modules under Node, `mock.module` `lib/api.js` — its
+  `API_BASE` is inlined from `import.meta.env` at BUILD time and is '' in Node.
+
+### MERGE RECIPE for #6 → then #2 (SIMULATED AND PROVEN, do not re-derive)
+
+The whole sequence was run on throwaway local branches before anything was
+merged. Result: **web 27 suites / 26 fully green, backend 10 suites / 86 tests,
+both builds clean.** The simulation is gone with that container, but every
+decision it made is below.
+
+**The overlap is NINE files, not the four usually quoted.** `chat.js` is NOT one
+of them:
+
+```
+.handoff/NEXT-SESSION.md   spotme/web/package.json
+spotme/web/src/lib/reach.js   src/lib/rooms.js   src/lib/socket-transport.js
+spotme/web/src/net.js
+spotme/web/test/{media,requests,viewonce}.test.js
+```
+
+**Conflicts and how each was resolved:**
+
+1. `package.json` — recurs on nearly every replayed commit. Both branches append
+   suites to one `&&` chain. Resolve as a UNION, never by taking a side, or the
+   dropped side's tests silently stop running. 26 suites is the correct total.
+2. `rooms.js` import — PR #2 adds a rationale comment above the import; PR #6
+   extends the import list with `clearRoomKey`/`clearRoomCursor` and adds a
+   `media-transfer.js` import. Keep the comment, the extended list, and the
+   extra import. **Watch for a duplicated `import { setRoomKeyProvider,
+   freshTokens }` line** — that was caught only by `node --check`.
+3. `socket-transport.js` — both sides add a new export inside a SHARED `/**`
+   block, with the closing `}` also shared. Ours (`clearRoomCursor`) needs its
+   own `}` and a fresh `/**` before theirs (`sealForRoom`/`openForRoom`).
+4. `media/requests/viewonce.test.js` — purely additive stub entries, union them.
+5. `.handoff/NEXT-SESSION.md` — take OURS. Master+#6 is strictly newer and
+   already carries the superseding section.
+
+**THE TRAP THAT ONLY EXISTS WHEN BOTH LAND.** A partial ESM `mock.module` is a
+LINK-time SyntaxError. Two new test files each stub `socket-transport.js`
+without knowing about the other branch's exports, and the combined suite dies at
+12 of 27 suites:
+
+- `send-failure-visible.test.js` (new in #6) needs `sealForRoom`/`openForRoom`
+  — **already added on this branch**, since an extra stub name is harmless
+  (verified) while a missing one is fatal.
+- `transport-seam.test.js` (new in #2) needs `clearRoomCursor` — **still to do,
+  during the merge.** It is the one remaining known break.
+
+**Verify with `node --check` on every file you touch by hand.** It caught a real
+mistake here that the eye did not.
+
+
+### Blocked on the user
+
+1. **Merge order matters.** #6 and #2 both touch `socket-transport.js`,
+   `rooms.js`, `net.js`, `chat.js`. Whichever merges first, **the other needs
+   rebasing again**. #2 was rebased this session; merging #6 undoes that.
+2. **Two product decisions.** Should `guestAuth` refuse deleted accounts (a user
+   who deletes their account then cannot return by reopening the app)? And what
+   to do about an account open on two origins?
+3. **Merging #6 needs a Railway deploy too** — `cd spotme/backend && npm run
+   deploy`. Additive and admin-guarded, so no Vercel-first hazard.
+4. Rotate the R2 secret and the `cfat_…` Cloudflare token. **Still not done.**
+5. Delete `probedesk9` / `smoketest_desk`. `DELETE /api/admin/users/:id` now
+   exists (admin-only, needs a STAFF login, not a user token). The API is on
+   **Railway**, not Vercel.
+6. **Safari DevTools may no longer be needed.** The device banner was dead code
+   until `377372a`; once #6 ships, @vijay22's phone should say so on its own
+   screen.
+
+### Traps found this session
+
+- **A cloud session still cannot reach `*.vercel.app` / `*.railway.app`** (403 at
+  the proxy). But it CAN run the whole stack locally — see harnesses above.
+- **`try { return f() } finally {}` runs the finally AT the return**, not when
+  the returned promise settles. That silently broke the first cut of the cursor
+  fix.
+- **A partial ESM `mock.module` is a link-time SyntaxError.** Adding an export to
+  `socket-transport.js` breaks four test files until their stubs list it.
+- `test/viewonce.test.js` is still 17/21 on Linux — verified pre-existing at
+  `origin/master` in the same container. Untouched, still undiagnosed.
+
+---
+
+## 0000000. EARLIER (2026-07-31 night) — superseded by the section above
 
 **`master` is `c5c9e07`. PRs #3 and #4 are MERGED. Vercel builds from master, so
 the fixes are shipping. No Railway deploy is needed — both changes are

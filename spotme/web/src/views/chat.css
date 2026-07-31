@@ -241,6 +241,22 @@
 
 .v-chat .sys svg { width: 13px; height: 13px; color: var(--blue); flex: none; }
 
+/* The key-persistence warning. Red because it is not advisory — nothing sent
+ * from this device can be read by the other side — and wider than the ordinary
+ * system line because it has a sentence to say, not a label. */
+.v-chat .sys.warn {
+  color: var(--red);
+  max-width: 94%;
+  font-size: 11px;
+  line-height: 1.35;
+  text-align: left;
+  padding: 6px 10px;
+  border-radius: 10px;
+  background: var(--redwell);
+}
+
+.v-chat .sys.warn svg { color: var(--red); align-self: flex-start; margin-top: 2px; }
+
 /* ------------------------------------------------------------ reply quote */
 
 .v-chat .q {

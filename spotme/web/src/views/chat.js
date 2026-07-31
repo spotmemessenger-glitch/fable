@@ -15,6 +15,7 @@ import { compressImage, fileToDataURL, recordVoice, currentLocation, mapLink, fi
 import { openPhotoEditor, closePhotoEditor } from '../lib/photoedit.js'
 import { el, clear, avatar, fmtTime, fmtDay, actionSheet } from '../lib/ui.js'
 import { isPlainEnglish } from '../lib/english.js'
+import { identityStatus } from '../lib/crypto/identity-store.js'
 import { transliterate, supportedScripts } from 'spotme-core/core/translit.js'
 
 const LONG_PRESS_MS = 420
@@ -366,6 +367,14 @@ export function render (root, ctx, roomId) {
 
   /* ------------------------------------------------------------- state */
   let mounted = true
+  /* Frames arrived for this room that would not open, and the transport's
+   * re-agreement did not rescue them. Screen-lifetime only and never written
+   * to the convo record: a "this chat is broken" flag that outlived the repair
+   * would make a working chat accuse itself forever. */
+  let roomUndecryptable = false
+  /* 'wrong-key' (re-agreement ran and failed) or 'no-key' (never got one).
+   * Only the first justifies telling someone to delete the conversation. */
+  let roomUndecryptableReason = null
   let lastDayKey = null
   /* Timestamp of the last row appended to the thread. Attachments finish out
    * of order, and appending each one wherever the thread currently ends
@@ -2101,6 +2110,54 @@ export function render (root, ctx, roomId) {
     ])
   }
 
+  /**
+   * The line that says this device cannot hold a key, or null when it can.
+   *
+   * This is not decoration. On a device in either state, `sysLine` above says
+   * "Encrypted with keys made on your devices" — which is precisely backwards:
+   * the key is there but the PEER cannot match it, so every message silently
+   * fails to open at the far end while this screen reassures the sender. The
+   * reassurance is worse than saying nothing.
+   *
+   * Only 'ephemeral' and 'unavailable' warn. 'unknown' does not: the identity
+   * simply has not been asked for yet, and warning on it would fire on every
+   * cold open of a perfectly healthy device.
+   */
+  function keyWarning () {
+    if (convo?.e2eVersion !== 'e2e_v2') return null   // a v1 room never used this key
+
+    /* THIS ROOM specifically is unreadable, whatever the device's own key is
+     * doing. Ranked above the device-level warning because it is the stronger
+     * statement: it is not a risk, it is a measurement — frames arrived, the
+     * transport tried to re-agree, and they still would not open. */
+    if (roomUndecryptable) {
+      /* The advice differs because the FAULTS differ, and one of them is
+       * destructive. 'wrong-key' means re-agreement ran and failed — the keys
+       * genuinely disagree and only recreating the chat clears it. 'no-key'
+       * means we never got a key at all, which a flat network or a slow key
+       * lookup produces just as easily as a real fault; telling someone to
+       * delete a working conversation over a dropped request would be a bug
+       * dressed as help. */
+      const worthDeleting = roomUndecryptableReason === 'wrong-key'
+      return el('div', { class: 'sys warn', html: IC.spark }, [
+        worthDeleting
+          ? 'Messages are arriving but can’t be read — this chat’s key no longer matches ' +
+            (convo?.peer?.name || 'the other person') + '’s. ' +
+            'Trying again won’t help. Delete this chat on both phones and start it again.'
+          : 'Messages are arriving but this device can’t unlock them yet. ' +
+            'Check your connection and reopen the chat — it often clears on its own.'
+      ])
+    }
+
+    const state = identityStatus()
+    if (state !== 'ephemeral' && state !== 'unavailable') return null
+    return el('div', { class: 'sys warn', html: IC.spark }, [
+      state === 'ephemeral'
+        ? 'This device can’t save its encryption key, so the other person can’t read what you send here. Reloading won’t fix it.'
+        : 'This device can’t store encryption keys at all — private browsing is the usual cause. Open Spot Me in a normal window.'
+    ])
+  }
+
   /* ------------------------------------------------------ photo albums */
   /**
    * A run of photos collapses into one WhatsApp-style album instead of
@@ -2225,7 +2282,14 @@ export function render (root, ctx, roomId) {
     lastDayKey = null
     lastTs = null
     const list = conn.store.list()
-    if (!list.length) { thread.appendChild(sysLine()); return }
+    /* The informational line is a first-run nicety, so an empty thread is the
+     * right and only place for it. A KEY WARNING is the opposite: it explains
+     * why the messages below are going nowhere, so it has to outlive the thread
+     * filling up — which on a broken device it does immediately, with the
+     * user's own sends, each one rendered locally and readable by nobody. */
+    const warning = keyWarning()
+    if (warning) thread.appendChild(warning)
+    if (!list.length) { if (!warning) thread.appendChild(sysLine()); return }
     for (const group of groupForRender(list)) {
       if (group.single) { appendMessage(group.single); continue }
       const first = group.album[0]
@@ -4274,6 +4338,12 @@ export function render (root, ctx, roomId) {
     if (!mounted) return
     switch (event.type) {
       case 'message': {
+        /* An incoming message that DECRYPTED is the only honest proof the key
+         * agrees again — the self-heal can repair a room without anything else
+         * saying so. Clearing here is what stops the warning outliving the
+         * fault it describes. `emit('message')` is the incoming path only, so
+         * the user's own sends cannot clear it by accident. */
+        if (roomUndecryptable) { roomUndecryptable = false; roomUndecryptableReason = null; renderList() }
         clearRxProgress(event.message?.id)
         const stick = nearBottom()
         appendMessage(event.message)
@@ -4282,6 +4352,27 @@ export function render (root, ctx, roomId) {
         else newChip.style.display = ''
         break
       }
+      /* Re-agreement already ran and failed by the time this fires, so there is
+       * nothing left to try automatically — the only remaining move is the
+       * user's. Re-render rather than append: the warning belongs at the top of
+       * the thread with the other system lines, not wherever we happen to be. */
+      case 'undecryptable': {
+        // 'wrong-key' is the stronger claim, so it may upgrade an existing
+        // 'no-key' — never the other way round.
+        const worse = event.reason === 'wrong-key' && roomUndecryptableReason !== 'wrong-key'
+        if (!roomUndecryptable || worse) {
+          roomUndecryptable = true
+          roomUndecryptableReason = event.reason || roomUndecryptableReason || 'wrong-key'
+          renderList()
+        }
+        break
+      }
+      /* The send threw and the store now says so. One row, rebuilt — the tick
+       * becomes "Not delivered", which is what `buildReadRow` has always drawn
+       * for an attachment and never had the chance to draw for text. */
+      case 'sendfailed':
+        refreshRow(event.id)
+        break
       case 'history': {
         const stick = nearBottom()
         renderList()

@@ -41,6 +41,14 @@ function tx (db, mode, fn) {
 
 let cached = null
 
+/* Why a module flag and not just `cached === null`. `loadIdentity` returns null
+ * when IndexedDB will not OPEN at all — private browsing, a blocked origin — and
+ * that is a DIFFERENT fault from "the write did not stick": the first means no
+ * v2 chat can work here at all, the second means this session's key is
+ * ephemeral. Neither is distinguishable from "nothing has asked for the
+ * identity yet" unless it is recorded, and the UI has to tell all three apart. */
+let openFailed = false
+
 /**
  * This device's identity, generated once and reused. Generation is idempotent
  * per device; a SECOND device gets a DIFFERENT key, which is why a v2 chat does
@@ -49,7 +57,8 @@ let cached = null
 export async function loadIdentity () {
   if (cached) return cached
   let db
-  try { db = await openDb() } catch { return null }   // private mode, quota, etc.
+  try { db = await openDb() } catch { openFailed = true; return null }   // private mode, quota, etc.
+  openFailed = false
 
   const found = await tx(db, 'readonly', (s) => s.get(SELF)).catch(() => null)
   if (found?.privateKey) {
@@ -102,6 +111,37 @@ export async function loadIdentity () {
   }
   cached = { ...record, persisted }
   return cached
+}
+
+/**
+ * This device's key situation, synchronously, for the UI.
+ *
+ * WHY THIS EXISTS. `persisted` was reported honestly and then written only to
+ * `console.warn`, which on a phone is nowhere: the device that CAUSED the
+ * @vijay22 outage looked completely healthy on its own screen, and diagnosing
+ * it needed a Mac and a cable. A fault this total has to be visible on the
+ * device it affects.
+ *
+ * Synchronous on purpose. `loadIdentity` is async and the chat paints before it
+ * resolves, so a caller that awaited would either block the first frame or show
+ * nothing at all. This reports what the last load already settled.
+ *
+ *   'ok'          the private key survives a reload
+ *   'ephemeral'   generated, but the write did not stick — THE bug. Every v2
+ *                 room here derives a key no peer can match, and
+ *                 `publishIdentity` is deliberately refusing to republish, so
+ *                 this does not resolve itself and a reload will not fix it
+ *   'unavailable' IndexedDB would not open, so there is no v2 identity at all
+ *   'unknown'     nothing has asked for the identity yet
+ *
+ * `persisted` is `undefined` on an identity LOADED from the store — only a
+ * freshly generated one carries the flag — so this tests `=== false`, exactly
+ * as `publishIdentity` does. Anything looser reports a fault on every healthy
+ * device that has simply been used before.
+ */
+export function identityStatus () {
+  if (cached) return cached.persisted === false ? 'ephemeral' : 'ok'
+  return openFailed ? 'unavailable' : 'unknown'
 }
 
 /**

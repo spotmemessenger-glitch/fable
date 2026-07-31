@@ -93,6 +93,7 @@ mock.module(`${SRC}lib/socket-transport.js`, {
     setRoomKey: () => {},
     setRoomKeyProvider: () => {},
     clearRoomKey: () => {},
+    clearRoomCursor: () => {},
     freshTokens: async () => ({ accessToken: 'test-token' })
   }
 })

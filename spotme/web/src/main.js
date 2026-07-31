@@ -12,7 +12,7 @@ import { db, wipeDevice } from './lib/db.js'
 import { lobby } from './lib/discovery.js'
 import { reach } from './lib/reach.js'
 import { rooms } from './lib/rooms.js'
-import { publishIdentity } from './lib/crypto/identity-store.js'
+import { publishIdentity, identityStatus } from './lib/crypto/identity-store.js'
 import { freshTokens } from './lib/socket-transport.js'
 import { readyRTC } from './net.js'
 import { attachPullRefresh } from './lib/pullrefresh.js'
@@ -498,7 +498,21 @@ function boot () {
    * It runs OUTSIDE the readyRTC() gate below because it is plain HTTP and has
    * nothing to do with ICE.
    */
-  publishIdentity(freshTokens).catch(() => {})
+  /* `publishIdentity` loads the identity on its way through, so once it settles
+   * — either way — `identityStatus()` has a real answer. Toasting here rather
+   * than only in the chat means a device in this state says so at launch,
+   * before the user has typed a message nobody will be able to read. The chat
+   * carries the persistent copy; this is the one that arrives unprompted. */
+  publishIdentity(freshTokens)
+    .catch(() => {})
+    .then(() => {
+      const state = identityStatus()
+      if (state === 'ephemeral') {
+        toast('This device can’t save its encryption key — messages you send can’t be read.')
+      } else if (state === 'unavailable') {
+        toast('This device can’t store encryption keys — private browsing is the usual cause.')
+      }
+    })
 
   readyRTC().then(() => {
     rooms.connectAll()

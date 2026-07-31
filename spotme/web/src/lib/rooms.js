@@ -14,7 +14,7 @@ import { createStore } from '../store.js'
 import { db, ROOM_PREFIX } from './db.js'
 import { alertMessage } from './notify.js'
 import { pokePeer } from './push.js'
-import { setRoomKeyProvider, freshTokens } from './socket-transport.js'
+import { setRoomKeyProvider, freshTokens, clearRoomKey, clearRoomCursor } from './socket-transport.js'
 import { roomKeyForConvo } from './crypto/identity-store.js'
 import { E2E_V2 } from './crypto/e2e-v2.js'
 
@@ -165,7 +165,10 @@ function createConnection (convo) {
     seenByPeer,
     openingByPeer,
     call: { state: 'idle', video: false, local: null, remote: null },
-    on (fn) { listeners.add(fn); return () => listeners.delete(fn) }
+    on (fn) { listeners.add(fn); return () => listeners.delete(fn) },
+    /* So a message can be placed into an already-open thread from outside this
+     * closure — `reach()` doing exactly that for the line carried by a knock. */
+    emit (event) { emit(event) }
   }
 
   function emit (event) { for (const fn of listeners) fn(event) }
@@ -318,6 +321,44 @@ function createConnection (convo) {
       seenByPeer.add(payload.id)
       emit({ type: 'seen', id: payload.id })
     },
+    /* The peer is sending and this device can open none of it, and re-agreeing
+     * the key did not rescue it. Deliberately NOT persisted onto the convo
+     * record: this is a live property of the key agreement, and a stale
+     * "broken" flag outliving a repair would be its own bug — the kind that
+     * makes a working chat permanently accuse itself. The view holds it while
+     * the screen is open, and an incoming message that DOES decrypt clears it. */
+    /* `type` LAST, not first. `info` carries the FRAME's type ('msg', 'read',
+     * …), so spreading it after `type: 'undecryptable'` overwrote the event
+     * type with the frame type — the event arrived as `{type:'msg'}`, the
+     * `case 'undecryptable'` in chat.js never matched, and the banner this was
+     * built for was dead code that its own test could not catch, because that
+     * test asserts at the transport boundary and never crosses this file. */
+    onUndecryptable (info) { emit({ ...info, type: 'undecryptable' }) },
+
+    /**
+     * A send threw, so the bubble must stop claiming it was sent.
+     *
+     * `sendAttachment` has patched `failed` since the voice-note work, and
+     * `buildReadRow` has drawn "Not delivered" for it just as long — but TEXT
+     * went out through `sendMessage`, which is fire-and-forget, so nothing ever
+     * set the flag on it. `read ? 'Read' : 'Sent'` is a DEFAULT, not a receipt:
+     * a text message that never left the device still rendered a tick.
+     *
+     * That is precisely the case ADR-001 created, as net.js's own comment says:
+     * an e2e_v2 room has no password fallback, so a room whose key cannot be
+     * agreed REFUSES to encrypt — correct behaviour, reported to the user as a
+     * tick and silence.
+     *
+     * Scoped to 'message'. Typing, read receipts and presence fail all the time
+     * on a flaky link and mean nothing to a user; marking a bubble undelivered
+     * because a typing indicator died would be noise dressed as information.
+     */
+    onSendError (what, error, id) {
+      if (what !== 'message' || !id) return
+      if (!conn.store.patch(id, { delivered: false, failed: true })) return
+      emit({ type: 'sendfailed', id })
+    },
+
     onPeers (count) {
       // Track when the peer was last connected, so the header can say
       // "Last seen 14:32" instead of a vague waiting message.
@@ -701,6 +742,33 @@ export const rooms = {
   },
 
   /** Build + persist + send a message. Returns the full envelope. */
+  /**
+   * Put a message into a room's thread without sending anything.
+   *
+   * THE BUG THIS EXISTS FOR. The first line of a new chat travels INSIDE the
+   * knock — `reach()` puts it in the payload, and both sides wrote it to the
+   * convo's `last` preview and fired a push notification with it. Neither side
+   * ever added it to the message store. So the notification quoted the text,
+   * the inbox row quoted the text, and opening the chat showed an empty thread:
+   * "it shows in notifications but not the actual message", reported from two
+   * real handsets. `inbox.js` states the intent plainly — the typed line is
+   * "what both sides see as the first message once the chat opens" — so this is
+   * a gap between the two, not a design choice.
+   *
+   * Idempotent by id, which is what makes it safe on the receiving side: a
+   * knock can arrive live over P2P AND again from the relay, and `store.add`
+   * refuses a duplicate id (and honours tombstones, so a deleted first message
+   * does not come back).
+   */
+  injectLocal (roomId, message) {
+    const conn = this.ensure(roomId)
+    if (!conn || !message?.id) return false
+    if (!conn.store.add(message)) return false
+    db.bump(roomId, { text: preview(message), ts: message.ts, fromMe: message.from === db.profile()?.id })
+    conn.emit({ type: 'message', message })
+    return true
+  },
+
   sendMessage (roomId, partial) {
     const conn = this.ensure(roomId)
     if (!conn) return null
@@ -917,11 +985,29 @@ export const rooms = {
     conn.store.remove(id)
   },
 
+  /**
+   * Delete this conversation's live state. Every caller pairs this with
+   * `db.removeConvo`, so it is the "this chat is gone" path, not teardown.
+   *
+   * THE KEY AND CURSOR HAVE TO GO WITH IT, and until now neither did.
+   * `clearRoomKey` had no production caller at all, so the registered provider
+   * — a closure over the convo record that was about to be deleted, holding its
+   * dead `peerKey` — outlived the conversation. A DM roomId is a pure function
+   * of the two account ids (`reach.js` `directRoom`), so re-starting the chat
+   * lands on the SAME room and `roomKey()` finds that orphan still installed:
+   * deleting and starting again derived from the dead key and failed exactly as
+   * before. That made the app's own repair advice self-defeating.
+   *
+   * The cursor goes too, or the re-created chat resumes mid-history with a hole
+   * where the messages it never managed to open used to be.
+   */
   leave (roomId) {
     const conn = connections.get(roomId)
     if (conn) {
       conn.net.leave()
       connections.delete(roomId)
     }
+    clearRoomKey(roomId)
+    clearRoomCursor(roomId)
   }
 }
