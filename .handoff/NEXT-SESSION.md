@@ -6,6 +6,142 @@ it, not by exit codes.
 
 ---
 
+## 0000000. LATEST (2026-07-31 night) — SUPERSEDES EVERYTHING BELOW
+
+**`master` is `c5c9e07`. PRs #3 and #4 are MERGED. Vercel builds from master, so
+the fixes are shipping. No Railway deploy is needed — both changes are
+client-side only, so the Vercel-before-Railway rule does not bite this time.**
+
+```
+master  c5c9e07  Self-healing key re-fetch (#4)
+        f09d49d  Hotfix: stop a keyless device poisoning every chat (#3)
+PR #2   feature/centrifugo-transport — STILL OPEN, and now conflicts on THIS FILE
+```
+
+### READ THIS BEFORE TESTING ON THE HANDSETS
+
+**The two merged PRs do NOT fix @vijay22 ↔ @ajith11 while that phone still
+cannot persist its key.** This is the single most likely way to misread the next
+test, so it is first. Walk the changes through that device:
+
+1. It cannot write IndexedDB, so it mints a fresh keypair every launch.
+2. PR #3 now makes it **refuse to publish** that ephemeral key. The server keeps
+   the ORIGINAL key, V₁.
+3. But the phone holds Vₙ's private half, not V₁'s. It derives a different room
+   key than @ajith11 does. That pair stays broken.
+4. PR #4 on @ajith11's side re-fetches @vijay22's CURRENT published key — and
+   gets V₁ back, because #3 just froze it. Same key, so the repair cannot land.
+
+That is not a bug in either PR. It is the deliberate trade in #3 (protect every
+other chat at the cost of that one device's session), and #4 repairs the PEERS
+of such a device, not the device itself. **Neither makes Safari store the key.**
+
+What the merge does buy, today: every other chat @vijay22 is in stops being
+poisoned on each launch; any conversation broken by an ORDINARY key rotation now
+repairs itself on the first undecryptable frame; a failed send says so instead
+of showing "✓ Sent"; and the moment that device does persist a key, @ajith11's
+side self-heals on the first message and stays healed.
+
+**Messages already dropped stay lost either way** — the cursor advances in
+`dispatch`'s `finally` whether or not the frame opened. Those two chats need
+recreating once the storage bug is fixed.
+
+### TASK 3 IS NOW A ONE-LINE ANSWER, NOT AN INVESTIGATION
+
+Connect @vijay22's iPhone to the Mac by cable, open Safari DevTools,
+**hard-reload the PWA so the phone actually has the new bundle**, and read the
+console:
+
+- `spotme identity: NOT republishing — this device cannot persist its key`
+  → the IndexedDB/Safari bug is still there, that chat will NOT heal, and this
+  is the blocker. Everything else is downstream of it.
+- **No warning** → the key persisted. Send one message; @ajith11's side should
+  repair on that frame, and both directions then work.
+
+The `persisted` flag from PR #3 is what makes this observable at all. Before it,
+the failure was invisible by construction.
+
+### What PR #4 added (`spotme/web`, 452 lines, one new test file)
+
+`roomKeyForConvo(convo, fetchToken, opts)` takes `forceRefetch` — the stored
+`convo.peerKey` was PREFERRED and only fetched when absent, which is what made a
+stale key permanent. Evicting the transport's key cache alone fixes nothing; the
+provider re-derives from the same stored value. `onPeerKeyChanged` reports a
+recovered key back because this module must not import `db` (import cycle).
+
+`refreshRoomKey(roomId)` in `socket-transport.js`, called from `dispatch` on
+**`OperationError` only** — AES-GCM refusing to authenticate means the key is
+wrong; a `SyntaxError` from `JSON.parse` means we DID decrypt and the sender
+sent nonsense. Guardrails: one retry per frame, one re-fetch per room per 30s,
+concurrent failures coalesce onto one fetch, v1 rooms never offered a repair.
+
+The captured `keyPromise` had to go — it resolved once for the life of the page,
+so a repaired room would have healed in the cache and stayed broken in the room.
+
+`test/key-self-heal.test.js`, 15 checks, **fails 4/22 against the pre-fix tree**.
+It drives the room's real `onFrame` (what `socket.on('action')` calls), not the
+modules alone — deliberately, because this project's most expensive bug was a
+V-19 cut with correct crypto that was never called and passed its module tests.
+
+### The two test users — there IS a route, with a catch
+
+`DELETE /api/users/me` exists but is **self-service**: it acts on the JWT's
+subject. **`AdminController` has NO user-deletion route at all** (growth, health,
+audit log, employees only) — that is why the admin dashboard could not do it.
+
+So you need a token AS each user. `auth.service.ts:152` rejects a mismatched
+claim secret, and `claimSecretHash` is set ONLY at creation. The web client
+generates `claimSecret: randomHex(16)` (`db.js:139`) while the transport falls
+back to `anon_<id>` (`socket-transport.js:307`) — so it depends on how the
+probes were made:
+
+```bash
+API=https://api-production-0a4ca.up.railway.app
+curl -sS -X POST $API/api/auth/guest -H 'content-type: application/json' \
+  -d '{"id":"ed112d1b973ba7b860f471f01e3acc8d","username":"smoketest_desk","secret":"anon_ed112d1b973ba7b860f471f01e3acc8d"}'
+# tokens -> curl -X DELETE $API/api/users/me -H "authorization: Bearer <accessToken>"
+# 401    -> random claim secret, gone with the device; neither route can reach it
+```
+
+Same shape for `probedesk9` / `731ffdf1a5e30958`. It is a **soft** delete
+(`deletedAt` set, email/phone nulled) — enough to drop them from username
+search, key lookup, group member search and the admin counts; the row stays.
+**If the 401 comes back, the real fix is adding an admin delete route.**
+
+### Traps found this session — do not rediscover
+
+- **A cloud session cannot reach `*.vercel.app` or `*.railway.app`.** The agent
+  proxy answers 403 to CONNECT. Verifying a deploy or touching production has to
+  happen from your own machine. Build locally and grep `dist/assets/index-*.js`
+  instead — that proves the minifier kept the fix, which is most of the value.
+- **`test/viewonce.test.js` is 17/21 on Linux/node 22**, failing the four checks
+  that assert media reaches disk. Identical at `67bacf7`, `e8ee362`, `9c81ffd`
+  and `a453b9e`, so it PREDATES PR #1 — not caused by any recent change. Not
+  module mocking either: `media.test.js` uses the same flag and passes 41/41.
+  Prior sessions measured on Windows. Flagged, not diagnosed.
+- **The container's local `master` was a divergent 26-July line** (`c88c214`,
+  57 ahead / 50 behind `origin/master`). Building or pushing from it would ship
+  five-day-old code. Check `git rev-parse master origin/master` before trusting
+  a local branch name in a fresh clone.
+- A stop hook may offer to `--reset-author` unsigned commits onto Claude. Those
+  50 commits are **Youvaraja's own work**; rewriting them would misattribute
+  them, they are not on any remote, and changing an author email does not sign
+  anything — "Unverified" is about GPG/SSH signing.
+
+### Still blocked on the user
+
+1. **Safari DevTools on @vijay22's iPhone** — task 3 above. Everything about
+   those two chats is downstream of it.
+2. **Rotate the R2 secret access key and the `cfat_…` Cloudflare token** — both
+   were pasted into the 2026-07-31 transcript, which is on disk. Still not done.
+3. Delete the two test users (see above).
+4. **PR #2 is open and now conflicts with this file.** This section was written
+   directly on master by agreement, accepting that. PR #2's branch carries its
+   own `## 00000` section, which the section you are reading supersedes on every
+   point they disagree.
+
+---
+
 ## 000. LATEST (2026-07-31 morning) — READ THIS FIRST, IT SUPERSEDES 00
 
 **Repo: `spotmemessenger-glitch/fable`, branch `master`, HEAD `ad0b123`, fully
