@@ -9,6 +9,7 @@ import {
   NotFoundException,
   Param,
   Post,
+  Put,
   Query,
   Req,
   Res,
@@ -196,7 +197,11 @@ export class LocalMediaController {
     if (this.storage.name !== 'local') throw new NotFoundException();
   }
 
-  @Post()
+  /* PUT, matching what S3/R2 presign. The local adapter is a stand-in for a
+   * bucket, so it has to speak the same verb — when it answered @Post() the
+   * client sent POST, passed every local test, and would have been rejected by
+   * the first real presigned URL it ever touched. */
+  @Put()
   @HttpCode(200)
   async upload(
     @Query('key') key: string,
