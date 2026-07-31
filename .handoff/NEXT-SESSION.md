@@ -8,13 +8,13 @@
 ## 0. LATEST (2026-07-31 overnight) — SUPERSEDES EVERYTHING BELOW
 
 PR #6 is MERGED. `master` is at `81858cc`. The designated branch was restarted
-from it (documented procedure for a merged branch) and now carries seven
+from it (documented procedure for a merged branch) and now carries TEN
 commits, all pushed, on **PR #7 (draft)**. PR #2 is still open, still rebased,
 still unmerged.
 
 ```
 master  81858cc
-PR #7   claude/next-session-b6ypc5   79f3abb   DRAFT — this session's work
+PR #7   claude/next-session-b6ypc5   cc0057d   DRAFT — this session's work
 PR #2   feature/centrifugo-transport 02611cf   OPEN, unmerged
 ```
 
@@ -84,6 +84,15 @@ deliberate 400 ms ghost-click window.
 12. A knock's sender was taken from the payload while the authenticated sender
     sat unused in `meta.peerId`. Any user could knock as anyone, and
     `receiveKnock` stores the ATTACKER's roomId and secret.
+
+13a. The bridged /api handlers verified a token's SIGNATURE but never asked
+    whether the account still existed, so a deleted user's token kept working
+    against /api/knock, /api/translate, /api/voice and /api/presence for its
+    full 15-minute life while /api/auth/* refused it. One gate now covers all
+    four (`src/middleware/guestAuth.ts`). `/api/turn` is deliberately NOT gated
+    — it is fetched at boot before a token can exist and `readyRTC()` caches the
+    result, so a 401 there pins the session to STUN-only. It is still
+    unauthenticated and still mints Cloudflare credentials: see item 4 below.
 
 **Shipped-broken and unreachable:**
 
