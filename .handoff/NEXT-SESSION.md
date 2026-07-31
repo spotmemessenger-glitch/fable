@@ -1,5 +1,113 @@
 # START HERE — pickup brief
 
+## 0000. LATEST (2026-07-31 evening) — SUPERSEDES EVERYTHING BELOW
+
+**Session cost ~$1,160. Two branches pushed, one PR open, nothing merged.**
+`master` is untouched at `a453b9e` — deliberately, because merging triggers the
+Vercel production deploy.
+
+```
+master                       a453b9e   (= origin, no Phase 1/2 work)
+fix/v19-e2ee-key-agreement   e8ee362   PR #1, OPEN
+feature/centrifugo-transport a57d2f5   stacked on the above, no PR yet
+```
+
+**PR #1 must merge first**, or the Phase 2 branch's diff reads wrong.
+https://github.com/spotmemessenger-glitch/fable/pull/1
+
+### Phase 1 — V-19 fixed AND wired (`fix/v19-e2ee-key-agreement`)
+
+DM keys were `cyrb53(sortedUserIds)` — a non-cryptographic hash of two columns
+the server already stores, so **the server could recompute every DM key**. New
+rooms now agree a key: non-exportable X25519 identity per device → ECDH →
+HKDF-SHA256, bound to roomId + both public keys. `e2e_v1` rooms keep their
+history and are labelled legacy; a room is marked v2 **only if agreement
+actually produced a key**.
+
+**THE LESSON OF THIS SESSION.** The first cut had correct crypto that was
+**never called**. A 145-agent adversarial review found it. My "verified
+end-to-end" claim was false because I had tested the modules DIRECTLY and never
+the app's wiring — two green halves each faking the half they did not own. Fixed:
+`publishIdentity` now runs at `boot()`; `rooms.js` registers a **key provider**
+so a v2 room has NO password path (it re-agrees or does not open); both sides
+store `peerKey` = the OTHER side's key; `reach()` writes the convo before
+returning; the knock relay passes `e2eVersion`/`senderKey` through.
+
+**Pre-existing bug found on the way:** `isToken` in `api/knock.js` demanded pure
+hex, but reach.js builds `dm-<hash>`. The relay had been **400ing every direct
+-message knock**, silently (`relayStore` uses `safe()`). The durable offline
+path for DMs has NEVER worked in production. Verify that on Railway after merge.
+
+Verified by running: 16 web suites / 263 checks, backend 34/34, migration applied
+and the column confirmed in Postgres, endpoints live (incl. a refused key
+hijack), and **in a browser the app itself published its X25519 key at boot** and
+re-derived a room key from the stored record after reload.
+
+### Phase 2 — the SEAM, not the migration (`feature/centrifugo-transport`)
+
+`ITransportAdapter` + `SocketIOAdapter` + `CentrifugoAdapter` in
+`web/src/lib/transport/`, selected by `localStorage['spotme.transport']`.
+ADR-002 written. 22 transport tests. Backend `/api/v2/realtime/token` works.
+
+**`FORBIDDEN_KEY_SURFACE` is the important part:** the tests FAIL if any adapter
+grows `roomKey`/`deriveKey`/`password`/`encrypt`. A transport rewrite is the
+most likely way to silently undo Phase 1.
+
+### NOT DONE — do not claim otherwise
+
+1. **The app does not use the transport layer.** Zero app-code imports of
+   `transport/`; `rooms.js` still calls `socket-transport.js` directly. This is
+   the same shape as the Phase 1 defect — named here so it is not rediscovered.
+2. **`POST /api/v2/realtime/centrifugo/publish` returns 501 on purpose.**
+   `policy()`/`refuse()` are PRIVATE on `RoomsGateway` (`:110`, `:333`).
+   Duplicating them would create a second authorisation path that drifts.
+   **Prerequisite: extract them into `RoomsService`.** That is the next task.
+3. **No two-device run, ever.** Everything was one browser + local backend.
+4. `centrifuge` is NOT installed; Centrifugo is NOT deployed; server version NOT
+   pinned (the clone is `--depth 1`, no tags).
+5. **No lint/typecheck exists in `web`** — no eslint config, no script.
+6. Performance targets (reconnect <2s, presence <500ms, zero dropped post-ack)
+   are TARGETS, never measured.
+7. The knock-relay round-trip test uses a **local Upstash-REST mock**; the real
+   credentials live only on Vercel and were deliberately not borrowed.
+
+### Traps learned this session — do not rediscover
+
+- **`nest build` wipes `dist/` and emits nothing** when a stale
+  `tsconfig.build.tsbuildinfo` survives. Delete it before every backend build.
+  Symptom: `Cannot find module dist/main`.
+- **Piping a long-running server through `Select-Object` kills it** — the closed
+  pipe terminates node. Redirect to a file instead.
+- **`git show <ref>:<path> | Set-Content` corrupts the file.** A "regression
+  proof" done that way failed with `handler is not a function`, which proves
+  nothing. Redirect via bash.
+- **A test must be run against the PRE-FIX code before it is trusted.** The
+  relay test only earned its keep when 9 of 12 checks failed against the old
+  `knock.js` on real assertions.
+- `gh auth status` hangs on this box (credential helper). Use the GitHub MCP.
+- **~10 files of shell debris** (0-byte, named `{`, `c!`, `X`) get created by
+  malformed PowerShell. Check `git status` before committing.
+
+### Reference corpus cloned this session (~8 GB, all gitignored)
+
+`whatsapp-oss/` (28) · `Telegram/` + `telegram-oss/` (20) · `msg-stack/` (17) ·
+`geo-stack/` (9) · `ui-stack/` (16) · `scale-stack/` (11) · `messenger-refs/` (8)
+
+**Licence traps:** Telegram clients are GPL-2.0/AGPL and `tgcalls` is GPL-3.0 —
+read, never copy. `redpanda` (BSL) and `sentry` (FSL) are **source-available,
+NOT open source**. `react-leaflet` is **Hippocratic-2.1, not OSI-approved**. The
+permissive picks are TDLib, LiveKit, h3, MapLibre, and both sticker repos.
+
+### Blocked on the user
+
+1. Merge PR #1 (triggers the Vercel production deploy — Vercel BEFORE Railway).
+2. Then verify on Railway that offline DM delivery works for the first time.
+3. Decide whether Phase 3 starts before or after the `policy()`/`refuse()`
+   extraction.
+
+---
+
+
 **Written:** 2026-07-29, end of session (~$341 spent).
 **Updated:** 2026-07-30 late evening. Everything below was verified by RUNNING
 it, not by exit codes.
