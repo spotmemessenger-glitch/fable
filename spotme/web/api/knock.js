@@ -46,7 +46,13 @@ const MODES = new Set(['meet', 'nearby', 'bluetooth'])
 /** Spot Me ids are hex from randomHex — anything else is not one. */
 const isId = (value) => typeof value === 'string' && /^[a-f0-9]{4,64}$/i.test(value)
 /** roomId/secret are stableHash hex, but keep this generous rather than brittle. */
-const isToken = (value) => typeof value === 'string' && /^[a-f0-9]{4,128}$/i.test(value)
+/* The optional `<prefix>-` matters: reach.js builds room ids as
+ * `dm-${stableHash(...)}` and `inbox-${stableHash(...)}`, and a hyphen is not a
+ * hex digit. The old pattern therefore rejected EVERY direct-message knock with
+ * 400 "invalid knock" — and `relayStore` posts through `safe()`, which swallows
+ * the rejection, so the durable offline path for DMs had never once worked and
+ * nothing said so. Group rooms use bare `randomHex(16)`, which still matches. */
+const isToken = (value) => typeof value === 'string' && /^(?:[a-z]{1,8}-)?[a-f0-9]{4,128}$/i.test(value)
 
 const inboxKey = (userId) => `knock:inbox:${userId}`
 const dataKey = (roomId) => `knock:data:${roomId}`
@@ -141,6 +147,23 @@ async function handleStore (res, body) {
     secret,
     text: String(knock.text || '').slice(0, MAX_TEXT_CHARS),
     mode: MODES.has(knock.mode) ? knock.mode : 'meet',
+    /* THE RELAY MUST NOT DOWNGRADE THE ROOM.
+     *
+     * This record is an allowlist rebuild, not a passthrough, so any field not
+     * named here is dropped. e2eVersion and senderKey were being dropped —
+     * which meant every knock delivered by the relay (the offline path: sender
+     * goes away before the recipient comes online) arrived without the public
+     * key needed to agree a v2 key, and receiveKnock silently opened an e2e_v1
+     * room. P2P knocks were v2, relayed ones were not, and nothing said so.
+     *
+     * `senderKey` is bounded and shape-checked because it lands in a public
+     * inbox: a raw X25519/P-256 key is 32 or 65 bytes, so 256 base64 chars is
+     * already generous. It is NOT trusted — the recipient's own agreement
+     * either succeeds against it or the room is recorded as downgraded. */
+    e2eVersion: knock.e2eVersion === 'e2e_v2' ? 'e2e_v2' : 'e2e_v1',
+    senderKey: typeof knock.senderKey === 'string' && /^[A-Za-z0-9+/]{1,256}={0,2}$/.test(knock.senderKey)
+      ? knock.senderKey
+      : null,
     ts: Date.now()
   }
 

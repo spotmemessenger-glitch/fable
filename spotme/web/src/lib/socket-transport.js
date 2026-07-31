@@ -82,16 +82,86 @@ function concatBytes (parts) {
 
 const keyCache = new Map()
 
+/**
+ * Install a room key that was AGREED rather than derived from a password.
+ *
+ * e2e_v2 rooms (ADR-001) get their AES-GCM key from an X25519 ECDH exchange, so
+ * there is no password to stretch — the key already exists before the room is
+ * joined. Seeding the same cache `roomKey()` reads means the entire message
+ * path below is unchanged: seal/open neither know nor care which scheme
+ * produced the key, which is exactly why this is the seam to use. A v1 room
+ * simply never calls this and falls through to PBKDF2 as before.
+ *
+ * Must be called BEFORE joinRoom for that roomId, or the password path wins the
+ * cache and the peer will not be able to open anything you send.
+ */
+export function setRoomKey (roomId, key) {
+  if (!roomId || !key) return
+  keyCache.set(`${roomId}`, Promise.resolve(key))
+}
+
+/**
+ * roomId -> async () => CryptoKey. A room with a provider NEVER falls back to
+ * the password.
+ */
+const keyProviders = new Map()
+
+/**
+ * Declare that this room's key is AGREED, and how to re-agree it.
+ *
+ * This exists because `setRoomKey` alone was not enough. The agreed key lived
+ * only in `keyCache`, which dies with the page — so after a reload
+ * `rooms.connectAll()` rejoined every stored room with `convo.secret` and
+ * `roomKey()` quietly derived PBKDF2 over the cyrb53 v1 secret. Both peers did
+ * the identical thing, so the chat kept working and nothing surfaced: an
+ * e2e_v2 room silently reverted to the exact key V-19 is about, while the UI
+ * went on promising the server holds no key to it.
+ *
+ * A provider makes that impossible. Once registered, this room has no password
+ * path at all — if agreement cannot be reached the room does not open, which is
+ * the correct outcome. Failing loudly beats silently using a key the server can
+ * recompute.
+ */
+export function setRoomKeyProvider (roomId, provider) {
+  if (!roomId || typeof provider !== 'function') return
+  const cacheKey = `${roomId}`
+  keyProviders.set(cacheKey, provider)
+  // Evict anything already derived: a PBKDF2 key cached from an earlier join
+  // must not outlive the moment we learn this room is v2.
+  keyCache.delete(cacheKey)
+}
+
+/** Forget a room entirely — used when a room is downgraded or wiped. */
+export function clearRoomKey (roomId) {
+  const cacheKey = `${roomId}`
+  keyProviders.delete(cacheKey)
+  keyCache.delete(cacheKey)
+}
+
 function roomKey (roomId, password) {
   const cacheKey = `${roomId}`
   if (!keyCache.has(cacheKey)) {
-    keyCache.set(cacheKey, (async () => {
-      const material = await crypto.subtle.importKey(
-        'raw', enc(String(password ?? '')), 'PBKDF2', false, ['deriveKey'])
-      return crypto.subtle.deriveKey(
-        { name: 'PBKDF2', salt: enc(`spotme-room-v1:${roomId}`), iterations: KEY_ITERATIONS, hash: 'SHA-256' },
-        material, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt'])
-    })())
+    const provider = keyProviders.get(cacheKey)
+    if (provider) {
+      // NO password fallback on this branch, by design. A rejected provider
+      // also evicts itself so a later attempt (peer publishes a key, network
+      // returns) can succeed instead of the room being wedged forever.
+      keyCache.set(cacheKey, Promise.resolve()
+        .then(() => provider())
+        .then((key) => {
+          if (!key) throw new Error(`no agreed key for room ${roomId}`)
+          return key
+        })
+        .catch((err) => { keyCache.delete(cacheKey); throw err }))
+    } else {
+      keyCache.set(cacheKey, (async () => {
+        const material = await crypto.subtle.importKey(
+          'raw', enc(String(password ?? '')), 'PBKDF2', false, ['deriveKey'])
+        return crypto.subtle.deriveKey(
+          { name: 'PBKDF2', salt: enc(`spotme-room-v1:${roomId}`), iterations: KEY_ITERATIONS, hash: 'SHA-256' },
+          material, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt'])
+      })())
+    }
   }
   return keyCache.get(cacheKey)
 }

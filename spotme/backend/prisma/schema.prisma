@@ -202,6 +202,18 @@ model Conversation {
   title     String?
   createdAt DateTime @default(now())
 
+  // 1 = e2e_v1 (key derived from both user ids via cyrb53 — the server can
+  // recompute it; see ADR-001), 2 = e2e_v2 (X25519 ECDH + HKDF, device-held).
+  // Default 1 backfills every existing row honestly: they ARE v1 and cannot be
+  // migrated without destroying their history.
+  //
+  // NOTE FOR THE WEB APP: this column is NOT its source of truth. Web DM rooms
+  // never create a Conversation row — they are roomId keys into RoomEvent /
+  // RoomMember, and their version lives on the client convo record and in the
+  // knock payload. This field serves the mobile/backend track (chat.service,
+  // chat-requests.service) and keeps the two schemas legible to each other.
+  keyVersion Int     @default(1)
+
   participants ConversationParticipant[]
   messages     Message[]
   chatRequest  ChatRequest?

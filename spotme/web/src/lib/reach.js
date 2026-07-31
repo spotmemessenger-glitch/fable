@@ -50,12 +50,14 @@
  * relay only ever holds the OPENING knock, never anything exchanged after
  * the chat is live — everything past that stays P2P-only, unchanged.
  */
-import { joinRoom } from './socket-transport.js'
+import { joinRoom, setRoomKey, freshTokens } from './socket-transport.js'
 import { RTC_CONFIG, readyRTC } from '../net.js'
 import { db } from './db.js'
 import { rooms } from './rooms.js'
 import { pushNote } from './notify.js'
 import { pokePeer } from './push.js'
+import { E2E_V1, E2E_V2, deriveRoomKey } from './crypto/e2e-v2.js'
+import { loadIdentity, fetchPeerKey } from './crypto/identity-store.js'
 
 const APP_ID = 'io.ysnapai.spotme'
 const HEARTBEAT_MS = 10_000
@@ -92,7 +94,41 @@ function directRoom (idA, idB) {
   const key = `${a}:${b}`
   return {
     roomId: `dm-${stableHash(`spotme-dm-room-v1:${key}`)}`,
+    // V-19: this secret is a NON-CRYPTOGRAPHIC hash of two ids the server
+    // stores, so the server can recompute it. It is retained ONLY because
+    // existing rooms were built with it and changing it would make their
+    // history unreadable forever. New rooms take the e2e_v2 path below and
+    // never use this value. See ADR-001.
     secret: stableHash(`spotme-dm-secret-v1:${key}`) + stableHash(`spotme-dm-secret-v2:${key}`)
+  }
+}
+
+/**
+ * Try to make this room an e2e_v2 room: fetch the peer's published public key,
+ * agree a key with our own non-exportable identity, and install it before the
+ * room is ever joined.
+ *
+ * Returns the sender's public key on success, null on any failure — and null is
+ * an ORDINARY outcome, not an error. Every account that predates this feature
+ * has no published key, so falling back to v1 is the common case for now. The
+ * caller records which scheme was actually used; what must never happen is a
+ * room labelled v2 that is really v1.
+ */
+async function prepareV2 (peerId, roomId) {
+  try {
+    const identity = await loadIdentity()
+    if (!identity?.privateKey) return null
+    const { accessToken } = await freshTokens()
+    const peer = await fetchPeerKey(peerId, accessToken)
+    if (!peer?.publicKey) return null
+    const key = await deriveRoomKey({ identity, peerPublicKeyB64: peer.publicKey, roomId })
+    setRoomKey(roomId, key)              // must precede joinRoom, or PBKDF2 wins the cache
+    // BOTH keys come back. `myKey` goes on the wire so the peer can agree;
+    // `peerKey` is persisted so THIS device can re-derive after a reload —
+    // returning only our own key (an earlier bug) made that impossible.
+    return { myKey: identity.publicKeyB64, peerKey: peer.publicKey }
+  } catch {
+    return null
   }
 }
 
@@ -109,6 +145,10 @@ function createReach () {
   function safe (promise) { if (promise?.catch) promise.catch(() => {}) }
 
   const outbox = new Map()   // peerId -> { room, payload, knockAction, first }
+  /** roomId -> our public key for that room, or null once agreement has been
+   *  attempted and failed. Presence of the roomId means "already attempted",
+   *  which is what stops reach() re-entering forever. */
+  const v2State = new Map()
 
   /**
    * Open the conversation a knock describes, whichever transport it arrived
@@ -121,8 +161,40 @@ function createReach () {
     if (!payload?.from?.id || !payload.roomId || !payload.secret) return 'invalid'
     if (db.isBlocked(payload.from.id)) return 'blocked'
     if (db.convo(payload.roomId)) return 'duplicate'
+
+    /* The sender says this is a v2 room and hands us their public key. Agree the
+     * same key from our own identity and install it BEFORE the room is joined,
+     * exactly as the sending side does — otherwise PBKDF2 over the (worthless)
+     * v1 secret wins the cache and neither side can open the other's messages.
+     * Agreement that fails downgrades this room to v1 and RECORDS that, rather
+     * than leaving a room that claims v2 and is not. */
+    const wantsV2 = payload.e2eVersion === E2E_V2 && typeof payload.senderKey === 'string'
+    let e2eVersion = wantsV2 ? E2E_V2 : E2E_V1
+    if (wantsV2) {
+      loadIdentity()
+        .then((identity) => identity?.privateKey
+          ? deriveRoomKey({ identity, peerPublicKeyB64: payload.senderKey, roomId: payload.roomId })
+          : null)
+        .then((key) => {
+          if (key) { setRoomKey(payload.roomId, key); rooms.ensure(payload.roomId); return }
+          // Agreement failed: record the DOWNGRADE rather than leaving a room
+          // labelled v2 that is really keyed v1, and drop the now-meaningless
+          // peerKey so the boot re-derivation does not keep retrying it.
+          db.upsertConvo({ roomId: payload.roomId, e2eVersion: E2E_V1, peerKey: null })
+          rooms.ensure(payload.roomId)
+        })
+        .catch(() => {
+          db.upsertConvo({ roomId: payload.roomId, e2eVersion: E2E_V1, peerKey: null })
+          rooms.ensure(payload.roomId)
+        })
+    }
+
     db.upsertConvo({
       roomId: payload.roomId, secret: payload.secret, kind: 'dm', mode: payload.mode || 'meet',
+      // `peerKey` is THEIR key, on both sides — the sender's knock carries it
+      // as `senderKey`, and from here it is stored under the same name the
+      // initiator uses so boot re-derivation works identically either way.
+      e2eVersion, peerKey: payload.senderKey || null,
       peer: {
         id: payload.from.id, name: payload.from.name || 'Unknown',
         avatar: payload.from.avatar || null, lang: payload.from.lang || 'en'
@@ -134,7 +206,12 @@ function createReach () {
       id: payload.from.id, name: payload.from.name || 'Unknown',
       avatar: payload.from.avatar || null, lang: payload.from.lang || 'en'
     })
-    rooms.ensure(payload.roomId)
+    // A v2 room is joined by the agreement continuation above, NOT here. Joining
+    // now would derive a key from the v1 password and win the cache before
+    // agreement finishes, leaving both sides unable to open each other's
+    // messages — the failure would look like "chat is broken", not "crypto is
+    // misconfigured", which is exactly the kind that costs a day to find.
+    if (!wantsV2) rooms.ensure(payload.roomId)
     pushNote(`${payload.from.name || 'Someone'} started a chat with you`,
       String(payload.text || 'Say hi').slice(0, 120), `chat:${payload.from.id}`)
     notify()
@@ -224,7 +301,11 @@ function createReach () {
 
     lastTick = Date.now()
     heartbeat = setInterval(() => { flushOutbox(); lastTick = Date.now() }, HEARTBEAT_MS)
-    window.__reach = { inbox, outbox }
+    // A `window.__reach = { inbox, outbox }` debug handle used to live here. It
+    // published live room objects and every pending knock — profile, roomId and
+    // room secret — to anything sharing the page: an injected script, a browser
+    // extension, a devtools snippet. Hardening key derivation while leaving the
+    // keys reachable from `window` would have been theatre.
     checkRelay()
   }
 
@@ -298,20 +379,57 @@ function createReach () {
     const existing = db.convo(roomId)
     if (existing && (!existing.initiated || existing.delivered)) return roomId
 
+    /* THE CONVO IS WRITTEN FIRST, ALWAYS.
+     *
+     * An earlier revision kicked off key agreement and returned `roomId` before
+     * upsertConvo ran, so the caller opened a thread for a conversation that
+     * did not exist yet — every new chat bounced off "Conversation not found"
+     * on the first tap. Persist the record, THEN agree the key, THEN join. */
     if (!existing) {
       db.upsertConvo({
         roomId, secret, kind: 'dm', mode, initiated: true, delivered: false,
+        e2eVersion: E2E_V1, peerKey: null,      // upgraded below iff agreement lands
         peer: { id: peer.id, name: peer.name, avatar: peer.avatar || null, lang: peer.lang || 'en' },
         title: peer.name,
         last: { text: text || 'Chat started', ts: Date.now(), fromMe: true }
       })
       db.addContact({ id: peer.id, name: peer.name, avatar: peer.avatar || null, lang: peer.lang || 'en' })
     }
+
+    /* Key agreement must SETTLE before the room is joined — the agreed key has
+     * to be installed before anything is sealed with it. reach() stays
+     * synchronous for its callers by re-entering once agreement resolves, the
+     * same shape the relayReady gate further down already uses. */
+    if (!v2State.has(roomId)) {
+      v2State.set(roomId, null)
+      prepareV2(peer.id, roomId).then((agreed) => {
+        v2State.set(roomId, agreed || null)
+        if (agreed) {
+          // peerKey is THEIR key on both sides of the conversation, so either
+          // device can re-derive after a reload. Storing our own key here (an
+          // earlier bug) left the initiator unable to re-derive at all.
+          db.upsertConvo({ roomId, e2eVersion: E2E_V2, peerKey: agreed.peerKey })
+        }
+        reach(peer, text, mode)
+      })
+      return roomId
+    }
+
+    const agreed = v2State.get(roomId)
+    // A room is v2 only if agreement actually produced a key. Never label a
+    // room by what was attempted — only by what happened.
+    const e2eVersion = agreed ? E2E_V2 : (db.convo(roomId)?.e2eVersion || E2E_V1)
+    const senderKey = agreed?.myKey ?? null
+
     rooms.ensure(roomId)
 
     const payload = {
       from: { id: me.id, name: me.name, avatar: me.avatar, lang: me.lang },
-      roomId, secret, text: String(text || '').slice(0, 300), mode
+      roomId, secret, text: String(text || '').slice(0, 300), mode,
+      // The recipient needs our public key to agree the same key. `secret` still
+      // rides along for v1 rooms and for peers on an older build; a v2 recipient
+      // ignores it entirely.
+      e2eVersion, senderKey
     }
     // Both are plain HTTP, independent of WebRTC/TURN readiness — no reason
     // to make them wait behind the relayReady gate below.

@@ -1,0 +1,25 @@
+-- e2e_v2 key-version marker (ADR-001).
+--
+-- Hand-written: Docker was not running on the authoring machine, so there was
+-- no shadow database for `prisma migrate dev`. It follows the same convention
+-- as 20260731093000_view_once_attachments, which was written the same way, and
+-- must stay byte-compatible with what Prisma would generate for this schema
+-- change: one additive column with a default.
+--
+-- WHY DEFAULT 1 AND NOT 2. Every conversation that exists when this lands IS
+-- e2e_v1: its key was derived from `cyrb53(idA:idB)`, which the server can
+-- recompute. Defaulting to 1 records that truthfully rather than flattering the
+-- existing rows. A v1 room cannot be upgraded in place — the key change would
+-- make its whole history undecryptable — so nothing backfills to 2, ever.
+--
+-- NOTE: this column is NOT the source of truth for the WEB app. Web DM rooms
+-- never create a Conversation row; they are roomId keys into RoomEvent and
+-- RoomMember, and their version travels on the client convo record and in the
+-- knock payload. This serves the mobile/backend track (chat.service.ts,
+-- chat-requests.service.ts) and keeps the two halves of the product legible.
+--
+-- `User.publicKey` is deliberately absent here: it already exists, added by
+-- 20260726153223_add_e2e_key_fields. It has simply been NULL for every user
+-- because no client has ever generated a key to put in it.
+
+ALTER TABLE "Conversation" ADD COLUMN "keyVersion" INTEGER NOT NULL DEFAULT 1;

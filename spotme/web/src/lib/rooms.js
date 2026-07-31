@@ -14,6 +14,9 @@ import { createStore } from '../store.js'
 import { db, ROOM_PREFIX } from './db.js'
 import { alertMessage } from './notify.js'
 import { pokePeer } from './push.js'
+import { setRoomKeyProvider, freshTokens } from './socket-transport.js'
+import { roomKeyForConvo } from './crypto/identity-store.js'
+import { E2E_V2 } from './crypto/e2e-v2.js'
 
 /** Attachments bigger than this never ride the history backlog — the bytes
  * are lazily fetched on demand instead, so reconnects stay instant. */
@@ -571,6 +574,18 @@ function createConnection (convo) {
     // Demo accounts are gone from the product; old stored ones stay readable
     // but never touch the network.
     if (isDemo) { conn.net = inertNet(); return }
+
+    /* AN e2e_v2 ROOM MUST NEVER BE JOINED WITH ITS v1 PASSWORD.
+     *
+     * `convo.secret` is still on the record — it has to be, for v1 rooms and
+     * for the knock wire format — and it is exactly the cyrb53 value the server
+     * can recompute. Registering a provider FIRST means roomKey() has no
+     * password path for this room: it re-agrees the ECDH key, or the room does
+     * not open. Without this the fix evaporated on the first page reload, and
+     * silently, because both peers degraded identically. */
+    if (convo.e2eVersion === E2E_V2) {
+      setRoomKeyProvider(convo.roomId, () => roomKeyForConvo(convo, freshTokens))
+    }
     // History backlog: never offer opened view-once photos, and strip heavy
     // attachment bytes (they'd re-ship megabytes on every reconnect — the
     // receiver lazily fetches bytes on tap instead).

@@ -72,7 +72,18 @@ const fakeRoom = {
 }
 
 mock.module(`${SRC}lib/socket-transport.js`, {
-  namedExports: { joinRoom: () => fakeRoom, selfId: 'self-id', serverMode: false }
+  // Must track reach.js's imports exactly: a partial ESM module mock fails at
+  // link time with a SyntaxError, not at call time. setRoomKey/freshTokens
+  // arrived with e2e_v2 key agreement (ADR-001).
+  namedExports: {
+    joinRoom: () => fakeRoom,
+    selfId: 'self-id',
+    serverMode: false,
+    setRoomKey: () => {},
+    setRoomKeyProvider: () => {},
+    clearRoomKey: () => {},
+    freshTokens: async () => ({ accessToken: 'test-token' })
+  }
 })
 mock.module(`${SRC}lib/notify.js`, {
   namedExports: {
