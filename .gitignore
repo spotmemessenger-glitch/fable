@@ -166,6 +166,46 @@ OpenWA/
 # PDFs. The skill that reads it lives in ~/.claude/skills/pentesting-everything.
 PentestingEverything/
 
+# All 28 repos of github.com/orgs/WhatsApp — each keeps its own .git. Reference
+# only; ~17 are Erlang/Rust/Scala backend tooling that cannot build on Windows.
+whatsapp-oss/
+
+# Telegram's open source, ~1.2GB, each with its own .git. Reference for Spot Me.
+# See the memory note `telegram-source-corpus` for the Windows git flags needed.
+Telegram/
+telegram-oss/
+tdlib-td/
+telegram-bot-api/
+
+# The custom-messaging-stack blueprint repos (push / WebRTC / MT / E2EE), each
+# its own .git. LICENCE MATTERS HERE — AGPL-3.0 (network use triggers copyleft):
+# synapse, LibreTranslate, libsignal, redis. GPL-3.0: janus-gateway. Permissive
+# (Apache-2.0/MIT): livekit, centrifugo, gorush, gotify-server, pion webrtc,
+# supabase, IndicXlit, firebase-admin-node, UP-spec. novu is MIT EXCEPT
+# enterprise/packages, which is proprietary.
+msg-stack/
+
+# Geospatial / mapping repos for the Spot radar. All permissive EXCEPT
+# react-leaflet, which is Hippocratic-2.1 — NOT OSI-approved, has ethical-use
+# terms and a 30-day compliance-termination clause. Check before depending on it.
+geo-stack/
+
+# UI / animation component libraries. All usable commercially; two oddities:
+# preline is dual "MIT + Preline UI Fair Use License", and heroui's LICENSE
+# file says Apache-2.0 while its package.json says MIT (trust the LICENSE).
+ui-stack/
+
+# Production-scale infra. TWO ARE NOT OPEN SOURCE: redpanda is BSL 1.1 (may not
+# be used to offer a Streaming/Queuing Service) and sentry is FSL-1.1-Apache-2.0
+# — both convert to Apache-2.0 on a delay. citus is AGPL-3.0. Rest permissive.
+scale-stack/
+
+# Messenger reference apps. MOSTLY COPYLEFT — Signal-iOS and element-x-android
+# are AGPL-3.0, tinode/chat is GPL-3.0: read for behaviour, never copy into
+# Spot Me. The two Instagram clones ship NO licence at all (= all rights
+# reserved), so they are not usable as source even though they are public.
+messenger-refs/
+
 # Bluetooth reference apps, each its own repo. bitchat-android is GPL-3.0:
 # read it for ARCHITECTURE only — copying its code would force Spot Me to
 # become GPL-3.0. BluetoothChat is Apache-2.0 and safe to borrow from.
