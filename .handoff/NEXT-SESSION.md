@@ -91,6 +91,55 @@ overwriting the other every launch.
 - To run the shipping web modules under Node, `mock.module` `lib/api.js` — its
   `API_BASE` is inlined from `import.meta.env` at BUILD time and is '' in Node.
 
+### MERGE RECIPE for #6 → then #2 (SIMULATED AND PROVEN, do not re-derive)
+
+The whole sequence was run on throwaway local branches before anything was
+merged. Result: **web 27 suites / 26 fully green, backend 10 suites / 86 tests,
+both builds clean.** The simulation is gone with that container, but every
+decision it made is below.
+
+**The overlap is NINE files, not the four usually quoted.** `chat.js` is NOT one
+of them:
+
+```
+.handoff/NEXT-SESSION.md   spotme/web/package.json
+spotme/web/src/lib/reach.js   src/lib/rooms.js   src/lib/socket-transport.js
+spotme/web/src/net.js
+spotme/web/test/{media,requests,viewonce}.test.js
+```
+
+**Conflicts and how each was resolved:**
+
+1. `package.json` — recurs on nearly every replayed commit. Both branches append
+   suites to one `&&` chain. Resolve as a UNION, never by taking a side, or the
+   dropped side's tests silently stop running. 26 suites is the correct total.
+2. `rooms.js` import — PR #2 adds a rationale comment above the import; PR #6
+   extends the import list with `clearRoomKey`/`clearRoomCursor` and adds a
+   `media-transfer.js` import. Keep the comment, the extended list, and the
+   extra import. **Watch for a duplicated `import { setRoomKeyProvider,
+   freshTokens }` line** — that was caught only by `node --check`.
+3. `socket-transport.js` — both sides add a new export inside a SHARED `/**`
+   block, with the closing `}` also shared. Ours (`clearRoomCursor`) needs its
+   own `}` and a fresh `/**` before theirs (`sealForRoom`/`openForRoom`).
+4. `media/requests/viewonce.test.js` — purely additive stub entries, union them.
+5. `.handoff/NEXT-SESSION.md` — take OURS. Master+#6 is strictly newer and
+   already carries the superseding section.
+
+**THE TRAP THAT ONLY EXISTS WHEN BOTH LAND.** A partial ESM `mock.module` is a
+LINK-time SyntaxError. Two new test files each stub `socket-transport.js`
+without knowing about the other branch's exports, and the combined suite dies at
+12 of 27 suites:
+
+- `send-failure-visible.test.js` (new in #6) needs `sealForRoom`/`openForRoom`
+  — **already added on this branch**, since an extra stub name is harmless
+  (verified) while a missing one is fatal.
+- `transport-seam.test.js` (new in #2) needs `clearRoomCursor` — **still to do,
+  during the merge.** It is the one remaining known break.
+
+**Verify with `node --check` on every file you touch by hand.** It caught a real
+mistake here that the eye did not.
+
+
 ### Blocked on the user
 
 1. **Merge order matters.** #6 and #2 both touch `socket-transport.js`,

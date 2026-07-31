@@ -86,6 +86,15 @@ mock.module(`${SRC}lib/socket-transport.js`, {
     setRoomKeyProvider: () => {},
     clearRoomKey: () => {},
     clearRoomCursor: () => {},
+    /* Not exported by socket-transport.js on THIS branch — PR #2 adds them, and
+     * `media-transfer.js` then reaches them through the module graph. A partial
+     * ESM mock fails at LINK time with a SyntaxError, not at call time, so the
+     * moment both branches meet this file stops loading and takes the whole
+     * suite with it. Stubbed ahead of that merge because an EXTRA name is
+     * harmless (verified: 10/10 with these present and unexported) while a
+     * missing one is fatal. Neither PR can discover this alone. */
+    sealForRoom: async (_roomId, bytes) => bytes,
+    openForRoom: async (_roomId, bytes) => bytes,
     refreshRoomKey: async () => null,
     freshTokens: async () => ({ accessToken: 'test-token' })
   }
