@@ -1,3 +1,5 @@
+// The same gate /api/knock and /api/translate use.
+import { verifyAccessToken } from './_auth.js'
 /**
  * Spot Me — native presence/invite relay (Vercel Node serverless function).
  *
@@ -174,23 +176,33 @@ async function handleAck (res, body) {
 export default async function handler (req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*')
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization')
   res.setHeader('Cache-Control', 'no-store')
   if (req.method === 'OPTIONS') { res.status(204).end(); return }
 
+  /* Same hole `/api/knock` had, same fix. This endpoint hands back `roomKey`
+   * and `writerKey`, and `GET ?userId=<anyone>` answered for any id a caller
+   * named — ids the username search gives out for free. `_auth.js` is the gate
+   * that already existed for it. */
+  const bearer = String(req.headers?.authorization || '').replace(/^Bearer\s+/i, '')
+  const claims = verifyAccessToken(bearer)
+  if (!claims?.sub) { send(res, 401, { error: 'unauthorized' }); return }
+
   try {
-    if (req.method === 'GET') { await handleGet(res, req.query?.userId); return }
+    // The caller's own id, never a parameter they chose.
+    if (req.method === 'GET') { await handleGet(res, claims.sub); return }
 
     if (req.method === 'POST') {
       const body = (typeof req.body === 'string' ? safeJson(req.body) : req.body) || {}
-      if (body.action === 'send') { await handleSend(res, body); return }
-      if (body.action === 'ack') { await handleAck(res, body); return }
+      if (body.action === 'send') { await handleSend(res, { ...body, fromId: claims.sub }); return }
+      if (body.action === 'ack') { await handleAck(res, { ...body, userId: claims.sub }); return }
       send(res, 400, { error: 'unknown action' })
       return
     }
 
     send(res, 405, { error: 'method not allowed' })
   } catch (error) {
-    send(res, 500, { error: error?.message || 'server error' })
+    // Never relay the raw message — it names internals to the caller.
+    send(res, 500, { error: 'server error' })
   }
 }
