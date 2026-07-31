@@ -259,6 +259,10 @@ await step('A reacts to a message and B sees the reaction', async () => {
   const bubble = pa.locator('.v-chat .bubOut, .v-chat .bubIn').last()
   await bubble.click({ button: 'right' })
   await pa.waitForSelector('.ms-emojis', { timeout: 8000 })
+  // The sheet arms itself against ghost clicks for 400ms: a long-press that
+  // mounts a sheet under the finger would otherwise have the synthesized click
+  // land on it immediately. Real fingers are never that fast; Playwright is.
+  await pa.waitForTimeout(600)
   const emoji = await pa.$eval('.ms-emojis button', (b) => b.textContent)
   await pa.locator('.ms-emojis button').first().click()
   await pa.waitForTimeout(3000)
@@ -271,6 +275,7 @@ await step('B replies to a specific message and A sees the quote', async () => {
   const bubble = pb.locator('.v-chat .bubOut, .v-chat .bubIn').last()
   await bubble.click({ button: 'right' })
   await pb.waitForSelector('.ms-sheet', { timeout: 8000 })
+  await pb.waitForTimeout(600)   // same 400ms ghost-click armour as above
   await pb.locator('.ms-item', { hasText: 'Reply' }).first().click()
   await pb.waitForTimeout(500)
   await send(pb, 'QUOTED REPLY')

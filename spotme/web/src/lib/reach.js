@@ -64,6 +64,7 @@ const HEARTBEAT_MS = 10_000
 const OUTBOX_TTL_MS = 24 * 60 * 60_000   // 24 hours — was 10 min, which silently abandoned most requests
 
 import { API_BASE as API_ORIGIN } from './api.js'
+import { authHeaders } from './auth-headers.js'
 const KNOCK_ENDPOINT = `${API_ORIGIN}/api/knock`
 
 /** Stable, non-cryptographic string hash — enough to derive a room id/secret
@@ -253,12 +254,17 @@ function createReach () {
    * recipient ever comes online. Never blocks or throws — P2P delivery above
    * is still the primary path, this only covers its one blind spot.
    */
+  /* The relay authenticates now: it holds room SECRETS, and it used to hand
+   * them to anyone who named a user id. `authHeaders()` fails open to an
+   * unauthenticated attempt, which earns a clean 401 rather than a hang — and
+   * `safe()` already swallows that, so a token that is not ready yet degrades
+   * to "P2P only", which is what this path was before the relay existed. */
   function relayStore (toId, payload) {
-    safe(fetch(KNOCK_ENDPOINT, {
+    safe(authHeaders().then((headers) => fetch(KNOCK_ENDPOINT, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify({ action: 'store', toId, knock: payload })
-    }))
+    })))
   }
 
   /**
@@ -271,18 +277,20 @@ function createReach () {
     if (!me?.id) return
     let knocks
     try {
-      const res = await fetch(`${KNOCK_ENDPOINT}?userId=${encodeURIComponent(me.id)}`)
+      // The server reads the inbox owner off the token; the query parameter it
+      // used to trust is gone.
+      const res = await fetch(KNOCK_ENDPOINT, { headers: await authHeaders() })
       if (!res.ok) return
       const data = await res.json()
       knocks = Array.isArray(data?.knocks) ? data.knocks : []
     } catch { return }
     if (!knocks.length) return
     for (const payload of knocks) receiveKnock(payload)
-    safe(fetch(KNOCK_ENDPOINT, {
+    safe(authHeaders().then((headers) => fetch(KNOCK_ENDPOINT, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'ack', userId: me.id, roomIds: knocks.map((k) => k.roomId) })
-    }))
+      headers,
+      body: JSON.stringify({ action: 'ack', roomIds: knocks.map((k) => k.roomId) })
+    })))
   }
 
   /** My own inbox: joined once at boot, left only by explicit teardown. */

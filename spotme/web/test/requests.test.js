@@ -123,8 +123,13 @@ globalThis.fetch = async (url, opts = {}) => {
 
   if (pathname === '/api/knock') {
     if (!opts.method || opts.method === 'GET') {
-      const userId = searchParams.get('userId')
-      const knocks = [...relayData.values()].filter((e) => e.toId === userId).map((e) => e.knock)
+      /* The relay identifies the caller by TOKEN now, not by a `userId` query
+       * parameter — that parameter was the hole: it handed every pending
+       * knock, room secret included, to anyone who named an id. The stub
+       * mirrors that, so a client that forgets the header gets nothing. */
+      const bearer = String(opts.headers?.authorization || '')
+      if (!bearer.startsWith('Bearer ')) return { ok: false, status: 401, json: async () => ({ error: 'unauthorized' }) }
+      const knocks = [...relayData.values()].filter((e) => e.toId === db.profile()?.id).map((e) => e.knock)
       return { ok: true, json: async () => ({ knocks }) }
     }
     if (body?.action === 'store') {
@@ -132,7 +137,7 @@ globalThis.fetch = async (url, opts = {}) => {
       return { ok: true, json: async () => ({ ok: true }) }
     }
     if (body?.action === 'ack') {
-      for (const roomId of body.roomIds) relayData.delete(roomId)
+      for (const roomId of body.roomIds || []) relayData.delete(roomId)
       return { ok: true, json: async () => ({ ok: true }) }
     }
   }
