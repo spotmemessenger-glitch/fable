@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { EmployeeAuthGuard } from '../common/guards/employee-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
@@ -75,5 +75,21 @@ export class AdminController {
     const employee = await this.admin.setEmployeeActive(id, false);
     await this.audit.log(principal.id, 'employee.deactivate', 'Employee', id);
     return employee;
+  }
+
+  /**
+   * Remove an app user. Admin-only, and audited — deleting someone else's
+   * account is the most consequential thing this controller can do, so it must
+   * never be the one action with no record of who did it.
+   */
+  @Delete('users/:id')
+  @Roles(Role.ADMIN)
+  async deleteUser(@Param('id') id: string, @CurrentUser() principal: AuthenticatedPrincipal) {
+    const result = await this.admin.softDeleteUser(id);
+    await this.audit.log(principal.id, 'user.delete', 'User', id, {
+      username: result.username,
+      alreadyDeleted: result.alreadyDeleted,
+    });
+    return result;
   }
 }

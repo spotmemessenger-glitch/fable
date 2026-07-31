@@ -77,6 +77,21 @@ export class AuthService {
       throw new UnauthorizedException('refresh token invalid or expired');
     }
     const user = await this.prisma.user.findUniqueOrThrow({ where: { id: stored.userId } });
+    /* A DELETED ACCOUNT MUST NOT BE ABLE TO RENEW ITSELF.
+     *
+     * Without this, `deletedAt` was a label with no teeth: the row dropped out
+     * of username search and key lookup, but the session went on refreshing
+     * every 15 minutes forever. Discovery made that visible — the nearby list
+     * is built from ephemeral `hello` broadcasts by whoever is CONNECTED, not
+     * from a query the soft-delete filters — so a deleted test account kept
+     * announcing itself as "Active now" to real users indefinitely.
+     *
+     * The refresh token is revoked on the way out rather than left to expire,
+     * so the session cannot be resumed from a copy of it. */
+    if (user.deletedAt) {
+      await this.prisma.refreshToken.update({ where: { id: stored.id }, data: { revokedAt: new Date() } });
+      throw new UnauthorizedException('this account has been deleted');
+    }
     await this.prisma.refreshToken.update({ where: { id: stored.id }, data: { revokedAt: new Date() } });
     return this.issueTokens(user.id, user.role, stored.deviceId ?? undefined);
   }
@@ -151,6 +166,15 @@ export class AuthService {
     if (existing) {
       if (existing.claimSecretHash && existing.claimSecretHash !== secretHash) {
         throw new UnauthorizedException('claim secret does not match this identity');
+      }
+      /* Guest auth is create-or-reauth, so a deleted account would otherwise
+       * walk straight back in on the next launch and undo the deletion — the
+       * same hole as `refresh` above, through the other door. Refused rather
+       * than silently re-created under a new id: this identity is the ONLY
+       * source of a v2 room key, and quietly minting a different one is how a
+       * device ends up unable to read its own conversations. */
+      if (existing.deletedAt) {
+        throw new UnauthorizedException('this account has been deleted');
       }
       const updates: { name?: string; publicKey?: string; username?: string } = {};
       if (name && name !== existing.name) updates.name = name;
