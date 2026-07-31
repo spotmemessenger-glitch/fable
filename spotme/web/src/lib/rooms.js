@@ -14,7 +14,7 @@ import { createStore } from '../store.js'
 import { db, ROOM_PREFIX } from './db.js'
 import { alertMessage } from './notify.js'
 import { pokePeer } from './push.js'
-import { setRoomKeyProvider, freshTokens } from './socket-transport.js'
+import { setRoomKeyProvider, freshTokens, clearRoomKey, clearRoomCursor } from './socket-transport.js'
 import { roomKeyForConvo } from './crypto/identity-store.js'
 import { E2E_V2 } from './crypto/e2e-v2.js'
 
@@ -949,11 +949,29 @@ export const rooms = {
     conn.store.remove(id)
   },
 
+  /**
+   * Delete this conversation's live state. Every caller pairs this with
+   * `db.removeConvo`, so it is the "this chat is gone" path, not teardown.
+   *
+   * THE KEY AND CURSOR HAVE TO GO WITH IT, and until now neither did.
+   * `clearRoomKey` had no production caller at all, so the registered provider
+   * — a closure over the convo record that was about to be deleted, holding its
+   * dead `peerKey` — outlived the conversation. A DM roomId is a pure function
+   * of the two account ids (`reach.js` `directRoom`), so re-starting the chat
+   * lands on the SAME room and `roomKey()` finds that orphan still installed:
+   * deleting and starting again derived from the dead key and failed exactly as
+   * before. That made the app's own repair advice self-defeating.
+   *
+   * The cursor goes too, or the re-created chat resumes mid-history with a hole
+   * where the messages it never managed to open used to be.
+   */
   leave (roomId) {
     const conn = connections.get(roomId)
     if (conn) {
       conn.net.leave()
       connections.delete(roomId)
     }
+    clearRoomKey(roomId)
+    clearRoomCursor(roomId)
   }
 }
