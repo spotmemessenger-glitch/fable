@@ -126,11 +126,176 @@ server-side publish path, not at the wire protocol.
 - **`msg-stack/centrifugo` is a reference clone, not a vendored dependency.**
   The deployment gets a pinned release image.
 
-## Alternatives rejected
+## Alternatives considered
+
+### A. Raw WebSockets (`ws` server + browser `WebSocket`)
+
+Drop both Socket.IO and Centrifugo and speak WebSocket directly.
+
+**For:** no broker to operate, no client SDK, smallest possible dependency
+surface, and full control of the frame format — which matters here, because the
+base64-not-Buffer rule already exists precisely because a framing detail cost a
+day.
+
+**Against, and decisive:** everything Socket.IO currently gives free would have
+to be rebuilt and then *debugged in production* — reconnection with backoff,
+heartbeat/liveness, multiplexing many rooms over one socket, message
+acknowledgement, and browser fallback where WebSocket is blocked by a corporate
+proxy. None of that is hard in isolation; all of it is where realtime systems
+actually break, and none of it addresses bottleneck (1), the in-process room
+map. Raw WebSockets is a *smaller* system, not a more scalable one. It would
+also mean writing our own history/recovery, which is the second thing we are
+trying to stop hand-rolling.
+
+**Rejected:** maximum effort, maximum new bug surface, and it solves neither
+stated problem.
+
+### B. Socket.IO Redis adapter (`@socket.io/redis-adapter`)
+
+Keep Socket.IO, add the Redis adapter so several Node instances share a room.
+
+**For:** by far the smallest diff. No new client SDK, no new protocol, no new
+service to expose publicly, and the existing gateway code is untouched. It
+genuinely fixes bottleneck (1).
+
+**Against:** it fixes *only* (1). There is still no channel history, no stream
+positioning and no recovery — a reconnecting client still re-queries the
+`RoomEvent` cursor for the whole room, and ephemeral events are still lost on
+every drop. It also does nothing for (3). And it adds Redis as a hard
+availability dependency for message fan-out, where today a single instance
+either works or is down.
+
+**Rejected as the destination, but explicitly retained as the cheap fallback:**
+if Centrifugo proves not worth operating, this is the smaller move that still
+unblocks horizontal scale. It is a real option, not a straw man.
+
+### C. Centrifugo behind a transport interface — chosen
+
+Purpose-built broker: channels, JWT connection auth, history with positioning
+and recovery, and horizontal scale via a Redis or Nats engine.
+
+**Against, honestly:** a new service to run, monitor and secure; a second wire
+protocol to reason about; and the client SDK is a real dependency (see below).
+It is more moving parts than (B).
+
+**Chosen because** the interface makes the decision reversible. Both transports
+coexist, selection is per-device, and if Centrifugo is a mistake we fall back to
+(B) or stay on Socket.IO without touching a line of message-handling code.
+
+### D. Others rejected outright
 
 | Option | Why not |
 |---|---|
-| Socket.IO Redis adapter for scale-out | Solves (1) only; no history, positioning or recovery, and leaves the hand-rolled cursor as the sole replay path |
-| Replace Socket.IO outright | A flag day on the message path of a live app, with no fallback, and no two-device test infrastructure yet |
+| Replace Socket.IO outright, no interface | A flag day on the message path of a live app, with no fallback, and no two-device test infrastructure yet |
 | Let clients publish to Centrifugo directly | Bypasses group policy and `RoomEvent` persistence — reintroduces the "knowing a roomId is the whole access model" hole |
 | Adapter owns encryption | Reintroduces V-19 by the most likely route available; see §2 |
+
+## Dependency analysis — `centrifuge` 5.7.0
+
+Verified against the registry on 2026-07-31, not assumed. **Two claims commonly
+made about this package are wrong and are corrected here**, because a design doc
+that repeats a comfortable number is how the number survives into a decision.
+
+| Property | Verified value |
+|---|---|
+| Package name | **`centrifuge`** — `centrifuge-js` does NOT exist on npm. The confusion is understandable: the GitHub repo *is* `centrifugal/centrifuge-js`. |
+| Version / licence | 5.7.0, **MIT** — no copyleft exposure, unlike much of `msg-stack/` |
+| Runtime dependencies | **`events` and `protobufjs` — it is NOT zero-dependency** |
+| Last publish | 2026-06-15 (~6 weeks before this ADR), 100 published versions — actively maintained, not abandoned |
+
+**On the "~15KB gzipped, zero dependencies" claim — both parts are false as
+stated, but the practical outcome is close to the spirit of it:**
+
+- `dist.unpackedSize` is **3.85 MB**. That figure covers CJS + ESM + protobuf
+  builds + type definitions + sourcemaps, and is *not* the browser payload.
+- The `exports` map has two entries: `.` (default, JSON protocol) and
+  `./build/protobuf`. **`protobufjs` is only reachable through the second
+  one.** Our adapter does `await import('centrifuge')` — the default JSON
+  path — so a bundler tree-shakes protobufjs out entirely. The `browser` field
+  maps `events` to a shim.
+- **The real gzipped delta is therefore small but UNMEASURED.** Do not quote a
+  number until it is: install it, build, and diff `dist/assets/index-*.js`
+  against the current 354 kB / 115 kB gzipped baseline. That is a two-minute
+  check and it beats a figure copied from a README.
+
+**Security posture:** MIT, maintained, no native code, no postinstall script.
+The dependency is loaded via **dynamic `import()`**, so a device that never
+selects the Centrifugo transport never executes it — the blast radius of a
+future advisory is limited to opted-in devices. Run `npm audit` at install
+time; it has not been run, because the package is not installed.
+
+**Conclusion:** justified, but **not yet added**. The adapter is written against
+it and degrades to "this transport is unavailable" when it is missing, which is
+why nothing is installed for a broker that is not deployed.
+
+## Bottleneck and horizontal scaling strategy
+
+### Where it breaks today
+
+| Layer | Limit | Why |
+|---|---|---|
+| **Node.js event loop** | One core per instance | Node is single-threaded for JS. Fan-out, JSON serialisation and `RoomEvent` writes all contend for the same loop; a slow Prisma call delays unrelated sockets. Vertical scale stops at one core's throughput. |
+| **In-process room map** | Hard ceiling of 1 instance | `Map<roomId, Map<userId, Set<Socket>>>` lives in memory and fan-out is `client.to('r:'+roomId)`. **Two instances each see half a room and neither knows.** This is not a tuning limit — the topology forbids adding a second instance at all. |
+| **Socket memory** | ~10s of thousands/instance | Each Socket.IO connection carries engine.io state, buffers and a JS object graph. |
+| **Presence** | One global lobby room | Every nearby-discovery client in one room; fan-out is O(users) per event. The Phase 0 audit already flagged this as needing geo-sharding. |
+
+The binding constraint is the **second row**, and no amount of hardware moves it.
+
+### The strategy
+
+1. **Move fan-out off Node.** Centrifugo is Go — goroutines and real parallelism
+   across cores, with connections held in a process built for holding
+   connections rather than one also running Prisma and business logic. Its
+   memory per connection is materially lower than an engine.io socket's.
+2. **Make the Node tier stateless.** Once fan-out belongs to the broker, the
+   NestJS instances hold no room state, and *that* is what makes them
+   horizontally scalable — the scaling win comes from removing state, not from
+   adding Centrifugo.
+3. **Scale the broker with an engine.** A single Centrifugo node uses its
+   in-memory engine; multiple nodes need **Redis or Nats** so a publication on
+   node A reaches a subscriber on node B. That engine becomes a hard
+   availability dependency for fan-out and must be planned for, not discovered.
+4. **Shard presence by geography**, using `h3` cells as the channel key
+   (Apache-2.0, already cloned at `geo-stack/h3`). This is the fix for row four
+   and is independent of the transport choice.
+
+**Deliberately unquantified:** no number here is measured. Connection ceilings,
+memory per connection and fan-out latency depend on message size, room fan-out
+and hardware, and Centrifugo is not deployed. The §"Performance targets"
+(reconnect < 2s, presence < 500ms, zero dropped messages post-ack) are
+**targets, not results** — treat any claim otherwise as unverified.
+
+## Rollback strategy
+
+The interface exists so this decision is reversible without a deploy.
+
+**Per device, immediately — no release, no server change:**
+
+```js
+localStorage.setItem('spotme.transport', 'socketio')
+```
+
+Takes effect on the next connect. `createTransport()` reads the flag on every
+call, so a reload is enough; nothing is cached across it.
+
+**Rollback is also automatic.** `createTransport()` catches a failed Centrifugo
+connect and returns the Socket.IO adapter instead — a dead broker degrades the
+app rather than killing it. Critically, it returns `{ requested, actual, reason }`,
+so a fallback is **visible** rather than inferred: you cannot believe you are
+testing Centrifugo when you are not. Silent fallback would be worse than no
+fallback.
+
+**Fleet-wide, without touching clients:** stop returning tokens. With
+`CENTRIFUGO_TOKEN_HMAC_SECRET_KEY` unset, `POST /api/v2/realtime/token` answers
+**503**, every Centrifugo connect fails, and every device falls back on its next
+connect. One environment variable is the kill switch.
+
+**What rollback does NOT undo:** nothing. Socket.IO is never modified or
+removed, `rooms.gateway.ts` is untouched, and no data written under one
+transport is unreadable under the other — both meet at the `RoomEvent` log, not
+at the wire protocol. There is no migration to reverse, which is the property
+that makes this safe to try.
+
+**If Centrifugo is abandoned entirely**, alternative (B) — the Socket.IO Redis
+adapter — remains available and still fixes the one bottleneck that blocks
+horizontal scale.

@@ -406,4 +406,97 @@ Two contract details that exist because their absence caused real failures:
 
 ---
 
-*This document describes the API as of the Phase 1 migration. Sections marked "in progress" (guest auth, the `/rooms` namespace, username migration) specify the protocol being implemented and must be checked against `spotme/backend/src/` and `spotme/web/src/lib/socket-transport.js` before external use.*
+## 8. Realtime v2 — Centrifugo endpoints (`/api/v2/realtime`)
+
+Implemented in `backend/src/realtime/realtime.controller.ts`. Both routes sit
+behind `JwtAuthGuard`. Rationale: [ADR-002](adr/002-realtime-centrifugo-abstraction.md).
+
+**These do not replace §6.** The Socket.IO `/rooms` namespace remains the
+default transport and is unchanged. Centrifugo is opt-in per device via
+`localStorage['spotme.transport'] = 'centrifugo'`.
+
+### 8.1 `POST /api/v2/realtime/token`
+
+Mints a short-lived **Centrifugo connection JWT**. Verified live 2026-07-31.
+
+**Request:** no body. Identity comes from the `Authorization: Bearer <access>` header.
+
+**200 OK**
+```json
+{ "token": "<header>.<payload>.<signature>", "expiresIn": 600 }
+```
+
+**JWT payload shape** — HS256 over `CENTRIFUGO_TOKEN_HMAC_SECRET_KEY`, a secret
+shared only between this backend and the broker, base64url-encoded without padding:
+
+```json
+{ "sub": "<spotme user id>", "iat": 1785499891, "exp": 1785500491 }
+```
+
+- **`sub` is taken from the verified JWT principal, never from the request
+  body.** Accepting an id from the body would let any signed-in user mint a
+  token impersonating anyone — the same class of mistake `POST /api/v2/auth/keys`
+  avoids by keying off the principal.
+- TTL is **600s** by design. The `centrifuge` SDK's `getToken` is re-invoked on
+  expiry, so a refresh costs no reconnect.
+
+| Status | Meaning |
+|---|---|
+| `200` | token issued |
+| `401` | no/invalid access token |
+| `503` | `CENTRIFUGO_TOKEN_HMAC_SECRET_KEY` unset — **this transport is not available on this deployment**, not a server fault. The client falls back to Socket.IO and reports why. Unsetting this variable is also the fleet-wide kill switch. |
+
+### 8.2 `POST /api/v2/realtime/centrifugo/publish` — **returns 501 by design**
+
+Server-side publish proxy. **Not enabled.** Calling it with a valid token and a
+room you belong to returns `501 Not Implemented`.
+
+**Request**
+```json
+{ "roomId": "dm-<hash>", "type": "msg", "payload": "<base64>", "meta": {}, "target": "<userId?>" }
+```
+
+| Status | Meaning |
+|---|---|
+| `401` | no/invalid access token |
+| `403` | `roomId` missing, or caller is not in `RoomMember` for that room |
+| `501` | **always, when authorised** — see below |
+
+#### Why 501 rather than a working endpoint
+
+Every publication must pass the two gates the Socket.IO gateway applies on
+`action`:
+
+1. **Group policy** — `policy()` → `refuse()` (role, mute, ban)
+2. **Persistence** — durable types append to `RoomEvent`, which is what makes
+   offline replay work at all
+
+Both are **private methods on `RoomsGateway`** (`rooms.gateway.ts:110` and
+`:333`), not on `RoomsService`. Reimplementing them in this controller would
+create a **second authorisation path that starts identical and drifts** — and
+the 2026-07-31 audit already found that this gateway once "authorised NOTHING",
+where knowing a `roomId` was the entire access model. Shipping a publish
+endpoint with weaker checks than the gateway would recreate that hole through a
+new door.
+
+**Prerequisite:** lift `policy()` and `refuse()` out of `RoomsGateway` into
+`RoomsService` so both callers share one implementation. That is a refactor of
+live message-path code and belongs in its own change. Until it lands, this route
+refuses loudly rather than half-authorising.
+
+The membership check still runs *before* the 501, so an unauthorised caller is
+told `403` first and learns nothing about internals.
+
+#### Client-side publish must also be disabled in the broker
+
+Centrifugo will happily accept a publication from a subscribed client, which
+would bypass both gates entirely. Disable client publish in the channel config —
+an unused capability is still a capability.
+
+---
+
+*This document describes the API as of the Phase 1 migration, plus the Phase 2
+realtime endpoints in §8. Sections marked "in progress" (guest auth, the
+`/rooms` namespace, username migration) specify the protocol being implemented
+and must be checked against `spotme/backend/src/` and
+`spotme/web/src/lib/socket-transport.js` before external use.*
