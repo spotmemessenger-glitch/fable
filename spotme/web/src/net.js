@@ -189,19 +189,42 @@ export function createNet (roomId, secret, handlers, getHistory) {
 
   // `send` is async and rejects if the peer vanished mid-flight. A peer leaving
   // during a handshake is normal, not an error worth surfacing to the user.
-  function msgSafe (promise) {
-    if (promise?.catch) promise.catch(() => {})
+  /**
+   * A send that fails must SAY SO. It used to `catch(() => {})`.
+   *
+   * The empty catch was written for one true case — a peer vanishing during a
+   * handshake is normal and not worth surfacing — and it then swallowed every
+   * other failure with it. On a two-handset test against production, outbound
+   * messages stopped leaving the client with no error anywhere: no log, no UI
+   * state, nothing to diagnose from. The send path had four ways to throw
+   * (`roomKeyForConvo`: not-v2, no device identity, no peer public key, derive
+   * failure) and all four were invisible by construction.
+   *
+   * That matters most for exactly the case ADR-001 introduced: an e2e_v2 room
+   * has NO password fallback, so a room whose key cannot be agreed refuses to
+   * encrypt — which is the correct behaviour, and was being reported to the
+   * user as silence.
+   *
+   * Still non-fatal, still unawaited; it just leaves a trace now.
+   */
+  function msgSafe (promise, what = 'send') {
+    if (promise?.catch) {
+      promise.catch((error) => {
+        console.warn(`spotme net: ${what} failed:`, error?.message || error)
+        handlers.onSendError?.(what, error)
+      })
+    }
   }
 
   return {
     /** True when the transport persists actions server-side — senders may
      * then deliver into an empty room instead of waiting for a live peer. */
     DURABLE: room.DURABLE === true,
-    sendMessage: (data) => msgSafe(msg.send(data)),
-    sendReaction: (data) => msgSafe(react.send(data)),
+    sendMessage: (data) => msgSafe(msg.send(data), 'message'),
+    sendReaction: (data) => msgSafe(react.send(data), 'reaction'),
     sendProfile: (data) => msgSafe(profile.send(data)),
-    sendDelete: (data) => msgSafe(del.send(data)),
-    sendEdit: (data) => msgSafe(edit.send(data)),
+    sendDelete: (data) => msgSafe(del.send(data), 'delete'),
+    sendEdit: (data) => msgSafe(edit.send(data), 'edit'),
     sendTyping: (data) => msgSafe(typing.send(data)),
     sendRead: (data) => msgSafe(read.send(data)),
     /**
