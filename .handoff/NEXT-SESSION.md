@@ -1,6 +1,142 @@
 # START HERE — pickup brief
 
-## 0000. LATEST (2026-07-31 evening) — SUPERSEDES EVERYTHING BELOW
+## 00000. LATEST (2026-07-31 night) — SUPERSEDES EVERYTHING BELOW
+
+**PR #1 IS MERGED AND DEPLOYED. Production has a live, reproduced, diagnosed
+messaging bug. The fix that stops it spreading is written and pushed but NOT
+deployed.**
+
+```
+master                       67bacf7   PR #1 merged (merge commit, not squash)
+feature/centrifugo-transport 8ec62db   PR #2 OPEN (not draft), 14 commits
+Vercel                       index-BmBst34F.js, verified serving the V-19 fix
+Railway                      master, /api/v2/auth/keys live (404 -> 401 proved it)
+```
+
+### THE PRODUCTION BUG — read this before anything else
+
+Two real handsets, @ajith11 (`3800d1531e8fcc87`) and @vijay22
+(`15868af06346fd9f`). Symptom: sender sees **"✓ Sent"**, recipient gets a
+**push notification**, and the message **never appears in the chat** — in BOTH
+directions.
+
+**Root cause: @vijay22's device cannot persist its X25519 identity, so it
+generates and republishes a new one on every launch.** Measured: its published
+key changed THREE times in one session (`5Q9M2sAu…` → `3yScLgOv…` →
+`kVK/fsEr…`) while @ajith11's never moved. Each republish staleifies the
+`convo.peerKey` every peer stored; both sides then derive different room keys,
+and every frame is dropped undecryptable — permanently, because
+`roomKeyForConvo` prefers the stored `peerKey` and only fetches when absent.
+
+Why each symptom lied:
+- **"Sent"** is `chat.js:1887`'s DEFAULT label (`read ? 'Read' : 'Sent'`).
+  Nothing sets `failed` for text — only `deliverAttachment` does, for
+  attachments. A text message that never left still reads "Sent".
+- **The notification** is the SERVER's `pushForEvent`. It involves no
+  decryption at all, which is exactly why it arrived when the message did not.
+- **The empty chat** is `socket-transport.js:452`: an unopenable frame is
+  dropped with only a `console.warn`.
+
+The trigger is `identity-store.js`, which wrote the key as `.catch(() => {})`
+under the comment *"Chatting beats failing."* True while a v1 room could fall
+back to the password; false the moment ADR-001 made this identity the ONLY
+source of a v2 room key. Safari is the usual reason — storing a non-extractable
+CryptoKey in IndexedDB has long failed there, and it fails by REJECTING the
+request, not by throwing anywhere visible.
+
+### What is already fixed (pushed, NOT deployed)
+
+- `8ec62db` — the identity write is verified by reading it back; `persisted` is
+  reported honestly; **`publishIdentity` refuses to overwrite a good published
+  key with an ephemeral one**, so one broken device stops taking down every
+  chat it is in. Does NOT repair already-poisoned conversations and does NOT
+  make Safari store the key.
+- `c68c5f2` — `net.js`'s `msgSafe` no longer swallows outbound failures
+  (`catch(() => {})`); it logs per channel and calls `handlers.onSendError`.
+
+### THE NEXT THREE TASKS, in order
+
+1. **Cherry-pick `8ec62db` + `c68c5f2` onto `master` and deploy.** Vercel
+   BEFORE Railway. Until then the handsets see none of it.
+2. **Self-healing re-fetch.** When `dispatch` cannot open a frame, evict the
+   cached room key, re-fetch the peer's CURRENT public key, re-derive, retry
+   once. Today a single stale key is permanent. Touch points:
+   `socket-transport.js` `dispatch()` catch at :449, `roomKey()`'s cache, and
+   `roomKeyForConvo` in `crypto/identity-store.js:147` (it prefers the stored
+   `convo.peerKey` and only fetches when absent — that is what makes it stick).
+3. **Why does the IndexedDB write fail on that iPhone?** Needs Safari devtools
+   over a cable from a Mac. Do NOT guess — the `persisted` flag from `8ec62db`
+   now surfaces it in the console, so look there first.
+
+### Also found, unfixed, lower priority
+
+- **A v2 room renders the v1 banner.** A convo confirmed as
+  `e2eVersion: 'e2e_v2'` displayed *"Older chat — its key came from both
+  account IDs, so the server could read it."* That is a lie about that room's
+  security, in the UI.
+- **`Start` on onboarding does nothing** if the inputs are filled
+  programmatically without dispatching `input`/`change` — the button is not
+  disabled, the app simply never sees the values. Real users type, so this is
+  mostly a test-automation trap, but it cost time here.
+- `smoketest_desk` (`ed112d1b973ba7b860f471f01e3acc8d`) and `probedesk9`
+  (`731ffdf1a5e30958`) are **test users left in PRODUCTION** — they could not
+  be deleted from here (prod Postgres is `postgres.railway.internal`,
+  unreachable from this machine). Remove via the admin dashboard.
+
+### PR #2 — open, and what it still says is unproven
+
+14 commits. Item 2 (S3 adapter) is CLOSED — `S3StorageAdapter` moved its first
+real byte against live Cloudflare R2, 13/13, including a non-member 403, a
+view-once 403 and a burned-object 404. Still open:
+
+1. **No physical-handset run of the MEDIA path.** The DM path has now been run,
+   and it found the bug above.
+2. **Half of item 3**: the send-retry ceiling is proven at 2 attempts per call
+   (`test/send-retry.test.js`), so 8 attempts is NOT a loop — but why four
+   invocations occurred for one `sendAttachment` is still unexplained.
+
+### R2 is live and configured
+
+Bucket **`spotme`** (not `spotme-media`). Credentials are in
+`spotme/backend/.env`, gitignored, with `STORAGE_PROVIDER=local` deliberately —
+Railway has NO storage config and must not get one until PR #2 ships, because
+the default `local` on Railway means the container's ephemeral filesystem.
+
+**ROTATE THE R2 SECRET ACCESS KEY** — it was pasted into the 2026-07-31
+transcript, which is on disk. Same for the `cfat_…` Cloudflare API token, which
+is account-scoped and was only ever needed for listing buckets.
+
+### Traps learned this session — do not rediscover
+
+- **`railway up` uploads the WORKING DIRECTORY.** Deploying while on a feature
+  branch ships that branch. `git checkout master` first and verify the tree
+  (`ls src/storage` should be empty for a PR #1-only deploy).
+- **A presigned S3/R2 URL is signed for PUT.** The client sent POST and every
+  local and mocked test passed, because the local adapter's route was
+  `@Post()`. Only a real bucket catches this.
+- **Express 4 here, not 5.** `@Get('x/*name')` registers, logs as `Mapped`, and
+  matches NOTHING. Use `:param` with `encodeURIComponent`.
+- **`emitWithAck` counts are attempts, not sends.** One `sendAction` can emit
+  twice (one rejoin retry). Server-side stayed correct throughout.
+- **Production Postgres is unreachable from this machine**
+  (`postgres.railway.internal`). Observe production through the API instead —
+  `GET /api/v2/auth/keys/:userId` is the best probe for key agreement.
+- **Two-origin harness**: `.claude/launch.json` has `spotme-web-harness` (port
+  5199, `--mode harness`, `--host`) pointing at `:4100` via the gitignored
+  `spotme/web/.env.harness`. `.claude/` is gitignored, so BOTH must be
+  recreated in a fresh clone. `npm --prefix X exec` ignores the prefix for cwd
+  — use `run dev`, or vite serves the repo root and 404s.
+
+### Blocked on the user
+
+1. Cherry-pick + deploy the two fixes — production is broken until then.
+2. Safari devtools on the iPhone, for task 3.
+3. Rotate the R2 secret and the Cloudflare token.
+4. Delete the two test users from production.
+
+---
+
+## 0000. EARLIER (2026-07-31 evening) — superseded by the section above
 
 **Session cost ~$1,160. Two branches pushed, one PR open, nothing merged.**
 `master` is untouched at `a453b9e` — deliberately, because merging triggers the
