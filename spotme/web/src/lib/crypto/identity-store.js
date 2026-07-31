@@ -64,10 +64,43 @@ export async function loadIdentity () {
     privateKey: fresh.privateKey,
     publicKeyB64: await exportPublicKeyB64(fresh)
   }
-  // If the put fails (quota, private browsing) the identity still works for
-  // this session — it simply will not survive a reload. Chatting beats failing.
-  await tx(db, 'readwrite', (s) => s.put(record, SELF)).catch(() => {})
-  cached = record
+  /* WRITE IT, THEN PROVE IT STUCK.
+   *
+   * This used to be `.catch(() => {})` with the note "chatting beats failing" —
+   * true while a v1 room could still fall back to the password, and false the
+   * moment ADR-001 made this identity the ONLY source of a v2 room key.
+   *
+   * When the write silently fails, every launch generates a fresh identity and
+   * `publishIdentity` overwrites the server record, which instantly staleifies
+   * the `convo.peerKey` every peer has stored. Measured on real handsets:
+   * @vijay22's published key changed three times in one session while
+   * @ajith11's never moved, and messages stopped arriving in BOTH directions —
+   * the server accepted them, push notifications fired, and every frame was
+   * dropped undecryptable at the far end.
+   *
+   * Safari is the usual reason: storing a non-extractable CryptoKey in
+   * IndexedDB has historically failed there, and it fails by rejecting the
+   * request rather than by throwing anywhere visible.
+   *
+   * So the write is verified by reading it back. `persisted` is the honest
+   * answer to "will this identity survive a reload", and publishIdentity
+   * refuses to clobber a good server record when it is false. */
+  let persisted = false
+  try {
+    await tx(db, 'readwrite', (s) => s.put(record, SELF))
+    const readBack = await tx(db, 'readonly', (s) => s.get(SELF))
+    persisted = Boolean(readBack?.privateKey)
+  } catch {
+    persisted = false
+  }
+  if (!persisted) {
+    console.warn(
+      'spotme identity: this device cannot persist its encryption key. ' +
+      'Encrypted chats will not survive a reload here, and republishing would ' +
+      'break existing conversations — see identity-store.js.'
+    )
+  }
+  cached = { ...record, persisted }
   return cached
 }
 
@@ -89,6 +122,35 @@ export async function publishIdentity (fetchToken) {
     try { accessToken = (await fetchToken())?.accessToken } catch { return false }
   }
   if (!accessToken) return false
+
+  /* NEVER OVERWRITE A GOOD RECORD WITH AN EPHEMERAL KEY.
+   *
+   * If this device could not persist its identity, the key in hand lives only
+   * until the tab closes. Publishing it replaces whatever peers are already
+   * deriving against, so every existing conversation goes silent — and does so
+   * again on the next launch, and the next. One device that cannot write to
+   * IndexedDB takes down every chat it is part of, in both directions.
+   *
+   * Better to leave the previous public key standing and let this session fail
+   * to decrypt than to break the other side too. If nothing is published yet
+   * there is nothing to protect, so a first publish still goes ahead. */
+  if (id.persisted === false) {
+    /* Our own id, taken from the token's `sub` rather than from db.profile() —
+     * this module is imported BY the room layer, so reaching back for db would
+     * close an import cycle, and `sub` is the authenticated principal anyway. */
+    const selfId = (() => {
+      try { return JSON.parse(atob(String(accessToken).split('.')[1] || ''))?.sub || null } catch { return null }
+    })()
+    const existing = selfId ? await fetchPeerKey(selfId, accessToken).catch(() => null) : null
+    if (existing?.publicKey && existing.publicKey !== id.publicKeyB64) {
+      console.warn(
+        'spotme identity: NOT republishing — this device cannot persist its key, ' +
+        'and overwriting the published one would silently break every existing chat.'
+      )
+      return false
+    }
+  }
+
   try {
     const res = await fetch(`${API_BASE}/api/v2/auth/keys`, {
       method: 'POST',
