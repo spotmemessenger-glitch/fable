@@ -614,7 +614,7 @@ function createConnection (convo) {
      * holding a partial copy, so a half-finished upload has delivered nothing
      * and must not read as "Sent". */
     if (objectStorageEnabled()) {
-      const { total: stored } = await uploadAttachment(roomId, message.id, buffer, {
+      const { total: stored } = await uploadAttachment(convo.roomId, message.id, buffer, {
         // The room secret, exactly as createNet is given it. For an e2e_v2
         // room the registered key provider wins and this is never consulted
         // (ADR-001) — the upload path must not be the one door with a
@@ -622,6 +622,14 @@ function createConnection (convo) {
         password: convo.secret,
         onProgress: (pr) => onProgress?.(Math.min(pr, 0.99))
       })
+      /* Record it on OUR copy too, so the history backlog we hand a joining
+       * peer carries the same two facts the live envelope does. Without this a
+       * receiver that learns of the message from Alice's backlog rather than
+       * from the server's replay gets an envelope with no idea the bytes are in
+       * storage — and the harness showed what that costs: it falls through to
+       * the peer path, fetches the 28-byte sealed-empty payload, and renders a
+       * successfully-loaded EMPTY image. */
+      store.patch(message.id, { viaStorage: true, total: stored })
       await conn.net.sendBinary(new Uint8Array(0), {
         metadata: { ...envelope, seq: 0, total: stored, viaStorage: true }
       })
@@ -991,6 +999,38 @@ export const rooms = {
   async fetchAttachment (roomId, id) {
     const conn = this.ensure(roomId)
     if (!conn) throw new Error('Conversation not found')
+    const m = conn.store.list().find((x) => x.id === id)
+
+    /* OBJECT STORAGE FIRST, when that is where the bytes are.
+     *
+     * A Phase 5 attachment has no RoomEvent slices at all — only a 28-byte
+     * envelope — so asking peers and the server log for them finds nothing and
+     * the message sits on "tap to load" permanently. The two-origin harness
+     * caught exactly this on the offline path: the envelope replayed, the
+     * bytes were sitting in storage the whole time, and nothing knew to fetch
+     * them. Falls through to the peer path on failure, so an attachment sent
+     * before this existed still loads the old way. */
+    /* `viaStorage` OR the device flag: the marker has to survive server replay,
+     * peer history backlog and a live send, and relying on all three to carry
+     * it is how the empty-image bug above happened. Object keys are DERIVED
+     * from (roomId, attachId), so trying storage costs one request and is
+     * always safe — a wrong guess 403s and falls through. */
+    if (m && (m.viaStorage || objectStorageEnabled())) {
+      try {
+        const bytes = await downloadAttachment(conn.roomId, id, Math.max(1, Number(m.total) || 1), {
+          password: db.convo(roomId)?.secret
+        })
+        if (!bytes?.length) throw new Error('empty object')
+        const url = bufferToDataURL(bytes, m.mime || 'image/jpeg')
+        conn.store.patch(id, { data: url, detached: false })
+        return url
+      } catch (error) {
+        // "Opened and destroyed" is an answer, not a failure to retry — a
+        // client that cannot tell the two apart asks forever.
+        if (/destroyed/i.test(error?.message || '')) throw error
+      }
+    }
+
     // The server log holds every slice ever sent through it, so a durable
     // transport can serve bytes with the sender long gone — 'server' is a
     // pseudo-peer the transport resolves internally.
@@ -998,7 +1038,6 @@ export const rooms = {
       ? ['server', ...conn.net.livePeerIds()]
       : conn.net.livePeerIds()
     if (peers.length === 0) throw new Error('They are offline — media transfers while you are both online')
-    const m = conn.store.list().find((x) => x.id === id)
     let bytes = null
     let lastError = null
     for (const peer of peers) {
@@ -1007,7 +1046,12 @@ export const rooms = {
         if (bytes) break
       } catch (error) { lastError = error }
     }
-    if (!bytes) throw new Error(lastError ? 'That transfer did not complete — try again' : 'No longer available')
+    /* EMPTY IS A FAILURE, NOT A LOAD. A Phase 5 attachment's RoomEvent row
+     * holds a sealed EMPTY payload — the bytes are in storage — so the peer
+     * path "succeeds" here with zero bytes and the UI renders a blank image as
+     * though it had loaded. `!bytes` alone did not catch it because an empty
+     * Uint8Array is truthy. */
+    if (!bytes?.length) throw new Error(lastError ? 'That transfer did not complete — try again' : 'No longer available')
     const dataURL = bufferToDataURL(bytes, m?.mime || 'image/jpeg')
     conn.store.patch(id, { data: dataURL, detached: false })
     return dataURL
