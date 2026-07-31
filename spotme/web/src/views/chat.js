@@ -553,8 +553,20 @@ export function render (root, ctx, roomId) {
     if (c.myLang !== base) db.upsertConvo({ roomId, myLang: base })
   }
 
-  /** Whole-chat transliteration switch, independent of the composer mode. */
-  const xlitOn = () => Boolean((db.convo(roomId) || convo).xlit)
+  /**
+   * Whole-chat transliteration switch, independent of the composer mode.
+   *
+   * A chat that has never been toggled falls back to the Settings preference.
+   * That switch — "Transliteration · Type in English, send in your script" —
+   * wrote `profile.translit` and NOTHING read it, so turning it on or off did
+   * nothing anywhere in the app; the only working control was the 文A button in
+   * each chat's header. `undefined` rather than a truthiness test is what keeps
+   * a deliberate per-chat "off" from being overridden by a global "on".
+   */
+  const xlitOn = () => {
+    const c = db.convo(roomId) || convo
+    return c.xlit === undefined ? Boolean(db.profile().translit) : Boolean(c.xlit)
+  }
 
   function setCompose (patch) {
     db.upsertConvo({ roomId, ...patch })
@@ -4405,6 +4417,14 @@ export function render (root, ctx, roomId) {
          * the user's own sends cannot clear it by accident. */
         if (roomUndecryptable) { roomUndecryptable = false; roomUndecryptableReason = null; renderList() }
         clearRxProgress(event.message?.id)
+        /* The "Read messages aloud" switch wrote `settings.readAloud` and
+         * nothing read it — the only working read-aloud was the manual
+         * per-message item in the long-press sheet, which is not what the
+         * toggle offers. This is the incoming path only, so it never reads the
+         * user's own sends back to them. */
+        if (db.settings().readAloud && event.message?.text) {
+          speak(event.message.text, db.profile().lang)
+        }
         const stick = nearBottom()
         appendMessage(event.message)
         rooms.markRead(roomId)

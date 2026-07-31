@@ -151,6 +151,16 @@ await step('both devices onboard', async () => {
   pb = await onboard(ctxB, B)
   return true
 })
+/* Everything below dereferences both pages. Without this a failed onboarding
+ * cascaded into twenty "Cannot read properties of undefined" lines that looked
+ * like twenty broken features — which is exactly the kind of false picture this
+ * harness exists to avoid. Stop, and say the real reason. */
+if (!pa || !pb) {
+  console.log('\n  ABORTED: onboarding did not complete, so nothing below could be tested.')
+  console.log('  (A dev server restarting mid-run does this — re-run against a settled server.)')
+  await browser.close()
+  process.exit(2)
+}
 
 console.log('\n-- discovery and the opening knock --')
 await step('A finds B by @username and sends the opening line', async () => {
