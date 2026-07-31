@@ -367,6 +367,11 @@ export function render (root, ctx, roomId) {
 
   /* ------------------------------------------------------------- state */
   let mounted = true
+  /* Frames arrived for this room that would not open, and the transport's
+   * re-agreement did not rescue them. Screen-lifetime only and never written
+   * to the convo record: a "this chat is broken" flag that outlived the repair
+   * would make a working chat accuse itself forever. */
+  let roomUndecryptable = false
   let lastDayKey = null
   /* Timestamp of the last row appended to the thread. Attachments finish out
    * of order, and appending each one wherever the thread currently ends
@@ -2117,6 +2122,19 @@ export function render (root, ctx, roomId) {
    */
   function keyWarning () {
     if (convo?.e2eVersion !== 'e2e_v2') return null   // a v1 room never used this key
+
+    /* THIS ROOM specifically is unreadable, whatever the device's own key is
+     * doing. Ranked above the device-level warning because it is the stronger
+     * statement: it is not a risk, it is a measurement — frames arrived, the
+     * transport tried to re-agree, and they still would not open. */
+    if (roomUndecryptable) {
+      return el('div', { class: 'sys warn', html: IC.spark }, [
+        'Messages are arriving but can’t be read — this chat’s key no longer matches ' +
+        (convo?.peer?.name || 'the other person') + '’s. ' +
+        'Trying again won’t help. Delete this chat on both phones and start it again.'
+      ])
+    }
+
     const state = identityStatus()
     if (state !== 'ephemeral' && state !== 'unavailable') return null
     return el('div', { class: 'sys warn', html: IC.spark }, [
@@ -4306,6 +4324,12 @@ export function render (root, ctx, roomId) {
     if (!mounted) return
     switch (event.type) {
       case 'message': {
+        /* An incoming message that DECRYPTED is the only honest proof the key
+         * agrees again — the self-heal can repair a room without anything else
+         * saying so. Clearing here is what stops the warning outliving the
+         * fault it describes. `emit('message')` is the incoming path only, so
+         * the user's own sends cannot clear it by accident. */
+        if (roomUndecryptable) { roomUndecryptable = false; renderList() }
         clearRxProgress(event.message?.id)
         const stick = nearBottom()
         appendMessage(event.message)
@@ -4314,6 +4338,13 @@ export function render (root, ctx, roomId) {
         else newChip.style.display = ''
         break
       }
+      /* Re-agreement already ran and failed by the time this fires, so there is
+       * nothing left to try automatically — the only remaining move is the
+       * user's. Re-render rather than append: the warning belongs at the top of
+       * the thread with the other system lines, not wherever we happen to be. */
+      case 'undecryptable':
+        if (!roomUndecryptable) { roomUndecryptable = true; renderList() }
+        break
       case 'history': {
         const stick = nearBottom()
         renderList()

@@ -184,6 +184,11 @@ export function createNet (roomId, secret, handlers, getHistory) {
     handlers.onPeers(Object.keys(room.getPeers()).length, peerId, 'leave')
   }
 
+  // A frame arrived and could not be opened, and re-agreeing the key did not
+  // help. Passed straight up: the transport states the fact, the view decides
+  // what the user is told.
+  room.onUndecryptable = (info) => handlers.onUndecryptable?.(info)
+
   // `send` is async and rejects if the peer vanished mid-flight. A peer leaving
   // during a handshake is normal, not an error worth surfacing to the user.
   /**

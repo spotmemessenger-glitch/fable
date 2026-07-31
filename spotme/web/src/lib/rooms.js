@@ -318,6 +318,14 @@ function createConnection (convo) {
       seenByPeer.add(payload.id)
       emit({ type: 'seen', id: payload.id })
     },
+    /* The peer is sending and this device can open none of it, and re-agreeing
+     * the key did not rescue it. Deliberately NOT persisted onto the convo
+     * record: this is a live property of the key agreement, and a stale
+     * "broken" flag outliving a repair would be its own bug — the kind that
+     * makes a working chat permanently accuse itself. The view holds it while
+     * the screen is open, and an incoming message that DOES decrypt clears it. */
+    onUndecryptable (info) { emit({ type: 'undecryptable', ...info }) },
+
     onPeers (count) {
       // Track when the peer was last connected, so the header can say
       // "Last seen 14:32" instead of a vague waiting message.

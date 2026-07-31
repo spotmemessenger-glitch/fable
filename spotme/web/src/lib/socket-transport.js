@@ -411,6 +411,10 @@ function serverRoom (config, roomId) {
   let onPeerJoinHandler = null
   let onPeerLeaveHandler = null
   let onPeerStreamHandler = null
+  /* Fired when a frame cannot be opened and re-agreement did not rescue it.
+   * The room reports the fact; deciding what a user should be told about it is
+   * the view's business, not the transport's. */
+  let onUndecryptableHandler = null
   const localStreams = new Set()
   let left = false
 
@@ -485,6 +489,22 @@ function serverRoom (config, roomId) {
       if (!isRetry && error?.name === 'OperationError') {
         const fresh = await refreshRoomKey(roomId)
         if (fresh) return dispatch(frame, isReplay, true)
+      }
+      /* RE-AGREEMENT DID NOT SAVE IT, SO SAY SO OUT LOUD.
+       *
+       * Reaching here with an OperationError means the room is genuinely
+       * broken: either the retry above ran and still could not authenticate, or
+       * there was no repair to offer (v1 room, no provider, or the cooldown is
+       * holding). Both are the same fact to a user — messages are arriving and
+       * none of them can be opened — and until now both were a `console.warn`
+       * on a device with no console, which is how a chat could look merely
+       * quiet while it was actually dead.
+       *
+       * ONLY OperationError. A SyntaxError from JSON.parse means we DID
+       * decrypt and the sender sent nonsense; announcing a key mismatch there
+       * would blame the key for a bug somewhere else entirely. */
+      if (error?.name === 'OperationError') {
+        onUndecryptableHandler?.({ roomId, type, from, isReplay: Boolean(isReplay) })
       }
       // A frame we cannot decrypt or parse must never kill the dispatch loop —
       // it is one lost event, not a dead room.
@@ -754,6 +774,7 @@ function serverRoom (config, roomId) {
     set onPeerJoin (fn) { onPeerJoinHandler = fn },
     set onPeerLeave (fn) { onPeerLeaveHandler = fn },
     set onPeerStream (fn) { onPeerStreamHandler = fn },
+    set onUndecryptable (fn) { onUndecryptableHandler = fn },
 
     getPeers () { return Object.fromEntries(peers) },
 
