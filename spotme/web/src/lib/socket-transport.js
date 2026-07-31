@@ -136,9 +136,58 @@ export function clearRoomKey (roomId) {
   const cacheKey = `${roomId}`
   keyProviders.delete(cacheKey)
   keyCache.delete(cacheKey)
+  refreshInFlight.delete(cacheKey)
+  refreshedAt.delete(cacheKey)
 }
 
-function roomKey (roomId, password) {
+/* Self-heal bookkeeping. `refreshInFlight` coalesces — a join replay of thirty
+ * undecryptable frames must produce ONE key fetch, not thirty. `refreshedAt`
+ * is the floor under that: when a room is genuinely unrecoverable every frame
+ * that arrives would otherwise hit the network forever. */
+const refreshInFlight = new Map()
+const refreshedAt = new Map()
+const REFRESH_COOLDOWN_MS = 30_000
+
+/**
+ * Re-agree this room's key because the one in hand cannot open a frame.
+ *
+ * THE BUG THIS EXISTS FOR. A device that cannot persist its X25519 identity
+ * republishes a fresh public key on every launch, and each republish
+ * staleifies the `convo.peerKey` every peer stored at creation. Both sides then
+ * derive different room keys and every frame is dropped undecryptable — in both
+ * directions, permanently, because `roomKeyForConvo` prefers the stored
+ * `peerKey` and only fetches when it is absent. Measured on two real handsets:
+ * @vijay22's published key moved three times in one session, @ajith11's never
+ * did, and the chat went silent while the server kept accepting messages and
+ * push notifications kept firing.
+ *
+ * Evicting the cache alone does nothing: the provider would re-derive from the
+ * same stale stored key. `forceRefetch` is what makes this a repair.
+ *
+ * v1 rooms have no provider and get null — a PBKDF2 key derived from the room
+ * password cannot be wrong in this way, so there is nothing to re-agree.
+ *
+ * Returns the fresh key, or null if this room cannot or should not refresh now.
+ */
+export function refreshRoomKey (roomId) {
+  const cacheKey = `${roomId}`
+  if (!keyProviders.has(cacheKey)) return Promise.resolve(null)
+  const inFlight = refreshInFlight.get(cacheKey)
+  if (inFlight) return inFlight
+  if (Date.now() - (refreshedAt.get(cacheKey) || 0) < REFRESH_COOLDOWN_MS) return Promise.resolve(null)
+
+  // Stamped BEFORE the attempt, so a failing refresh is rate-limited too.
+  refreshedAt.set(cacheKey, Date.now())
+  keyCache.delete(cacheKey)
+  const run = Promise.resolve()
+    .then(() => roomKey(roomId, undefined, { forceRefetch: true }))
+    .catch(() => null)          // a wedged room must not become an unhandled rejection
+    .then((key) => { refreshInFlight.delete(cacheKey); return key || null })
+  refreshInFlight.set(cacheKey, run)
+  return run
+}
+
+function roomKey (roomId, password, opts) {
   const cacheKey = `${roomId}`
   if (!keyCache.has(cacheKey)) {
     const provider = keyProviders.get(cacheKey)
@@ -147,7 +196,7 @@ function roomKey (roomId, password) {
       // also evicts itself so a later attempt (peer publishes a key, network
       // returns) can succeed instead of the room being wedged forever.
       keyCache.set(cacheKey, Promise.resolve()
-        .then(() => provider())
+        .then(() => provider(opts))
         .then((key) => {
           if (!key) throw new Error(`no agreed key for room ${roomId}`)
           return key
@@ -380,7 +429,11 @@ function serverRoom (config, roomId) {
   const readCursor = () => { try { return Number(localStorage.getItem(cursorKey())) || 0 } catch { return 0 } }
   const writeCursor = (n) => { try { localStorage.setItem(cursorKey(), String(n)) } catch { /* private mode */ } }
 
-  const keyPromise = roomKey(roomId, password)
+  /* Re-read the cache on every use instead of capturing the promise once.
+   * `refreshRoomKey` repairs a room by EVICTING that cache entry, and a
+   * captured promise would go on resolving to the stale key for the life of the
+   * page — the room would self-heal in the cache and stay broken in the room. */
+  const currentKey = () => roomKey(roomId, password)
 
   function actionRecord (name) {
     if (!actions.has(name)) {
@@ -393,9 +446,9 @@ function serverRoom (config, roomId) {
 
   /* -- incoming ---------------------------------------------------------- */
 
-  async function dispatch (frame, isReplay) {
+  async function dispatch (frame, isReplay, isRetry) {
     if (left || !frame || frame.from === selfId) return
-    const key = await keyPromise
+    const key = await currentKey()
     const { type, from } = frame
     try {
       if (type === 'fetchreq') return void handleFetchReq(frame, key)
@@ -417,6 +470,22 @@ function serverRoom (config, roomId) {
         a.onMessage?.(payload, { peerId: from })
       }
     } catch (error) {
+      /* A WRONG KEY IS REPAIRABLE. TRY, EXACTLY ONCE.
+       *
+       * `OperationError` is AES-GCM refusing to authenticate — the tag did not
+       * match, which for this transport means the key is wrong rather than the
+       * bytes are damaged. It is the one failure here worth acting on: a
+       * SyntaxError from JSON.parse means we DID decrypt and the sender sent
+       * nonsense, and re-agreeing a key would not change that.
+       *
+       * Only ever one retry (`isRetry`), and `refreshRoomKey` refuses to run
+       * more than once per room per cooldown, so a room whose peer key is
+       * genuinely gone degrades to the old behaviour — one warning per frame —
+       * instead of one key fetch per frame. */
+      if (!isRetry && error?.name === 'OperationError') {
+        const fresh = await refreshRoomKey(roomId)
+        if (fresh) return dispatch(frame, isReplay, true)
+      }
       // A frame we cannot decrypt or parse must never kill the dispatch loop —
       // it is one lost event, not a dead room.
       if (!isReplay) console.warn(`spotme transport: dropped ${type} frame:`, error?.message)
@@ -446,7 +515,7 @@ function serverRoom (config, roomId) {
     joinPromise = (async () => {
       const socket = await ensureSocket()
       const ack = await emitAck(socket, 'join', { roomId, since: readCursor() })
-      const key = await keyPromise
+      const key = await currentKey()
       for (const peerId of ack.peers || []) addPeer(peerId, true)
       for (const ev of ack.events || []) await dispatch(ev, true)
       // Attachments that arrived while this device was away come back as
@@ -494,7 +563,7 @@ function serverRoom (config, roomId) {
   async function sendAction (type, data, sendOpts = {}, attachId) {
     if (left) return
     const socket = await join()
-    const key = await keyPromise
+    const key = await currentKey()
     const bytes = toBytes(data)
     const payload = b64(await seal(key, bytes || enc(JSON.stringify(data ?? null))))
     const meta = await wrapMeta(key, sendOpts.metadata)
@@ -517,7 +586,7 @@ function serverRoom (config, roomId) {
 
   async function requestBytes (data, reqOpts = {}) {
     const socket = await join()
-    const key = await keyPromise
+    const key = await currentKey()
     // The server log answers first — it holds every slice ever sent through
     // it, which is exactly the case P2P could not serve (sender offline).
     if (data?.id) {

@@ -584,7 +584,18 @@ function createConnection (convo) {
      * not open. Without this the fix evaporated on the first page reload, and
      * silently, because both peers degraded identically. */
     if (convo.e2eVersion === E2E_V2) {
-      setRoomKeyProvider(convo.roomId, () => roomKeyForConvo(convo, freshTokens))
+      /* `opts` carries `forceRefetch` down from the transport's self-heal. The
+       * new key is written to BOTH the record and the captured `convo` object:
+       * the record so a reload does not repeat the repair, and the object
+       * because this closure is what the next re-derive reads — persisting to
+       * only one of them leaves the room healing itself over and over. */
+      setRoomKeyProvider(convo.roomId, (opts) => roomKeyForConvo(convo, freshTokens, {
+        ...opts,
+        onPeerKeyChanged: (peerKey) => {
+          convo.peerKey = peerKey
+          db.upsertConvo({ roomId: convo.roomId, peerKey })
+        }
+      }))
     }
     // History backlog: never offer opened view-once photos, and strip heavy
     // attachment bytes (they'd re-ship megabytes on every reconnect — the
