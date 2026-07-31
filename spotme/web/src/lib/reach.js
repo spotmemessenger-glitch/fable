@@ -85,6 +85,20 @@ function stableHash (input) {
 const inboxRoomId = (userId) => `inbox-${stableHash(`spotme-inbox-v1:${userId}`)}`
 
 /**
+ * Place the line a knock carried into the room's thread.
+ *
+ * Never throws: a first message that cannot be shown must not take the knock —
+ * and therefore the whole conversation — down with it.
+ */
+function firstMessage (roomId, { id, from, name, lang, text }) {
+  try {
+    rooms.injectLocal(roomId, {
+      id, from, name, lang, ts: Date.now(), kind: 'text', text
+    })
+  } catch { /* the conversation still opens; only its opening line is missing */ }
+}
+
+/**
  * Deterministic conversation for a PAIR, independent of who reaches out first.
  * Sorting the ids means both sides compute the identical room without
  * exchanging anything — the knock still carries it too, belt and suspenders.
@@ -206,6 +220,21 @@ function createReach () {
       id: payload.from.id, name: payload.from.name || 'Unknown',
       avatar: payload.from.avatar || null, lang: payload.from.lang || 'en'
     })
+    /* THE FIRST LINE IS A MESSAGE, NOT JUST A PREVIEW.
+     *
+     * It used to reach `last` and `pushNote` and stop there, so the
+     * notification quoted the text and the thread was empty when the chat was
+     * opened — "it shows in notifications but not the actual message". The id
+     * rides in the knock so the live P2P copy and the relay copy land as ONE
+     * message; a sender on an older build sends none, and the fallback keeps
+     * that deterministic per room so its two copies still collapse. */
+    if (payload.text) {
+      firstMessage(payload.roomId, {
+        id: payload.msgId || `k_${stableHash(`${payload.roomId}:${payload.from.id}:${payload.text}`)}`,
+        from: payload.from.id, name: payload.from.name || 'Unknown',
+        lang: payload.from.lang || 'en', text: String(payload.text).slice(0, 300)
+      })
+    }
     // A v2 room is joined by the agreement continuation above, NOT here. Joining
     // now would derive a key from the v1 password and win the cache before
     // agreement finishes, leaving both sides unable to open each other's
@@ -423,13 +452,27 @@ function createReach () {
 
     rooms.ensure(roomId)
 
+    /* One id for this knock's opening line, deterministic per room so that
+     * reach()'s own re-entry after key agreement, the live P2P knock and the
+     * relay copy all resolve to the SAME message instead of three. */
+    const msgId = `k_${stableHash(`${roomId}:${me.id}:${String(text || '')}`)}`
+
     const payload = {
       from: { id: me.id, name: me.name, avatar: me.avatar, lang: me.lang },
       roomId, secret, text: String(text || '').slice(0, 300), mode,
       // The recipient needs our public key to agree the same key. `secret` still
       // rides along for v1 rooms and for peers on an older build; a v2 recipient
       // ignores it entirely.
-      e2eVersion, senderKey
+      e2eVersion, senderKey, msgId
+    }
+
+    // Our own opening line belongs in our own thread too — without this the
+    // sender watched their first message vanish as the chat opened.
+    if (text) {
+      firstMessage(roomId, {
+        id: msgId, from: me.id, name: me.name, lang: me.lang,
+        text: String(text).slice(0, 300)
+      })
     }
     // Both are plain HTTP, independent of WebRTC/TURN readiness — no reason
     // to make them wait behind the relayReady gate below.

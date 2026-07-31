@@ -165,7 +165,10 @@ function createConnection (convo) {
     seenByPeer,
     openingByPeer,
     call: { state: 'idle', video: false, local: null, remote: null },
-    on (fn) { listeners.add(fn); return () => listeners.delete(fn) }
+    on (fn) { listeners.add(fn); return () => listeners.delete(fn) },
+    /* So a message can be placed into an already-open thread from outside this
+     * closure — `reach()` doing exactly that for the line carried by a knock. */
+    emit (event) { emit(event) }
   }
 
   function emit (event) { for (const fn of listeners) fn(event) }
@@ -733,6 +736,33 @@ export const rooms = {
   },
 
   /** Build + persist + send a message. Returns the full envelope. */
+  /**
+   * Put a message into a room's thread without sending anything.
+   *
+   * THE BUG THIS EXISTS FOR. The first line of a new chat travels INSIDE the
+   * knock — `reach()` puts it in the payload, and both sides wrote it to the
+   * convo's `last` preview and fired a push notification with it. Neither side
+   * ever added it to the message store. So the notification quoted the text,
+   * the inbox row quoted the text, and opening the chat showed an empty thread:
+   * "it shows in notifications but not the actual message", reported from two
+   * real handsets. `inbox.js` states the intent plainly — the typed line is
+   * "what both sides see as the first message once the chat opens" — so this is
+   * a gap between the two, not a design choice.
+   *
+   * Idempotent by id, which is what makes it safe on the receiving side: a
+   * knock can arrive live over P2P AND again from the relay, and `store.add`
+   * refuses a duplicate id (and honours tombstones, so a deleted first message
+   * does not come back).
+   */
+  injectLocal (roomId, message) {
+    const conn = this.ensure(roomId)
+    if (!conn || !message?.id) return false
+    if (!conn.store.add(message)) return false
+    db.bump(roomId, { text: preview(message), ts: message.ts, fromMe: message.from === db.profile()?.id })
+    conn.emit({ type: 'message', message })
+    return true
+  },
+
   sendMessage (roomId, partial) {
     const conn = this.ensure(roomId)
     if (!conn) return null
