@@ -696,29 +696,68 @@ OmniParser must run in a 3.11 venv and talk to ybot over a socket.
 
 ---
 
-## 2. THE NEXT TASK (agreed with the user)
+## 2. ybot — CORRECTED 2026-07-31 night. The old text here was WRONG.
 
-**Bolt OmniParser + a verify-after-every-action loop onto ybot. Not a rewrite.**
+**What this section used to say, and why it must not be acted on:** *"ybot today
+is 2057 lines that screenshot, ask a model, and click a guessed coordinate. It
+never checks the click worked."* Read the code before believing that. ybot is
+**4,288 lines across 30 files**; `agent.py` is 451. The
+PERCEIVE → GROUND → ACT → VERIFY → RECOVER loop this section named as the TARGET
+was already built — through the Windows accessibility tree, not OmniParser:
 
-Why this and nothing else: ybot today is 2057 lines that screenshot, ask a
-model, and click a guessed coordinate. It never checks the click worked. The
-single biggest cause of "autonomous agent failed" is a missing verification
-step, not a wrong decision.
+| Stage | Where it already lives |
+|---|---|
+| PERCEIVE | `ui_inspect` → numbered elements, ~336 tokens vs ~1,230 for a screenshot |
+| GROUND | `ui_click(ref)` — "no coordinates involved", per the system prompt |
+| ACT | `actions.execute` behind `guard.evaluate` + the kill switch |
+| VERIFY | `_after()` → `screen.wait_change()` → "Screen unchanged after {what}" |
+| RECOVER | that message says "Do not simply repeat it; call ui_inspect" |
 
-Target loop:
-```
-PERCEIVE (OmniParser -> numbered elements)
-  -> GROUND (pick element id, never a bare coordinate)
-  -> ACT
-  -> VERIFY (re-capture; did the expected change happen?)
-  -> RECOVER (retry with a DIFFERENT strategy, then escalate)
-```
+Building the old §2 as written would have rebuilt working code. **Anyone who
+plans ybot work from a brief instead of from the source will do it again.**
 
-Read `ybot/ybot/agent.py` (420 lines) and `screen.py` / `uia.py` **before**
-editing — target the real code paths, not assumed ones.
+### What was actually missing, and what shipped tonight
 
-After that: `langgraph` 1.2.9 is installed and is the intended fix for ybot
-having **no durable state** (a crash currently loses everything).
+`wait_change` hashes the frame, so it answered "did ANY pixel change" — not "did
+the EXPECTED change happen". A click opening the WRONG menu, a mistyped
+filename, an error dialog: all move pixels, all logged `✓`. A blinking cursor
+moves pixels too.
+
+Shipped: **`ybot/verify.py`** — a step declares `expect`, checked against the
+accessibility tree. Four kinds: `appears:<text>`, `disappears:<text>`,
+`title:<text>`, `changed` (the old weak default, still there and still the
+fallback). Wired into `ui_click` and into every `batch_actions` step.
+
+Three decisions worth keeping:
+- **A malformed expectation is REFUSED, never downgraded to `changed`.** Silently
+  falling back would reintroduce the weak check invisibly, on a typo.
+- **An expectation that was ALREADY true before the step still passes but is
+  flagged `proved_nothing`** and marked `⚠` in the batch log — it is not evidence
+  the action did anything.
+- **`UIA._enumerate()` was split out of `inspect()`** because verification reads
+  the tree too, and a read that reassigned `_elements`/`_wrappers` would
+  invalidate every ref the model holds, mid-batch, between the click and the
+  check — clicking the wrong element by the right number.
+
+**PROVEN:** `python3 tests/test_verify.py` → 28/28, and it runs anywhere because
+`verify.py` imports no pywinauto, mss or ctypes and reads no clock.
+**NOT PROVEN:** the `agent.py`/`uia.py` wiring is compile-checked only. ybot is
+Windows-only and the cloud container is Linux with no `anthropic`, `mss` or
+`pywinauto` installed, so `agent.py` cannot even be imported there. **First run
+on the Windows box is the real test.**
+
+### If you still want OmniParser, here is its actual niche
+
+`_ui_inspect` already has the fallback: *"This window exposes no interactive
+elements to the accessibility tree (common for canvas, game, or custom-drawn
+UIs). Take a screenshot and work from pixels instead."* **That** branch is where
+OmniParser earns its keep. Replacing `ui_inspect` with it on ordinary Windows UI
+would be strictly worse — slower, inferred rather than exact, and 4 GB of VRAM
+for something the tree answers exactly and for free.
+
+Also still true: ybot has **no tests at all** outside `tests/test_verify.py`, and
+`langgraph` 1.2.9 is installed as the intended fix for ybot having **no durable
+state** (a crash loses everything).
 
 ---
 
