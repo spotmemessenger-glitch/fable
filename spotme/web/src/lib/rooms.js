@@ -14,6 +14,12 @@ import { createStore } from '../store.js'
 import { db, ROOM_PREFIX } from './db.js'
 import { alertMessage } from './notify.js'
 import { pokePeer } from './push.js'
+/* DELIBERATELY NOT ROUTED THROUGH THE TRANSPORT SEAM. This is key material, and
+ * `setRoomKeyProvider` is on FORBIDDEN_KEY_SURFACE by name — an adapter that can
+ * be handed a key is an adapter that will eventually derive one, which is how
+ * V-19 survived its first fix. Rooms come from transport/room.js; keys are
+ * installed here, directly, and never cross an adapter. See ADR-002 §2 and the
+ * header of transport/socketio-adapter.js. */
 import { setRoomKeyProvider, freshTokens } from './socket-transport.js'
 import { roomKeyForConvo } from './crypto/identity-store.js'
 import { E2E_V2 } from './crypto/e2e-v2.js'

@@ -29,7 +29,10 @@
 // the Spot Me backend with a persistent, ciphertext-only event log — which is
 // what finally gives the web app offline delivery. Trystero remains available
 // behind localStorage['spotme.transport'] = 'p2p'.
-import { joinRoom, selfId } from './lib/socket-transport.js'
+// The transport SEAM, not a transport: it reads localStorage['spotme.transport']
+// in one place and hands back a room. See lib/transport/room.js for why chat
+// still runs on Socket.IO underneath and what Phase 3 has to move first.
+import { joinRoom, selfId } from './lib/transport/room.js'
 
 /** Namespaces our rooms so we never collide with another Trystero app. */
 /**

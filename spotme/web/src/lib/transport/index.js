@@ -19,24 +19,13 @@
 import { createSocketIOAdapter } from './socketio-adapter.js'
 import { createCentrifugoAdapter } from './centrifugo-adapter.js'
 import { assertImplementsTransport } from './ITransportAdapter.js'
+import { selectedTransport } from './select.js'
 
-export const TRANSPORT_KEYS = Object.freeze(['socketio', 'centrifugo', 'p2p'])
-const STORAGE_KEY = 'spotme.transport'
-const DEFAULT = 'socketio'
-
-/** What this device is configured to use. Unknown values fall back to default. */
-export function selectedTransport () {
-  let raw = null
-  try { raw = localStorage.getItem(STORAGE_KEY) } catch { /* private mode */ }
-  return TRANSPORT_KEYS.includes(raw) ? raw : DEFAULT
-}
-
-/** Switch transports. Takes effect on the next connect, not retroactively. */
-export function setTransport (key) {
-  if (!TRANSPORT_KEYS.includes(key)) throw new Error(`unknown transport: ${key}`)
-  try { localStorage.setItem(STORAGE_KEY, key) } catch { /* private mode */ }
-  return key
-}
+/* The selector lives in select.js so `transport/room.js` — which every screen
+ * goes through — can read the flag WITHOUT importing this file, and therefore
+ * without dragging the Centrifugo adapter into the app bundle. Re-exported
+ * here so existing importers are unaffected. */
+export { TRANSPORT_KEYS, selectedTransport, setTransport } from './select.js'
 
 /**
  * Build the adapter for this device.
