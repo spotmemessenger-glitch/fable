@@ -24,6 +24,9 @@
 import { db } from './db.js'
 
 import { API_BASE as API_ORIGIN } from './api.js'
+// `/api/push` derives the subscriber from the token now, not from a userId in
+// the body — an unauthenticated POST there could unsubscribe anyone by id.
+import { authHeaders } from './auth-headers.js'
 
 const ENDPOINT = `${API_ORIGIN}/api/push`
 
@@ -78,7 +81,7 @@ export async function registerNativePush () {
 
     const response = await fetch(ENDPOINT, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: await authHeaders(),
       body: JSON.stringify({
         action: 'register-device',
         userId: me,
@@ -137,7 +140,7 @@ export async function subscribePush () {
       })
     const response = await fetch(ENDPOINT, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: await authHeaders(),
       body: JSON.stringify({
         action: 'subscribe',
         userId: me,
@@ -163,7 +166,7 @@ export async function unsubscribePush () {
   if (!me) return
   await fetch(ENDPOINT, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: await authHeaders(),
     body: JSON.stringify({ action: 'unsubscribe', userId: me })
   }).catch(() => {})
 }
@@ -177,9 +180,11 @@ export async function unsubscribePush () {
  */
 export function pokePeer (userId) {
   if (!userId) return
-  fetch(ENDPOINT, {
+  // Still fire-and-forget, just with the token attached — hence the .then
+  // rather than an await, which this function's signature cannot take.
+  authHeaders().then((headers) => fetch(ENDPOINT, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers,
     body: JSON.stringify({ action: 'notify', toUserId: userId })
-  }).catch(() => {})
+  })).catch(() => {})
 }

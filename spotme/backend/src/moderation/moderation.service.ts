@@ -3,6 +3,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { ReportReason, ReportStatus } from '@prisma/client';
 import { NcmecService } from './ncmec.service';
 import { AuditService } from '../audit/audit.service';
+import { PUBLIC_USER } from '../common/prisma/public-user';
 
 const PRESERVE_DAYS_DEFAULT = 90;
 const PRESERVE_DAYS_LE_REQUEST = 180;
@@ -85,7 +86,7 @@ export class ModerationService {
   }
 
   blockedByUser(userId: string) {
-    return this.prisma.block.findMany({ where: { blockerId: userId }, include: { blocked: true } });
+    return this.prisma.block.findMany({ where: { blockerId: userId }, include: { blocked: { select: PUBLIC_USER } } });
   }
 
   /** Reports past their retention window with no open legal hold get purged. */

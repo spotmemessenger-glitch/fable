@@ -15,12 +15,22 @@ import { openCrop } from '../lib/crop.js'
 import { el, clear, avatar, actionSheet } from '../lib/ui.js'
 import { notifyState, enableNotify, chime, notifyBlockedReason } from '../lib/notify.js'
 import { subscribePush } from '../lib/push.js'
+import { API_BASE as REGISTRY_API } from '../lib/api.js'
 
 /* ------------------------------------------------------------- icons */
 
-const REGISTRY_API = (location.hostname === 'localhost' || /^[\d.:[\]]+$/.test(location.hostname))
-  ? 'https://spotme-messenger.vercel.app'
-  : ''
+/* ONE REGISTRY, OR TWO PEOPLE CANNOT FIND EACH OTHER.
+ *
+ * This file used to pick its own origin — same-origin (Vercel) in production,
+ * a hardcoded Vercel URL in dev — while EVERY other caller went to `API_BASE`
+ * (Railway): the username search in api.js, main.js, inbox.js and
+ * member-picker.js. Both hosts really do run a registry
+ * (web/api/username.js and backend's username.controller.ts), so the two
+ * diverge in practice: you claim @name on one and everybody searches the other,
+ * which reads as "that user does not exist".
+ *
+ * api.js and main.js both already document this invariant in comments. This was
+ * the one file breaking it. */
 const USERNAME_RE = /^[a-z0-9_]{2,}$/
 
 const I = {

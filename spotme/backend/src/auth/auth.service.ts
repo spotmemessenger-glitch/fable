@@ -208,12 +208,30 @@ export class AuthService {
         // Same reasoning as `refresh` above: terminal, so it must not look retryable.
         throw new ForbiddenException({ error: 'deleted_account', message: 'this account has been deleted' });
       }
-      const updates: { name?: string; publicKey?: string; username?: string } = {};
+      const updates: { name?: string; publicKey?: string; username?: string; deletedAt?: Date | null } = {};
       if (name && name !== existing.name) updates.name = name;
       if (publicKey && publicKey !== existing.publicKey) updates.publicKey = publicKey;
       if (username && username !== existing.username) {
         const taken = await this.prisma.user.findUnique({ where: { username } });
         if (!taken) updates.username = username;
+      }
+      /* RE-CLAIMING A NAME MUST CLEAR THE RELEASE STAMP.
+       *
+       * `releaseUsername` stamps `deletedAt` AND renames to `released_…`, and
+       * `isDeletedAccount` reads the two together: a released name means the row
+       * is still alive. Re-claiming an ordinary name above rewrote the username
+       * and left `deletedAt` set — so the row became {deletedAt set, ordinary
+       * username}, which is the exact shape of a genuinely deleted account. The
+       * next refresh returned 403 `deleted_account` and there is no in-app way
+       * back.
+       *
+       * This is not only an attacker's move. It is what our OWN reset flow does
+       * when it half-fails: main.js releases the username, then calls
+       * wipeDevice() inside a try/catch. In private mode or at quota the wipe
+       * throws, the device keeps id + username + claimSecret, re-claims on the
+       * next launch — and bricks itself. */
+      if (existing.deletedAt && existing.username?.startsWith(RELEASED_PREFIX)) {
+        updates.deletedAt = null;
       }
       if (Object.keys(updates).length) {
         await this.prisma.user.update({ where: { id }, data: updates });

@@ -76,6 +76,25 @@ export function wipeDevice () {
     if (key.startsWith(ROOM_PREFIX) && !key.slice(ROOM_PREFIX.length).includes(':')) doomed.push(key)
   }
   doomed.forEach((key) => localStorage.removeItem(key))
+
+  /* THE IDENTITY KEY IS NOT IN localStorage, AND IT IS THE ONE THING A WIPE MOST
+   * HAS TO REMOVE. The loop above walks localStorage only, so "Clear all data"
+   * left the X25519 private key sitting in IndexedDB. The next launch minted a
+   * NEW random account id and then published that SAME old key against it —
+   * anyone who recorded the old public key could link the erased identity to the
+   * fresh one, and the key that opens the server's retained ciphertext for the
+   * supposedly-erased conversations was still on the device.
+   *
+   * Deleting the database is not enough on its own: identity-store caches the
+   * record in a module variable, so without `forgetIdentity()` the key stays
+   * live in memory for the rest of the page and gets written straight back. */
+  // Imported lazily so db.js stays a leaf module: it is imported by nearly
+  // every view, and a static import of the crypto tree would pull api.js and
+  // e2e-v2.js in behind it for every one of them.
+  import('./crypto/identity-store.js')
+    .then((m) => m.forgetIdentity?.())
+    .catch(() => { /* crypto never loaded on this device; nothing cached */ })
+  try { indexedDB.deleteDatabase('spotme-e2e') } catch { /* private mode, or no IDB at all */ }
 }
 
 function randomHex (bytes = 8) {

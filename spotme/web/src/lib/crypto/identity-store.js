@@ -33,7 +33,10 @@ function tx (db, mode, fn) {
   return new Promise((resolve, reject) => {
     const t = db.transaction(STORE, mode)
     const out = fn(t.objectStore(STORE))
-    t.oncomplete = () => resolve(out?.result ?? out)
+    // `?? out` would hand back the IDBRequest itself on a MISS, because a miss
+    // resolves `result` to undefined. Harmless only by luck downstream — a
+    // request object has no `privateKey` — so ask whether it is a request.
+    t.oncomplete = () => resolve(out && typeof out === 'object' && 'result' in out ? out.result : out)
     t.onerror = () => reject(t.error)
     t.onabort = () => reject(t.error)
   })
@@ -60,7 +63,32 @@ export async function loadIdentity () {
   try { db = await openDb() } catch { openFailed = true; return null }   // private mode, quota, etc.
   openFailed = false
 
-  const found = await tx(db, 'readonly', (s) => s.get(SELF)).catch(() => null)
+  /* AN ABORTED READ IS NOT AN EMPTY STORE.
+   *
+   * This was `.catch(() => null)`, which collapsed "nothing stored yet" into the
+   * same branch as "the read threw" — and the branch below GENERATES a new
+   * identity and `put`s it over whatever is there. `tx` rejects on both
+   * `onerror` and `onabort`, so a quota blip, an IO error, or (on iOS) a
+   * transaction aborted because the tab was suspended was enough to destroy the
+   * private key. It is non-extractable, so there is no copy: every existing v2
+   * conversation dies at once.
+   *
+   * And the device then reported itself healthy. The write-back below succeeds,
+   * so `persisted` is true and `identityStatus()` says 'ok' — meaning the
+   * `id.persisted === false` guard in `publishIdentity`, whose whole job is
+   * "never overwrite a good record", does not fire either. The new key goes to
+   * the server and staleifies the `peerKey` every peer holds.
+   *
+   * Fail CLOSED. A read we could not complete says nothing about what is
+   * stored, and the only safe move is to report the store unavailable and write
+   * nothing at all. */
+  let found
+  try {
+    found = await tx(db, 'readonly', (s) => s.get(SELF))
+  } catch {
+    openFailed = true
+    return null
+  }
   if (found?.privateKey) {
     cached = found
     return cached
@@ -139,6 +167,19 @@ export async function loadIdentity () {
  * as `publishIdentity` does. Anything looser reports a fault on every healthy
  * device that has simply been used before.
  */
+/**
+ * Drop the in-memory identity so the next `loadIdentity()` starts clean.
+ *
+ * `wipeDevice` deletes the IndexedDB database, but the record is also cached in
+ * a module variable that outlives it — without this the "wiped" device keeps
+ * serving the old private key for the rest of the page and republishes it under
+ * the new account id, which is precisely what a wipe is supposed to prevent.
+ */
+export function forgetIdentity () {
+  cached = null
+  openFailed = false
+}
+
 export function identityStatus () {
   if (cached) return cached.persisted === false ? 'ephemeral' : 'ok'
   return openFailed ? 'unavailable' : 'unknown'

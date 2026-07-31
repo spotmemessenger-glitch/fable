@@ -85,7 +85,10 @@ mock.module(`${SRC}lib/socket-transport.js`, {
   namedExports: {
     joinRoom: (_opts, roomId) => fakeRoomFor(roomId),
     selfId: 'test-self',
-    serverMode: false,
+    // The SHIPPED default (`spotme.transport !== 'p2p'`), so the knock handler's
+    // sender check is exercised here rather than skipped. Under p2p, peer ids
+    // are per-session torrent ids and the check correctly stands down.
+    serverMode: true,
     setRoomKey: () => {},
     setRoomKeyProvider: () => {},
     clearRoomKey: () => {},
@@ -249,7 +252,14 @@ async function main () {
     roomId,                       // a room we already hold (from step 4)
     secret: 'secret',
     text: 'duplicate'
-  }, { peerId: 'bob-transport-9' })
+    /* `peerId` IS THE SENDER'S ACCOUNT ID, not a separate transport id. The
+     * gateway sets `client.data.userId` from the JWT `sub` and stamps every
+     * frame `from: userId`; the client hands that straight through as
+     * `meta.peerId`. This used to read 'bob-transport-9', modelling a
+     * connection id the server has never sent — and a knock handler that
+     * cannot compare the two has to take `payload.from.id` on trust, which is
+     * what let any authenticated user knock as anyone. */
+  }, { peerId: BOB.id })
   await tick()
   check('a duplicate knock is still acknowledged',
     myInboxRoom.actions.knockAck.sends.length === ackCountBefore + 1)
@@ -275,12 +285,45 @@ async function main () {
     secret: 'dave-secret',
     text: 'hi',
     mode: 'meet'
-  }, { peerId: 'dave-transport-1' })
+  }, { peerId: 'dave-id' })
   await tick()
   check('an incoming knock opens the conversation with no accept step',
     db.convo('dave-room')?.kind === 'dm')
   check('an incoming knock adds the sender as a contact',
     db.contacts().some((c) => c.id === 'dave-id'))
+
+  /* ------------------------------------------------------------------ 8 */
+  /* IMPERSONATION. The transport says who really sent the frame; the payload
+   * merely claims. When they disagree the claim is a lie, and acting on it
+   * meant any authenticated user could open a chat labelled with a friend's
+   * name, in a room THEY chose, under a key THEY chose — and then read and
+   * write everything in it. No cryptography is broken by that; it is simply
+   * never invoked, because `secret` and `roomId` both come from the knock. */
+  myInboxRoom.actions.knock.onMessage({
+    from: { id: 'dave-id', name: 'Dave' },       // claims to be Dave…
+    roomId: 'mallory-room',
+    secret: 'mallory-secret',
+    text: 'hi again',
+    mode: 'meet'
+  }, { peerId: 'mallory-id' })                   // …but the socket says Mallory
+  await tick()
+  check('THE HOLE: a knock whose sender does not match the transport is refused',
+    !db.convo('mallory-room'))
+  check('…and the impersonated person is not filed as a contact',
+    !db.contacts().some((c) => c.id === 'mallory-id'))
+
+  /* The rule must not fire on the honest case it sits in front of. A knock
+   * that agrees with the transport still opens, exactly as above. */
+  myInboxRoom.actions.knock.onMessage({
+    from: { id: 'erin-id', name: 'Erin' },
+    roomId: 'erin-room',
+    secret: 'erin-secret',
+    text: 'hello',
+    mode: 'meet'
+  }, { peerId: 'erin-id' })
+  await tick()
+  check('an honest knock is unaffected by the impersonation check',
+    db.convo('erin-room')?.kind === 'dm')
 
   /* ------------------------------------------------------------------ 8 */
   /* reach() must ALSO persist to the server relay and poke the recipient's

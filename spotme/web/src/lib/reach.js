@@ -50,7 +50,7 @@
  * relay only ever holds the OPENING knock, never anything exchanged after
  * the chat is live — everything past that stays P2P-only, unchanged.
  */
-import { joinRoom, setRoomKey, freshTokens } from './socket-transport.js'
+import { joinRoom, setRoomKey, freshTokens, serverMode } from './socket-transport.js'
 import { RTC_CONFIG, readyRTC } from '../net.js'
 import { db } from './db.js'
 import { rooms } from './rooms.js'
@@ -298,6 +298,30 @@ function createReach () {
     knockAck = room.makeAction('knockAck')
 
     knock.onMessage = (payload, meta) => {
+      /* THE TRANSPORT ALREADY KNOWS WHO SENT THIS. USE IT.
+       *
+       * `meta.peerId` is server-authenticated — rooms.gateway builds every
+       * frame's `from` out of `client.data.userId`, which comes from the JWT
+       * `sub`, so a peer cannot forge it. This handler had it in hand, used it
+       * only to address the ack, and took `payload.from.id` on trust for
+       * everything that mattered.
+       *
+       * That let any authenticated user post a knock claiming to be anyone.
+       * `receiveKnock` then stores the ATTACKER's chosen `roomId`, `secret` and
+       * `peer.id` — so the victim opens a chat labelled with a friend's name,
+       * in a room the attacker picked, under a key the attacker chose, and
+       * reads and writes everything in it. No cryptography is broken; it is
+       * simply never invoked.
+       *
+       * A knock that disagrees with the transport is not a knock.
+       *
+       * ONLY IN SERVER MODE, and the distinction is not pedantic. `selfId` is
+       * `db.profile().id` on the socket transport but `torrent.selfId` — a
+       * per-session connection id — under the `spotme.transport = p2p` escape
+       * hatch. There, peer ids are not account ids and never claimed to be, so
+       * comparing them would reject every legitimate knock. Enforce the rule
+       * where the guarantee exists; do not invent one where it does not. */
+      if (serverMode && meta?.peerId && payload?.from?.id !== meta.peerId) return
       const status = receiveKnock(payload)
       if (status === 'invalid' || status === 'blocked') return
       // The ack must self-identify as US (the one who just received the

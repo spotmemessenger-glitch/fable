@@ -70,6 +70,24 @@ async function mountWebApiBridge(app: INestApplication) {
 }
 
 async function bootstrap() {
+  /* REFUSE TO BOOT WITH A SIGNING KEY ANYONE CAN READ.
+   *
+   * Six places sign or verify with `process.env.JWT_ACCESS_SECRET ||
+   * 'dev-only-secret'`. That fallback is published in this repository, so if the
+   * variable is ever unset or blank on the host, the server comes up looking
+   * completely healthy while anyone who has seen the source can forge
+   * `{ sub: <any user id>, role: 'ADMIN' }` and be that person, or be staff.
+   *
+   * A missing secret is a deployment mistake, and the moment to find out is at
+   * boot, in the logs, not afterwards. */
+  const jwtSecret = process.env.JWT_ACCESS_SECRET;
+  if (!jwtSecret || jwtSecret.length < 32) {
+    throw new Error(
+      'JWT_ACCESS_SECRET must be set to at least 32 characters. ' +
+        'Refusing to boot: the fallback signing key is public, and anyone could mint admin tokens with it.',
+    );
+  }
+
   const app = await NestFactory.create(AppModule, { cors: true });
   app.useGlobalPipes(
     new ValidationPipe({ whitelist: true, transform: true, forbidNonWhitelisted: true }),
@@ -81,4 +99,11 @@ async function bootstrap() {
   // eslint-disable-next-line no-console
   console.log(`Spot Me backend listening on :${port}`);
 }
-bootstrap();
+// A bare `bootstrap()` meant any failure to start — Postgres unreachable, port
+// taken, the assertion above — died as an unhandled rejection with no usable
+// line in the Railway log.
+bootstrap().catch((err) => {
+  // eslint-disable-next-line no-console
+  console.error('fatal: Spot Me backend failed to start —', err instanceof Error ? err.message : err);
+  process.exit(1);
+});

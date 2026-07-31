@@ -433,9 +433,22 @@ function ensureSocket () {
     })
     socket.on('action', (frame) => activeRooms.get(frame?.roomId)?.onFrame(frame))
     socket.on('peer', (frame) => activeRooms.get(frame?.roomId)?.onPeer(frame))
+    /* Only RE-connects rejoin. This handler is registered above the
+     * `once('connect', resolve)` below, so on the first connect it ran FIRST —
+     * and every room is already in `activeRooms` by then, because `serverRoom`
+     * registers itself and calls `join()` synchronously while this promise is
+     * still awaiting `guestAuth`. So each room emitted `join` twice with the
+     * same `since`, and the server replayed the whole window twice.
+     *
+     * Duplicate messages were absorbed by `store.add`'s id check, which is why
+     * this stayed invisible. The damage was to the cursor hold: two replay loops
+     * interleave on their awaits, and the second one's `unopenedFloor = null`
+     * cleared a floor the first had just set for a frame it could not open. The
+     * first loop then advanced the cursor straight past it — exactly the loss
+     * `unopenedFloor` exists to prevent, re-opened by the double join. */
+    let everConnected = false
     socket.on('connect', () => {
-      // First connect resolves the promise; later connects are reconnects —
-      // every active room rejoins from its cursor and diffs its peer set.
+      if (!everConnected) { everConnected = true; return }
       for (const room of activeRooms.values()) room.rejoin()
     })
     // Debug handle in the spirit of window.__rooms / window.__lobby: a dead
@@ -663,6 +676,33 @@ function serverRoom (config, roomId) {
     }
   }
 
+  /**
+   * Live frames, ONE AT A TIME, in arrival order.
+   *
+   * The replay loops are `for … await dispatch(…)` and therefore ordered. Live
+   * delivery was not: `onFrame` fired `dispatch` without awaiting it, so two
+   * frames arriving together both sat on `await openSealed(…)` and finished in
+   * whatever order WebCrypto happened to finish them.
+   *
+   * That breaks `advanceCursor`, which is only sound in order. A frame that
+   * fails sets `unopenedFloor` in its `catch` — but only AFTER a
+   * `refreshRoomKey` network round trip. A later frame that decrypts fine
+   * reaches its `finally` during that window, sees the floor still `null`, and
+   * writes a cursor above the frame that is about to be held. The hold then
+   * lands too late and the earlier message is never replayed again.
+   *
+   * It reorders order-sensitive handlers too: an `edit` that opens before the
+   * `msg` it edits finds no target and returns silently, so a corrected message
+   * stays wrong forever on the receiving device.
+   *
+   * Serialising costs nothing real — dispatch is already async and frames
+   * arrive far slower than they decrypt — and it fixes both at once.
+   */
+  let frameChain = Promise.resolve()
+  const enqueueFrame = (frame) => {
+    frameChain = frameChain.then(() => dispatch(frame, false)).catch(() => {})
+  }
+
   function addPeer (peerId, announce) {
     if (peerId === selfId || peers.has(peerId)) return
     peers.set(peerId, { connectionState: 'connected' })
@@ -676,6 +716,68 @@ function serverRoom (config, roomId) {
   }
 
   /* -- join / rejoin ----------------------------------------------------- */
+
+  /**
+   * Attachments that arrived while this device was away, as detached history
+   * entries — bubble appears, bytes fetch on demand.
+   *
+   * SHARED BY BOTH JOIN PATHS, and that is the whole point of it existing.
+   * `rejoin` used to skip this block and still run `advanceCursor`, which is
+   * unconditional, permanent loss: the server strips `bin` from `ack.events`
+   * (rooms.service.ts `type: { not: 'bin' }`), so an envelope is the ONLY way a
+   * missed attachment ever comes back, and `lastEventId` counts the bin rows it
+   * declined to send. Every photo, voice note and file received across a
+   * reconnect was dropped and then marked as consumed.
+   *
+   * And `rejoin` is the common path, not the rare one — `joinPromise` is cached,
+   * so the full `join` runs once per room per page load and every socket drop
+   * after that (a lift, wifi handing over to cellular) went through `rejoin`.
+   */
+  async function absorbEnvelopes (envelopes, key) {
+    if (!envelopes?.length) return
+    const messages = []
+    for (const env of envelopes) {
+      const metadata = await unwrapMeta(key, env.meta)
+      if (!metadata?.id) continue
+      const { seq, total, ...envelope } = metadata
+      messages.push({ ...envelope, data: null, detached: true })
+    }
+    if (messages.length) actions.get('history')?.onMessage?.({ messages }, { peerId: 'server' })
+  }
+
+  /**
+   * One replay page: dispatch the events, absorb the envelopes, move the cursor.
+   * Returns whether the server says more is waiting above what it just sent.
+   *
+   * A device offline long enough to miss more than REPLAY_LIMIT events gets a
+   * CAPPED page, and there is no second join until the next reconnect — which on
+   * a phone that is now awake and working may be hours away, or never. So keep
+   * asking while the server says it truncated. `PAGE_CAP` is a stop, not a
+   * limit: a server that answered `truncated` forever would otherwise spin here.
+   */
+  const PAGE_CAP = 20
+  async function replayPage (socket) {
+    const ack = await emitAck(socket, 'join', { roomId, since: readCursor() })
+    const key = await currentKey()
+    unopenedFloor = null
+    for (const ev of ack.events || []) await dispatch(ev, true)
+    await absorbEnvelopes(ack.envelopes, key)
+    advanceCursor(ack.lastEventId)
+    return { ack, more: Boolean(ack.truncated) }
+  }
+
+  async function drainReplay (socket, firstAck) {
+    let more = Boolean(firstAck?.truncated)
+    for (let page = 0; more && page < PAGE_CAP; page++) {
+      // The floor only holds while a page is being replayed; if a frame in this
+      // page could not be opened the cursor has not moved past it, so the next
+      // page starts from the same place and we would loop. Stop and let the
+      // ordinary rejoin path retry once the key is repaired.
+      const before = readCursor()
+      const next = await replayPage(socket)
+      more = next.more && readCursor() > before
+    }
+  }
 
   let joinPromise = null
 
@@ -696,22 +798,9 @@ function serverRoom (config, roomId) {
       unopenedFloor = null
       for (const peerId of ack.peers || []) addPeer(peerId, true)
       for (const ev of ack.events || []) await dispatch(ev, true)
-      // Attachments that arrived while this device was away come back as
-      // detached history entries — bubble appears, bytes fetch on demand.
-      if (ack.envelopes?.length) {
-        const messages = []
-        for (const env of ack.envelopes) {
-          const metadata = await unwrapMeta(key, env.meta)
-          if (!metadata?.id) continue
-          const { seq, total, ...envelope } = metadata
-          messages.push({ ...envelope, data: null, detached: true })
-        }
-        if (messages.length) {
-          const h = actions.get('history')
-          h?.onMessage?.({ messages }, { peerId: 'server' })
-        }
-      }
+      await absorbEnvelopes(ack.envelopes, key)
       advanceCursor(ack.lastEventId)
+      await drainReplay(socket, ack)
       return socket
     })()
     joinPromise.catch((error) => {
@@ -735,12 +824,15 @@ function serverRoom (config, roomId) {
     try {
       const socket = await socketPromise
       const ack = await emitAck(socket, 'join', { roomId, since: readCursor() })
+      const key = await currentKey()
       unopenedFloor = null   // same reasoning as join(): only once a replay is really about to run
       const alive = new Set(ack.peers || [])
       for (const peerId of [...peers.keys()]) if (!alive.has(peerId)) removePeer(peerId)
       for (const peerId of alive) addPeer(peerId, true)
       for (const ev of ack.events || []) await dispatch(ev, true)
+      await absorbEnvelopes(ack.envelopes, key)
       advanceCursor(ack.lastEventId)
+      await drainReplay(socket, ack)
     } catch { /* reconnect loop will fire again */ }
   }
 
@@ -987,7 +1079,7 @@ function serverRoom (config, roomId) {
     },
 
     // internals used by the shared socket dispatcher
-    onFrame: (frame) => { dispatch(frame, false) },
+    onFrame: (frame) => { enqueueFrame(frame) },
     onPeer: (frame) => {
       if (frame.peerId === selfId) return
       if (frame.action === 'join') addPeer(frame.peerId, true)

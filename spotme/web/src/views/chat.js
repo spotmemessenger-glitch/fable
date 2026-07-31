@@ -2055,6 +2055,12 @@ export function render (root, ctx, roomId) {
   }
 
   function appendMessage (m, skipAlbumCheck) {
+    /* The first-run line belongs to an EMPTY thread and nothing else. It is
+     * rendered at the one moment the room is guaranteed to still look v1 — the
+     * chat opens before key agreement resolves — so leaving it in place once
+     * messages start arriving pinned a stale, and wrong, security claim above a
+     * conversation that had since upgraded. */
+    thread.querySelector('.sys.firstrun')?.remove()
     // A newly arrived photo may complete a run of four — the whole thread has
     // to regroup, which incremental appending cannot do.
     if (!skipAlbumCheck && albumable(m) && completesAlbum(m)) {
@@ -2102,9 +2108,30 @@ export function render (root, ctx, roomId) {
     if (replyTarget?.id === id) clearReply()
   }
 
+  /**
+   * The room's encryption version AS IT IS NOW, not as it was when this view
+   * was built.
+   *
+   * `convo` is captured once at construction (`const convo = db.convo(roomId)`),
+   * and `reach()` deliberately writes the convo record as E2E_V1 FIRST and
+   * upgrades it to E2E_V2 only once key agreement resolves — that ordering is
+   * what stops a new chat bouncing off "Conversation not found". The chat view
+   * opens in between, so the snapshot it captured says v1 for a room that is
+   * about to be, and then is, v2.
+   *
+   * Two things read this field, and the stale value broke both:
+   *   - `sysLine` told the user "the server could read it" about a brand-new
+   *     end-to-end encrypted chat. A false alarm is not harmless — it is how
+   *     people learn to disregard the real one.
+   *   - `keyWarning` returns null for anything that is not v2, so on exactly
+   *     these rooms the "messages are arriving and can't be read" banner could
+   *     never render at all.
+   */
+  const e2eVersionNow = () => db.convo(roomId)?.e2eVersion || convo?.e2eVersion
+
   function sysLine () {
-    return el('div', { class: 'sys', html: IC.spark }, [
-      convo?.e2eVersion === 'e2e_v2'
+    return el('div', { class: 'sys firstrun', html: IC.spark }, [
+      e2eVersionNow() === 'e2e_v2'
         ? 'Encrypted with keys made on your devices. Translation runs on-device when possible.'
         : 'Older chat — its key came from both account IDs, so the server could read it.'
     ])
@@ -2124,7 +2151,7 @@ export function render (root, ctx, roomId) {
    * cold open of a perfectly healthy device.
    */
   function keyWarning () {
-    if (convo?.e2eVersion !== 'e2e_v2') return null   // a v1 room never used this key
+    if (e2eVersionNow() !== 'e2e_v2') return null   // a v1 room never used this key
 
     /* THIS ROOM specifically is unreadable, whatever the device's own key is
      * doing. Ranked above the device-level warning because it is the stronger
@@ -2837,7 +2864,7 @@ export function render (root, ctx, roomId) {
        * truth per room instead of one reassuring sentence for both. */
       el('p', {
         class: 'cp-enc',
-        text: convo.e2eVersion === 'e2e_v2'
+        text: e2eVersionNow() === 'e2e_v2'
           ? '🔒 Encrypted with keys created on your device and your contact\'s. The server carries the messages but holds no key to them.'
           : '⚠️ This is an older chat. Its key was derived from both account IDs, so the server could read it. Start a new chat for device-held keys.'
       })

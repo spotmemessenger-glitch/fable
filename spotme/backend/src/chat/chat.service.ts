@@ -1,5 +1,6 @@
 import { Injectable, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { PUBLIC_USER } from '../common/prisma/public-user';
 
 @Injectable()
 export class ChatService {
@@ -16,7 +17,7 @@ export class ChatService {
   async listConversations(userId: string) {
     return this.prisma.conversationParticipant.findMany({
       where: { userId },
-      include: { conversation: { include: { participants: { include: { user: true } } } } },
+      include: { conversation: { include: { participants: { include: { user: { select: PUBLIC_USER } } } } } },
       orderBy: { conversation: { createdAt: 'desc' } },
     });
   }
