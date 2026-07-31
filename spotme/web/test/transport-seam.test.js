@@ -55,6 +55,11 @@ mock.module(`${SRC}lib/socket-transport.js`, {
     setRoomKey: () => {},
     setRoomKeyProvider: () => {},
     clearRoomKey: () => {},
+    /* Added when PR #6 landed on master: it exports `clearRoomCursor`, and a
+     * PARTIAL ESM mock is a LINK-time SyntaxError, not a call-time one — so
+     * this file stops loading entirely without it. Neither branch could
+     * discover this alone; it only exists where the two meet. */
+    clearRoomCursor: () => {},
     /* Phase 5: media-transfer.js imports these, and a PARTIAL ESM module mock
      * fails at LINK time with a SyntaxError, not at call time — so every export
      * the module graph reaches has to be present even when unused here. */
