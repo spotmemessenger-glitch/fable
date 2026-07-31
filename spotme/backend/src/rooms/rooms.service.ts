@@ -1,5 +1,6 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { IStorageAdapter, STORAGE_ADAPTER, buildObjectKey } from '../storage/storage.interface';
 
 /**
  * Persistence for server-backed rooms (the web client's transport).
@@ -36,7 +37,52 @@ const REPLAY_LIMIT = 5000;
 
 @Injectable()
 export class RoomsService {
-  constructor(private prisma: PrismaService) {}
+  private readonly log = new Logger(RoomsService.name);
+
+  constructor(
+    private prisma: PrismaService,
+    /* @Optional so RoomsService stays constructible in unit tests that care
+     * only about replay and truncation and have no storage to give it. In the
+     * running app StorageModule is @Global, so this is always present. */
+    @Optional() @Inject(STORAGE_ADAPTER) private storage?: IStorageAdapter,
+  ) {}
+
+  /**
+   * Destroy the stored objects for one attachment.
+   *
+   * `seqs` is passed in rather than probed for. `deleteObject` is contractually
+   * idempotent — deleting what is not there is success — so a "walk upward
+   * until one fails" loop never terminates early and would fire thousands of
+   * pointless deletes per burn. The seq numbers are already in the rows being
+   * removed, so the caller reads them once and hands them over.
+   *
+   * Failures are logged, never thrown: a burn must not fail because a bucket is
+   * briefly unreachable, and the hourly orphan sweep is the backstop for
+   * exactly that case.
+   */
+  private async purgeAttachmentObjects(
+    roomId: string,
+    attachId: string,
+    seqs: number[],
+  ): Promise<number> {
+    if (!this.storage || !seqs.length) return 0;
+    let removed = 0;
+    for (const seq of seqs) {
+      let key: string;
+      try {
+        key = buildObjectKey(roomId, attachId, seq);
+      } catch {
+        continue; // an id that cannot form a key never formed one
+      }
+      if (await this.storage.deleteObject(key).catch(() => false)) removed++;
+    }
+    if (removed < seqs.length) {
+      this.log.warn(
+        `burn ${attachId}: ${removed}/${seqs.length} objects removed — the orphan sweep will retry`,
+      );
+    }
+    return removed;
+  }
 
   isPersisted(type: string): boolean {
     return PERSISTED.has(type);
@@ -212,9 +258,25 @@ export class RoomsService {
       select: { senderId: true, meta: true },
     });
     if (!envelope || (envelope.meta as { once?: boolean } | null)?.once !== true) return 0;
+    /* Read the slice numbers BEFORE deleting the rows — afterwards there is
+     * nothing left to say which objects belonged to this attachment, and the
+     * bytes would survive the "burn" with no record pointing at them. */
+    const slices = await this.prisma.roomEvent.findMany({
+      where: { roomId, attachId, type: 'bin' },
+      select: { meta: true },
+    });
+    const seqs = slices
+      .map((s) => Number((s.meta as { seq?: number } | null)?.seq ?? 0))
+      .filter((n) => Number.isInteger(n) && n >= 0);
+
     const { count } = await this.prisma.roomEvent.deleteMany({
       where: { roomId, attachId, type: 'bin' },
     });
+    /* Object storage holds the same slices once media moves off RoomEvent.
+     * Not awaited into the return value — the rows are already gone, which is
+     * what makes the photo unreachable — but not fire-and-forget either: an
+     * unresolved promise here would let the process exit mid-delete. */
+    await this.purgeAttachmentObjects(roomId, attachId, seqs);
     // Recorded even when no claim row exists — the common case is a recipient
     // who received the bytes live and never had to fetch them at all.
     await this.prisma.viewOnce

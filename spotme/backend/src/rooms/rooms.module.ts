@@ -4,10 +4,16 @@ import { GroupsModule } from '../groups/groups.module';
 import { RoomsGateway } from './rooms.gateway';
 import { RoomsService } from './rooms.service';
 import { RoomsAuthService } from './rooms-auth.service';
+import { MediaController } from '../storage/media.controller';
 
 @Module({
   // GroupsModule supplies the policy the gateway enforces on join/send.
   imports: [JwtModule.register({}), GroupsModule],
+  // The presign/download-url routes authorise through the SAME RoomsAuthService
+  // the gateway uses, so a ban or a media restriction bites identically whether
+  // media is requested over the socket or over HTTP. STORAGE_ADAPTER reaches
+  // them from the @Global StorageModule.
+  controllers: [MediaController],
   providers: [RoomsGateway, RoomsService, RoomsAuthService],
   // Exported for RealtimeModule: the Centrifugo publish proxy must authorise
   // and persist through the SAME code the gateway uses, never a copy of it

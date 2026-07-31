@@ -102,9 +102,13 @@ export class RealtimeController {
    *    actually deployed. Notifying everyone would wake people who are already
    *    reading the message.
    *  - `meta.burn` (view-once destruction) is handled on the socket path only.
-   *  - Express caps a JSON body at 100kb by default, well under the 8MB the
-   *    socket allows, so attachment slices need a raised limit before media can
-   *    travel this way.
+   *
+   * CORRECTED: an earlier version of this note claimed Express caps the body at
+   * 100kb. It does by default, but this app does not — `main.ts` mounts
+   * `json({ limit: '8mb' })`, matching the socket's maxHttpBufferSize. Slices
+   * are 128KB, so they fit. Phase 4 moves media to presigned object storage
+   * anyway (`storage/media.controller.ts`), which takes the bytes off this
+   * path entirely.
    */
   @Post('centrifugo/publish')
   @HttpCode(200)
