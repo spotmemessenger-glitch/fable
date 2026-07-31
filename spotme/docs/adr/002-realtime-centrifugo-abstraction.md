@@ -71,11 +71,40 @@ likely way to reintroduce it.
 Therefore:
 
 - **Adapters move opaque bytes.** They never derive, hold, cache or inspect a
-  room key. Sealing and opening stay above the transport.
+  room key.
 - `setRoomKeyProvider` / `clearRoomKey` remain the only way a key enters the
   system, for every adapter.
 - `test/transport.test.js` asserts that no adapter exposes a key-shaped
   surface, so this is enforced by a failing test rather than by this paragraph.
+
+#### CORRECTION (2026-07-31): sealing is BELOW the adapter, not above it
+
+This section originally said "sealing and opening stay above the transport".
+That is what the design intends and **not** what the code does, which matters
+enough to write down rather than quietly restate.
+
+AES-GCM `seal`/`open` live *inside* `socket-transport.js` (`sendAction`,
+`dispatch`). `SocketIOAdapter` **wraps** that module, so on the Socket.IO path
+the crypto sits underneath the adapter and everything is correctly sealed.
+`CentrifugoAdapter` wraps nothing — its `publish()` POSTs `frame.payload`
+straight through. Pointing the chat path at `createTransport()` and selecting
+`centrifugo` would therefore send **plaintext** to the server: V-19 again,
+through a door `FORBIDDEN_KEY_SURFACE` cannot watch, because that test asserts
+an adapter holds *no* key and a keyless adapter satisfies it trivially.
+
+Consequences, all of which are in the code today:
+
+- `web/src/lib/transport/room.js` is the seam every screen goes through. It
+  resolves the transport from `localStorage['spotme.transport']` in one place
+  and, when asked for `centrifugo`, falls back to Socket.IO **loudly** — the
+  reason string names plaintext, and `activeTransport()` reports it.
+- `test/transport-seam.test.js` pins the hazard directly: it feeds
+  `CentrifugoAdapter.publish()` readable text and asserts that exact text
+  reaches the wire. If someone adds sealing to the adapter, that check fails,
+  and that failure is the signal to revisit the seam.
+- **Phase 3 must lift `seal`/`open` above the transport before Centrifugo can
+  carry a message.** That is a refactor of the message layer, not a wiring
+  change, and it — not the broker deployment — is the real prerequisite.
 
 ### 3. Publishing goes through the server, never straight to the broker
 
@@ -93,6 +122,52 @@ So client publications go to `POST /api/v2/realtime/centrifugo/publish`, which
 runs the same policy and persistence path and then publishes server-side via
 Centrifugo's HTTP API. **Client-side publish is disabled in the Centrifugo
 channel config**, not merely unused — an unused capability is a capability.
+
+#### IMPLEMENTED 2026-07-31 — and how "the same path" was made literal
+
+This endpoint returned a hard 501 until now, because `policy()` and `refuse()`
+were **private methods on `RoomsGateway`** and the only way to authorise an HTTP
+publication was to write a second copy. A second authorisation path that starts
+identical and drifts is exactly how the "gateway authorised NOTHING" hole gets
+reopened through a new door, so the refusal was the correct answer at the time.
+
+Both are now `RoomsAuthService` (`rooms/rooms-auth.service.ts`), exported by
+`RoomsModule` and injected into both callers — the *same provider instance*, not
+a shared shape. `EPHEMERAL` moved to `RoomsService` alongside `isPersisted` for
+the same reason: two lists of what may cross the wire would drift.
+
+The route's order is broker-config → shape → membership → policy → persistence →
+broadcast. Membership is the `RoomMember` row that `join` writes, because HTTP
+has no join handshake to lean on. Persisting before the broker is known to be
+reachable would append events nobody receives.
+
+Verified by running, against the local backend on `:4100`:
+
+| Case | Result |
+|---|---|
+| no token | **401** |
+| authed, broker unconfigured | **503** `centrifugo is not configured` |
+| authed, not a `RoomMember` | **403** `not a member of this room` |
+| unknown action type | **400** `unknown action type: exfiltrate` |
+| member, `type: msg` | **200** `{"seq":2196}`, one `RoomEvent` row written |
+| member, `type: typing` | **200** `{}`, **no** row — ephemeral stays ephemeral |
+| **muted group member** | **403** `you are muted in this group` |
+| broker answers 200 + `{error}` | **503**, not reported as delivery |
+
+The muted-member row is the one that matters: that string is the gateway's own
+wording, produced by the gateway's own code, on the HTTP path.
+
+**The broker was a stub** speaking Centrifugo's `POST /api/publish` dialect —
+Centrifugo is not deployed, so the 200 path cannot be proven against the real
+thing. The controller ran unmodified; only the broker underneath was simulated.
+The stub recorded channel `room:<roomId>` and a frame identical in shape to the
+gateway's `action` emit.
+
+Known gaps, deliberately not filled: no push notification on this path (the
+gateway skips push for users holding a live socket, and presence here lives in
+the broker); `meta.burn` view-once destruction is socket-path only; and Express
+caps a JSON body at 100kb, well under the 8MB the socket allows, so attachment
+slices need a raised limit before media can travel this way.
 
 ### 4. Connection tokens are minted by us
 
