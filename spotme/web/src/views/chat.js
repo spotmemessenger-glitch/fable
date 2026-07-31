@@ -1879,9 +1879,15 @@ export function render (root, ctx, roomId) {
     // reading "Sent" is the whole complaint.
     if (m.failed) {
       const row = el('div', { class: 'readRow failed', html: IC.check1 }, ['Not delivered'])
-      // A failed send used to be the end of the road — the only remedy on
-      // offer was to record the whole note again. The bytes are still here.
-      if (m.kind && m.kind !== 'text' && m.data) {
+      /* A failed send used to be the end of the road — the only remedy on
+       * offer was to record the whole note again. The bytes are still here.
+       *
+       * TEXT WAS EXCLUDED, and that was the worse half: a typed message that
+       * failed showed "Not delivered" with no way to send it again, and
+       * nothing behind the scenes retried it either (socket.io drops a packet
+       * from its send buffer once the ack times out). The text is sitting in
+       * the store, intact — only the button was missing. */
+      if ((!m.kind || m.kind === 'text') || m.data) {
         row.appendChild(el('button', {
           class: 'retryTx', type: 'button', text: 'Retry',
           onclick (e) { e.stopPropagation(); retrySend(m) }
@@ -2819,6 +2825,27 @@ export function render (root, ctx, roomId) {
         canBlock ? act(' danger', IC.block, 'Block', confirmBlock) : null
       ]),
       el('div', { class: 'cp-list' }, [
+        /* A GROUP'S ONLY DOOR IS ITS LINK, and no screen a user could reach was
+         * building one. The two link builders that emit the `&g=` parameter
+         * `adoptRoomLink` needs both live behind `#/groups`, and the group you
+         * get from the inbox's "New group" is created locally — so it was a
+         * room of one, permanently, with no button anywhere to invite anyone. */
+        convo.kind === 'group'
+          ? row(IC.link, 'Share invite link', null, () => {
+              close()
+              const c = db.convo(roomId) || convo
+              const url = `${location.origin}${location.pathname}#r=${c.roomId}&k=${c.secret}` +
+                `&g=${encodeURIComponent(c.title || 'Group')}`
+              if (navigator.share) {
+                navigator.share({ title: 'Spot Me', text: 'Join our group on Spot Me', url })
+                  .catch(() => { /* dismissed, or unavailable mid-flight */ })
+                return
+              }
+              navigator.clipboard?.writeText(url)
+                .then(() => ctx.toast('Invite link copied'))
+                .catch(() => ctx.toast('Could not share the link'))
+            })
+          : null,
         row(IC.link, 'Connected through', CONNECTED_VIA[convo.mode] || 'Invite link', null),
         row(IC.clock, 'Disappearing messages', msgTtl ? fmtTtlLong(msgTtl) : 'Off',
           () => { close(); openTimerSheet() }),
@@ -3480,6 +3507,12 @@ export function render (root, ctx, roomId) {
 
   /** Push a failed attachment's bytes again — they never left this device. */
   function retrySend (m) {
+    // Text has no bytes and no progress ring — it just goes again.
+    if (!m.kind || m.kind === 'text') {
+      if (!rooms.retryMessage(roomId, m.id)) { ctx.toast('That message is no longer here'); return }
+      refreshRow(m.id)
+      return
+    }
     inFlight.add(m.id)
     if (!rooms.retryAttachment(roomId, m.id, (p) => paintProgress(m.id, p))) {
       inFlight.delete(m.id)

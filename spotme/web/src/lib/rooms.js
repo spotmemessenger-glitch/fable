@@ -91,7 +91,11 @@ function inertNet () {
   const noop = () => {}
   return {
     sendMessage: noop, sendReaction: noop, sendProfile: noop, sendDelete: noop,
-    sendTyping: noop, sendRead: noop, sendSeen: noop, sendCall: noop, sendLocup: noop,
+    // `sendEdit` was the one member of createNet's surface missing here, and
+    // `editMessage` calls it AFTER it has already patched the store — so
+    // editing your own text in a legacy demo convo threw a TypeError with the
+    // text already changed and the sheet still open, saying nothing.
+    sendTyping: noop, sendRead: noop, sendSeen: noop, sendCall: noop, sendLocup: noop, sendEdit: noop,
     sendBinary: () => Promise.resolve(),
     sendBinAck: noop,
     fetchFrom: () => Promise.resolve(null),
@@ -845,6 +849,32 @@ export const rooms = {
    * it does not do yet; duplicate slices are already harmless (the receiver
    * ignores a seq it holds, and the log now reports DISTINCT seqs held).
    */
+  /**
+   * Send a failed TEXT message again.
+   *
+   * `retryAttachment` below refuses text explicitly, and the "Not delivered"
+   * row only offered a Retry button for attachments — so a text message that
+   * failed to send was the end of the road. There was no queue behind it
+   * either: `sendAction` recovers only a `not joined` error, and socket.io
+   * splices a packet out of its send buffer once the ack times out, so a
+   * fifteen-second outage discarded the message for good.
+   *
+   * The text never left this device. It is sitting in the store, fully intact,
+   * one call away from being sent — the only thing missing was the offer.
+   */
+  retryMessage (roomId, id) {
+    const conn = this.ensure(roomId)
+    if (!conn) return false
+    const message = conn.store.list().find((m) => m.id === id)
+    if (!message || (message.kind && message.kind !== 'text')) return false
+    conn.store.patch(id, { failed: false })
+    // `onSendError` flips it back if this attempt fails too, exactly as the
+    // first attempt did — so a retry that fails is honest rather than silent.
+    conn.net.sendMessage(message)
+    wakeIfUnreachable(conn, roomId)
+    return true
+  },
+
   retryAttachment (roomId, id, onProgress) {
     const conn = this.ensure(roomId)
     if (!conn) return false

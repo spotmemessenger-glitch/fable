@@ -161,6 +161,30 @@ actions.read.failNext = true
 rooms.markRead(ROOM)
 await settle()
 
+/* ---- a failed TEXT message must be RECOVERABLE, not just labelled ----------
+ *
+ * Marking it "Not delivered" was only half the job. There was no retry offered
+ * for text and no queue behind it — `sendAction` recovers only a `not joined`
+ * error, and socket.io splices a packet out of its send buffer once the ack
+ * times out, so a fifteen-second outage discarded the message permanently. The
+ * text was in the store the whole time; only the way back out was missing. */
+const sendsBefore = actions.msg.sends.length
+const retried = rooms.retryMessage(ROOM, dead.id)
+await settle()
+
+check('THE OTHER HALF: a failed text message can be sent again',
+  retried === true && stored(dead.id)?.failed !== true)
+check('…and it really goes back out over the transport',
+  actions.msg.sends.length === sendsBefore + 1)
+check('…and a retry that fails AGAIN is honest, not silently swallowed', await (async () => {
+  actions.msg.failNext = true
+  rooms.retryMessage(ROOM, dead.id)
+  await settle()
+  return stored(dead.id)?.failed === true
+})())
+check('retrying a message that is not there is refused, not thrown',
+  rooms.retryMessage(ROOM, 'no-such-id') === false)
+
 check('a TYPING failure marks no message undelivered', stored(survivor.id)?.failed !== true)
 check('a READ-RECEIPT failure marks no message undelivered', stored(dead.id) && stored(ok.id)?.failed !== true)
 
