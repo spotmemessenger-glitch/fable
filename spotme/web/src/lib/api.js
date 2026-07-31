@@ -16,3 +16,43 @@ export const API_BASE = (import.meta.env?.VITE_SPOTME_SERVER || '').replace(/\/$
 
 /** Absolute URL for an /api path — accepts '/api/x' or 'api/x'. */
 export const apiUrl = (path) => `${API_BASE}/${String(path).replace(/^\//, '')}`
+
+/** What the server's prefix endpoint accepts: 1-16 handle characters. Matching
+ *  PREFIX_RE in backend/src/auth/username.controller.ts, so a query this file
+ *  lets through is never one the server then rejects as invalid. */
+const HANDLE_PREFIX = /^[a-z0-9_]{1,16}$/
+
+/**
+ * Find people by the START of their @username.
+ *
+ * WHY THIS EXISTS RATHER THAN AN EXACT LOOKUP. The member picker used to
+ * resolve strangers through `/api/users/lookup?username=`, which matches only a
+ * complete handle, and it declined to query at all below three characters. With
+ * @yuva registered, typing "yu" sent no request and typing "yuv" 404'd into a
+ * silent null — the picker reported "Nobody is registered as @yuv" while the
+ * account sat one character away. Since the creation wizard will not advance
+ * until two members are picked, that did not merely degrade group creation, it
+ * blocked it. The server has answered prefix queries all along and the inbox
+ * search already used them; only the picker was asking the wrong way.
+ *
+ * Deliberately UNAUTHENTICATED, like the endpoint it calls — it lives in this
+ * dependency-free module rather than groups-api.js precisely so it needs no
+ * token, no socket, and no `window`, which is also what makes it testable.
+ *
+ * Returns [] for every failure. This runs on each keystroke, so a dead registry
+ * or an offline phone must read as "no matches yet", never as a thrown error
+ * mid-typing. Callers that need to distinguish those cases should not use this.
+ */
+export async function searchUsers (query, { excludeId = null, signal } = {}) {
+  const q = String(query ?? '').trim().toLowerCase().replace(/^@+/, '')
+  if (!HANDLE_PREFIX.test(q)) return []
+  try {
+    const res = await fetch(`${API_BASE}/api/username?q=${encodeURIComponent(q)}`, { signal })
+    if (!res.ok) return []
+    const data = await res.json()
+    const rows = Array.isArray(data?.results) ? data.results : []
+    return rows.filter((u) => u?.username && u.id && u.id !== excludeId)
+  } catch {
+    return []
+  }
+}

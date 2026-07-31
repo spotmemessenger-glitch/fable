@@ -67,27 +67,14 @@ export const groupsApi = {
     call(`/${enc(id)}/members/${enc(userId)}/mute`, { method: 'PATCH', body: { minutes } })
 }
 
-/**
- * Find one person by exact @username.
- *
- * This is what lets you add someone you have never met — the equivalent of
- * typing a phone number into WhatsApp's participant picker. Without it a new
- * account can never make a group, because the only candidates would be people
- * already in the local contact list, and a fresh device's list is empty.
- *
- * Returns null rather than throwing when there is no such user: "not found" is
- * an ordinary search outcome, not an error to surface.
+/*
+ * There was a `lookupUser(username)` here that matched only a COMPLETE handle
+ * via /api/users/lookup. It is gone, not merely unused: it is what made adding
+ * members impossible — typing "yuv" 404'd into a silent null while @yuva
+ * existed — and leaving a second, worse way to find people is how the picker
+ * came to use the wrong one. Prefix search now lives in `searchUsers()` in
+ * lib/api.js, which needs no token and is covered by test/member-search.test.js.
  */
-export async function lookupUser (username) {
-  const name = String(username || '').trim().toLowerCase().replace(/^@/, '')
-  if (!/^[a-z0-9_]{3,16}$/.test(name)) return null
-  const { accessToken } = await freshTokens()
-  const res = await fetch(`${API_BASE}/api/users/lookup?username=${enc(name)}`, {
-    headers: { Authorization: `Bearer ${accessToken}` }
-  })
-  if (!res.ok) return null
-  return res.json()
-}
 
 /* ------------------------------------------------------------ permissions */
 

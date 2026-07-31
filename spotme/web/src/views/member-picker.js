@@ -15,11 +15,14 @@
  * creating a group and growing one.
  */
 import { db } from '../lib/db.js'
-import { lookupUser } from '../lib/groups-api.js'
+import { searchUsers } from '../lib/api.js'
 import { el, clear, avatar } from '../lib/ui.js'
 
 const LOOKUP_DEBOUNCE_MS = 350
-const HANDLE_RE = /^[a-z0-9_]{3,16}$/
+/** One character is enough to search. This used to demand a COMPLETE 3-16 char
+ *  handle before it would even ask the server, which is why @yuva was
+ *  unreachable by typing "yu" — see searchUsers() in lib/api.js. */
+const HANDLE_PREFIX = /^[a-z0-9_]{1,16}$/
 
 /**
  * @param selected Map(userId -> {id,name,username,avatar}) — mutated in place
@@ -29,13 +32,13 @@ const HANDLE_RE = /^[a-z0-9_]{3,16}$/
  */
 export function buildPicker ({ selected, exclude = new Set(), onChange = () => {} }) {
   let lookupTimer = null
-  let remote = null          // the person found by handle, if any
+  let remotes = []           // everyone the registry matched on this prefix
   let searching = false
 
   const search = el('input', {
     class: 'gw-input',
     type: 'text',
-    placeholder: 'Search contacts or type an @username',
+    placeholder: 'Search contacts or type a @username',
     autocomplete: 'off',
     autocapitalize: 'none',
     spellcheck: 'false'
@@ -97,40 +100,44 @@ export function buildPicker ({ selected, exclude = new Set(), onChange = () => {
 
     for (const c of contacts) list.appendChild(row(c, { already: exclude.has(c.id) }))
 
-    // The handle lookup only ever ADDS a row; it never replaces contact
+    // The registry search only ever ADDS rows; it never replaces contact
     // results, so a local match is never hidden by a slower network one.
-    if (remote && !contacts.some((c) => c.id === remote.id)) {
+    const fresh = remotes.filter((r) => !contacts.some((c) => c.id === r.id))
+    if (fresh.length) {
       list.appendChild(el('div', { class: 'gw-sec', text: 'Found by username' }))
-      list.appendChild(row(
-        { id: remote.id, name: remote.name, username: remote.username, avatar: remote.avatarUrl },
-        { already: exclude.has(remote.id) }
-      ))
+      for (const r of fresh) {
+        list.appendChild(row(
+          { id: r.id, name: r.name, username: r.username, avatar: r.avatarUrl },
+          { already: exclude.has(r.id) }
+        ))
+      }
     }
 
     if (!list.children.length) {
-      const looksLikeHandle = HANDLE_RE.test(q)
       list.appendChild(el('p', {
         class: 'gw-hint',
         text: searching
           ? 'Searching…'
           : q
-            ? (looksLikeHandle
-                ? `Nobody is registered as @${q}.`
-                : 'No match. Usernames are 3-16 characters: a-z, 0-9, _')
-            : 'Search by @username to add someone you have not met yet.'
+            ? (HANDLE_PREFIX.test(q)
+                ? `No one found starting with “${q}”.`
+                : 'Usernames are a-z, 0-9 and _ only.')
+            : 'Start typing a name or @username to find people.'
       }))
     }
   }
 
+  const normalise = (value) => String(value || '').trim().toLowerCase().replace(/^@+/, '')
+
   async function runLookup () {
-    const q = search.value.trim().toLowerCase().replace(/^@/, '')
-    if (!HANDLE_RE.test(q)) { remote = null; searching = false; refresh(); return }
+    const q = normalise(search.value)
+    if (!HANDLE_PREFIX.test(q)) { remotes = []; searching = false; refresh(); return }
     searching = true
     refresh()
-    const found = await lookupUser(q)
+    const found = await searchUsers(q, { excludeId: db.profile()?.id })
     // A slower reply from an earlier keystroke must not overwrite a newer one.
-    if (search.value.trim().toLowerCase().replace(/^@/, '') !== q) return
-    remote = found && found.id !== db.profile()?.id ? found : null
+    if (normalise(search.value) !== q) return
+    remotes = found
     searching = false
     refresh()
   }
