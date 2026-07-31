@@ -129,6 +129,30 @@ describe('admin user deletion — and the auth teeth that make it real', () => {
     ).rejects.toBeInstanceOf(UnauthorizedException);
   });
 
+  /**
+   * `deletedAt` is written by TWO different operations, and only one of them
+   * means the account is gone. `releaseUsername` stamps it while renaming the
+   * row to `released_<id>_<ts>` and deliberately keeping the user alive so
+   * "conversations referencing the user survive". Reading it as a deletion
+   * locks a live user out of their own account permanently, with no in-app
+   * recovery — and the username-change flow can reach that state through a
+   * race. Caught in review of the first cut of this work.
+   */
+  it('a RELEASED username is not a deleted account — that user still gets in', async () => {
+    const releasedId = hex(16);
+    try {
+      await prisma.user.create({
+        data: { id: releasedId, username: `released_${releasedId.slice(0, 8)}_x`, name: 'Renamed', role: Role.USER, deletedAt: new Date() },
+      });
+      const out = await auth.guestAuth(releasedId, `reclaim_${hex(3)}`, 'Renamed', `anon_${releasedId}`);
+      expect(out.userId).toBe(releasedId);
+      expect(out.accessToken).toBeTruthy();
+    } finally {
+      await prisma.refreshToken.deleteMany({ where: { userId: releasedId } });
+      await prisma.user.deleteMany({ where: { id: releasedId } });
+    }
+  });
+
   it('a LIVE account still authenticates normally — the check is not a blanket refusal', async () => {
     const liveId = hex(16);
     const liveName = `live_${hex(4)}`;

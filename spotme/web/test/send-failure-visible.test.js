@@ -155,6 +155,28 @@ await settle()
 check('a TYPING failure marks no message undelivered', stored(survivor.id)?.failed !== true)
 check('a READ-RECEIPT failure marks no message undelivered', stored(dead.id) && stored(ok.id)?.failed !== true)
 
+/* ---- the undecryptable report has to SURVIVE the trip through rooms.js ----
+ *
+ * `room-broken-alert.test.js` asserts that the transport RAISES this, and it
+ * does — but it stops at the transport boundary, so it could not see that
+ * rooms.js then emitted `{type:'undecryptable', ...info}` with `info` carrying
+ * the FRAME's type. Spread-last won, the event went out as `{type:'msg'}`, the
+ * `case 'undecryptable'` in chat.js never matched, and the whole banner was
+ * dead code. Two green tests, one broken feature, because nothing checked the
+ * seam between them. This is that check. */
+const events = []
+conn.on((e) => events.push(e))
+fakeRoom.onUndecryptable?.({ roomId: ROOM, type: 'msg', from: 'peer-sendfail', isReplay: false, reason: 'wrong-key' })
+await settle()
+
+const alert = events.find((e) => e.type === 'undecryptable')
+check('THE SEAM: the event reaches a listener as type "undecryptable", not the frame type',
+  Boolean(alert))
+check('…carrying the reason, so the view can tell a wrong key from no key at all',
+  alert?.reason === 'wrong-key')
+check('…and the frame type is not mistaken for an event type',
+  !events.some((e) => e.type === 'msg' && e.reason === 'wrong-key'))
+
 /* -------------------------------------------------------------- report */
 console.log('\n========================================')
 console.log('  send failure — a text that went nowhere says so')

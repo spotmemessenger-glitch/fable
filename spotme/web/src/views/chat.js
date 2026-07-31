@@ -372,6 +372,9 @@ export function render (root, ctx, roomId) {
    * to the convo record: a "this chat is broken" flag that outlived the repair
    * would make a working chat accuse itself forever. */
   let roomUndecryptable = false
+  /* 'wrong-key' (re-agreement ran and failed) or 'no-key' (never got one).
+   * Only the first justifies telling someone to delete the conversation. */
+  let roomUndecryptableReason = null
   let lastDayKey = null
   /* Timestamp of the last row appended to the thread. Attachments finish out
    * of order, and appending each one wherever the thread currently ends
@@ -2128,10 +2131,21 @@ export function render (root, ctx, roomId) {
      * statement: it is not a risk, it is a measurement — frames arrived, the
      * transport tried to re-agree, and they still would not open. */
     if (roomUndecryptable) {
+      /* The advice differs because the FAULTS differ, and one of them is
+       * destructive. 'wrong-key' means re-agreement ran and failed — the keys
+       * genuinely disagree and only recreating the chat clears it. 'no-key'
+       * means we never got a key at all, which a flat network or a slow key
+       * lookup produces just as easily as a real fault; telling someone to
+       * delete a working conversation over a dropped request would be a bug
+       * dressed as help. */
+      const worthDeleting = roomUndecryptableReason === 'wrong-key'
       return el('div', { class: 'sys warn', html: IC.spark }, [
-        'Messages are arriving but can’t be read — this chat’s key no longer matches ' +
-        (convo?.peer?.name || 'the other person') + '’s. ' +
-        'Trying again won’t help. Delete this chat on both phones and start it again.'
+        worthDeleting
+          ? 'Messages are arriving but can’t be read — this chat’s key no longer matches ' +
+            (convo?.peer?.name || 'the other person') + '’s. ' +
+            'Trying again won’t help. Delete this chat on both phones and start it again.'
+          : 'Messages are arriving but this device can’t unlock them yet. ' +
+            'Check your connection and reopen the chat — it often clears on its own.'
       ])
     }
 
@@ -4329,7 +4343,7 @@ export function render (root, ctx, roomId) {
          * saying so. Clearing here is what stops the warning outliving the
          * fault it describes. `emit('message')` is the incoming path only, so
          * the user's own sends cannot clear it by accident. */
-        if (roomUndecryptable) { roomUndecryptable = false; renderList() }
+        if (roomUndecryptable) { roomUndecryptable = false; roomUndecryptableReason = null; renderList() }
         clearRxProgress(event.message?.id)
         const stick = nearBottom()
         appendMessage(event.message)
@@ -4342,9 +4356,17 @@ export function render (root, ctx, roomId) {
        * nothing left to try automatically — the only remaining move is the
        * user's. Re-render rather than append: the warning belongs at the top of
        * the thread with the other system lines, not wherever we happen to be. */
-      case 'undecryptable':
-        if (!roomUndecryptable) { roomUndecryptable = true; renderList() }
+      case 'undecryptable': {
+        // 'wrong-key' is the stronger claim, so it may upgrade an existing
+        // 'no-key' — never the other way round.
+        const worse = event.reason === 'wrong-key' && roomUndecryptableReason !== 'wrong-key'
+        if (!roomUndecryptable || worse) {
+          roomUndecryptable = true
+          roomUndecryptableReason = event.reason || roomUndecryptableReason || 'wrong-key'
+          renderList()
+        }
         break
+      }
       /* The send threw and the store now says so. One row, rebuilt — the tick
        * becomes "Not delivered", which is what `buildReadRow` has always drawn
        * for an attachment and never had the chance to draw for text. */

@@ -17,6 +17,28 @@ function hash(value: string): string {
   return crypto.createHash('sha256').update(value).digest('hex');
 }
 
+/** Prefix `releaseUsername` renames a row to when it hands the name back. */
+const RELEASED_PREFIX = 'released_';
+
+/**
+ * Was this account DELETED, or did it merely give up its @username?
+ *
+ * `deletedAt` is written by two very different operations. `softDeleteAccount`
+ * means the account is gone. `releaseUsername` also stamps it — while renaming
+ * the row to `released_<id>_<ts>` and explicitly keeping the user alive so that
+ * "conversations referencing the user survive". Treating the second as a
+ * deletion locks a live user out of their own account permanently, with no
+ * in-app recovery, and the username-change flow can reach it through a race.
+ *
+ * The rename is the distinguishing mark, so it is what this reads. A dedicated
+ * column would be better and needs a migration; this is the version that does
+ * not require one, and it fails SAFE — an unrecognised shape stays logged in.
+ */
+function isDeletedAccount(user: { deletedAt: Date | null; username: string | null }): boolean {
+  if (!user.deletedAt) return false;
+  return !user.username?.startsWith(RELEASED_PREFIX);
+}
+
 @Injectable()
 export class AuthService {
   constructor(
@@ -88,7 +110,7 @@ export class AuthService {
      *
      * The refresh token is revoked on the way out rather than left to expire,
      * so the session cannot be resumed from a copy of it. */
-    if (user.deletedAt) {
+    if (isDeletedAccount(user)) {
       await this.prisma.refreshToken.update({ where: { id: stored.id }, data: { revokedAt: new Date() } });
       throw new UnauthorizedException('this account has been deleted');
     }
@@ -173,7 +195,7 @@ export class AuthService {
        * than silently re-created under a new id: this identity is the ONLY
        * source of a v2 room key, and quietly minting a different one is how a
        * device ends up unable to read its own conversations. */
-      if (existing.deletedAt) {
+      if (isDeletedAccount(existing)) {
         throw new UnauthorizedException('this account has been deleted');
       }
       const updates: { name?: string; publicKey?: string; username?: string } = {};

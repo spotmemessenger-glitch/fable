@@ -327,7 +327,13 @@ function createConnection (convo) {
      * "broken" flag outliving a repair would be its own bug — the kind that
      * makes a working chat permanently accuse itself. The view holds it while
      * the screen is open, and an incoming message that DOES decrypt clears it. */
-    onUndecryptable (info) { emit({ type: 'undecryptable', ...info }) },
+    /* `type` LAST, not first. `info` carries the FRAME's type ('msg', 'read',
+     * …), so spreading it after `type: 'undecryptable'` overwrote the event
+     * type with the frame type — the event arrived as `{type:'msg'}`, the
+     * `case 'undecryptable'` in chat.js never matched, and the banner this was
+     * built for was dead code that its own test could not catch, because that
+     * test asserts at the transport boundary and never crosses this file. */
+    onUndecryptable (info) { emit({ ...info, type: 'undecryptable' }) },
 
     /**
      * A send threw, so the bubble must stop claiming it was sent.

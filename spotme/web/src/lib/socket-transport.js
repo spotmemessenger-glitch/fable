@@ -472,8 +472,23 @@ function serverRoom (config, roomId) {
    * on). That is what makes this self-correcting rather than a permanent stall.
    */
   let unopenedFloor = null
+  /**
+   * Hold, but ONLY where a repair is actually possible.
+   *
+   * `refreshRoomKey` returns null outright for a room with no key provider, and
+   * providers exist only for e2e_v2 conversations. A v1 room, a group room, the
+   * inbox/knock rooms — all derive from a fixed password, so a frame they cannot
+   * open will never open, and holding for it would pin the cursor forever:
+   * every reconnect replays a growing prefix until the backlog passes the
+   * server's REPLAY_LIMIT and newer events fall out of the window entirely. For
+   * the inbox that would eventually stop chat requests arriving.
+   *
+   * Which is the same rule the catch already applies to a SyntaxError — not
+   * repairable by waiting means not worth holding for.
+   */
   const holdCursorAt = (seq) => {
-    if (seq && (unopenedFloor === null || seq < unopenedFloor)) unopenedFloor = seq
+    if (!seq || !keyProviders.has(`${roomId}`)) return
+    if (unopenedFloor === null || seq < unopenedFloor) unopenedFloor = seq
   }
   /** Advance to `seq`, but never at or past a frame still waiting on a repair. */
   const advanceCursor = (seq) => {
@@ -617,12 +632,17 @@ function serverRoom (config, roomId) {
     if (joinPromise) return joinPromise
     joinPromise = (async () => {
       const socket = await ensureSocket()
-      // Cleared per replay: this join re-reads from the held cursor, so the
-      // failures either recur and hold again, or the room has been repaired and
-      // moves on. That is what stops a hold becoming a permanent stall.
-      unopenedFloor = null
       const ack = await emitAck(socket, 'join', { roomId, since: readCursor() })
       const key = await currentKey()
+      /* Cleared only once a key is actually in hand, and AFTER `currentKey()`
+       * on purpose. `join` retries every 2s on failure, and `currentKey()` is
+       * the throw that fails it — so resetting above this line handed the retry
+       * loop a fresh floor every 2 seconds, and each live frame that arrived in
+       * between set a HIGHER floor than the last, letting the cursor creep past
+       * frames already held. That is the original data loss again, just slower.
+       * Past this point the replay is genuinely about to run, so a reset means
+       * "re-evaluate what is unopenable now", which is what it is for. */
+      unopenedFloor = null
       for (const peerId of ack.peers || []) addPeer(peerId, true)
       for (const ev of ack.events || []) await dispatch(ev, true)
       // Attachments that arrived while this device was away come back as
@@ -656,8 +676,8 @@ function serverRoom (config, roomId) {
     if (left) return
     try {
       const socket = await socketPromise
-      unopenedFloor = null
       const ack = await emitAck(socket, 'join', { roomId, since: readCursor() })
+      unopenedFloor = null   // same reasoning as join(): only once a replay is really about to run
       const alive = new Set(ack.peers || [])
       for (const peerId of [...peers.keys()]) if (!alive.has(peerId)) removePeer(peerId)
       for (const peerId of alive) addPeer(peerId, true)
