@@ -486,8 +486,18 @@ function serverRoom (config, roomId) {
         for (const env of ack.envelopes) {
           const metadata = await unwrapMeta(key, env.meta)
           if (!metadata?.id) continue
+          /* `total` and `viaStorage` are KEPT for a storage-backed attachment.
+           *
+           * Stripping them was right while every byte lived in the RoomEvent
+           * log — the lazy fetch asks the server for slices and needs neither.
+           * A Phase 5 attachment has no slices, so a receiver that loses those
+           * two fields has an envelope it can render and bytes it can never
+           * retrieve: "tap to load" that fails forever. Measured in the
+           * two-origin harness, on the offline-delivery path specifically. */
           const { seq, total, ...envelope } = metadata
-          messages.push({ ...envelope, data: null, detached: true })
+          messages.push(metadata.viaStorage
+            ? { ...envelope, total, data: null, detached: true }
+            : { ...envelope, data: null, detached: true })
         }
         if (messages.length) {
           const h = actions.get('history')
