@@ -990,9 +990,17 @@ export function render (root, ctx) {
       (on) => db.setSettings({ vibrate: on })),
     el('div', {
       class: 'note',
-      text: 'Alerts need Spot Me open in a tab. Messages travel straight between '
-        + 'devices, so with the app fully closed there is no connection and nothing '
-        + 'to announce — unlike apps whose servers hold your messages for you.'
+      /* This used to say alerts could never reach a closed app, because
+       * messages "travel straight between devices". That was true of the
+       * Trystero P2P build and has been false since the server tier landed —
+       * the server relays, and it pushes when an event arrives for someone who
+       * is not connected. Left standing, it told users the working feature was
+       * impossible. */
+      text: '“On · closed-app alerts” means this device can be woken when a '
+        + 'message arrives. The alert only ever says that something arrived, '
+        + 'never what it said — the server cannot read your messages. Plain '
+        + '“On” means push is not set up for this device, so Spot Me has to be '
+        + 'open for you to be told.'
     }),
 
     el('div', { class: 'sec', text: 'Language & translation' }),
