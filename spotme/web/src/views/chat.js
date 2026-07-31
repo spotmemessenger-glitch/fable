@@ -4345,6 +4345,12 @@ export function render (root, ctx, roomId) {
       case 'undecryptable':
         if (!roomUndecryptable) { roomUndecryptable = true; renderList() }
         break
+      /* The send threw and the store now says so. One row, rebuilt — the tick
+       * becomes "Not delivered", which is what `buildReadRow` has always drawn
+       * for an attachment and never had the chance to draw for text. */
+      case 'sendfailed':
+        refreshRow(event.id)
+        break
       case 'history': {
         const stick = nearBottom()
         renderList()

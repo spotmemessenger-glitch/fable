@@ -326,6 +326,30 @@ function createConnection (convo) {
      * the screen is open, and an incoming message that DOES decrypt clears it. */
     onUndecryptable (info) { emit({ type: 'undecryptable', ...info }) },
 
+    /**
+     * A send threw, so the bubble must stop claiming it was sent.
+     *
+     * `sendAttachment` has patched `failed` since the voice-note work, and
+     * `buildReadRow` has drawn "Not delivered" for it just as long — but TEXT
+     * went out through `sendMessage`, which is fire-and-forget, so nothing ever
+     * set the flag on it. `read ? 'Read' : 'Sent'` is a DEFAULT, not a receipt:
+     * a text message that never left the device still rendered a tick.
+     *
+     * That is precisely the case ADR-001 created, as net.js's own comment says:
+     * an e2e_v2 room has no password fallback, so a room whose key cannot be
+     * agreed REFUSES to encrypt — correct behaviour, reported to the user as a
+     * tick and silence.
+     *
+     * Scoped to 'message'. Typing, read receipts and presence fail all the time
+     * on a flaky link and mean nothing to a user; marking a bubble undelivered
+     * because a typing indicator died would be noise dressed as information.
+     */
+    onSendError (what, error, id) {
+      if (what !== 'message' || !id) return
+      if (!conn.store.patch(id, { delivered: false, failed: true })) return
+      emit({ type: 'sendfailed', id })
+    },
+
     onPeers (count) {
       // Track when the peer was last connected, so the header can say
       // "Last seen 14:32" instead of a vague waiting message.

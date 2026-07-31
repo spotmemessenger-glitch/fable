@@ -209,11 +209,15 @@ export function createNet (roomId, secret, handlers, getHistory) {
    *
    * Still non-fatal, still unawaited; it just leaves a trace now.
    */
-  function msgSafe (promise, what = 'send') {
+  function msgSafe (promise, what = 'send', id = null) {
     if (promise?.catch) {
       promise.catch((error) => {
         console.warn(`spotme net: ${what} failed:`, error?.message || error)
-        handlers.onSendError?.(what, error)
+        /* `id` is what makes this reportable rather than merely logged. Without
+         * it the listener knows a send died but not WHICH one, so the only
+         * honest thing it could do is nothing — which is how this hook came to
+         * exist, be called on every failure, and change nothing on screen. */
+        handlers.onSendError?.(what, error, id)
       })
     }
   }
@@ -222,7 +226,7 @@ export function createNet (roomId, secret, handlers, getHistory) {
     /** True when the transport persists actions server-side — senders may
      * then deliver into an empty room instead of waiting for a live peer. */
     DURABLE: room.DURABLE === true,
-    sendMessage: (data) => msgSafe(msg.send(data), 'message'),
+    sendMessage: (data) => msgSafe(msg.send(data), 'message', data?.id),
     sendReaction: (data) => msgSafe(react.send(data), 'reaction'),
     sendProfile: (data) => msgSafe(profile.send(data)),
     sendDelete: (data) => msgSafe(del.send(data), 'delete'),
