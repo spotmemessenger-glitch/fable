@@ -12,12 +12,20 @@ import { GroupsModule } from './groups/groups.module';
 import { StoriesModule } from './stories/stories.module';
 import { RoomsModule } from './rooms/rooms.module';
 import { RealtimeModule } from './realtime/realtime.module';
+import { StorageModule } from './storage/storage.module';
+import { ScheduleModule } from '@nestjs/schedule';
 import { PushModule } from './push/push.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
+    // Without forRoot() the @Cron in StorageCleanupService is decoration: it
+    // registers nothing and never fires, silently.
+    ScheduleModule.forRoot(),
     PrismaModule,
+    // @Global — StorageModule must be initialised before RoomsModule and
+    // GroupsModule, both of which inject STORAGE_ADAPTER to purge media.
+    StorageModule,
     AuditModule,
     AuthModule,
     UsersModule,
