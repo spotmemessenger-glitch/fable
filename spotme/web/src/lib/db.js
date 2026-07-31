@@ -76,6 +76,13 @@ export function wipeDevice () {
     if (key.startsWith(ROOM_PREFIX) && !key.slice(ROOM_PREFIX.length).includes(':')) doomed.push(key)
   }
   doomed.forEach((key) => localStorage.removeItem(key))
+  /* Media lives in IndexedDB, not localStorage, so a prefix sweep cannot reach
+   * it. Without this line "Clear all data" would leave every photo and voice
+   * note this device ever received on disk — a worse leak than the one the
+   * button exists to fix, and an invisible one. Imported lazily and never
+   * awaited so db.js keeps no load-time dependency on a browser API that the
+   * packaged WebView, private mode, or the Node tests may not provide. */
+  void import('./blobstore.js').then((blobs) => blobs.clearAll()).catch(() => {})
 }
 
 function randomHex (bytes = 8) {
