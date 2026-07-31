@@ -175,11 +175,21 @@ app. The two are not interoperable as written.
 **WebRTC**, true peer-to-peer, with signalling relayed over the Socket.IO
 gateway.
 
-ICE servers are **STUN only**:
-`stun:stun.cloudflare.com:3478` and `stun:stun.l.google.com:19302`.
+**There IS a TURN relay.** An earlier revision of this document claimed "STUN
+only, no TURN server". That was wrong, and the mistake is instructive: `net.js`
+sets a STUN-only config as its *initial* value, so grepping for literal `turn:`
+strings finds nothing. The relay arrives at runtime — `readyRTC()` fetches
+`/api/turn`, which mints **short-lived Cloudflare TURN credentials** (6-hour
+TTL, `api/turn.js`). Verified live 2026-07-31: HTTP 200 with a credentialed
+relay over UDP, TCP, TURNS/5349 and port 443.
 
-**There is no TURN server.** Calls between peers behind symmetric NAT or
-restrictive corporate firewalls will fail to connect, with no relay fallback.
+- Fallback if `CF_TURN_KEY_ID`/`CF_TURN_TOKEN` are unset: STUN only, and the
+  response says `relay: false`, so the degradation is detectable.
+- `hasRelay()` reports whether a real relay is configured.
+- STUN servers: `stun:stun.cloudflare.com:3478`, `stun:stun.l.google.com:19302`.
+
+The lesson for anyone auditing this file: **a config assembled at runtime cannot
+be audited by grepping for constants.**
 
 Calls remain **unproven** — the machinery is written but has never been dialled;
 testing it headless needs fake media devices.
@@ -273,8 +283,11 @@ with nothing after it.
 
 | Area | Status |
 |---|---|
-| DM end-to-end encryption | **Broken by design (V-19)** — server can recompute every DM key |
-| Onboarding privacy copy | **Currently false** — says the server cannot read messages |
+| DM encryption — **NEW** chats | **Fixed** (ADR-001) — X25519 ECDH + HKDF, device-held keys. Verified live: server holding both public keys cannot derive |
+| DM encryption — **existing** chats | **Still V-19** — `e2e_v1` rooms keep the cyrb53 secret; they cannot be migrated without destroying their history |
+| Forward secrecy | **None.** Static pairs — one stolen device key opens that pair's whole v2 history |
+| Key authentication | **None.** The server hands out public keys, so it can MITM a *new* conversation. Fingerprint comparison is Phase 2 |
+| Onboarding privacy copy | **Corrected** — states what is true per room version; legacy rooms are labelled as readable |
 | Real-device push | **Never verified** — emulator only, production holds 1 device token |
 | Voice/video calls | **Never dialled**; no TURN server |
 | Presence scaling | One global lobby room; needs geo-sharding (h3 + Citus is the candidate) |

@@ -82,7 +82,19 @@ const fakeRoom = {
 /* net.js now rides the server-backed transport module; the fake below is
  * transport-agnostic (room + actions), so only the mocked path changes. */
 mock.module(`${SRC}lib/socket-transport.js`, {
-  namedExports: { joinRoom: () => fakeRoom, selfId: 'self-id', serverMode: false }
+  // setRoomKey/freshTokens are stubbed because reach.js imports them for
+  // e2e_v2 agreement (ADR-001). A partial module mock is a HARD failure under
+  // ESM — a missing name is a link-time SyntaxError, not undefined at call
+  // time — so this list has to track reach.js's imports exactly.
+  namedExports: {
+    joinRoom: () => fakeRoom,
+    selfId: 'self-id',
+    serverMode: false,
+    setRoomKey: () => {},
+    setRoomKeyProvider: () => {},
+    clearRoomKey: () => {},
+    freshTokens: async () => ({ accessToken: 'test-token' })
+  }
 })
 /* Alerts are a side effect of receiving, not part of it — but they are
  * recorded so the suite can assert an incoming message actually raises one. */

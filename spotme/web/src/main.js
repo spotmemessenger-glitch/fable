@@ -12,6 +12,8 @@ import { db, wipeDevice } from './lib/db.js'
 import { lobby } from './lib/discovery.js'
 import { reach } from './lib/reach.js'
 import { rooms } from './lib/rooms.js'
+import { publishIdentity } from './lib/crypto/identity-store.js'
+import { freshTokens } from './lib/socket-transport.js'
 import { readyRTC } from './net.js'
 import { attachPullRefresh } from './lib/pullrefresh.js'
 import { el, clear, toast, avatar, actionSheet } from './lib/ui.js'
@@ -350,7 +352,13 @@ function renderOnboarding () {
   app.appendChild(el('div', { class: 'onboard scroll-y' }, [
     el('div', { class: 'ob-inner' }, [
       el('h1', { text: 'Spot Me' }),
-      el('p', { class: 'ob-lede', text: 'Meet people nearby. Chat in any language. Peer-to-peer — no account, no server reading your messages.' }),
+      // The old lede promised "no server reading your messages". That was false:
+    // DM keys were derived from a non-cryptographic hash of two user ids the
+    // server stores, so it could recompute any of them (V-19, ADR-001). New
+    // chats now use real key agreement, but old ones cannot be retrofitted and
+    // the server still hands out the public keys — so the claim is narrowed to
+    // what is actually true rather than restated with a fresh adjective.
+    el('p', { class: 'ob-lede', text: 'Meet people nearby. Chat in any language. No account needed — new chats are encrypted with keys made on your device.' }),
       avatarSlot,
       filePick,
       el('label', { text: 'Name' }),
@@ -474,6 +482,24 @@ function boot () {
    * readyRTC() resolves either way (STUN-only on failure), so this cannot
    * strand the app offline.
    */
+  /**
+   * PUBLISH THIS DEVICE'S PUBLIC KEY.
+   *
+   * Without this the whole e2e_v2 path is dead code: `User.publicKey` stays
+   * NULL for everyone, so every `fetchPeerKey` 404s, every `prepareV2` returns
+   * null, and every new room silently falls back to the v1 cyrb53 secret the
+   * server can recompute. The crypto was correct and simply never ran.
+   *
+   * Fire-and-forget on purpose. It is not on the critical path — nothing local
+   * needs the PUBLISHED key, only peers do — so it must never delay chat or
+   * fail sign-in. A failed publish means peers open v1 rooms with us until the
+   * next boot, which is the old behaviour, not a regression.
+   *
+   * It runs OUTSIDE the readyRTC() gate below because it is plain HTTP and has
+   * nothing to do with ICE.
+   */
+  publishIdentity(freshTokens).catch(() => {})
+
   readyRTC().then(() => {
     rooms.connectAll()
     lobby.start()

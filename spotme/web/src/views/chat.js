@@ -2095,7 +2095,9 @@ export function render (root, ctx, roomId) {
 
   function sysLine () {
     return el('div', { class: 'sys', html: IC.spark }, [
-      'Messages are end-to-end between devices. Translation runs on-device when possible.'
+      convo?.e2eVersion === 'e2e_v2'
+        ? 'Encrypted with keys made on your devices. Translation runs on-device when possible.'
+        : 'Older chat — its key came from both account IDs, so the server could read it.'
     ])
   }
 
@@ -2764,7 +2766,17 @@ export function render (root, ctx, roomId) {
           ? row(IC.block, `Block ${name}`, null, confirmBlock, ' danger')
           : null
       ]),
-      el('p', { class: 'cp-enc', text: '🔒 Messages are end-to-end encrypted between your devices. No server can read them.' })
+      /* This used to read "No server can read them" for every chat. For v1
+       * rooms that was false — their key came from a non-cryptographic hash of
+       * two ids the server stores (V-19, ADR-001) — and a chat cannot be
+       * migrated without destroying its history. So the line now tells the
+       * truth per room instead of one reassuring sentence for both. */
+      el('p', {
+        class: 'cp-enc',
+        text: convo.e2eVersion === 'e2e_v2'
+          ? '🔒 Encrypted with keys created on your device and your contact\'s. The server carries the messages but holds no key to them.'
+          : '⚠️ This is an older chat. Its key was derived from both account IDs, so the server could read it. Start a new chat for device-held keys.'
+      })
     ]))
     root.appendChild(back)
   }

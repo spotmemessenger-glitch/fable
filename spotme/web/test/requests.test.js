@@ -79,7 +79,18 @@ function fakeRoomFor (roomId) {
 /* reach.js now rides the server-backed transport module; the fake below is
  * transport-agnostic (rooms + actions), so only the mocked path changes. */
 mock.module(`${SRC}lib/socket-transport.js`, {
-  namedExports: { joinRoom: (_opts, roomId) => fakeRoomFor(roomId), selfId: 'test-self', serverMode: false }
+  // Must track reach.js's imports exactly: a partial ESM module mock fails at
+  // link time with a SyntaxError, not at call time. setRoomKey/freshTokens
+  // arrived with e2e_v2 key agreement (ADR-001).
+  namedExports: {
+    joinRoom: (_opts, roomId) => fakeRoomFor(roomId),
+    selfId: 'test-self',
+    serverMode: false,
+    setRoomKey: () => {},
+    setRoomKeyProvider: () => {},
+    clearRoomKey: () => {},
+    freshTokens: async () => ({ accessToken: 'test-token' })
+  }
 })
 /* Relay credentials resolve instantly; reach.js waits on this before joining. */
 mock.module(`${SRC}net.js`, {
