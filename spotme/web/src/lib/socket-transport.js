@@ -484,6 +484,12 @@ async function emitAck (socket, event, body) {
 
 function serverRoom (config, roomId) {
   const password = config?.password
+  /* Who the other participant is, for a DM. The server recomputes the room id
+   * from this plus the AUTHENTICATED caller and refuses a mismatch — a DM room
+   * id is a pure function of two public ids, so without it anyone who learned
+   * two ids could join and replay the whole history (see backend dm-room.ts).
+   * Undefined for groups, the lobby and inbox rooms, which the gate skips. */
+  const peerId = config?.peerId
   const rtcConfig = config?.rtcConfig || {}
   const actions = new Map()      // name -> action record
   const peerPcs = new Map()      // peerId -> { pc, makingOffer, polite } (calls only)
@@ -757,7 +763,7 @@ function serverRoom (config, roomId) {
    */
   const PAGE_CAP = 20
   async function replayPage (socket) {
-    const ack = await emitAck(socket, 'join', { roomId, since: readCursor() })
+    const ack = await emitAck(socket, 'join', { roomId, since: readCursor(), peerId })
     const key = await currentKey()
     unopenedFloor = null
     for (const ev of ack.events || []) await dispatch(ev, true)
@@ -785,7 +791,7 @@ function serverRoom (config, roomId) {
     if (joinPromise) return joinPromise
     joinPromise = (async () => {
       const socket = await ensureSocket()
-      const ack = await emitAck(socket, 'join', { roomId, since: readCursor() })
+      const ack = await emitAck(socket, 'join', { roomId, since: readCursor(), peerId })
       const key = await currentKey()
       /* Cleared only once a key is actually in hand, and AFTER `currentKey()`
        * on purpose. `join` retries every 2s on failure, and `currentKey()` is
@@ -823,7 +829,7 @@ function serverRoom (config, roomId) {
     if (left) return
     try {
       const socket = await socketPromise
-      const ack = await emitAck(socket, 'join', { roomId, since: readCursor() })
+      const ack = await emitAck(socket, 'join', { roomId, since: readCursor(), peerId })
       const key = await currentKey()
       unopenedFloor = null   // same reasoning as join(): only once a replay is really about to run
       const alive = new Set(ack.peers || [])

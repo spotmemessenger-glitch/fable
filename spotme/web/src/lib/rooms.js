@@ -676,7 +676,13 @@ function createConnection (convo) {
         .filter((m) => !(m.viewOnce && seenByPeer.has(m.id)))
         .map((m) => (m.data && m.data.length > DETACH_BYTES
           ? { ...m, data: null, detached: true, mime: m.data.slice(5, m.data.indexOf(';')) }
-          : m)))
+          : m)),
+      /* The peer's id, so the server can verify this device belongs in a DM
+       * room instead of taking the room id as proof. A DM id is a pure function
+       * of two PUBLIC ids, so it was never proof of anything. Harmless to send
+       * — the server already stores both ids and never trusts this one on its
+       * own; it only checks that it re-derives the room. */
+      convo.peer?.id)
   }
 
   /**

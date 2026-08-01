@@ -290,6 +290,22 @@ export class PushService {
     return { sent, pruned: dead.length };
   }
 
+  /**
+   * Has this user already been recorded in this room?
+   *
+   * Used by the DM join gate as the fallback for clients too old to name their
+   * peer. Read-only on purpose: `remember()` must not run until the join has
+   * been authorised, or the act of intruding would create the very membership
+   * row that later makes the intruder look legitimate.
+   */
+  async isMember(roomId: string, userId: string): Promise<boolean> {
+    const row = await this.prisma.roomMember.findUnique({
+      where: { roomId_userId: { roomId, userId } },
+      select: { roomId: true },
+    });
+    return Boolean(row);
+  }
+
   /** Remember that this user belongs to this room, so we know whom to notify. */
   async remember(roomId: string, userId: string) {
     await this.prisma.roomMember.upsert({
