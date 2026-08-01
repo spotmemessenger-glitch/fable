@@ -100,6 +100,12 @@ jobs:
 
       - run: npm ci
 
+      # Cheapest first: lint fails in seconds, the suite takes longer.
+      # Correctness rules only — see spotme/web/eslint.config.mjs for why there
+      # is no `tsc --checkJs` gate here.
+      - name: Lint
+        run: npm run lint
+
       # `build` runs a prebuild that re-vendors ../core, so it also proves the
       # vendored copy in the tree matches the source it was taken from.
       - name: Build

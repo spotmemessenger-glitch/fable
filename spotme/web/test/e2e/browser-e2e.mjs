@@ -23,11 +23,6 @@ const check = (name, pass, detail = '') => {
   console.log(`  ${pass === true ? 'PASS' : 'FAIL'}  ${name}${detail ? `  — ${detail}` : ''}`)
 }
 
-/** A 2x2 red PNG as a data URL, small enough to paste into a file input. */
-const TINY_PNG = Buffer.from(
-  'iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAFElEQVR42mP8z8BQz0AEYBxVSF+FABJADveWkH6oAAAAAElFTkSuQmCC',
-  'base64')
-
 async function onboard (ctx, who) {
   const page = await ctx.newPage()
   page.on('console', (m) => { if (m.type() === 'error') console.log(`    [${who.user} console.error] ${m.text().slice(0, 160)}`) })
@@ -57,10 +52,6 @@ async function startChatWith (page, peerUser, firstLine) {
   await page.click('button.reqsend')
   await page.waitForSelector('input[placeholder="Type a message…"]', { timeout: 20000 })
 }
-
-const bubbles = (page) =>
-  page.$$eval('.v-chat .msg, .v-chat .bub, .v-chat .row', (els) =>
-    els.map((e) => e.innerText.replace(/\s+/g, ' ').trim()).filter(Boolean))
 
 /** Every text visible in the thread — resilient to class-name drift. */
 const threadText = (page) =>

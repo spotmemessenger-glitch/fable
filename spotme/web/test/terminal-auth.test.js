@@ -48,7 +48,6 @@ globalThis.indexedDB = { open () {
 
 const results = {}
 const names = []
-const check = (name, pass) => { names.push(name); results[name] = pass === true }
 const checkAsync = async (name, fn) => {
   names.push(name)
   try { results[name] = (await fn()) === true } catch (e) {
@@ -59,10 +58,8 @@ const checkAsync = async (name, fn) => {
 
 /** Answers `/api/auth/guest` with whatever the current scenario dictates. */
 let authResponse = null
-let authCalls = 0
 globalThis.fetch = (url) => {
   if (String(url).includes('/api/auth/guest')) {
-    authCalls++
     const r = authResponse()
     return Promise.resolve({
       ok: r.status >= 200 && r.status < 300,
@@ -134,7 +131,6 @@ await checkAsync('a 403 with an unparseable body is NOT terminal — it fails SA
   authResponse = () => ({ status: 403, body: null })
   globalThis.fetch = (url) => {
     if (String(url).includes('/api/auth/guest')) {
-      authCalls++
       return Promise.resolve({
         ok: false, status: 403,
         json: async () => { throw new SyntaxError('not json') },

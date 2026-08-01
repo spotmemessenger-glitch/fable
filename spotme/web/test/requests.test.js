@@ -123,7 +123,7 @@ const pushPokes = []          // toUserId values pokePeer() asked the server to 
 
 globalThis.fetch = async (url, opts = {}) => {
   // API calls are same-origin (relative) now — give URL a base to parse them.
-  const { pathname, searchParams } = new URL(url, 'http://localhost')
+  const { pathname } = new URL(url, 'http://localhost')
   const body = opts.body ? JSON.parse(opts.body) : null
 
   if (pathname === '/api/knock') {

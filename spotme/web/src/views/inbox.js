@@ -97,12 +97,6 @@ export function render (root, ctx) {
 
   /* ------------------------------------------------------------- actions */
 
-  function openPersonChat (person) {
-    const convo = db.convos().find((c) => c.peer?.id === person.id)
-    if (convo) ctx.openThread(convo.roomId)
-    else ctx.toast(`No chat with ${person.name} yet — find them in Discovery`)
-  }
-
   function confirmDelete (convo) {
     actionSheet([{
       label: 'Delete conversation',
