@@ -734,7 +734,7 @@ sequenceDiagram
   Reg-->>Sup: HealthSample[] , CostSignal[]
   Sup->>Sup: score(t,peer,class) ; hysteresis (§5.4)
   alt a transport is reachable
-    Sup->>Net: publish(roomId, SealedEnvelope)  %% opaque bytes only
+    Sup->>Net: publish(roomId, SealedEnvelope) — opaque bytes only
     Net-->>Sup: {seq?} or transport ack
     Sup-->>App: queued/sent (route recorded)
   else none reachable
@@ -752,13 +752,13 @@ sequenceDiagram
   participant Tnew as T_new (e.g. Wi-Fi)
   participant Store as Room store (cursor+dedup)
   Note over Sup: health change: score(Tnew)-score(Told) >= MARGIN for DWELL
-  Sup->>Tnew: subscribe(roomId)   %% make-before-break
+  Sup->>Tnew: subscribe(roomId) — make-before-break
   Tnew-->>Sup: subscribed (resume from held cursor `since`)
   Sup->>Store: replay id > since
   Store-->>Sup: overlap frames (dedup by envelopeId drops dupes)
   Sup->>Tnew: re-drain unacked outbox (same envelopeIds)
   Note over Sup,Store: ratchet untouched (INV-3); order = seq/ord token (§9.4)
-  Sup->>Told: unsubscribe(roomId)  %% only after Tnew reachable
+  Sup->>Told: unsubscribe(roomId) — only after Tnew reachable
   Sup-->>Sup: emit route_change(from=Told,to=Tnew,reason,dwell)
 ```
 
@@ -775,7 +775,7 @@ sequenceDiagram
   Note over R: R forwards opaque bytes; cannot read, alter, or replay
   R->>B: MeshFrame{ttl=6, hop+1, env}
   B->>B: open(env) -> decrypt ; dedup by envelopeId
-  B-->>R: signed DeliveryAck{receipt}  %% recipient-signed, relay cannot forge
+  B-->>R: signed DeliveryAck{receipt} — recipient-signed, relay cannot forge
   R-->>A: relay receipt back (when A reachable)
   Note over A: outbox stops retrying on ack (§7.3, §13)
 ```
