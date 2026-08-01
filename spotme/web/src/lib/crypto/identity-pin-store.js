@@ -24,6 +24,7 @@
  * no timer set. The database is opened on first use and cached after that.
  */
 import { applyEvent, emptyRecord, migrateRecord } from './identity-pin.js'
+import { applyAvailability } from './identity-availability.js'
 
 const DB_NAME = 'spotme-identity-pins'
 const DB_VERSION = 1
@@ -210,6 +211,36 @@ export async function forgetRecord (peerId) {
   const db = await openDb()
   await run(db, 'readwrite', (store) => req(store.delete(peerId)))
   return true
+}
+
+/**
+ * Record the server's view of whether this peer is reachable.
+ *
+ * A SEPARATE ENTRY POINT FROM `applyToRecord`, deliberately. Routing an
+ * availability report through the identity event loop would mean one function
+ * that can write both axes, and the whole point of A6a is that the server can
+ * reach exactly one of them. Two doors, and the server has a key to one.
+ *
+ * Same single-transaction read-modify-write as `applyToRecord`, so a concurrent
+ * identity decision cannot be lost to an availability write or the reverse.
+ */
+export async function setAvailability (peerId, event) {
+  if (!peerId) throw new Error('peerId is required')
+  const db = await openDb()
+  let refused = null
+
+  const out = await run(db, 'readwrite', (store, tx) => {
+    return req(store.get(peerId)).then((raw) => {
+      const current = migrateRecord(raw, peerId)
+      const result = applyAvailability(current, event)
+      if (!result.ok) { refused = result; tx(ABORTED); return undefined }
+      if (!result.changed && raw) return result
+      return req(store.put({ ...result.next, peerId })).then(() => result)
+    })
+  })
+
+  if (refused) return refused
+  return out
 }
 
 /** A fresh, unstored record. Re-exported so callers need one import, not two. */
