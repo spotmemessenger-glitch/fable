@@ -137,6 +137,31 @@ await checkAsync('VECTOR 05: Bob\'s reply carries a NEW ratchet_pub and reproduc
   return hex(header) === v.header_hex && hex(sealed) === v.ciphertext_hex
 })
 
+await checkAsync('VECTOR 13: the shipped messageStep reproduces correct_message_key and rejects off_by_one (B1)', async () => {
+  // The negative vector. Feed its chain_key through the SHIPPED symmetric step:
+  // the result must equal correct_message_key, and must NOT equal off_by_one —
+  // the key an implementation that advanced the chain a step early would take.
+  // `messageStep` is internal, so it is reached through the shipped `encrypt`
+  // with a capturing AEAD seam that records each per-message key. Two steps
+  // give both keys: step 1 is correct_message_key, step 2 is off_by_one.
+  const v = V['13_negative_subtly_wrong_advancement']
+  const captured = []
+  const capturingAead = {
+    makeIv: () => new Uint8Array(12),
+    async seal (keyBytes) { captured.push(hex(keyBytes)); return new Uint8Array(0) },
+    async open () { return new Uint8Array(0) },
+  }
+  const s = {
+    sendChainKey: fromHex(v.chain_key), sendN: 0, prevSendN: 0,
+    self: { pub: new Uint8Array(32) }, sdev: SDEV, rdev: RDEV, aead: capturingAead,
+  }
+  const step1 = await encrypt(s, 'x', ROOM)      // messageStep(chain_key).messageKey
+  await encrypt(step1.session, 'x', ROOM)         // messageStep(messageStep(chain_key).chainKey).messageKey
+  return captured[0] === v.correct_message_key &&
+    captured[0] !== v.off_by_one_message_key &&
+    captured[1] === v.off_by_one_message_key
+})
+
 /* ===================== TIER 2 — behaviour on the shipped seams ============= */
 
 async function pair () {

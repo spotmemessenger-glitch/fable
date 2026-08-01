@@ -33,6 +33,11 @@ globalThis.localStorage = {
 }
 
 const { db, wipeDevice } = await import('../src/lib/db.js')
+// The three identity stores, so NEW-4 can open a live connection to each BEFORE
+// the wipe — the precondition that made the app block its own delete.
+const { allRecords, _resetForTests: _resetPinStore } = await import('../src/lib/crypto/identity-pin-store.js')
+const { loadIdentity, forgetIdentity } = await import('../src/lib/crypto/identity-store.js')
+const { loadSigningIdentity, forgetSigningIdentity } = await import('../src/lib/crypto/signing-key-store.js')
 
 const results = {}
 const check = (name, fn) => {
@@ -234,6 +239,78 @@ await checkAsync('no IndexedDB at all is a reported failure, not a silent succes
   globalThis.indexedDB = { deleteDatabase: () => { throw new Error('private mode') } }
   const out = await wipeDevice()
   return out.ok === false && out.failures.length >= 2
+})
+
+/* ====== NEW-4: a live store connection must not block its own wipe ======== */
+
+await checkAsync('NEW-4: still-open store connections close on versionchange, so wipeDevice is not self-blocked', async () => {
+  /* IndexedDB `deleteDatabase` fires `versionchange` at EVERY open connection
+   * and blocks until they close. The three identity stores each hold a live
+   * connection (identity-pin-store caches its at module level for the module's
+   * lifetime); before the fix none set `db.onversionchange`, so the app blocked
+   * its OWN deletes and db.js reported the block (`onblocked`) as a wipe failure.
+   *
+   * helpers/fake-idb.js deliberately does NOT model version-change blocking, so
+   * this mock does it explicitly: a connection that IGNORES `versionchange`
+   * stays in `live`, and its database's delete fires `onblocked` (a failure); a
+   * connection that closes on notice drops out of `live` and the delete
+   * succeeds. So this passes ONLY because the fix closes each connection. */
+  const live = new Set()
+  const deleted = []
+  const mkReq = (result) => { const r = {}; queueMicrotask(() => { r.result = result; r.onsuccess?.() }); return r }
+  // A readable record so identity-store / signing-key-store take their "found"
+  // branch and do NOT generate a key — the test is about the OPEN handle only.
+  const readable = { algo: 'X25519', privateKey: {}, publicKey: {}, publicKeyB64: 'AA', schemaVersion: 1 }
+  globalThis.indexedDB = {
+    open: (name) => {
+      const conn = {
+        name,
+        onversionchange: null,
+        objectStoreNames: { contains: () => true },
+        createObjectStore: () => ({}),
+        close () { live.delete(conn) },
+        transaction: () => {
+          const store = {
+            get: () => mkReq(readable),
+            getAll: () => mkReq([]),
+            put: () => mkReq(undefined),
+            delete: () => mkReq(undefined),
+            clear: () => ({}),
+          }
+          const t = { objectStore: () => store }
+          // oncomplete AFTER any request microtasks queued this tick.
+          queueMicrotask(() => queueMicrotask(() => t.oncomplete?.()))
+          return t
+        },
+      }
+      live.add(conn)
+      const req = { result: conn }
+      queueMicrotask(() => { req.onupgradeneeded?.(); req.onsuccess?.() })
+      return req
+    },
+    deleteDatabase: (name) => {
+      const req = {}
+      queueMicrotask(() => {
+        // Notify every open connection to this database, then see who is left.
+        for (const conn of [...live]) if (conn.name === name) conn.onversionchange?.({ type: 'versionchange' })
+        if ([...live].some((conn) => conn.name === name)) { req.onblocked?.(); return } // still blocked
+        deleted.push(name)
+        req.onsuccess?.()
+      })
+      return req
+    },
+  }
+
+  // Simulate normal app use having already opened all three identity stores, so
+  // each holds a live connection when the wipe runs.
+  _resetPinStore(); forgetIdentity(); forgetSigningIdentity()
+  await allRecords()            // opens + module-caches spotme-identity-pins
+  await loadIdentity()          // opens spotme-e2e
+  await loadSigningIdentity()   // opens spotme-signing
+
+  const out = await wipeDevice()
+  return out.ok === true &&
+    ['spotme-e2e', 'spotme-identity-pins', 'spotme-signing'].every((d) => deleted.includes(d))
 })
 
 /* --------------------------------------------------------------- report */

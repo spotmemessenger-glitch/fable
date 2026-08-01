@@ -59,7 +59,14 @@ function openDb () {
     req.onupgradeneeded = () => {
       try { req.result.createObjectStore(STORE) } catch (err) { reject(err) }
     }
-    req.onsuccess = () => resolve(req.result)
+    req.onsuccess = () => {
+      const db = req.result
+      // A live connection blocks wipeDevice's `deleteDatabase` until it closes:
+      // `deleteDatabase` fires `versionchange` at every open connection. Close
+      // on notice so the app does not block its own wipe.
+      db.onversionchange = () => db.close()
+      resolve(db)
+    }
     req.onerror = () => reject(req.error)
     req.onblocked = () => reject(new Error('signing store is blocked by another connection'))
   })
