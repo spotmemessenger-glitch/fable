@@ -89,10 +89,15 @@ multi-device implementation, not during.
 
 ## 2. Governance
 
-**The migration document is the controlling source** — the owner restated this
-explicitly. Our A1–A7 / B1–B10 labels are an implementation breakdown only;
-they appear nowhere in the document. Priority 1 completes only when every
-document requirement and every completion-checklist item passes.
+**2026-08-01, later: the owner supplied `MASTER-ENGINEERING-ROADMAP-V2.md`**
+(committed under `spotme/docs/` with the source .docx) and ordered it consulted
+on every coding change — CLAUDE.md now points at it. Its V1→V2 mapping
+(`14-ROADMAP-V1-TO-V2-MAPPING.md`) is **awaiting owner approval**; until then
+the V1 plan (preserved as `MIGRATION-PLAN-V1.md`) still governs, stricter gate
+wins either way (V2 Appendix B). **V1/V2 priority numbers differ — the mapping
+§1 restates every standing owner block under V2 numbering; renumbering never
+unblocks.** Our A1–A7 / B1–B10 labels remain an implementation breakdown only.
+Priority 1 completes only when every requirement and checklist item passes.
 
 Priority 1 checklist, honestly, as of this write:
 
