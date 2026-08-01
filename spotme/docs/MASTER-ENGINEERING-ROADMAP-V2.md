@@ -520,3 +520,53 @@ testing.
   unless explicitly amended.
 - Status percentages are estimates; code, tests, and deployment evidence
   control completion.
+
+---
+
+## Owner Amendment — 2026-08-01 (execution order + one principle)
+
+Recorded verbatim in effect; issued by the owner after V2 became controlling.
+This amendment re-sequences execution. It does not remove any requirement:
+§5's priorities remain the requirement inventory, and Priority 1's remaining
+cryptography stays mandatory before Priority 1 is declared complete.
+
+### Immediate launch priorities (highest first)
+
+1. **Push notifications** — complete Android AND iOS push; background,
+   terminated, and foreground delivery; messages, calls, mentions, group
+   events, and stories; production-grade delivery.
+2. **Translation platform** — translation as a core platform capability: a
+   provider abstraction over the EXISTING integrations (Google, Azure
+   Translator, Sarvam AI, Gemini, OpenAI, MyMemory — already present in
+   `web/api/translate.js` and the guard tests — plus ElevenLabs where
+   applicable); dynamic best-provider selection by language pair, latency,
+   quality, and availability; conversation context preserved; quality metrics,
+   fallback, retries, caching, observability.
+3. **Live voice translation** — the flagship. NOT an extension of voice notes:
+   a dedicated realtime architecture per §6 (capture → streaming STT →
+   incremental translation → streaming TTS → voice preservation → low-latency
+   return), with interruptions, partial transcripts, context-aware
+   translation, language auto-detection, buffering/jitter handling, original-
+   audio fallback, live captions, both transcripts, AI status indicator,
+   provider fallback, quality monitoring. **Latency: MVP < 2.5 s end-to-end;
+   production < 1 s where providers allow** (tightened from §6.5's 3.0 s MVP
+   first-audio target).
+4. **Adaptive communication layer** — elevated to flagship: Socket.IO,
+   Centrifugo, P2P, native Bluetooth offline messaging, automatic transport
+   switching, offline synchronization; Wi-Fi Direct and mesh as future work.
+   **Users never manually select a transport.** This supersedes the earlier
+   hold on transport work to the extent of this scope; the horizontal-scale
+   remainder of Priority 3 (Redis/Dragonfly selection, load testing) is not
+   scheduled by this amendment.
+5. **Then Priority 1 security work continues** — X3DH, Double Ratchet,
+   multi-device, forward secrecy, break-in recovery remain MANDATORY before
+   Priority 1 is complete. §10.6 ("do not start new priorities while the
+   Priority 1 gate is open") is superseded by this explicit re-sequencing;
+   ADR-008 §12's publication hard stop is unchanged.
+
+### Additional non-negotiable engineering rule (appended to §2)
+
+10. Every AI feature must optimize for three dimensions simultaneously:
+    **accuracy, latency, and privacy**. No provider may become a hard
+    dependency. The system must be able to choose or fall back between
+    providers based on quality, availability, cost, and response time.
