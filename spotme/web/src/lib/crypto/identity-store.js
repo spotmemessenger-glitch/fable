@@ -16,7 +16,29 @@
 import { API_BASE } from '../api.js'
 import { generateIdentity, exportPublicKeyB64, deriveRoomKey, E2E_V2 } from './e2e-v2.js'
 import { applyToRecord } from './identity-pin-store.js'
-import { OBSERVE } from './identity-pin.js'
+import { OBSERVE, VERIFY } from './identity-pin.js'
+
+/**
+ * Record that a human compared this exact key out of band.
+ *
+ * `verifiedKey` MUST be the key taken from the scanned payload — the one the
+ * comparison actually covered — and never a key re-read from the conversation
+ * or the server between the comparison and this call. That window is precisely
+ * where a substitution would land, and it is why `verifyScannedPayload` returns
+ * the compared key rather than leaving the caller to look it up again.
+ *
+ * `applyEvent` then matches it against the stored pin or proposal, so verifying
+ * a PROPOSED key succeeds only when that exact proposal was what was compared,
+ * and a key matching neither is refused with KEY_MISMATCH.
+ *
+ * AWAITED, unlike `observePeerKey`. This one is a direct answer to something
+ * the user just did, so the UI has to be able to say whether it was recorded —
+ * "verified" that did not persist is the worst of both outcomes.
+ */
+export async function recordVerification (peerId, verifiedKey, meta = {}) {
+  if (!peerId || !verifiedKey) return { ok: false, error: { code: 'MISSING_KEY' } }
+  return applyToRecord(peerId, { type: VERIFY, at: Date.now(), key: verifiedKey, ...meta })
+}
 
 /**
  * Record that a peer published this key. Returns the resulting trust record,

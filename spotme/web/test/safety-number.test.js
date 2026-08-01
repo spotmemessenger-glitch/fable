@@ -89,7 +89,15 @@ await checkAsync('a different conversation between different people is a differe
 
 /* --------------------------------------------------------- QR verification */
 
-const payload = encodeVerificationPayload(ALICE, BOB)
+/* A4 made the payload v2: it must now name the conversation and carry an issue
+ * time, because a code that binds neither verifies any room those two people
+ * share and stays valid forever once photographed. */
+const ROOM = 'safety-number-test-room'
+const AT = 1_700_000_000_000
+const scanCtx = {
+  roomId: ROOM, at: AT, selfKey: ALICE.publicKeyB64, peerKey: BOB.publicKeyB64
+}
+const payload = encodeVerificationPayload(ALICE, BOB, { roomId: ROOM, at: AT })
 
 check('the QR payload carries the KEYS, never the number', (() => {
   // Carrying the digits would verify nothing: an attacker who can show a QR can
@@ -105,11 +113,12 @@ check('a payload round-trips', (() => {
 })())
 
 await checkAsync('scanning the honest payload CONFIRMS the number on screen', async () =>
-  (await verifyScannedPayload(payload, number)).match === true)
+  (await verifyScannedPayload(payload, number, scanCtx)).match === true)
 
 await checkAsync('scanning a payload built from a substituted key FAILS', async () => {
-  const forged = encodeVerificationPayload(ALICE, { userId: BOB.userId, publicKeyB64: MALLORY_KEY })
-  const { match } = await verifyScannedPayload(forged, number)
+  const forged = encodeVerificationPayload(
+    ALICE, { userId: BOB.userId, publicKeyB64: MALLORY_KEY }, { roomId: ROOM, at: AT })
+  const { match } = await verifyScannedPayload(forged, number, scanCtx)
   return match === false
 })
 
