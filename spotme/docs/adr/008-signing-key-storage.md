@@ -179,3 +179,28 @@ The options, none yet chosen:
 **This must be decided before multi-device is implemented, not during.** Whatever
 is chosen becomes a new `SAFETY_VERSION`, and the coexistence rules in ADR-006
 apply.
+
+## Implementation status — updated 2026-08-01 (Roadmap V2 Phase 2, first half)
+
+**§1–§5, §7–§10 are IMPLEMENTED** in `web/src/lib/crypto/signing-key-store.js`
+(`spotme-signing` v1, record-level `schemaVersion`, promise-cached load,
+write-then-read-back with an honest `ephemeral` status, corruption and
+newer-schema treated as UNREADABLE-not-absent, wipe integration in
+`wipeDevice`, explicit-only rotation returning the retired public key for the
+future revocation ledger). Covered by `test/signing-key-store.test.js`,
+`test/wipe-device.test.js`, and `test/bench/signing-store.bench.mjs`
+(cold ~0.3 ms median / read-back ~0.01 ms on the Node fake; the browser adds
+disk cost, measured in the Phase 6 hardware pass).
+
+**Still design-only, deliberately:** §4's publication gate consumer, §6's UI
+warnings, §11's safety-number interaction, and **all of §12** — publication and
+rollback-after-publication are the second Phase 2 PR, because the server-side
+published-key lifecycle must exist in the same change that first publishes.
+`test/signing-not-shipped.test.js` now fences the store too: the app may reach
+exactly `forgetSigningIdentity` (the wipe), and nothing else.
+
+**Rotation semantics (addendum to §9):** rotation within a device exists and is
+explicit-only — never on a timer, never on an error path. Pre-publication it is
+a local affair; post-publication every rotation must carry the signed
+supersession statement the publication PR introduces, and the returned
+`previousPublicKeyB64` is what that statement names.
