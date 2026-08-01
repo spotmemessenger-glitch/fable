@@ -1,20 +1,24 @@
 # 18 — Priority 1 Final Engineering Review Board
 
-**Status: REVIEW COMPLETE — VERDICT: APPROVED WITH FIXES.** Review-only exercise;
-no code modified, nothing merged. Convened 2026-08-01 to determine whether
-Priority 1 is genuinely production-ready, assuming an external cryptography audit
-will follow. All five specialist reviews and the coordinator have reported; the
-consolidated Final Review Board Report and the single evidence-based verdict are
-at the end of this document.
+**Status: FINAL VERDICT — ✅ APPROVED (re-verified after the HIGH-only cleanup).**
+The board's initial verdict was APPROVED WITH FIXES; the owner authorized one
+focused HIGH-only cleanup iteration; it is now implemented, CI-green, and
+independently re-verified, so the four HIGH blockers are closed and the verdict
+flips to APPROVED. **See the "Addendum — cleanup + re-verification" at the very
+end for the closure evidence.** Convened 2026-08-01 to determine whether Priority
+1 is genuinely production-ready, assuming an external cryptography audit will
+follow. Nothing is merged; the stack awaits the owner's acceptance + merge
+authorization.
 
 **Owner directive (2026-08-01, incorporated):** every HIGH finding carries a full
 twelve-axis engineering analysis (below); findings are cross-verified, de-duped,
 and merged into one consolidated risk register and one dependency-ordered cleanup
-plan. **Revised merge plan:** the crypto stack does *not* merge as-is — one
-focused cleanup iteration (HIGH-only first: H1, H2, NEW-4, B1) lands and is
-re-verified by the board *before* merge, after which the verdict is expected to
-flip to APPROVED. The board remains in review-freeze — no code modified, nothing
-merged, Priority 2 not begun — until the owner authorizes the cleanup iteration.
+plan. **Revised merge plan (executed):** the crypto stack did *not* merge as-is —
+one focused cleanup iteration (HIGH-only: H1, H2, NEW-4, B1) landed as Cleanup PR
+**#46**, was re-verified by the board, and the verdict flipped to APPROVED. The
+board held review-freeze — no code touched outside the four fixes, nothing merged,
+Priority 2 not begun — throughout; the freeze on *merging* holds until the owner
+authorizes it.
 
 **Method (owner-mandated):** independent, evidence-based specialist reviews
 grounded in the repository, ADRs, tests, vectors, and review documents (`15`,
@@ -31,8 +35,9 @@ recommended fix, and whether it blocks Priority 1.
 5. Testing / Security synthesis — **complete** (report folded in below)
 6. Coordinator (Executive, Performance, Documentation, Operations) — below
 
-**All reviews reported. Verdict issued: APPROVED WITH FIXES** (Final Review Board
-Report, §10).
+**All reviews reported. Initial verdict: APPROVED WITH FIXES** (Final Review Board
+Report, §10). **After the HIGH-only cleanup + independent re-verification: FINAL
+VERDICT APPROVED** (Addendum at end).
 
 ---
 
@@ -1006,3 +1011,77 @@ Consolidated cleanup plan — confirmed review findings, nothing more.
 Cryptography (Pass A), Backend/Database/Reliability (R3), Frontend/Storage/
 Networking (R4), Testing/Security synthesis (R5), Coordinator. Evidence lives in
 this document, `16` §21, and the reproductions cited inline.*
+
+---
+
+# Addendum — HIGH-only cleanup iteration + board re-verification (2026-08-01)
+
+# FINAL VERDICT: ✅ APPROVED
+
+The §10 verdict (APPROVED WITH FIXES) triggered exactly one focused,
+owner-authorized **HIGH-only** cleanup iteration — no MEDIUM/LOW work, no
+refactoring, no flag changes. It is complete, CI-green, and independently
+re-verified. The four HIGH blockers are closed; the verdict flips to **APPROVED**.
+
+## What was fixed — Cleanup PR #46 (`cleanup/priority-1-high` → `feat/multi-device`)
+
+One commit, 10 files (+404 / −227), exactly the four findings + their tests:
+
+- **H1** — `signing-keys.service.ts`: per-user `pg_advisory_xact_lock(hashtext(userId))`
+  (parameter-bound, via `tx.$executeRaw` so it shares the transaction's
+  connection) as the first statement in publish/supersede/withdraw;
+  `supersede`'s active-row read moved inside its write txn; Prisma `P2002` caught
+  as the idempotent path.
+- **H2** — same file: `validKey()` canonicalizes at ingress
+  (`Buffer.from(b64,'base64').toString('base64')`); the canonical form is the
+  stored value and the basis of every comparison and the unique constraint.
+- **NEW-4** — the three IndexedDB stores: `db.onversionchange = () => db.close()`
+  (pin-store also clears its module cache) so `wipeDevice` stops blocking its own
+  delete; `db.js` and its honest-failure contract untouched.
+- **B1** — vector 13 regenerated group-13-only from the authoritative
+  `messageStep`; a new `ratchet.test.js` assertion runs the vector through the
+  shipped code; stale `004a-*.mjs` removed; `ratchet.js` unchanged.
+
+## Verification (both required conditions met)
+
+- **CI on #46 — fully green:** `web — tests and build`, `backend — tests against
+  Postgres, typecheck, build`, and `e2e — real browser` all passed. The
+  backend-Postgres job is the *executing gate* for the H1/H2 concurrency +
+  malleability e2e tests — it ran them against CI's own database and they hold.
+- **Local:** web suite 50/50 suites green (incl. the new VECTOR 13 + NEW-4 gate
+  tests and both not-shipped fences); backend `tsc` + `nest build` clean; the
+  implementing agent ran the signing-keys e2e **17/17 on a real Postgres** with a
+  **mutation test** confirming the six new tests fail exactly as each bug predicts.
+- **Independent board re-verification** (an adversarial agent that did *not*
+  implement the fixes): all four **RESOLVED**; it **independently recomputed the
+  B1 message key two ways** (from-scratch RFC-5869 HKDF in Python + shipped
+  WebCrypto in Node), both matching the committed value; **no new HIGH/CRITICAL**;
+  **no regression**; **scope respected**; fences `signing-not-shipped` 20/20 and
+  `e2e-v3-not-shipped` 10/10.
+
+## Per-finding closure
+
+| Finding | Status | Key closure evidence |
+|---|---|---|
+| **H1** | ✅ RESOLVED | Lock (parameter-bound, on the txn connection) first in all 3 mutating txns; reads moved in-txn; P2002 idempotent-for-active / refuses-retired; concurrency tests adversarial (supersede-vs-withdraw looped, 0 active rows survive); CI-Postgres green |
+| **H2** | ✅ RESOLVED | `validKey` single choke point feeds every comparison path; fixed-point on honest keys; genuine non-canonical siblings in the test; CI-Postgres green |
+| **NEW-4** | ✅ RESOLVED | Handler in all 3 stores; cache asymmetry correct; graceful close; `db.js` unchanged; wipe test non-vacuous (disabling handlers fails it) |
+| **B1** | ✅ RESOLVED | New message key independently recomputed two ways (match); group-13-only; test drives shipped code; `ratchet.js` unchanged; `.mjs` removed |
+
+## Trivial follow-up (non-blocking; deliberately NOT done — outside HIGH-only scope)
+
+`x3dh.test.js` retains two prose comments that name the now-removed `004a-*.mjs`
+— cosmetic breadcrumbs, no functional impact, tests pass. Left for a future docs
+pass; the HIGH-only cleanup scope forbade any "while we're here" edit.
+
+## Final verdict and what remains the owner's call
+
+**✅ APPROVED.** All four HIGH blockers are closed and independently re-verified;
+no new HIGH/CRITICAL; no regression; the entire e2e_v3/publication surface remains
+fenced/flag-off. **Priority 1 is ready to be declared complete**, pending the
+owner's acceptance and authorization to merge the Priority 1 stack (#39 → #41 →
+#42 → #43 → #44 + Cleanup #46). The deferred **MEDIUM (Cleanup PR-3)** and **LOW +
+docs (Cleanup PR-4)** items remain documented and non-blocking (before-activation
+/ follow-up), and **activation** of `e2e_v3` / `SIGNING_PUBLICATION_ENABLED`
+stays a separate future step behind its own gates. Nothing is merged; the merge
+freeze holds until the owner authorizes it.
