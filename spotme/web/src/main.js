@@ -20,8 +20,8 @@ import { el, clear, toast, avatar, actionSheet } from './lib/ui.js'
 import { compressImage, shrinkDataURL, AVATAR_EDGE, AVATAR_QUALITY } from './lib/media.js'
 import { openCrop } from './lib/crop.js'
 import { readLink } from './net.js'
-import { primeAudio, startNotifier, notifyState, enableNotify, notifyBlockedReason } from './lib/notify.js'
-import { subscribePush, isNative as isNativeShell } from './lib/push.js'
+import { primeAudio, startNotifier, notifyState, enableNotify, notifyBlockedReason, alertMessage } from './lib/notify.js'
+import { subscribePush, attachPushHandlers, isNative as isNativeShell } from './lib/push.js'
 
 import * as inbox from './views/inbox.js'
 import * as discovery from './views/discovery.js'
@@ -628,6 +628,24 @@ if (!RESETTING) {
     } else {
       offerNotifications()
     }
+
+    /* Consume what arrives. Registration only makes the phone REACHABLE; until
+     * these are attached, a push landing while the app is open displays nothing
+     * (Android hands it to the running app rather than the tray) and a tap on a
+     * tray notification opens the app on whatever screen it was last showing.
+     *
+     * Not chained to subscribePush: a token registered on a PREVIOUS launch is
+     * still live, so taps must route even when today's registration fails.
+     * `#/thread/<roomId>` is the chat itself — `#/chat` is the chat LIST, and
+     * routing there would drop the user one screen short every time.
+     *
+     * alertMessage takes an object, and it earns its keep here: it suppresses
+     * the alert when this very room is already on screen, and only raises a
+     * system notification when the app is hidden. */
+    attachPushHandlers({
+      onForeground: ({ roomId, title, body }) => alertMessage({ roomId, title, body }),
+      onOpenRoom: (roomId) => { window.location.hash = `#/thread/${roomId}` }
+    }).catch(() => {})
   })
 }
 
