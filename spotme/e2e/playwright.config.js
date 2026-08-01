@@ -74,7 +74,15 @@ export default defineConfig({
 
   webServer: [
     {
-      command: 'node ../backend/dist/main.js',
+      /* FROM THE COMPILED ARTEFACT, never `nest start`, `ts-node` or a dev
+       * server. The point of this suite is to exercise what actually ships, and
+       * a source-run would not have a BUILD_ID at all — which is why the build
+       * identity check treats 'unknown' as a failure rather than a skip.
+       *
+       * `tee` because the log-hygiene spec has to READ what the backend printed.
+       * Playwright pipes webServer output to its own reporter, where a test
+       * cannot reach it. */
+      command: 'sh -c "mkdir -p test-results && node ../backend/dist/main.js 2>&1 | tee test-results/backend.log"',
       url: `${API}/api/username?q=probe`,
       reuseExistingServer: !process.env.CI,
       timeout: 60_000,

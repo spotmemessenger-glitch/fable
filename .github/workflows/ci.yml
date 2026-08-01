@@ -210,13 +210,58 @@ jobs:
         working-directory: spotme/backend
         run: npm run build
 
-      # A build that emits nothing used to pass silently: nest-cli deletes
-      # dist/ while tsconfig's incremental build-info survived outside it, so
-      # TypeScript concluded the output was current and emitted nothing. Nothing
-      # in CI ran dist/main.js, so nobody noticed. This asserts the artefact.
-      - name: The build actually produced something
+      # THE WARM-BUILD REGRESSION, as its own step.
+      #
+      # The original bug: nest-cli deletes dist/ while tsconfig's incremental
+      # build-info survived OUTSIDE it, so TypeScript concluded the output was
+      # already current, emitted nothing, and exited 0. CI never caught it
+      # because a fresh checkout has no build-info file and nothing ran
+      # dist/main.js -- the Build step passed while building nothing.
+      #
+      # A fresh-checkout build therefore proves nothing about this. The second
+      # build, on the SAME workspace with nothing cleaned by hand, is the one
+      # that used to fail. This step stands alone so it keeps catching the
+      # regression even if the e2e suite is rewritten.
+      - name: Warm-build regression — a second build on the same workspace
         working-directory: spotme/backend
-        run: test -f dist/main.js || (echo "dist/main.js was not emitted"; exit 1)
+        run: |
+          set -euo pipefail
+          test -f dist/main.js || { echo "::error::first build emitted no dist/main.js"; exit 1; }
+          first_hash=$(sha256sum dist/main.js | cut -d' ' -f1)
+          first_id=$(cat dist/BUILD_ID)
+          echo "first build  main.js=${first_hash:0:12}… BUILD_ID=$first_id"
+
+          # Deliberately NO clean, NO rm -rf dist, NO cache reset.
+          npm run build
+
+          test -f dist/main.js || {
+            echo "::error::the SECOND build emitted nothing — the incremental/deleteOutDir bug is back"; exit 1; }
+          second_hash=$(sha256sum dist/main.js | cut -d' ' -f1)
+          second_id=$(cat dist/BUILD_ID)
+          echo "second build main.js=${second_hash:0:12}… BUILD_ID=$second_id"
+
+          # The artefact must still correspond to the CURRENT source, which is
+          # what a source-derived build id is for. Recomputed independently.
+          expected=$(node scripts/build-id.mjs)
+          [ "$second_id" = "$expected" ] || {
+            echo "::error::dist/BUILD_ID ($second_id) does not match current source ($expected)"; exit 1; }
+
+      - name: …and the twice-built artefact actually starts
+        working-directory: spotme/backend
+        env:
+          PORT: 3399
+        run: |
+          set -euo pipefail
+          node dist/main.js > /tmp/warm.log 2>&1 &
+          pid=$!
+          for i in $(seq 1 30); do
+            if curl -fsS "http://127.0.0.1:3399/api/version" > /tmp/ver.json 2>/dev/null; then break; fi
+            sleep 1
+          done
+          kill $pid 2>/dev/null || true
+          cat /tmp/ver.json
+          grep -q "$(cat dist/BUILD_ID)" /tmp/ver.json || {
+            echo "::error::the started process did not report the built BUILD_ID"; tail -20 /tmp/warm.log; exit 1; }
 
       - name: Install web
         working-directory: spotme/web
