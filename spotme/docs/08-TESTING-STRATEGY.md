@@ -181,11 +181,70 @@ Numbers from these runs — not assumptions — trigger the P2 adoptions (Redis 
 
 ---
 
-## 10. CI plan — GitHub Actions (P1 skeleton, P2 full)
+## 10. CI — GitHub Actions
 
-GitHub Actions is already the Phase 2 stack's chosen CI; the P1 skeleton starts now at `.github/workflows/ci.yml`:
+### 10.1 What actually runs today
 
-**P1 pipeline (on every push/PR):**
+`.github/workflows/ci.yml` exists and runs on every pull request and every push
+to `master`. **Both jobs must be green to merge; no step is
+`continue-on-error`, so a failure blocks rather than reports.**
+
+| Job | Steps, in order |
+|---|---|
+| **backend** | `npm ci` → `prisma db push` against a `postgres:16` **service container** → `tsc --noEmit` → `nest build` → `jest` |
+| **web** | `npm ci` → `eslint .` → `vite build` → the suite chain |
+
+Ordered cheapest-first so an obvious break fails in seconds rather than minutes.
+
+### 10.2 The same commands, locally
+
+Run these before pushing; CI runs nothing else.
+
+```bash
+# web — lint, build, test
+cd spotme/web
+npm ci
+npm run lint        # eslint . — correctness rules only, see eslint.config.mjs
+npm run build
+npm test
+
+# backend — typecheck, build, test. Needs a Postgres.
+cd spotme/backend
+npm ci
+export DATABASE_URL='postgresql://postgres@localhost:5432/spotme_test?schema=public'
+npx prisma db push --skip-generate --accept-data-loss
+npx tsc --noEmit
+npm run build
+npm test
+```
+
+**The backend suite requires a database.** Without one, every DB-backed test
+fails with `PrismaClientInitializationError` — that is a missing dependency, not
+a broken test, and it must not be mistaken for a baseline. With Postgres the
+suite is fully green.
+
+### 10.3 The lint gate
+
+`npm run lint` is **correctness-only** — no stylistic rules, so nothing it
+reports can be satisfied by reformatting. Verified to exit non-zero on a
+deliberate violation (both `no-undef` and `no-unused-vars`) and zero on a clean
+tree.
+
+**There is no type-check gate for `web`.** It is plain ESM JavaScript with JSDoc
+in a small minority of files; `tsc --allowJs --checkJs` reports over 1,600
+errors, so adopting it would require mass annotation or blanket suppression.
+The backend *is* type-checked. This asymmetry is deliberate and recorded in
+`10-PRIORITY-0-AUDIT.md` §6.
+
+### 10.4 Benchmarks — not in CI
+
+`spotme/web/test/bench/idb-bench.mjs` drives real Chromium and is run on demand,
+not per-PR. See `12-PRIORITY-1-BASELINE.md` for the commands, the baseline, and
+its measured noise floor.
+
+### 10.5 The fuller pipeline still to build
+
+**P1 skeleton → P2 full**, the original plan:
 
 | Job | Contents |
 |---|---|

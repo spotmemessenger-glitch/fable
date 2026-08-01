@@ -59,7 +59,11 @@ await checkAsync('CONTROL: v1 secret IS reproducible from two user ids alone', a
 
 await checkAsync('CONTROL: v1 needs no secret input whatsoever', async () => {
   // Anyone holding the two ids — the server certainly does — reproduces it.
-  return deriveV1SecretForContrast(ALICE, BOB) === deriveV1SecretForContrast(ALICE, BOB)
+  // Named for the two parties, because that is the claim: a client with the
+  // secret and a server with only the public ids arrive at the same value.
+  const byTheClient = deriveV1SecretForContrast(ALICE, BOB)
+  const byAnyoneWithTheIds = deriveV1SecretForContrast(ALICE, BOB)
+  return byTheClient === byAnyoneWithTheIds && byTheClient.length === 32
 })
 
 /* ========================== v2: real agreement =========================== */

@@ -107,7 +107,6 @@ globalThis.fetch = (url) => {
 
 const results = {}
 const names = []
-const check = (name, pass) => { names.push(name); results[name] = pass === true }
 const checkAsync = async (name, fn) => {
   names.push(name)
   try { results[name] = (await fn()) === true } catch (e) {

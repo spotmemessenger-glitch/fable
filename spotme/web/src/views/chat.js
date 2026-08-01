@@ -3961,14 +3961,6 @@ export function render (root, ctx, roomId) {
     showVoiceConfirm(clip)
   }
 
-  function cancelRecording () {
-    if (!recording) return
-    recording.cancel()
-    recording = null
-    endRecordingUI()
-    rooms.typing(roomId, false)
-  }
-
   const fmtClock = (secs) => {
     const s = Math.max(0, Math.round(secs || 0))
     return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
