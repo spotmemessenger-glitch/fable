@@ -70,6 +70,7 @@ Vercel integration deploys); `ybot/` is the untouched #8; `desk/`, `jarvis/`,
 | Translation (per-message + whole-chat) | ✅ | §10 |
 | Transliteration + English guard | ✅ | `translit.js`, `english.js`, tests |
 | Read aloud / dictation | 🟡 | wired 07-31; ElevenLabs-dependent |
+| **Voice-note translation in the sender's own voice** | ✅ | `views/chat.js:3997–4112` — STT → translate → cloned TTS, sends the re-voiced mp3; the asynchronous form of the roadmap's differentiator, already shipping |
 | E2EE | 🟡 by design | §7 |
 | QR verification screen | ✅ | `views/verify.js` + `lib/qr-scan.js` (#28); camera device-unproven |
 | Admin APIs | ✅ | 10 admin + 2 ingest routes (growth, user delete, crash reports, health) |
@@ -80,7 +81,7 @@ Vercel integration deploys); `ybot/` is the untouched #8; `desk/`, `jarvis/`,
 |---|---|---|---|
 | Speech-to-text (dictation) | **ElevenLabs** | `web/api/voice.js` proxy → `api.elevenlabs.io/v1`; client `lib/voice.js` | 🟡 wired; needs server-side key; bearer-gated since 07-31 |
 | Text-to-speech (read aloud) | ElevenLabs | same proxy | 🟡 |
-| Voice cloning | ElevenLabs | experimentation evidence only (stray debug file referencing `voice_id`); no product UI | 🔴 |
+| Voice cloning | ElevenLabs | **CORRECTED (V2 §10.5):** full product flow exists — `lib/voice.js` lifecycle (`cloneVoice`/`deleteClone`/cloned TTS), one-clone-per-profile enrollment UI (`views/profile.js:443–622`), quota-bucketed `clone`/`unclone` proxy ops; the first audit pass grepped the wrong terms | 🟡 implemented for voice notes; consent/audit UX and live-call use are roadmap items |
 | Text translation | unofficial Google `gtx` → MyMemory → backend `/api/translate` | `lib/translate.js` | ✅ working; ⚠️ primary endpoint is unofficial/ToS-fragile |
 | LLM / OCR / image generation / AI moderation / assistants | — | none in product code | 🔴 |
 
@@ -172,8 +173,10 @@ storage is the default provider.
 
 Notes ✅. Calls 🟡 (1:1 WebRTC with video flag, Cloudflare TURN; no ICE
 restart, no added noise suppression/echo cancellation, no group calls,
-device-unproven). ElevenLabs STT/TTS 🟡 behind the authed proxy. Voice cloning
-🔴. Voice translation 🔴.
+device-unproven). ElevenLabs STT/TTS 🟡 behind the authed proxy. **Voice
+cloning 🟡 — corrected: implemented for voice notes** (one clone per profile,
+enroll/delete lifecycle). **Voice translation 🟡 — the voice-note form ships**
+(re-voiced via the sender's clone); live-call translation 🔴.
 
 ## 10. Translation
 
@@ -295,14 +298,14 @@ usage-capped in code.
 |---|---|---|
 | 1 | User-visible features audited | ~45 — **22 ✅ · 12 🟡 · 11 🔴/❌** |
 | 2 | Backend capabilities | 14 controllers · 25 models · 1 gateway · 1 cron · 8 bridge functions |
-| 3 | AI capabilities | 3 live (STT, TTS, translation) + 1 experimental (cloning) |
+| 3 | AI capabilities | **4 live** (STT, TTS, translation, voice cloning for voice notes) — corrected per V2 §10.5 |
 | 4 | Third-party integrations | 8 active · 3 configured-but-dead · rest absent |
 | 5 | REST endpoints | **72** |
 | 6 | WebSocket events | 4 server messages / ~21 client event types |
 | 7 | Database models | **25** (10 migrations) |
 | 8 | Feature flags | **6** |
 | 9 | Implementation vs the migration plan's full scope | **~45–50%** (estimate; messaging core ~90%, crypto programme ~55% through A7 foundation, Priorities 2–12 largely 🔴) |
-| 10 | Differentiators vs WhatsApp/Signal/Telegram | verified-identity UX designed as one system (TOFU + QR + enforcement) before scale; first-class in-chat translation + transliteration; proximity-first discovery (map + BLE); a transport seam that can drop to serverless P2P; and an auditable engineering trail — ADRs, mutation-tested suites, licence-auditable lockfile — which is itself a diligence asset |
+| 10 | Differentiators vs WhatsApp/Signal/Telegram | verified-identity UX designed as one system (TOFU + QR + enforcement) before scale; first-class in-chat translation + transliteration — **including voice notes translated and re-voiced in the sender's own cloned voice, which none of the three comparators ship**; proximity-first discovery (map + BLE); a transport seam that can drop to serverless P2P; and an auditable engineering trail — ADRs, mutation-tested suites, licence-auditable lockfile — which is itself a diligence asset |
 
 ## Caveats — what was sampled, not exhaustively read
 
