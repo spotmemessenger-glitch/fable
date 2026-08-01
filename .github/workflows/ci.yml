@@ -52,8 +52,9 @@ jobs:
       # There is deliberately no JWT_REFRESH_SECRET: it does not exist. Both
       # strategies read JWT_ACCESS_SECRET, which is the finding R5 records.
       JWT_ACCESS_SECRET: ci-access-secret-not-a-real-key
-      # Points the integration suite at the MinIO service above. Absent these,
-      # s3-integration.spec.ts SKIPS LOUDLY rather than passing vacuously.
+      # Points the integration suite at the MinIO started by the step below.
+      # Absent these, s3-integration.spec.ts SKIPS LOUDLY rather than passing
+      # vacuously.
       S3_ENDPOINT: http://localhost:9000
       S3_BUCKET: spotme-itest
       S3_REGION: us-east-1

@@ -266,18 +266,14 @@ explicitly. The bucket is then created by `scripts/s3-ensure-bucket.mjs` —
 the R2 credentials the same suite runs under in stage 2 are deliberately
 least-privilege and cannot create buckets.
 
-**Why not a lighter emulator.** Measured, not assumed: `s3rver` serves
-completely unsigned requests with `200`. A green authorization test against a
-server with no authorization is a false pass, so the suite probes the endpoint
-first and prints `NOT EXERCISED` rather than passing those two assertions
-vacuously. MinIO and R2 both verify signatures.
-
-**The endpoint-capability probe, which is the subtle part.** Not every
+**Why MinIO and not a lighter emulator — the subtle part.** Not every
 S3-compatible server verifies signatures. `s3rver`, the obvious local stand-in,
 **serves completely unsigned requests with 200** — measured, not assumed. On
-such a server the authorization assertions cannot fail, so running them would
-report a green authorization test against a server that has no authorization.
-The suite probes the endpoint and prints `NOT EXERCISED` per test instead.
+such a server the two authorization assertions cannot fail, so running them
+would report a green authorization test against a server that has no
+authorization. The suite therefore probes the endpoint first and prints
+`NOT EXERCISED` per test rather than passing them vacuously. MinIO and R2 both
+verify, which is the entire reason those two are the servers used.
 
 **The suite SKIPS LOUDLY when `S3_ENDPOINT` is unset**, and the R2 workflow
 fails if any secret is missing — because a skipped suite that reports success is
