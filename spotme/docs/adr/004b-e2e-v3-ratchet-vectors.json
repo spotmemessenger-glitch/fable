@@ -1,0 +1,200 @@
+{
+  "00_inputs": {
+    "bob_ratchet_pub": "eb4ea1bbce60dcda8218109eccaaddd2fbd1d953392abe2c8fbeae4188737204",
+    "description": "Fixed inputs. The X3DH shared secret is pinned; 004a \u00a710 covers its derivation.",
+    "labels": {
+      "chain": "spotme/e2e_v3/chain",
+      "msg": "spotme/e2e_v3/msg",
+      "root": "spotme/e2e_v3/root"
+    },
+    "max_skip_per_chain": 1000,
+    "max_skipped_stored": 2000,
+    "rdev": "b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2",
+    "room_id": "dm_0123456789abcdef",
+    "sdev": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+    "shared_secret": "799c927a3aeb14af34ca0ae592bb9cd80ffb3ac81c20fc7511853219d6838229"
+  },
+  "01_session_establishment_and_first_message": {
+    "aad_hex": "73706f746d652f6532655f763303646d5f3031323334353637383961626364656600a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b22b9e4aec0d14d009ec01c18f6e2da8734770185df5a9cb898b09aaa913f74a530000000000000000",
+    "ciphertext_hex": "7dd52e085e2a2d6f1cc8e39ea34a5d5e2b46d17dcc0f0e018251ce8a99f2ee77872001cfdd5e0e799c36fee151130d540bcb485c",
+    "description": "Alice initialises from the X3DH secret and sends message 0.",
+    "header_hex": "00a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b22b9e4aec0d14d009ec01c18f6e2da8734770185df5a9cb898b09aaa913f74a530000000000000000",
+    "header_len": 73,
+    "n": 0,
+    "payload_hex": "5303004900a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b22b9e4aec0d14d009ec01c18f6e2da8734770185df5a9cb898b09aaa913f74a5300000000000000007dd52e085e2a2d6f1cc8e39ea34a5d5e2b46d17dcc0f0e018251ce8a99f2ee77872001cfdd5e0e799c36fee151130d540bcb485c",
+    "plaintext": "first message from alice",
+    "pn": 0,
+    "ratchet_pub": "2b9e4aec0d14d009ec01c18f6e2da8734770185df5a9cb898b09aaa913f74a53"
+  },
+  "02_first_message_decrypts": {
+    "description": "Bob initialises from the same secret and recovers the plaintext.",
+    "recovered": "first message from alice"
+  },
+  "03_send_chain_advancement": {
+    "description": "Three further messages on the same sending chain: n increments, ratchet_pub is constant.",
+    "invariant": "ratchet_pub identical across all; n = 1,2,3; pn constant",
+    "messages": [
+      {
+        "aad_hex": "73706f746d652f6532655f763303646d5f3031323334353637383961626364656600a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b22b9e4aec0d14d009ec01c18f6e2da8734770185df5a9cb898b09aaa913f74a530000000000000001",
+        "ciphertext_hex": "46f6112edc007f9f3b19bfffabd000a70c06e4538d068d2c07a0540a025664befbdc5c7d38a3d67dfeddb1303499",
+        "header_hex": "00a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b22b9e4aec0d14d009ec01c18f6e2da8734770185df5a9cb898b09aaa913f74a530000000000000001",
+        "header_len": 73,
+        "i": 1,
+        "n": 1,
+        "payload_hex": "5303004900a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b22b9e4aec0d14d009ec01c18f6e2da8734770185df5a9cb898b09aaa913f74a53000000000000000146f6112edc007f9f3b19bfffabd000a70c06e4538d068d2c07a0540a025664befbdc5c7d38a3d67dfeddb1303499",
+        "plaintext": "alice send-chain 1",
+        "pn": 0,
+        "ratchet_pub": "2b9e4aec0d14d009ec01c18f6e2da8734770185df5a9cb898b09aaa913f74a53"
+      },
+      {
+        "aad_hex": "73706f746d652f6532655f763303646d5f3031323334353637383961626364656600a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b22b9e4aec0d14d009ec01c18f6e2da8734770185df5a9cb898b09aaa913f74a530000000000000002",
+        "ciphertext_hex": "bab06d2df9fd07c91a90c1c58ad241af8a19beaa64be7a354a72c97379efc1b632db0a2272dbc1876c9a68a1d87e",
+        "header_hex": "00a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b22b9e4aec0d14d009ec01c18f6e2da8734770185df5a9cb898b09aaa913f74a530000000000000002",
+        "header_len": 73,
+        "i": 2,
+        "n": 2,
+        "payload_hex": "5303004900a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b22b9e4aec0d14d009ec01c18f6e2da8734770185df5a9cb898b09aaa913f74a530000000000000002bab06d2df9fd07c91a90c1c58ad241af8a19beaa64be7a354a72c97379efc1b632db0a2272dbc1876c9a68a1d87e",
+        "plaintext": "alice send-chain 2",
+        "pn": 0,
+        "ratchet_pub": "2b9e4aec0d14d009ec01c18f6e2da8734770185df5a9cb898b09aaa913f74a53"
+      },
+      {
+        "aad_hex": "73706f746d652f6532655f763303646d5f3031323334353637383961626364656600a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b22b9e4aec0d14d009ec01c18f6e2da8734770185df5a9cb898b09aaa913f74a530000000000000003",
+        "ciphertext_hex": "0cb27952852d4dfb3dd7756d9e06cdfd736773e191ef26a4d05a9b7b7cb47a06e2113e32f0fb2455ffa6b31a61c0",
+        "header_hex": "00a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b22b9e4aec0d14d009ec01c18f6e2da8734770185df5a9cb898b09aaa913f74a530000000000000003",
+        "header_len": 73,
+        "i": 3,
+        "n": 3,
+        "payload_hex": "5303004900a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b22b9e4aec0d14d009ec01c18f6e2da8734770185df5a9cb898b09aaa913f74a5300000000000000030cb27952852d4dfb3dd7756d9e06cdfd736773e191ef26a4d05a9b7b7cb47a06e2113e32f0fb2455ffa6b31a61c0",
+        "plaintext": "alice send-chain 3",
+        "pn": 0,
+        "ratchet_pub": "2b9e4aec0d14d009ec01c18f6e2da8734770185df5a9cb898b09aaa913f74a53"
+      }
+    ]
+  },
+  "04_receive_chain_advancement": {
+    "description": "Bob walks his receiving chain in order.",
+    "recovered": [
+      "alice send-chain 1",
+      "alice send-chain 2",
+      "alice send-chain 3"
+    ]
+  },
+  "05_bidirectional_ratchet_step": {
+    "aad_hex": "73706f746d652f6532655f763303646d5f3031323334353637383961626364656600a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b227614f45d6513feb378200c82539a6f93ecddb939c1586ce7a933162c7106c760000000000000000",
+    "ciphertext_hex": "a398d0e880cc5f095e238bc532b025897088d2f7f49601057e47c2d135893764a52ad955cc6b2296d16a1bf41310da393eedb4dac9184d0565b238a835",
+    "description": "Bob's first reply carries a NEW ratchet_pub and pn = his previous sending chain length.",
+    "header_hex": "00a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b227614f45d6513feb378200c82539a6f93ecddb939c1586ce7a933162c7106c760000000000000000",
+    "header_len": 73,
+    "invariant": "ratchet_pub differs from Alice's; a DH step occurs on Alice's decrypt",
+    "n": 0,
+    "payload_hex": "5303004900a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b227614f45d6513feb378200c82539a6f93ecddb939c1586ce7a933162c7106c760000000000000000a398d0e880cc5f095e238bc532b025897088d2f7f49601057e47c2d135893764a52ad955cc6b2296d16a1bf41310da393eedb4dac9184d0565b238a835",
+    "plaintext": "bob replies, stepping the ratchet",
+    "pn": 0,
+    "ratchet_pub": "27614f45d6513feb378200c82539a6f93ecddb939c1586ce7a933162c7106c76"
+  },
+  "06_out_of_order_delivery": {
+    "delivery_order": [
+      "3",
+      "1",
+      "0",
+      "2"
+    ],
+    "description": "Delivered 3,1,0,2. Every message decrypts; none is lost.",
+    "messages": [
+      {
+        "aad_hex": "73706f746d652f6532655f763303646d5f3031323334353637383961626364656600a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b24bf0f9447b6296571fba640e6a5279b17f9870c01468583df90790202e427a610000000400000000",
+        "ciphertext_hex": "1061a66f3c15424b0b3e0c1330c06f352e9ddedd5bca86694732fcdfe7df77456b8944",
+        "header_hex": "00a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b24bf0f9447b6296571fba640e6a5279b17f9870c01468583df90790202e427a610000000400000000",
+        "header_len": 73,
+        "n": 0,
+        "payload_hex": "5303004900a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b24bf0f9447b6296571fba640e6a5279b17f9870c01468583df90790202e427a6100000004000000001061a66f3c15424b0b3e0c1330c06f352e9ddedd5bca86694732fcdfe7df77456b8944",
+        "pn": 4,
+        "ratchet_pub": "4bf0f9447b6296571fba640e6a5279b17f9870c01468583df90790202e427a61"
+      },
+      {
+        "aad_hex": "73706f746d652f6532655f763303646d5f3031323334353637383961626364656600a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b24bf0f9447b6296571fba640e6a5279b17f9870c01468583df90790202e427a610000000400000001",
+        "ciphertext_hex": "87211246c6a90f70d586c7638302cfff954ebef015516f00b1c84cc1f2302a8a57f20d",
+        "header_hex": "00a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b24bf0f9447b6296571fba640e6a5279b17f9870c01468583df90790202e427a610000000400000001",
+        "header_len": 73,
+        "n": 1,
+        "payload_hex": "5303004900a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b24bf0f9447b6296571fba640e6a5279b17f9870c01468583df90790202e427a61000000040000000187211246c6a90f70d586c7638302cfff954ebef015516f00b1c84cc1f2302a8a57f20d",
+        "pn": 4,
+        "ratchet_pub": "4bf0f9447b6296571fba640e6a5279b17f9870c01468583df90790202e427a61"
+      },
+      {
+        "aad_hex": "73706f746d652f6532655f763303646d5f3031323334353637383961626364656600a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b24bf0f9447b6296571fba640e6a5279b17f9870c01468583df90790202e427a610000000400000002",
+        "ciphertext_hex": "5157dfb86b84be161a8075ab8b3a40417f0f55b5231da3a284a00dc18df440c8f8e7c8",
+        "header_hex": "00a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b24bf0f9447b6296571fba640e6a5279b17f9870c01468583df90790202e427a610000000400000002",
+        "header_len": 73,
+        "n": 2,
+        "payload_hex": "5303004900a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b24bf0f9447b6296571fba640e6a5279b17f9870c01468583df90790202e427a6100000004000000025157dfb86b84be161a8075ab8b3a40417f0f55b5231da3a284a00dc18df440c8f8e7c8",
+        "pn": 4,
+        "ratchet_pub": "4bf0f9447b6296571fba640e6a5279b17f9870c01468583df90790202e427a61"
+      },
+      {
+        "aad_hex": "73706f746d652f6532655f763303646d5f3031323334353637383961626364656600a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b24bf0f9447b6296571fba640e6a5279b17f9870c01468583df90790202e427a610000000400000003",
+        "ciphertext_hex": "bc5c0926826cd889d3df4914a079c64ecb926abc937aad7ab22d9492d1636c9ffa1ad8",
+        "header_hex": "00a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b24bf0f9447b6296571fba640e6a5279b17f9870c01468583df90790202e427a610000000400000003",
+        "header_len": 73,
+        "n": 3,
+        "payload_hex": "5303004900a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b24bf0f9447b6296571fba640e6a5279b17f9870c01468583df90790202e427a610000000400000003bc5c0926826cd889d3df4914a079c64ecb926abc937aad7ab22d9492d1636c9ffa1ad8",
+        "pn": 4,
+        "ratchet_pub": "4bf0f9447b6296571fba640e6a5279b17f9870c01468583df90790202e427a61"
+      }
+    ],
+    "recovered": [
+      "burst 3",
+      "burst 1",
+      "burst 0",
+      "burst 2"
+    ]
+  },
+  "07_skipped_message_keys": {
+    "bound": "a header claiming n beyond 1000 must be REFUSED, not honoured",
+    "description": "Receiving 3 before 0-2 stores three skipped keys, later consumed out of order.",
+    "rationale": "an unbounded n is a remote DoS: the client would derive that many keys",
+    "skipped_count_expected": 3
+  },
+  "08_duplicate_and_replay_rejection": {
+    "description": "Re-delivering an already-decrypted message is refused; its key was deleted on use.",
+    "expected": "rejected",
+    "result": "rejected: DuplicateMessageException"
+  },
+  "09_state_serialization_and_restore": {
+    "description": "Bob's session is serialised, rebuilt, and still decrypts the next message.",
+    "invariant": "restoration must preserve skipped keys and both chain counters",
+    "recovered": "after bob was restored from disk",
+    "state_keys": [
+      "diffie_hellman_ratchet",
+      "skipped_message_keys",
+      "version"
+    ]
+  },
+  "10_associated_data_mismatch": {
+    "correct_aad": "73706f746d652f6532655f763303646d5f3031323334353637383961626364656600a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b24bf0f9447b6296571fba640e6a5279b17f9870c01468583df90790202e427a610000000400000005",
+    "description": "The same ciphertext replayed into another roomId fails the GCM tag, because roomId is in the AAD.",
+    "expected": "rejected",
+    "result": "rejected: AuthenticationFailedException",
+    "wrong_aad": "73706f746d652f6532655f763303646d5f6666666666666666666666666666666600a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b24bf0f9447b6296571fba640e6a5279b17f9870c01468583df90790202e427a610000000400000005"
+  },
+  "11_tampered_ciphertext": {
+    "description": "One flipped bit in the final tag byte fails authentication.",
+    "expected": "rejected",
+    "result": "rejected: AuthenticationFailedException"
+  },
+  "12_wrong_device_or_session_routing": {
+    "description": "A message for one session cannot be opened by an unrelated session, even with a well-formed header.",
+    "expected": "rejected",
+    "note": "RDEV additionally lets a non-target device ignore it quietly rather than alarm \u2014 see 004a \u00a79",
+    "result": "rejected: AuthenticationFailedException"
+  },
+  "13_negative_subtly_wrong_advancement": {
+    "chain_key": "212787eb89214957a2a8aaa074b4555b6f71087b04b45fe4a5590f418aacbf3b",
+    "correct_message_key": "77ab6651822b4230acb5051fecbbdc449a48051a8dd564f3b4ce8bef83d62982",
+    "description": "An implementation that advances the chain one step early produces a DIFFERENT message key from the same chain key. Both look valid in isolation; only a vector distinguishes them.",
+    "must_hold": "an implementation matching off_by_one_message_key is WRONG and this vector fails it",
+    "off_by_one_message_key": "1689b393e2f6e46310e198f4209dfa8faea197508b9f34eb3a3a571d88b7a3fd",
+    "why": "this is the failure this whole package exists for: it is invisible to a self-test, invisible in review, and produces a transcript the peer cannot read"
+  }
+}

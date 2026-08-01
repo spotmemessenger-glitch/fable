@@ -137,6 +137,107 @@ ADR-004 verified Ed25519 generates natively in WebCrypto, so no polyfill.
 Crossing them loses messages permanently and the UI must say so, using the
 existing undecryptable surface rather than failing silently.
 
+**Eviction order is FIFO — oldest skipped key first — and that is Spot Me's
+decision, not an inherited one.** The reference implementation selected in
+`004c` also evicts FIFO, but an implementation choosing LRU would diverge while
+both looked correct, so it is stated here rather than discovered.
+
+### 5a. Prekey-message representation
+
+The X3DH prologue (`FLAGS` bit 0) is carried on **every message until the
+sender has decrypted one from the recipient** — not only on the very first.
+
+The reason is delivery, not cryptography. A prologue-bearing message may be
+lost, delayed behind a push wake-up, or refused by a full mailbox; if only
+message 0 carried it, the recipient would receive messages 1..n with no way to
+establish the session and no way to ask for one. Repeating it costs 72 bytes per
+message for the short window before the first reply.
+
+The recipient treats a repeated prologue as **idempotent**: the first one
+establishes the session, later ones with the same `EK` and `OPKID` are matched
+to the existing session rather than establishing a second. A prologue with a
+*different* `EK` is a new session — that is a legitimate re-initiation after the
+peer lost state, and it resets the ratchet rather than failing.
+
+**One-time prekey consumption is atomic and single-use.** The server deletes the
+`OneTimePreKey` row in the same transaction that serves the bundle; two fetchers
+never receive the same `OPKID`. When the pool is exhausted the bundle is served
+without one and `OPKID = 0xFFFFFFFF`, which is weaker but functional — and the
+sentinel makes the degradation visible rather than silent.
+
+### 5b. Replay and duplicate handling
+
+Three distinct cases, deliberately separated because they warrant different
+answers:
+
+| Case | Detection | Response |
+|---|---|---|
+| **Duplicate within a live chain** | `N` is below the receiving chain counter and no skipped key is stored for it | Drop silently. The key was deleted on first use, so it *cannot* decrypt — this is the ratchet's own replay defence |
+| **Replay of a message whose skipped key is still held** | Skipped key exists for `(DH, N)` | Decrypt **once**, then delete the key. A second delivery hits the case above |
+| **Replay into a different room** | AAD mismatch | GCM tag failure (§6) |
+
+**Message keys are deleted on use, so replay protection is a property of the
+ratchet rather than a table we maintain.** There is deliberately no separate
+seen-message-id set: it would be unbounded, and it would duplicate a guarantee
+the construction already gives.
+
+A duplicate must **not** advance the replay cursor differently from a first
+delivery, and must not surface to the user. Vector 08 in `004b` pins the
+rejection.
+
+### 5c. Canonical serialization rules
+
+Every multi-byte value in the header and AAD is **big-endian**. This is stated
+because it is exactly the kind of detail that two implementations get differently
+and neither notices until they interoperate.
+
+- Integers: unsigned, big-endian, fixed width as declared in §2 (`u8`, `u16`, `u32`)
+- Public keys: **raw** X25519, 32 bytes — never SPKI, never PEM, never base64
+  inside the header
+- `roomId` in the AAD: UTF-8 bytes of the id exactly as the client holds it, with
+  no normalisation, no trimming and no case folding. It is an opaque identifier;
+  normalising it would make two clients disagree about the AAD for ids that
+  differ only in form
+- No padding anywhere, and **no length prefix except `HDRLEN`**. Every other
+  field is fixed width, so the header parses by offset
+- Reserved `FLAGS` bits **must** be zero on send and are **refused** on receive
+  (§7), so the encoding cannot be extended silently
+- The payload is base64 **text** on the wire, matching v1/v2 — binary
+  `Uint8Array` frames split socket.io packets and break the decoder, which is a
+  bug this codebase has already paid for once
+
+**Session state persisted to IndexedDB is not part of the wire format** and has
+no canonical form: it is local, versioned by the app, and may change without a
+protocol version bump. Vector 09 in `004b` pins that a round-trip preserves
+skipped keys and both chain counters, which is the property that actually
+matters.
+
+### 5d. Legacy conversation migration
+
+**There is none, and that is the design.**
+
+`e2eVersion` is decided at room creation and never changes (§7). An `e2e_v1` or
+`e2e_v2` room stays on its scheme for its whole life. Concretely:
+
+- **No re-encryption of history.** v2 history is readable only with the v2 room
+  key; re-encrypting it under a v3 session would require decrypting it all,
+  holding it in memory, and rewriting every `RoomEvent` — with no forward-secrecy
+  benefit, because the old ciphertext the server already holds does not go away.
+- **No in-place upgrade of an existing room.** A room that changed version
+  mid-life would have a history in two schemes and a cursor that cannot express
+  the boundary.
+- **The upgrade path is a new conversation.** Two peers who both support v3 get
+  v3 on their *next* room. The existing one keeps working.
+- **v1's known weakness is not fixed by v3** and is not meant to be: `e2e_v1`
+  keys derive from `cyrb53` of two public ids and are server-recomputable (R3 in
+  `10-PRIORITY-0-AUDIT.md`). Migrating those rooms would destroy their history,
+  which is why R3 is *accepted* rather than open.
+
+**What must be verified before v3 ships** is therefore not a migration but an
+absence of one: that adding v3 changes nothing about how v1 and v2 rooms behave.
+Compatibility tests 1 and 2 in §11 exist for exactly that, and they must run
+against real v1 and v2 rooms rather than synthetic ones.
+
 ## 6. AAD — what the ciphertext is bound to
 
 ```
