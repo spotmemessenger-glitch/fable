@@ -52,6 +52,15 @@ jobs:
       # There is deliberately no JWT_REFRESH_SECRET: it does not exist. Both
       # strategies read JWT_ACCESS_SECRET, which is the finding R5 records.
       JWT_ACCESS_SECRET: ci-access-secret-not-a-real-key
+      # Points the integration suite at the MinIO started by the step below.
+      # Absent these, s3-integration.spec.ts SKIPS LOUDLY rather than passing
+      # vacuously.
+      S3_ENDPOINT: http://localhost:9000
+      S3_BUCKET: spotme-itest
+      S3_REGION: us-east-1
+      S3_ACCESS_KEY_ID: spotmeci
+      S3_SECRET_ACCESS_KEY: spotmeci-not-a-real-secret
+      S3_FORCE_PATH_STYLE: 'true'
 
     defaults:
       run:
@@ -68,6 +77,42 @@ jobs:
 
       - run: npm ci
 
+      # MINIO AS A STEP, NOT A SERVICE. The official image needs `server /data`
+      # as its command, and Actions service containers cannot specify one —
+      # `bitnami/minio:latest`, which can, no longer exists ("manifest unknown").
+      # A step also lets readiness be waited for explicitly rather than trusted
+      # to a health-check guess.
+      #
+      # WHY MINIO AND NOT A LIGHTER EMULATOR: it VERIFIES SIGNATURES. Measured —
+      # `s3rver` serves completely unsigned requests with 200, so a green
+      # authorization test against it proves nothing. Credentials here are this
+      # container's own, created fresh per run and destroyed with it.
+      #
+      # PINNED BY DIGEST, NOT BY TAG. `bitnami/minio:latest` disappearing under
+      # us is exactly why: CI infrastructure must not change when an upstream
+      # tag moves. This digest is the image the run that established this job
+      # green actually pulled, confirmed against the registry. To upgrade,
+      # resolve a new digest deliberately and let CI prove it:
+      #   docker buildx imagetools inspect minio/minio:latest
+      - name: Start MinIO
+        run: |
+          docker run -d --name minio \
+            -p 9000:9000 \
+            -e MINIO_ROOT_USER=spotmeci \
+            -e MINIO_ROOT_PASSWORD=spotmeci-not-a-real-secret \
+            minio/minio@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e \
+            server /data
+          for i in $(seq 1 30); do
+            if curl -fsS http://localhost:9000/minio/health/live >/dev/null 2>&1; then
+              echo "MinIO ready after ${i}s"; exit 0
+            fi
+            sleep 1
+          done
+          echo "::error::MinIO did not become ready"; docker logs minio; exit 1
+
+      - name: Create the test bucket
+        run: node scripts/s3-ensure-bucket.mjs
+
       - name: Apply the Prisma schema
         run: npx prisma db push --skip-generate --accept-data-loss
 
@@ -80,6 +125,15 @@ jobs:
 
       - name: Test
         run: npm test
+
+      # `if: always()` so a FAILING suite — the case most likely to have skipped
+      # its own afterAll — is still checked. Nothing is at stake in the MinIO
+      # container itself; what this protects is the R2 staging bucket, by
+      # proving the cleanup path still works on every pull request instead of
+      # only during a rare manual run against a real bucket.
+      - name: Confirm the suite cleaned up after itself
+        if: always()
+        run: node scripts/s3-verify-clean.mjs
 
   web:
     name: web — tests and build

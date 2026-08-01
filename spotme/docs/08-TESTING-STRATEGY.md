@@ -236,13 +236,77 @@ errors, so adopting it would require mass annotation or blanket suppression.
 The backend *is* type-checked. This asymmetry is deliberate and recorded in
 `10-PRIORITY-0-AUDIT.md` §6.
 
-### 10.4 Benchmarks — not in CI
+### 10.4 Storage integration — two stages, on purpose
+
+`test/s3-integration.spec.ts` drives `S3StorageAdapter` against a **real
+S3-protocol server, moving real bytes**. `storage.spec.ts` exercises the same
+adapter against a mocked SDK, which proves it issues the right commands and
+proves nothing about a server accepting them.
+
+| Stage | Where | Runs |
+|---|---|---|
+| **1 — MinIO** | `ci.yml`, started as a job step | Every PR, automatically, no external credentials |
+| **2 — Cloudflare R2** | `r2-smoke.yml` | **Manually only**, gated on the `r2-staging` environment |
+
+**Why both.** MinIO proves the protocol against a server that verifies
+signatures. It does not prove *Cloudflare R2* accepts the same requests — R2 has
+its own behaviour around path-style addressing, presigned query parameters and
+error bodies, and "works against an S3-compatible server" is not the same claim
+as "works against the provider we ship on".
+
+**Why not R2 on every PR.** It needs real credentials against a real bucket, and
+running that from an untrusted pull request would expose them to anyone who can
+open one.
+
+**Why MinIO is a step rather than a service container.** The official
+`minio/minio` image needs `server /data` as its command, and Actions service
+containers cannot specify one. A step also lets readiness be waited for
+explicitly. The bucket is then created by `scripts/s3-ensure-bucket.mjs` —
+`S3StorageAdapter` has no bucket-creation path and should not grow one, because
+the R2 credentials the same suite runs under in stage 2 are deliberately
+least-privilege and cannot create buckets.
+
+**Why MinIO and not a lighter emulator — the subtle part.** Not every
+S3-compatible server verifies signatures. `s3rver`, the obvious local stand-in,
+**serves completely unsigned requests with 200** — measured, not assumed. On
+such a server the two authorization assertions cannot fail, so running them
+would report a green authorization test against a server that has no
+authorization. The suite therefore probes the endpoint first and prints
+`NOT EXERCISED` per test rather than passing them vacuously. MinIO and R2 both
+verify, which is the entire reason those two are the servers used.
+
+**The suite SKIPS LOUDLY when `S3_ENDPOINT` is unset**, and the R2 workflow
+fails if any secret is missing — because a skipped suite that reports success is
+evidence for a run that never happened.
+
+Credentials for stage 2 must be newly rotated, least-privilege, scoped to one
+isolated non-production bucket, and stored **only** as GitHub Actions secrets —
+never in the repository, in chat, in code, in logs, in PR text or in
+documentation. The suite uses a run-unique prefix and deletes what it created;
+`scripts/s3-verify-clean.mjs` runs afterwards and fails if anything was left.
+
+**Cleanup is verified in both stages, with `if: always()`.** The same script runs
+in CI against MinIO, where nothing is at stake — the container is discarded
+seconds later. It runs there so the `afterAll` path is exercised on every pull
+request, rather than being trusted until a rare manual R2 run discovers it broke,
+which is both the worst place to find out and the place where it has already
+leaked. `always()` matters because a failing suite is the case most likely to
+have skipped its own cleanup.
+
+**The MinIO image is pinned by digest, not by tag.** `bitnami/minio:latest`
+vanishing mid-project is why: CI infrastructure must not change because an
+upstream tag moved. Upgrading it is a deliberate edit that CI then re-proves.
+
+**This validates the existing storage seam. It is not authorization to begin the
+Priority 2 media migration.**
+
+### 10.5 Benchmarks — not in CI
 
 `spotme/web/test/bench/idb-bench.mjs` drives real Chromium and is run on demand,
 not per-PR. See `12-PRIORITY-1-BASELINE.md` for the commands, the baseline, and
 its measured noise floor.
 
-### 10.5 The fuller pipeline still to build
+### 10.6 The fuller pipeline still to build
 
 **P1 skeleton → P2 full**, the original plan:
 

@@ -29,10 +29,14 @@ import {
  * media-heavy messenger is the line item that ends the project. The SDK is the
  * same, so this class covers both — set S3_ENDPOINT to the R2 endpoint.
  *
- * UNVERIFIED AGAINST A REAL BUCKET. No R2 account exists for this project yet,
- * so this adapter has been exercised against a mocked SDK only. It is wired,
- * selectable and tested for shape, and it has never moved a byte. Treat the
- * first real upload as the actual test, exactly as ADR-002 treats Centrifugo.
+ * VERIFIED AGAINST MINIO, NOT YET AGAINST R2. `test/s3-integration.spec.ts`
+ * drives this class against a real MinIO in CI — real bytes, real presigned
+ * URLs, real signature verification. What that does NOT prove is Cloudflare R2
+ * specifically: no R2 account exists for this project yet, and R2 has its own
+ * quirks around path-style addressing, presigned query parameters and error
+ * bodies. The manually-triggered `r2-smoke` workflow runs the same suite
+ * against a real bucket when credentials exist; until it has, treat the first
+ * real R2 upload as the actual test, exactly as ADR-002 treats Centrifugo.
  */
 @Injectable()
 export class S3StorageAdapter implements IStorageAdapter {
