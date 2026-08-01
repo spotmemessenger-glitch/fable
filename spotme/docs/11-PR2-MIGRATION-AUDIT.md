@@ -119,15 +119,29 @@ Recorded from PR #2's own "NOT PROVEN" section plus this audit:
       asserted without a baseline
 - [ ] **No physical-handset run of the media path** — PR #2's own open item
 
-## Open question for the owner
+## DECISION (owner, 2026-08-01): split into three replacement PRs
 
-The rebase is mechanical except for `rooms.gateway.ts`. Two ways to run it:
+PR #2 is **not** rebased and **not** merged as a whole. This document is the
+permanent decision record for that call.
 
-- **Rebase the whole branch** — one PR, all four phases, ~5.6k lines to review.
-- **Split by phase** — transport seam (Phase 2), media/IndexedDB (Phase 3),
-  storage seam (Phase 4+5) as three sequential PRs off current master. More
-  process, far smaller review surface, and each phase independently revertable.
+Three focused branches are cut from `master` *after* PR #14 merged, each
+carrying only work this audit classified as still necessary:
 
-Given Priorities 2 and 3 both depend on this and neither has started, **the
-split is the safer shape** — but it is a larger amount of my time, so it is the
-owner's call.
+| Replacement | Carries forward from PR #2 |
+|---|---|
+| **A — transport seam** | `rooms-auth.service.ts`, `realtime/` module + controller, `web/src/lib/transport/*`, ADR-002, `transport.test.js`, `transport-seam.test.js`, `rooms-auth.service.spec.ts` |
+| **B — media in IndexedDB** | `blobstore.js`, `store.js` quota work, `media.js` cap change, `blobstore.test.js`, `media-leakage.test.js` |
+| **C — storage seam + client→bucket** | `backend/src/storage/*`, `media-transfer.js`, view-once download guard, `storage.spec.ts`, `storage-purge.spec.ts`, `view-once-download.spec.ts`, `media-transfer.test.js`, `send-retry.test.js` |
+
+**Explicitly NOT carried forward**, per the owner's instruction that nothing is
+preserved merely because it existed in PR #2:
+
+- `.handoff/NEXT-SESSION.md` — superseded by master's
+- `backend/package-lock.json` — regenerated, never hand-carried
+- PR #2's version of `rooms.gateway.ts` — master's `onJoin` (DM gate, `Logger`,
+  `peerId`) is authoritative; only the `policy()`/`refuse()` extraction moves,
+  and it is re-derived against current master rather than replayed
+
+PR #2 is closed only once all three replacements are open and this mapping is
+published. Rules for each: independently testable, reviewable, deployable and
+reversible; linked back to PR #2 and to this audit.
