@@ -172,6 +172,12 @@ export function emptyRecord (peerId) {
     verifiedAt: null,
     changedAt: null,
     revocation: null,
+    /* THE OTHER AXIS. Whether the SERVER will carry traffic for this peer —
+     * written only by identity-availability.js, which structurally cannot
+     * touch anything above it. A server assertion may block a conversation; it
+     * may never retire an identity, because that would make a re-pin something
+     * the server can trigger. See ADR-005 and identity-availability.js. */
+    availability: null,
     updatedAt: null,
     history: [],
   }
