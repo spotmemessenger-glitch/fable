@@ -31,6 +31,9 @@ const TEST = join(ROOT, 'test')
 const V3 = [
   'src/lib/crypto/x3dh.js',
   'src/lib/crypto/ratchet.js',
+  // Multi-device safety numbers (Phase 5). Gated on the owner ratifying the
+  // ADR-008 §BLOCKING construction; unreachable until then, same as the rest.
+  'src/lib/crypto/device-set.js',
 ]
 
 function walk (dir, out = []) {
@@ -53,8 +56,8 @@ const testFiles = walk(TEST).map((f) => ({ path: relative(ROOT, f), body: readFi
 
   const appFiles = srcFiles.filter((f) => !V3.includes(f.path))
   const importers = appFiles.filter((f) =>
-    /from\s+['"][^'"]*\/(x3dh|ratchet)\.js['"]/.test(f.body) ||
-    /import\s*\(\s*['"][^'"]*\/(x3dh|ratchet)\.js['"]/.test(f.body))
+    /from\s+['"][^'"]*\/(x3dh|ratchet|device-set)\.js['"]/.test(f.body) ||
+    /import\s*\(\s*['"][^'"]*\/(x3dh|ratchet|device-set)\.js['"]/.test(f.body))
 
   check(`NOT WIRED IN: none of the ${appFiles.length} other app modules import the e2e_v3 crypto`,
     importers.length === 0)

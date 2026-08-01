@@ -70,7 +70,7 @@ const testFiles = walk(TEST).map((f) => ({ path: relative(ROOT, f), body: readFi
    * unreachable from the product, proven by `e2e-v3-not-shipped.test.js`. So
    * they are excluded from this fence's app scan: the two fences compose, and
    * one fenced module using another is not a leak into shipped code. */
-  const OTHER_FENCED = ['src/lib/crypto/x3dh.js', 'src/lib/crypto/ratchet.js']
+  const OTHER_FENCED = ['src/lib/crypto/x3dh.js', 'src/lib/crypto/ratchet.js', 'src/lib/crypto/device-set.js']
   const appFiles = srcFiles.filter((f) => !A7.includes(f.path) && !OTHER_FENCED.includes(f.path))
   const importers = appFiles.filter((f) =>
     /from\s+['"][^'"]*(signing-identity|identity-binding)\.js['"]/.test(f.body) ||
