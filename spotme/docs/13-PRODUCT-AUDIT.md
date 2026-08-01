@@ -70,7 +70,7 @@ Vercel integration deploys); `ybot/` is the untouched #8; `desk/`, `jarvis/`,
 | Translation (per-message + whole-chat) | ✅ | §10 |
 | Transliteration + English guard | ✅ | `translit.js`, `english.js`, tests |
 | Read aloud / dictation | 🟡 | wired 07-31; ElevenLabs-dependent |
-| **Voice-note translation in the sender's own voice** | ✅ | `views/chat.js:3997–4112` — STT → translate → cloned TTS, sends the re-voiced mp3; the asynchronous form of the roadmap's differentiator, already shipping |
+| **Voice-note translation in the sender's own voice** | ✅ | `views/chat.js:3997–4112` — STT → translate → cloned TTS, sends the re-voiced mp3; the asynchronous form of the roadmap's differentiator, already shipping. **This is the foundation for V2 §6's live voice translation:** the live architecture streams the same three stages this pipeline already runs in batch, with the same cloned-voice preservation |
 | E2EE | 🟡 by design | §7 |
 | QR verification screen | ✅ | `views/verify.js` + `lib/qr-scan.js` (#28); camera device-unproven |
 | Admin APIs | ✅ | 10 admin + 2 ingest routes (growth, user delete, crash reports, health) |
@@ -184,7 +184,12 @@ restart, no added noise suppression/echo cancellation, no group calls,
 device-unproven). ElevenLabs STT/TTS 🟡 behind the authed proxy. **Voice
 cloning 🟡 — corrected: implemented for voice notes** (one clone per profile,
 enroll/delete lifecycle). **Voice translation 🟡 — the voice-note form ships**
-(re-voiced via the sender's clone); live-call translation 🔴.
+(re-voiced via the sender's clone); live-call translation 🔴. Positioning
+(owner, 2026-08-01): the shipped voice-note pipeline — STT → translate →
+cloned TTS — **is the foundation the future live voice translation builds
+on**; the live form re-architects the same stages as streaming with
+interruption handling, captions, and provider failover (V2 §6), rather than
+starting from nothing.
 
 ## 10. Translation
 
