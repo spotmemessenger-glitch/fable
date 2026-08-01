@@ -245,7 +245,7 @@ proves nothing about a server accepting them.
 
 | Stage | Where | Runs |
 |---|---|---|
-| **1 — MinIO** | `ci.yml`, service container | Every PR, automatically, no external credentials |
+| **1 — MinIO** | `ci.yml`, started as a job step | Every PR, automatically, no external credentials |
 | **2 — Cloudflare R2** | `r2-smoke.yml` | **Manually only**, gated on the `r2-staging` environment |
 
 **Why both.** MinIO proves the protocol against a server that verifies
@@ -257,6 +257,20 @@ as "works against the provider we ship on".
 **Why not R2 on every PR.** It needs real credentials against a real bucket, and
 running that from an untrusted pull request would expose them to anyone who can
 open one.
+
+**Why MinIO is a step rather than a service container.** The official
+`minio/minio` image needs `server /data` as its command, and Actions service
+containers cannot specify one. A step also lets readiness be waited for
+explicitly. The bucket is then created by `scripts/s3-ensure-bucket.mjs` —
+`S3StorageAdapter` has no bucket-creation path and should not grow one, because
+the R2 credentials the same suite runs under in stage 2 are deliberately
+least-privilege and cannot create buckets.
+
+**Why not a lighter emulator.** Measured, not assumed: `s3rver` serves
+completely unsigned requests with `200`. A green authorization test against a
+server with no authorization is a false pass, so the suite probes the endpoint
+first and prints `NOT EXERCISED` rather than passing those two assertions
+vacuously. MinIO and R2 both verify signatures.
 
 **The endpoint-capability probe, which is the subtle part.** Not every
 S3-compatible server verifies signatures. `s3rver`, the obvious local stand-in,

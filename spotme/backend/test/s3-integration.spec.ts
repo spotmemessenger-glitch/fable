@@ -15,11 +15,12 @@ import { buildObjectKey } from '../src/storage/storage.interface';
  *
  * It moves bytes now.
  *
- * WHERE IT RUNS. Against whatever `S3_ENDPOINT` points at. CI provides MinIO as
- * a service container, with no external credentials and nothing to provision.
- * The same suite runs unchanged against a real Cloudflare R2 bucket in the
- * manually-triggered staging workflow — that is the point of testing the
- * protocol rather than the vendor.
+ * WHERE IT RUNS. Against whatever `S3_ENDPOINT` points at. CI starts MinIO as a
+ * step — not a service container, which cannot pass the `server /data` command
+ * the official image needs — with no external credentials and nothing to
+ * provision beyond `scripts/s3-ensure-bucket.mjs`. The same suite runs unchanged
+ * against a real Cloudflare R2 bucket in the manually-triggered staging
+ * workflow; that is the point of testing the protocol rather than the vendor.
  *
  * SKIPPED, LOUDLY, when no endpoint is configured. A suite that silently passes
  * when it did not run is worse than one that is absent, because it appears in
@@ -34,7 +35,7 @@ if (!ENDPOINT) {
   console.warn(
     '\n  s3-integration.spec: SKIPPED — S3_ENDPOINT is not set.\n' +
     '  This suite proves the adapter moves real bytes; skipping it proves nothing.\n' +
-    '  CI sets it to the MinIO service container.\n',
+    '  CI sets it to the MinIO instance started by the backend job.\n',
   );
 }
 

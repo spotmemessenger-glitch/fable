@@ -42,25 +42,6 @@ jobs:
           --health-timeout 5s
           --health-retries 5
 
-      # MinIO, so S3StorageAdapter is tested against a server that ACTUALLY
-      # VERIFIES SIGNATURES. Measured: `s3rver`, the obvious local stand-in,
-      # serves completely unsigned requests with 200 — an emulator like that
-      # cannot prove authorization, and a green authorization test against one
-      # is worse than no test. No external credentials: the root user below is
-      # this container's, created fresh per run and thrown away with it.
-      minio:
-        image: bitnami/minio:latest
-        env:
-          MINIO_ROOT_USER: spotmeci
-          MINIO_ROOT_PASSWORD: spotmeci-not-a-real-secret
-          MINIO_DEFAULT_BUCKETS: spotme-itest
-        ports: ['9000:9000']
-        options: >-
-          --health-cmd "mc ready local"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 10
-
     env:
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/spotme_test?schema=public
       # Not a secret and not read from the repository's real ones. No test
@@ -94,6 +75,34 @@ jobs:
           cache-dependency-path: spotme/backend/package-lock.json
 
       - run: npm ci
+
+      # MINIO AS A STEP, NOT A SERVICE. The official image needs `server /data`
+      # as its command, and Actions service containers cannot specify one —
+      # `bitnami/minio:latest`, which can, no longer exists ("manifest unknown").
+      # A step also lets readiness be waited for explicitly rather than trusted
+      # to a health-check guess.
+      #
+      # WHY MINIO AND NOT A LIGHTER EMULATOR: it VERIFIES SIGNATURES. Measured —
+      # `s3rver` serves completely unsigned requests with 200, so a green
+      # authorization test against it proves nothing. Credentials here are this
+      # container's own, created fresh per run and destroyed with it.
+      - name: Start MinIO
+        run: |
+          docker run -d --name minio \
+            -p 9000:9000 \
+            -e MINIO_ROOT_USER=spotmeci \
+            -e MINIO_ROOT_PASSWORD=spotmeci-not-a-real-secret \
+            minio/minio:latest server /data
+          for i in $(seq 1 30); do
+            if curl -fsS http://localhost:9000/minio/health/live >/dev/null 2>&1; then
+              echo "MinIO ready after ${i}s"; exit 0
+            fi
+            sleep 1
+          done
+          echo "::error::MinIO did not become ready"; docker logs minio; exit 1
+
+      - name: Create the test bucket
+        run: node scripts/s3-ensure-bucket.mjs
 
       - name: Apply the Prisma schema
         run: npx prisma db push --skip-generate --accept-data-loss
