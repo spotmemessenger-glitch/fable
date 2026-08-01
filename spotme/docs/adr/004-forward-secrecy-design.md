@@ -233,3 +233,42 @@ revisited on its own terms for groups.
 **Awaiting approval on two questions:** (1) accept owning a ratchet
 implementation, or defer forward secrecy and close Priority 1 at ADR-003?
 (2) if accepted, is the additive `e2e_v3` migration shape agreed?
+
+---
+
+## Implementation status — Phase 3 (X3DH) · 2026-08-01
+
+**IMPLEMENTED, behind the `spotme.e2e3` flag (absent by default), NOT wired in.**
+This is the asynchronous handshake only; the Double Ratchet it seeds is Phase 4.
+
+- **Client** `web/src/lib/crypto/x3dh.js` (PURE): the four DH in Signal order
+  (DH1=IK_A·SPK_B, DH2=EK_A·IK_B, DH3=EK_A·SPK_B, DH4=EK_A·OPK_B), the HKDF
+  root (`salt=0^32`, `info="spotme/e2e_v3/root"`), initiator and responder
+  paths that provably converge, and signed-prekey verification against the
+  peer's published signing key (#39). **Validated byte-for-byte against the
+  reproducible 004a vectors** (`test/x3dh.test.js`, 13/13) — the DH outputs,
+  the 128-byte shared secret, and the root key all match the spec's printed
+  hex, not the implementation's own output.
+- **Backend** `SignedPreKey` + `OneTimePreKey` tables (additive migration;
+  no message-path change), and `/v2/auth/prekeys` — publish/refill (principal-
+  keyed, key-shapes validated), OPK-pool count, and **atomic single-use
+  bundle fetch**. The OPK row is deleted in the same transaction that serves
+  it, proven under real concurrency (`test/prekeys.e2e-spec.ts`, 8/8,
+  including a ten-way race with zero collisions). Exhaustion serves a bundle
+  with `opk: null` (OPKID sentinel on the wire), never an error or a reuse.
+  The server carries `sig` opaquely and **never verifies it** — the fetcher
+  checks it against the peer's signing key, because the server is the
+  adversary.
+- **Benchmarks** (`test/bench/x3dh.bench.mjs`, WebCrypto X25519): initiator
+  4-DH+HKDF ~0.60 ms median / p99 1.42 ms; no-OPK ~0.51 ms; responder ~0.68 ms.
+  Real-device bundle-fetch round trip + IndexedDB read land in the Phase 6
+  hardware pass.
+- **Fence**: `test/e2e-v3-not-shipped.test.js` fails the build if any app
+  module imports the e2e_v3 crypto or reads the rollout flag; the signing
+  fence excludes the e2e_v3 foundation with rationale (one fenced module may
+  consume another). Enforcement flag stays OFF.
+
+**Still design-only:** the Double Ratchet (Phase 4, against the 004b vectors),
+session persistence to IndexedDB, the v3 envelope on the wire, and version
+negotiation in `reach.js`/`socket-transport.js`. §13's Q5 ("build the ratchet
+or defer") is resolved by the owner's Priority 1 mandate: build it.

@@ -64,7 +64,14 @@ const testFiles = walk(TEST).map((f) => ({ path: relative(ROOT, f), body: readFi
   check('the two A7 modules are actually present, so section 1 is not vacuous',
     A7.every((p) => srcFiles.some((f) => f.path === p)))
 
-  const appFiles = srcFiles.filter((f) => !A7.includes(f.path))
+  /* Other FENCED crypto foundation is not "the app". The e2e_v3 modules
+   * legitimately consume the signing foundation — X3DH verifies a fetched
+   * signed-prekey against the peer's signing key — and they are themselves
+   * unreachable from the product, proven by `e2e-v3-not-shipped.test.js`. So
+   * they are excluded from this fence's app scan: the two fences compose, and
+   * one fenced module using another is not a leak into shipped code. */
+  const OTHER_FENCED = ['src/lib/crypto/x3dh.js', 'src/lib/crypto/ratchet.js']
+  const appFiles = srcFiles.filter((f) => !A7.includes(f.path) && !OTHER_FENCED.includes(f.path))
   const importers = appFiles.filter((f) =>
     /from\s+['"][^'"]*(signing-identity|identity-binding)\.js['"]/.test(f.body) ||
     /import\s*\(\s*['"][^'"]*(signing-identity|identity-binding)\.js['"]/.test(f.body))

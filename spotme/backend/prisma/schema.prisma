@@ -130,6 +130,8 @@ model User {
   stories          Story[]
   storyViews       StoryView[]
   signingKeys      SigningKey[]
+  signedPreKeys    SignedPreKey[]
+  oneTimePreKeys   OneTimePreKey[]
 
   @@index([city])
   @@index([createdAt])
@@ -589,4 +591,49 @@ model SigningKey {
 
   @@unique([userId, publicKeyB64])
   @@index([userId, status])
+}
+
+// X3DH prekey infrastructure (ADR-004 §8, e2e_v3). Additive and independent of
+// the message path — no existing table changes. A bundle is what a peer fetches
+// to open a session WITHOUT the recipient online: the signed prekey proves the
+// bundle came from the identity (Ed25519 over IK||SPK, verified before any DH),
+// and the one-time prekeys give the FIRST message forward secrecy.
+//
+// The identity key itself is NOT stored here — it is the published signing key
+// (SigningKey) plus the X25519 agreement key (User.publicKey). This table holds
+// only the rotating prekeys that hang off that identity.
+model SignedPreKey {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  deviceId     String   // 16-byte device id, hex — which device published this
+  keyId        Int      // client-assigned, monotonic per device; names the SPK in a header (SPKID)
+  pub          String   // raw X25519 public key, base64
+  sig          String   // Ed25519 signature over (IK || SPK), base64 — verified by the fetcher
+  createdAt    DateTime @default(now())
+  // Exactly one active SPK per (user, device): rotation replaces, it does not
+  // accumulate. Kept (not deleted) so in-flight initial messages naming an old
+  // SPKID can still resolve until they expire.
+  retiredAt    DateTime?
+
+  @@unique([userId, deviceId, keyId])
+  @@index([userId, deviceId])
+}
+
+// One-time prekeys — consumed ATOMICALLY and single-use. The server deletes the
+// row in the same transaction that serves the bundle, so two fetchers never get
+// the same OPKID. Exhaustion is not an error: the bundle is served without one
+// (OPKID = 0xFFFFFFFF on the wire), weaker but functional, and the sentinel
+// makes the degradation visible rather than silent.
+model OneTimePreKey {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  deviceId  String
+  keyId     Int      // names the OPK in a header (OPKID)
+  pub       String   // raw X25519 public key, base64
+  createdAt DateTime @default(now())
+
+  @@unique([userId, deviceId, keyId])
+  @@index([userId, deviceId])
 }
