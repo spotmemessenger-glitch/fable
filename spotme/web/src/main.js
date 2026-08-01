@@ -441,7 +441,20 @@ async function maybeFreshStart () {
     } catch { /* offline — the name stays claimed, nothing else breaks */ }
   }
 
-  try { wipeDevice() } catch { /* private mode — nothing to clear */ }
+  /* AWAITED, and its answer acted on. Two things were wrong with firing this
+   * and reloading: the IndexedDB deletes had not finished when the page went
+   * away, and a wipe that FAILED — most realistically because another tab still
+   * holds a database open, which makes deleteDatabase block and silently do
+   * nothing — reloaded into a screen that claimed the device was clean while
+   * the data was still on disk. Telling someone their data is gone when it is
+   * not is the one outcome this button must never produce. */
+  let wiped = { ok: false, failures: ['unknown'] }
+  try { wiped = await wipeDevice() } catch { /* private mode — nothing to clear */ }
+  if (!wiped.ok) {
+    toast(`Couldn’t finish clearing this device (${wiped.failures.join(', ')}). ` +
+      'Close any other Spot Me tabs and try again.')
+    return false
+  }
   // Stamped AFTER the wipe, so a reset interrupted half-way runs again next
   // time instead of being marked done.
   try { localStorage.setItem(EPOCH_KEY, RESET_EPOCH) } catch { /* private mode */ }

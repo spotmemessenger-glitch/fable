@@ -15,6 +15,54 @@
  */
 import { API_BASE } from '../api.js'
 import { generateIdentity, exportPublicKeyB64, deriveRoomKey, E2E_V2 } from './e2e-v2.js'
+import { applyToRecord } from './identity-pin-store.js'
+import { OBSERVE } from './identity-pin.js'
+
+/**
+ * Record that a peer published this key. Returns the resulting trust record,
+ * or null if it could not be recorded.
+ *
+ * BEST EFFORT, DELIBERATELY, IN THIS STEP. If the pin store cannot be reached —
+ * private browsing, a blocked origin, an older tab holding the database — the
+ * key path must still work. Refusing to open any conversation because an audit
+ * record could not be written would be a far larger outage than the attack this
+ * defends against.
+ *
+ * That is safe only because the refusal to ADOPT a substituted key does not
+ * depend on this succeeding: `roomKeyForConvo` decides trust from the key it
+ * already holds and merely RECORDS it here. A5 is where an unavailable store
+ * becomes a fail-closed condition rather than a degraded one.
+ */
+const OBSERVE_TIMEOUT_MS = 2000
+
+async function observePeerKey (peerId, key, meta = {}) {
+  if (!peerId || !key) return null
+  let timer = null
+  try {
+    /* BOUNDED. A storage layer is entitled to wait for its own request; this
+     * layer is the one that decided the write is optional, so this is where the
+     * waiting stops. An IndexedDB that never answers — a version-change
+     * deadlock against another tab, a wedged origin — would otherwise hang the
+     * key path forever, and a chat that never opens is a worse failure than an
+     * audit record that was not written. */
+    const out = await Promise.race([
+      applyToRecord(peerId, { type: OBSERVE, at: Date.now(), key, ...meta }),
+      new Promise((resolve) => {
+        timer = setTimeout(() => resolve(null), OBSERVE_TIMEOUT_MS)
+        // Node holds the process open for a pending timer; a browser has no
+        // unref and does not need one.
+        timer?.unref?.()
+      }),
+    ])
+    return out?.ok ? out.next : null
+  } catch {
+    return null
+  } finally {
+    // Cleared either way: a pending timer keeps a Node process alive and holds
+    // a needless handle in the browser.
+    if (timer) clearTimeout(timer)
+  }
+}
 
 const DB_NAME = 'spotme-e2e'
 const STORE = 'identity'
@@ -193,16 +241,33 @@ export function identityStatus () {
  * e2e_v1 room with us until the next boot, which is the previous behaviour, not
  * a regression. Never let this block sign-in.
  */
+export const PUBLISH = Object.freeze({
+  OK: 'ok',
+  NO_IDENTITY: 'no-identity',
+  NO_TOKEN: 'no-token',
+  /** THE A3 CASE. This device cannot persist its key, and a good record is
+   *  already published, so republishing would break every existing chat. Not a
+   *  failure to be retried — a deliberate, recoverable refusal the user has to
+   *  be told about, because only they can fix it (leave private browsing, free
+   *  up storage, use a different device). */
+  REFUSED_EPHEMERAL: 'refused-ephemeral',
+  FAILED: 'failed',
+})
+
+/* An OBJECT, not a bare string. A string result would make 'failed' truthy and
+ * silently invert every `if (await publishIdentity(...))` ever written. */
+const pub = (reason) => ({ ok: reason === PUBLISH.OK, reason })
+
 export async function publishIdentity (fetchToken) {
   const id = await loadIdentity()
-  if (!id?.publicKeyB64) return false
+  if (!id?.publicKeyB64) return pub(PUBLISH.NO_IDENTITY)
   // Accept either a token or a function that gets one. Boot has no token in
   // hand yet — minting it is itself async — so the caller passes freshTokens.
   let accessToken = fetchToken
   if (typeof fetchToken === 'function') {
-    try { accessToken = (await fetchToken())?.accessToken } catch { return false }
+    try { accessToken = (await fetchToken())?.accessToken } catch { return pub(PUBLISH.NO_TOKEN) }
   }
-  if (!accessToken) return false
+  if (!accessToken) return pub(PUBLISH.NO_TOKEN)
 
   /* NEVER OVERWRITE A GOOD RECORD WITH AN EPHEMERAL KEY.
    *
@@ -224,11 +289,18 @@ export async function publishIdentity (fetchToken) {
     })()
     const existing = selfId ? await fetchPeerKey(selfId, accessToken).catch(() => null) : null
     if (existing?.publicKey && existing.publicKey !== id.publicKeyB64) {
+      /* A DEFINED, RECOVERABLE REFUSAL — not a silent reset, and not a bare
+       * `false` the caller cannot tell from a dropped connection. This is the
+       * A3 requirement: the one routine cause of honest key churn is a device
+       * that cannot persist its identity and republishes a new one every
+       * launch. Stopping that is what makes A2's refusal to adopt a changed key
+       * safe, because after this a key change is rare and suspicious rather
+       * than a Tuesday. */
       console.warn(
         'spotme identity: NOT republishing — this device cannot persist its key, ' +
         'and overwriting the published one would silently break every existing chat.'
       )
-      return false
+      return pub(PUBLISH.REFUSED_EPHEMERAL)
     }
   }
 
@@ -238,9 +310,9 @@ export async function publishIdentity (fetchToken) {
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
       body: JSON.stringify({ publicKey: id.publicKeyB64, algo: id.algo })
     })
-    return res.ok
+    return pub(res.ok ? PUBLISH.OK : PUBLISH.FAILED)
   } catch {
-    return false
+    return pub(PUBLISH.FAILED)
   }
 }
 
@@ -307,16 +379,64 @@ export async function roomKeyForConvo (convo, fetchToken, opts = {}) {
   const identity = await loadIdentity()
   if (!identity?.privateKey) throw new Error('this device has no identity key')
 
+  const peerId = convo.peer?.id || null
   const stored = convo.peerKey || null
-  let peerKey = opts.forceRefetch ? null : stored
-  if (!peerKey && convo.peer?.id && typeof fetchToken === 'function') {
-    const { accessToken } = (await fetchToken()) || {}
-    const found = await fetchPeerKey(convo.peer.id, accessToken)
-    peerKey = found?.publicKey || null
-    if (peerKey && peerKey !== stored) opts.onPeerKeyChanged?.(peerKey)
-  }
-  if (!peerKey && opts.forceRefetch) peerKey = stored
-  if (!peerKey) throw new Error('no peer public key for this conversation')
 
-  return deriveRoomKey({ identity, peerPublicKeyB64: peerKey, roomId: convo.roomId })
+  /* SEED THE PIN FROM WHAT IS ALREADY LOCAL, never from the network.
+   *
+   * A conversation that predates pinning already has a key it has been using
+   * successfully, and that key becomes the pin. Seeding from a fetch instead
+   * would hand the server the choice of every pin at upgrade time — one
+   * request, and it owns the trust anchor for every existing chat. This
+   * ordering is the whole reason the migration is safe.
+   *
+   * FIRE AND FORGET, and this is deliberate. `convo.peerKey` IS the effective
+   * pin on this path: it is already local, already loaded, and is exactly the
+   * key the conversation has been trusting. So the refusal below is pure logic
+   * over a value in hand, and the store is the durable RECORD — the thing that
+   * survives, accumulates provenance, and drives the UI. Awaiting it would put
+   * IndexedDB on the critical path of every key derivation, where a slow or
+   * wedged origin becomes a stall on opening a chat. A5 makes the store
+   * authoritative, at a point where blocking on it is a UI decision rather than
+   * the hot path. */
+  if (stored) void observePeerKey(peerId, stored, { source: 'stored' })
+
+  let trusted = stored
+  let fetched = null
+  if ((opts.forceRefetch || !trusted) && peerId && typeof fetchToken === 'function') {
+    const { accessToken } = (await fetchToken()) || {}
+    const found = await fetchPeerKey(peerId, accessToken)
+    fetched = found?.publicKey || null
+    if (fetched) {
+      void observePeerKey(peerId, fetched, {
+        source: opts.forceRefetch ? 'server-refetch' : 'server-first-use',
+        reason: opts.reason || null,
+      })
+    }
+  }
+
+  /* A DIFFERENT KEY IS A PROPOSAL, NOT AN ADOPTION.
+   *
+   * This is the behaviour change. Previously the fetched key was used AND
+   * persisted over the stored one, so a server able to provoke a decrypt
+   * failure — which is what drives `forceRefetch` — could rotate the key it
+   * hands out and have every client adopt it silently and permanently.
+   *
+   * Now the pinned key is what gets used, and the differing key is reported so
+   * the user can decide. Enforcement is still ADVISORY in this step: nothing is
+   * blocked, and a peer who legitimately rotated will fail to decrypt until the
+   * change is accepted. That availability cost is the reason A3 ships in the
+   * same change — it removes the one routine cause of honest key churn. */
+  if (fetched && trusted && fetched !== trusted) {
+    opts.onPeerKeyProposed?.({ proposed: fetched, pinned: trusted, peerId })
+  } else if (fetched && !stored) {
+    /* First key this conversation has ever had. Nothing is being replaced, so
+     * there is nothing to protect and it is safe to cache locally. */
+    opts.onPeerKeyChanged?.(fetched)
+  }
+
+  if (!trusted && fetched) trusted = fetched
+  if (!trusted) throw new Error('no peer public key for this conversation')
+
+  return deriveRoomKey({ identity, peerPublicKeyB64: trusted, roomId: convo.roomId })
 }

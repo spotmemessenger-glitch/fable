@@ -782,16 +782,37 @@ function createConnection (convo) {
      * not open. Without this the fix evaporated on the first page reload, and
      * silently, because both peers degraded identically. */
     if (convo.e2eVersion === E2E_V2) {
-      /* `opts` carries `forceRefetch` down from the transport's self-heal. The
-       * new key is written to BOTH the record and the captured `convo` object:
-       * the record so a reload does not repeat the repair, and the object
-       * because this closure is what the next re-derive reads — persisting to
-       * only one of them leaves the room healing itself over and over. */
+      /* `opts` carries `forceRefetch` down from the transport's self-heal.
+       *
+       * TWO CALLBACKS, AND THE DIFFERENCE BETWEEN THEM IS THE POINT.
+       *
+       * `onPeerKeyChanged` fires only for a FIRST key — nothing is being
+       * replaced, so caching it is safe. It writes to BOTH the record and the
+       * captured `convo` object: the record so a reload does not repeat the
+       * fetch, and the object because this closure is what the next re-derive
+       * reads; persisting to only one leaves the room repairing itself forever.
+       *
+       * `onPeerKeyProposed` fires when the server returns a key that is NOT the
+       * one this device trusts. It deliberately persists NOTHING. Until this
+       * change that case went through the same path as a first key and was
+       * written straight over the pin, so a server that could provoke a decrypt
+       * failure — which is exactly what drives `forceRefetch` — could rotate the
+       * key it serves and have every client adopt it silently. The proposal is
+       * recorded in the trust store by `roomKeyForConvo` and surfaced; it is not
+       * adopted, and the room keeps deriving against the pinned key. */
       setRoomKeyProvider(convo.roomId, (opts) => roomKeyForConvo(convo, freshTokens, {
         ...opts,
         onPeerKeyChanged: (peerKey) => {
           convo.peerKey = peerKey
           db.upsertConvo({ roomId: convo.roomId, peerKey })
+        },
+        onPeerKeyProposed: ({ proposed, pinned }) => {
+          // No write. Advisory in this step — A5 turns this into a block.
+          console.warn(
+            `spotme identity: ${convo.peer?.name || 'this contact'} is publishing a ` +
+            'different key than the one this device trusts. It has NOT been adopted. ' +
+            `pinned=${String(pinned).slice(0, 12)}… proposed=${String(proposed).slice(0, 12)}…`
+          )
         }
       }))
     }

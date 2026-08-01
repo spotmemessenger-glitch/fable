@@ -58,6 +58,14 @@ const DEFAULT_SETTINGS = {
  * deletes nothing from the server, and it cannot revoke the refresh token
  * server-side because there is no endpoint for that yet.
  */
+/**
+ * Clear all data on this device.
+ *
+ * Returns a promise for `{ ok, failures }`. The localStorage sweep is still
+ * synchronous and immediate; the IndexedDB stores cannot be, so a caller that
+ * needs to TELL THE USER whether the wipe worked has to await this. A caller
+ * that ignores it behaves exactly as before.
+ */
 export function wipeDevice () {
   const profileId = db.profile()?.id
   // No profile means no way to tell this slot's cursors from another's — and a
@@ -91,18 +99,80 @@ export function wipeDevice () {
   // Imported lazily so db.js stays a leaf module: it is imported by nearly
   // every view, and a static import of the crypto tree would pull api.js and
   // e2e-v2.js in behind it for every one of them.
-  import('./crypto/identity-store.js')
-    .then((m) => m.forgetIdentity?.())
-    .catch(() => { /* crypto never loaded on this device; nothing cached */ })
-  try { indexedDB.deleteDatabase('spotme-e2e') } catch { /* private mode, or no IDB at all */ }
+  const cleared = import('./crypto/identity-store.js')
+    .then((m) => { m.forgetIdentity?.(); return null })
+    .catch(() => 'identity cache')
 
   /* Media lives in IndexedDB, not localStorage, so a prefix sweep cannot reach
-   * it. Without this line "Clear all data" would leave every photo and voice
-   * note this device ever received on disk — a worse leak than the one the
-   * button exists to fix, and an invisible one. Imported lazily and never
-   * awaited so db.js keeps no load-time dependency on a browser API that the
-   * packaged WebView, private mode, or the Node tests may not provide. */
-  void import('./blobstore.js').then((blobs) => blobs.clearAll()).catch(() => {})
+   * it. Without this, "Clear all data" would leave every photo and voice note
+   * this device ever received on disk — a worse leak than the one the button
+   * exists to fix, and an invisible one. Imported lazily so db.js keeps no
+   * load-time dependency on a browser API that the packaged WebView, private
+   * mode, or the Node tests may not provide. */
+  const media = import('./blobstore.js')
+    .then((blobs) => blobs.clearAll())
+    .then((ok) => (ok === false ? 'media' : null))
+    .catch(() => 'media')
+
+  /* `spotme-identity-pins` is a SEPARATE database (ADR-005 §4 explains why it
+   * has to be). It holds, per peer: their user id, their public key, and a
+   * timestamped history of every time that key changed — a record of who this
+   * device talked to and when. A1 created it; A2 is what first writes to it, so
+   * this is the change that makes leaving it behind a real leak rather than an
+   * empty one. */
+  return Promise.all([
+    cleared,
+    media,
+    dropDatabase('spotme-e2e'),
+    dropDatabase('spotme-identity-pins'),
+  ]).then((results) => {
+    const failures = results.filter(Boolean)
+    return { ok: failures.length === 0, failures }
+  })
+}
+
+/**
+ * Delete one IndexedDB database, and actually find out whether it worked.
+ *
+ * WHY THIS IS NOT `try { indexedDB.deleteDatabase(name) } catch {}`. That was
+ * the previous shape, and it cannot detect the failure that matters:
+ * `deleteDatabase` returns a REQUEST, so a synchronous try/catch sees only the
+ * call succeeding to be *issued*. The realistic failure is `onblocked` — another
+ * tab still holds the database open, and the delete simply never happens. A wipe
+ * that silently no-ops is worse than one that fails loudly, because the user is
+ * told their data is gone while it is still on disk.
+ *
+ * `onblocked` does NOT end the request; the delete may still complete once the
+ * other connection closes. It is reported as a failure anyway, because at the
+ * moment we answer the user we cannot honestly say it is gone.
+ *
+ * Resolves to null on success, or the database name on failure — never rejects,
+ * so one failing store cannot hide the others.
+ */
+const DROP_TIMEOUT_MS = 5000
+
+function dropDatabase (name) {
+  return new Promise((resolve) => {
+    let req
+    try {
+      req = indexedDB.deleteDatabase(name)
+    } catch {
+      resolve(name)                     // no IndexedDB at all
+      return
+    }
+    if (!req || typeof req !== 'object') { resolve(null); return }
+    /* BOUNDED. A request that never fires any handler would leave the caller
+     * waiting forever, and a wipe that hangs is no better than one that lies —
+     * the user is still left without an answer. Timing out reports FAILURE
+     * rather than success, because an unanswered delete is precisely the case
+     * where we cannot honestly say the data is gone. */
+    const done = (v) => { clearTimeout(timer); resolve(v) }
+    const timer = setTimeout(() => resolve(name), DROP_TIMEOUT_MS)
+    timer?.unref?.()
+    req.onsuccess = () => done(null)
+    req.onerror = () => done(name)
+    req.onblocked = () => done(name)
+  })
 }
 
 function randomHex (bytes = 8) {

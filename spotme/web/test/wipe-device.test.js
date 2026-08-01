@@ -38,6 +38,11 @@ const results = {}
 const check = (name, fn) => {
   try { results[name] = fn() === true } catch (e) { results[name] = false; results[`${name} — threw ${e.message}`] = false }
 }
+/** The async sibling. `wipeDevice` now answers whether the wipe actually
+ *  worked, and that answer can only arrive after the IndexedDB deletes do. */
+const checkAsync = async (name, fn) => {
+  try { results[name] = (await fn()) === true } catch (e) { results[`${name} — threw ${e.message}`] = false }
+}
 
 /* This slot is `?id=wipetest`, so its own keys carry that suffix. */
 const ME = 'aabbccdd11223344'
@@ -111,6 +116,77 @@ check('tokens go even when the profile record is already gone', () =>
 check('wiping an already-empty store is a no-op, not an error', () => {
   mem.clear(); wipeDevice(); wipeDevice()
   return mem.size === 0
+})
+
+/* ============ a wipe that did NOT work must not claim it did ============== */
+
+await checkAsync('a wipe reports ok when every store WAS actually cleared', async () => {
+  // The fake has to serve `open` too, or the media store genuinely cannot be
+  // cleared and is correctly reported as a failure — which would make this
+  // assertion pass for the wrong reason if it only looked at the databases.
+  globalThis.indexedDB = {
+    deleteDatabase: () => { const req = {}; queueMicrotask(() => req.onsuccess?.()); return req },
+    open: () => {
+      const req = { result: {
+        objectStoreNames: { contains: () => true },
+        createObjectStore: () => ({}),
+        transaction: () => {
+          const t = { objectStore: () => ({ clear: () => ({}) }) }
+          queueMicrotask(() => t.oncomplete?.())
+          return t
+        }
+      } }
+      queueMicrotask(() => { req.onupgradeneeded?.(); req.onsuccess?.() })
+      return req
+    }
+  }
+  const out = await wipeDevice()
+  return out.ok === true && out.failures.length === 0
+})
+
+await checkAsync('THE POINT: a BLOCKED database delete is reported, not swallowed', async () => {
+  /* The realistic failure, and the one a synchronous try/catch cannot see:
+   * `deleteDatabase` returns a REQUEST. Another tab still holding the database
+   * open fires `onblocked` and the delete simply never happens. Before this,
+   * "Clear all data" reloaded into a screen claiming the device was clean while
+   * the data was still on disk — telling someone their data is gone when it is
+   * not is the one outcome this button must never produce. */
+  globalThis.indexedDB = {
+    deleteDatabase: (name) => {
+      const req = {}
+      queueMicrotask(() => (name === 'spotme-identity-pins' ? req.onblocked?.() : req.onsuccess?.()))
+      return req
+    }
+  }
+  const out = await wipeDevice()
+  return out.ok === false && out.failures.includes('spotme-identity-pins')
+})
+
+await checkAsync('an ERRORING database delete is reported too', async () => {
+  globalThis.indexedDB = {
+    deleteDatabase: (name) => {
+      const req = {}
+      queueMicrotask(() => (name === 'spotme-e2e' ? req.onerror?.() : req.onsuccess?.()))
+      return req
+    }
+  }
+  const out = await wipeDevice()
+  return out.ok === false && out.failures.includes('spotme-e2e')
+})
+
+await checkAsync('one failing store does not hide the others — all failures are listed', async () => {
+  globalThis.indexedDB = {
+    deleteDatabase: () => { const req = {}; queueMicrotask(() => req.onerror?.()); return req }
+  }
+  const out = await wipeDevice()
+  return out.ok === false &&
+    out.failures.includes('spotme-e2e') && out.failures.includes('spotme-identity-pins')
+})
+
+await checkAsync('no IndexedDB at all is a reported failure, not a silent success', async () => {
+  globalThis.indexedDB = { deleteDatabase: () => { throw new Error('private mode') } }
+  const out = await wipeDevice()
+  return out.ok === false && out.failures.length >= 2
 })
 
 /* --------------------------------------------------------------- report */
