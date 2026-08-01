@@ -188,20 +188,30 @@ await checkAsync('without forcing, the STORED peer key is used and nothing hits 
   return keyFetches === before
 })
 
-await checkAsync('THE REPAIR: forcing ignores the stored key and asks what the peer publishes NOW', async () => {
+await checkAsync('forcing asks what the peer publishes NOW, but DERIVES against the pin', async () => {
+  /* REWRITTEN IN A2. This used to assert the opposite — that forcing adopted
+   * whatever the server returned — and it passed, which was the vulnerability:
+   * the server both chooses that key and can provoke the decrypt failure that
+   * triggers the refetch. The re-fetch still happens (it is how a change is
+   * DETECTED); what changed is that its answer is a proposal, not an adoption. */
   const key = await roomKeyForConvo(convo, async () => ({ accessToken: 'tok' }), { forceRefetch: true })
-  const sealed = Buffer.from(await wireFrame(trueKey, { text: 'after rotation' }), 'base64')
+  const sealed = Buffer.from(await wireFrame(staleKey, { text: 'still the pinned key' }), 'base64')
   const out = await crypto.subtle.decrypt(
     { name: 'AES-GCM', iv: sealed.subarray(0, 12) }, key, sealed.subarray(12))
-  return JSON.parse(new TextDecoder().decode(out)).text === 'after rotation'
+  return JSON.parse(new TextDecoder().decode(out)).text === 'still the pinned key'
 })
 
-await checkAsync('a recovered key is handed back so the caller can persist it', async () => {
-  let reported = null
+await checkAsync('a DIFFERING key is proposed, never handed back for persistence', async () => {
+  let persisted = null
+  let proposal = null
   await roomKeyForConvo(convo, async () => ({ accessToken: 'tok' }), {
-    forceRefetch: true, onPeerKeyChanged: (k) => { reported = k }
+    forceRefetch: true,
+    onPeerKeyChanged: (k) => { persisted = k },
+    onPeerKeyProposed: (p) => { proposal = p }
   })
-  return reported === bobNewPub
+  // onPeerKeyChanged is the PERSIST path. It must not fire for a replacement,
+  // or the pin is gone and the substitution is permanent.
+  return persisted === null && proposal?.proposed === bobNewPub && proposal?.pinned === bobOldPub
 })
 
 await checkAsync('an UNCHANGED key reports nothing — no pointless write on every heal', async () => {
@@ -292,14 +302,28 @@ const msg = room.makeAction('msg')
 let received = null
 msg.onMessage = (payload) => { received = payload }
 
-await checkAsync('THE WIRING: a message sent after the peer rotated its key still ARRIVES', async () => {
+await checkAsync('THE WIRING: a rotated key does NOT open the frame, and is not adopted', async () => {
+  /* REWRITTEN IN A2 — this and the assertion below were the pair that proved
+   * the silent adoption worked end to end. They read "a message sent after the
+   * peer rotated its key still ARRIVES" and "...and the recovered key is
+   * PERSISTED", and both passed.
+   *
+   * Read together with who controls the inputs, they describe the attack: the
+   * server picks the replacement key, the server can provoke the decrypt
+   * failure that triggers the refetch, and the client then adopts and persists
+   * the server's choice. Recovery and compromise were indistinguishable.
+   *
+   * The frame now stays shut. That is the deliberate trade. */
   room.onFrame({ roomId: ROOM, from: BOB, type: 'msg', seq: 1, payload: await wireFrame(trueKey, { text: 'you can hear me now' }) })
   for (let i = 0; i < 40 && !received; i++) await tick()
-  return received?.text === 'you can hear me now'
+  return received === null
 })
 
-await checkAsync('...and the recovered key is PERSISTED, so a reload does not repeat the repair', async () => {
-  return db.state?.().convos?.[ROOM]?.peerKey === bobNewPub || convo.peerKey === bobNewPub
+await checkAsync('...and the pin is UNCHANGED on both the record and the object', async () => {
+  // Persisting to only one of the two was the old repair's failure mode; not
+  // persisting to EITHER is the new requirement.
+  const onRecord = db.state?.().convos?.[ROOM]?.peerKey
+  return convo.peerKey === bobOldPub && (onRecord === undefined || onRecord === bobOldPub)
 })
 
 await checkAsync('a frame that decrypts but is not JSON does NOT trigger a key re-fetch', async () => {

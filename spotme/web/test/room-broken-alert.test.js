@@ -173,14 +173,29 @@ const provider = (opts) => roomKeyForConvo(convo, async () => ({ accessToken: 't
 
 /* ========== 1. the repair still works, and stays SILENT when it does ======= */
 
-await checkAsync('a room the self-heal REPAIRS raises no alarm — the message just arrives', async () => {
+await checkAsync('a peer publishing a DIFFERENT key is not silently adopted — the room reports instead', async () => {
+  /* REWRITTEN IN A2, and the old assertion is worth stating because it was the
+   * opposite. This used to read "a room the self-heal REPAIRS raises no alarm —
+   * the message just arrives", and it passed: the transport force-refetched,
+   * took whatever key the server returned, wrote it over `convo.peerKey`, and
+   * the frame opened.
+   *
+   * That is the vulnerability. The server chooses what `peerKeyOnServer` is, and
+   * the server can provoke the decrypt failure that triggers the refetch — so
+   * the old behaviour let it rotate a peer's key and have every client adopt it
+   * with no trace. Silently repairing and silently being MITM'd were the same
+   * code path.
+   *
+   * Now the pin holds, the frame stays unreadable, and the room SAYS SO. That is
+   * a real availability cost, accepted deliberately: A3 removes the one routine
+   * cause of honest key churn, so a change here is now rare and suspicious. */
   peerKeyOnServer = bobNewPub
-  convo.peerKey = bobOldPub                     // stale: what the repair must beat
+  convo.peerKey = bobOldPub                     // the pin the server must not override
   clearRoomKey(ROOM); setRoomKeyProvider(ROOM, provider)
   alerts = []; received = null
   room.onFrame({ roomId: ROOM, from: BOB, type: 'msg', seq: 1, payload: await sealWith(trueKey, 'you can hear me now') })
-  for (let i = 0; i < 40 && !received; i++) await tick()
-  return received?.text === 'you can hear me now' && alerts.length === 0
+  for (let i = 0; i < 40 && !alerts.length; i++) await tick()
+  return received === null && alerts.length >= 1 && convo.peerKey === bobOldPub
 })
 
 /* ========== 2. a room nothing can repair DOES raise it ===================== */
@@ -206,9 +221,11 @@ await checkAsync('…and it names the room, so a device in several chats can att
 
 await checkAsync('a frame that DECRYPTS but is not JSON raises nothing — the key is fine', async () => {
   peerKeyOnServer = bobNewPub
+  // Settle on the good key first so the frame below really does decrypt. Since
+  // A2 a forced re-fetch no longer ADOPTS a differing key, so the accepted state
+  // is established directly — which is what `accept` will do in A5.
+  convo.peerKey = bobNewPub
   clearRoomKey(ROOM); setRoomKeyProvider(ROOM, provider)
-  // Settle on the good key first so the frame below really does decrypt.
-  await provider({ forceRefetch: true })
   alerts = []; received = null
   room.onFrame({ roomId: ROOM, from: BOB, type: 'msg', seq: 3, payload: await sealGarbage(trueKey) })
   for (let i = 0; i < 20; i++) await tick()
@@ -217,6 +234,7 @@ await checkAsync('a frame that DECRYPTS but is not JSON raises nothing — the k
 
 await checkAsync('a readable frame raises nothing at all', async () => {
   peerKeyOnServer = bobNewPub
+  convo.peerKey = bobNewPub                     // accepted, as above
   clearRoomKey(ROOM); setRoomKeyProvider(ROOM, provider)
   alerts = []; received = null
   room.onFrame({ roomId: ROOM, from: BOB, type: 'msg', seq: 4, payload: await sealWith(trueKey, 'perfectly fine') })

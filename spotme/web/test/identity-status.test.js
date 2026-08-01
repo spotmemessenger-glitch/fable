@@ -176,9 +176,15 @@ await checkAsync('ephemeral: status warns AND publishIdentity refuses to overwri
     }
     return Promise.resolve({ ok: false, status: 404, json: async () => ({}) })
   }
-  const { publishIdentity, identityStatus } = await freshStore()
+  const { publishIdentity, identityStatus, PUBLISH } = await freshStore()
   const published = await publishIdentity(tokenFor('me'))
-  return identityStatus() === 'ephemeral' && published === false && posted === false
+  /* A3 gave this refusal a DEFINED reason. It used to return a bare `false`,
+   * identical to a dropped connection — so a caller could not tell "this device
+   * is broken and only the user can fix it" from "retry in a moment". The shape
+   * is an object rather than a string precisely so a truthy failure value
+   * cannot invert a caller's `if`. */
+  return identityStatus() === 'ephemeral' && posted === false &&
+    published.ok === false && published.reason === PUBLISH.REFUSED_EPHEMERAL
 })
 
 await checkAsync('returning device: status is ok AND publishIdentity is allowed to publish', async () => {
@@ -192,9 +198,10 @@ await checkAsync('returning device: status is ok AND publishIdentity is allowed 
     if (opts?.method === 'POST') { posted = true; return Promise.resolve({ ok: true, status: 200, json: async () => ({}) }) }
     return Promise.resolve({ ok: true, status: 200, json: async () => ({ publicKey: 'AAAA-something-older', algo: 'X25519' }) })
   }
-  const { publishIdentity, identityStatus } = await freshStore()
+  const { publishIdentity, identityStatus, PUBLISH } = await freshStore()
   const published = await publishIdentity(tokenFor('me'))
-  return identityStatus() === 'ok' && posted === true && published !== false
+  return identityStatus() === 'ok' && posted === true &&
+    published.ok === true && published.reason === PUBLISH.OK
 })
 
 /* -------------------------------------------------------------- report --- */

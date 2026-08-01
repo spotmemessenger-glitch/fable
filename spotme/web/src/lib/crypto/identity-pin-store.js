@@ -47,11 +47,20 @@ function openDb () {
       return
     }
     req.onupgradeneeded = () => {
-      const db = req.result
-      if (!db.objectStoreNames.contains(STORE)) {
-        // Keyed by peer id. `keyPath` rather than out-of-line keys so a record
-        // always carries the id it is filed under and the two cannot drift.
-        db.createObjectStore(STORE, { keyPath: 'peerId' })
+      // Guarded, and the failure REJECTS rather than being swallowed. An
+      // upgrade that throws here would otherwise escape as an unhandled
+      // exception from inside the event callback, where no caller can catch it
+      // — and the caller is what decides whether to degrade or fail.
+      try {
+        const db = req.result
+        if (!db?.objectStoreNames?.contains?.(STORE)) {
+          // Keyed by peer id. `keyPath` rather than out-of-line keys so a
+          // record always carries the id it is filed under, and the two cannot
+          // drift apart.
+          db.createObjectStore(STORE, { keyPath: 'peerId' })
+        }
+      } catch (err) {
+        reject(err)
       }
     }
     req.onsuccess = () => resolve(req.result)
