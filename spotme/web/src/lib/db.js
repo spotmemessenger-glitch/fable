@@ -96,6 +96,16 @@ export function wipeDevice () {
     .catch(() => { /* crypto never loaded on this device; nothing cached */ })
   try { indexedDB.deleteDatabase('spotme-e2e') } catch { /* private mode, or no IDB at all */ }
 
+  /* AND the identity-pin database, which is a SEPARATE one (see ADR-005 §4 for
+   * why it has to be). It holds, per peer: their user id, their public key, and
+   * a timestamped history of every time that key changed. That is a record of
+   * who this device talked to and when — exactly the thing "Clear all data"
+   * exists to remove, and exactly as invisible as the media leak the block
+   * below was added for. A1 created this database; A2 is what first writes to
+   * it, so this is the change that makes leaving it behind a real leak rather
+   * than an empty one. */
+  try { indexedDB.deleteDatabase('spotme-identity-pins') } catch { /* as above */ }
+
   /* Media lives in IndexedDB, not localStorage, so a prefix sweep cannot reach
    * it. Without this line "Clear all data" would leave every photo and voice
    * note this device ever received on disk — a worse leak than the one the

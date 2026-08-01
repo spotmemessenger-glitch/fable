@@ -156,6 +156,12 @@ async function loadWith (idb) {
   wipeDevice()
   check('THE OTHER BUG: a wipe deletes the identity database, not just localStorage',
     deleted.includes('spotme-e2e'))
+  /* The identity-pin database is SEPARATE (ADR-005 §4) and holds, per peer,
+   * their id, their public key, and a timestamped history of every change to
+   * it — a record of who this device talked to and when. A wipe that left it
+   * behind would be the same invisible leak the media sweep was added for. */
+  check('…and the identity-PIN database too, which is a separate one',
+    deleted.includes('spotme-identity-pins'))
   // wipeDevice clears STORAGE; the in-memory state is discarded by the reload
   // that follows it in the app, so assert on what it actually promises.
   check('…and still clears the stored profile it always cleared',
