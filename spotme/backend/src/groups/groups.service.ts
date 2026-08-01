@@ -1,4 +1,8 @@
+import { IStorageAdapter, STORAGE_ADAPTER } from '../storage/storage.interface';
 import {
+  Inject,
+  Logger,
+  Optional,
   BadRequestException,
   ForbiddenException,
   Injectable,
@@ -75,7 +79,15 @@ export type GroupPolicy = {
 
 @Injectable()
 export class GroupsService implements OnModuleInit {
-  constructor(private prisma: PrismaService) {}
+  private readonly log = new Logger(GroupsService.name);
+
+  constructor(
+    private prisma: PrismaService,
+    /* @Optional so this service stays constructible in the unit tests that
+     * exercise policy and membership with no storage to give it. StorageModule
+     * is @Global, so in the running app it is always present. */
+    @Optional() @Inject(STORAGE_ADAPTER) private storage?: IStorageAdapter,
+  ) {}
 
   /** Daily-ish purge of soft-deleted groups. A setInterval rather than a cron
    *  dependency — one timer, and a missed sweep just runs on the next boot. */
@@ -100,6 +112,16 @@ export class GroupsService implements OnModuleInit {
       this.prisma.roomMember.deleteMany({ where: { roomId: { in: roomIds } } }),
       this.prisma.group.deleteMany({ where: { id: { in: doomed.map((g) => g.id) } } }),
     ]);
+    /* The same argument one line up, applied to object storage: once media
+     * lives in a bucket, deleting the rows leaves ciphertext behind with
+     * nothing pointing at it. Outside the transaction because a bucket cannot
+     * join one — and deliberately AFTER it, so a storage outage cannot roll
+     * back a deletion the user asked for. Anything missed here is caught by
+     * StorageCleanupService's hourly orphan sweep. */
+    for (const roomId of roomIds) {
+      const removed = await this.storage?.deleteRoomObjects(roomId).catch(() => 0);
+      if (removed) this.log.log(`purged ${removed} stored objects for room ${roomId}`);
+    }
     return doomed.length;
   }
 

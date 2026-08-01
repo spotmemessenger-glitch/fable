@@ -28,6 +28,9 @@ import { pokePeer } from './push.js'
  * teardown half of that key material, and `leave()` must be able to reset a room
  * or deleting a chat reuses its dead key. */
 import { setRoomKeyProvider, freshTokens, clearRoomKey, clearRoomCursor } from './socket-transport.js'
+import {
+  objectStorageEnabled, uploadAttachment, downloadAttachment,
+} from './media-transfer.js'
 import { roomKeyForConvo } from './crypto/identity-store.js'
 import { E2E_V2 } from './crypto/e2e-v2.js'
 
@@ -250,6 +253,54 @@ function createConnection (convo) {
     emit({ type: 'message', message })
   }
 
+  /**
+   * An attachment whose bytes live in object storage (Phase 5).
+   *
+   * The envelope arrived over the socket; the slices are fetched, decrypted and
+   * reassembled here. Progress is emitted per slice through the SAME
+   * `rxprogress` event the inline path uses, so nothing in the UI needs to know
+   * which transport carried the file.
+   *
+   * A failure leaves the message DETACHED rather than absent — the bubble
+   * stays, `tap to load` is offered, and the bytes can be fetched again. That
+   * matters most for the case it is hardest to distinguish: a view-once photo
+   * someone else already claimed answers 403, and a private photo already
+   * opened and destroyed answers 404, and neither should look like a message
+   * that never arrived.
+   */
+  async function receiveFromStorage (meta) {
+    const total = Math.max(1, Number(meta.total) || 1)
+    emit({ type: 'rxprogress', id: meta.id, progress: 0, meta })
+    try {
+      const bytes = await downloadAttachment(convo.roomId, meta.id, total, {
+        password: convo.secret,
+        onProgress: (pr) => emit({ type: 'rxprogress', id: meta.id, progress: pr, meta })
+      })
+      const { seq, total: _t, viaStorage: _v, mime, ...envelope } = meta
+      const message = {
+        ...envelope,
+        data: bufferToDataURL(bytes, mime || 'application/octet-stream')
+      }
+      // Tell the sender it landed before anything below can throw — their
+      // "Sent" indicator is waiting on exactly this.
+      conn.net.sendBinAck({ id: meta.id })
+      if (store.add(message)) {
+        emit({ type: 'rxdone', id: meta.id })
+        onIncoming(message)
+      } else {
+        store.patch(meta.id, { data: message.data, detached: false })
+        emit({ type: 'rxdone', id: meta.id })
+      }
+    } catch (error) {
+      const { seq, total: _t, viaStorage: _v, ...envelope } = meta
+      // Keep the envelope so the message is visible and retryable.
+      if (!store.add({ ...envelope, data: null, detached: true })) {
+        store.patch(meta.id, { detached: true })
+      }
+      emit({ type: 'rxfail', id: meta.id, error: error?.message || 'transfer failed' })
+    }
+  }
+
   const handlers = {
     profile: () => {
       const p = db.profile()
@@ -421,6 +472,24 @@ function createConnection (convo) {
     onBinary (payload, context) {
       const meta = context?.metadata
       if (!meta?.id) return
+
+      /* Phase 5: the bytes are in object storage, not in this frame.
+       *
+       * One envelope arrives with an empty payload and `viaStorage` set, and
+       * the slices are fetched and decrypted from storage instead of being
+       * reassembled from the wire. Handled BEFORE the assembly bookkeeping
+       * below, because an envelope declaring total=N with no slices coming
+       * would otherwise sit in `assembling` until it expired and the message
+       * would never appear at all.
+       *
+       * The fetch is deliberately not awaited: onBinary is a transport
+       * callback, and blocking it would stall every other frame behind one
+       * download. */
+      if (meta.viaStorage) {
+        void receiveFromStorage(meta)
+        return
+      }
+
       sweepAssemblies()
       const total = meta.total || 1
       const seq = meta.seq || 0
@@ -559,6 +628,54 @@ function createConnection (convo) {
   conn.deliverAttachment = async function (message, buffer, mime, onProgress) {
     const total = Math.max(1, Math.ceil(buffer.byteLength / SLICE_BYTES))
     const envelope = { ...message, data: null, mime }
+
+    /* OBJECT-STORAGE PATH (Phase 5, opt-in per device).
+     *
+     * Bytes go client -> bucket; the socket carries one envelope frame of a few
+     * hundred bytes instead of ~1.33x the file as base64. The payload is
+     * EMPTY — not omitted, because sendAction seals whatever it is given and an
+     * empty sealed payload is what tells a receiver "the bytes are not here".
+     * `viaStorage` in the sealed envelope is the actual signal, and the object
+     * keys are derived from (roomId, attachId, seq) on both sides rather than
+     * transmitted.
+     *
+     * A failure here throws, and sendAttachment's catch marks the message
+     * failed — which is correct: unlike the socket path there is no server log
+     * holding a partial copy, so a half-finished upload has delivered nothing
+     * and must not read as "Sent". */
+    if (objectStorageEnabled()) {
+      const { total: stored } = await uploadAttachment(convo.roomId, message.id, buffer, {
+        // The room secret, exactly as createNet is given it. For an e2e_v2
+        // room the registered key provider wins and this is never consulted
+        // (ADR-001) — the upload path must not be the one door with a
+        // password fallback.
+        password: convo.secret,
+        onProgress: (pr) => onProgress?.(Math.min(pr, 0.99))
+      })
+      /* Record it on OUR copy too, so the history backlog we hand a joining
+       * peer carries the same two facts the live envelope does. Without this a
+       * receiver that learns of the message from Alice's backlog rather than
+       * from the server's replay gets an envelope with no idea the bytes are in
+       * storage — and the harness showed what that costs: it falls through to
+       * the peer path, fetches the 28-byte sealed-empty payload, and renders a
+       * successfully-loaded EMPTY image. */
+      store.patch(message.id, { viaStorage: true, total: stored })
+      await conn.net.sendBinary(new Uint8Array(0), {
+        metadata: { ...envelope, seq: 0, total: stored, viaStorage: true }
+      })
+      onProgress?.(1)
+      try {
+        await awaitAck(message.id)
+        store.patch(message.id, { delivered: true, failed: false })
+      } catch {
+        // Same reasoning as the durable socket path below: the bytes are in
+        // storage and the envelope is in the log, so a late receipt is not a
+        // failed send.
+        store.patch(message.id, { delivered: false, failed: false })
+      }
+      return
+    }
+
     for (let seq = 0; seq < total; seq++) {
       // Durable transport: slices land in the server log even with nobody
       // online — the receiver assembles them from replay + lazy fetch.
@@ -944,6 +1061,38 @@ export const rooms = {
   async fetchAttachment (roomId, id) {
     const conn = this.ensure(roomId)
     if (!conn) throw new Error('Conversation not found')
+    const m = conn.store.list().find((x) => x.id === id)
+
+    /* OBJECT STORAGE FIRST, when that is where the bytes are.
+     *
+     * A Phase 5 attachment has no RoomEvent slices at all — only a 28-byte
+     * envelope — so asking peers and the server log for them finds nothing and
+     * the message sits on "tap to load" permanently. The two-origin harness
+     * caught exactly this on the offline path: the envelope replayed, the
+     * bytes were sitting in storage the whole time, and nothing knew to fetch
+     * them. Falls through to the peer path on failure, so an attachment sent
+     * before this existed still loads the old way. */
+    /* `viaStorage` OR the device flag: the marker has to survive server replay,
+     * peer history backlog and a live send, and relying on all three to carry
+     * it is how the empty-image bug above happened. Object keys are DERIVED
+     * from (roomId, attachId), so trying storage costs one request and is
+     * always safe — a wrong guess 403s and falls through. */
+    if (m && (m.viaStorage || objectStorageEnabled())) {
+      try {
+        const bytes = await downloadAttachment(conn.roomId, id, Math.max(1, Number(m.total) || 1), {
+          password: db.convo(roomId)?.secret
+        })
+        if (!bytes?.length) throw new Error('empty object')
+        const url = bufferToDataURL(bytes, m.mime || 'image/jpeg')
+        conn.store.patch(id, { data: url, detached: false })
+        return url
+      } catch (error) {
+        // "Opened and destroyed" is an answer, not a failure to retry — a
+        // client that cannot tell the two apart asks forever.
+        if (/destroyed/i.test(error?.message || '')) throw error
+      }
+    }
+
     // The server log holds every slice ever sent through it, so a durable
     // transport can serve bytes with the sender long gone — 'server' is a
     // pseudo-peer the transport resolves internally.
@@ -951,7 +1100,6 @@ export const rooms = {
       ? ['server', ...conn.net.livePeerIds()]
       : conn.net.livePeerIds()
     if (peers.length === 0) throw new Error('They are offline — media transfers while you are both online')
-    const m = conn.store.list().find((x) => x.id === id)
     let bytes = null
     let lastError = null
     for (const peer of peers) {
@@ -960,7 +1108,12 @@ export const rooms = {
         if (bytes) break
       } catch (error) { lastError = error }
     }
-    if (!bytes) throw new Error(lastError ? 'That transfer did not complete — try again' : 'No longer available')
+    /* EMPTY IS A FAILURE, NOT A LOAD. A Phase 5 attachment's RoomEvent row
+     * holds a sealed EMPTY payload — the bytes are in storage — so the peer
+     * path "succeeds" here with zero bytes and the UI renders a blank image as
+     * though it had loaded. `!bytes` alone did not catch it because an empty
+     * Uint8Array is truthy. */
+    if (!bytes?.length) throw new Error(lastError ? 'That transfer did not complete — try again' : 'No longer available')
     const dataURL = bufferToDataURL(bytes, m?.mime || 'image/jpeg')
     conn.store.patch(id, { data: dataURL, detached: false })
     return dataURL
