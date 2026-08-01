@@ -31,10 +31,14 @@ document for Spot Me. Read it (at minimum §2 rules, §5 priorities, §8
 checklist, §10 instructions) before changing code, and check every change
 against it.** The owner's instruction: refer to it each time you code.
 
-- Its V1→V2 requirement mapping is `spotme/docs/14-ROADMAP-V1-TO-V2-MAPPING.md`
-  — **approval PENDING**; until the owner approves it, V1
-  (`spotme/docs/MIGRATION-PLAN-V1.md`, historical) still governs, and where V1
-  is stricter the stricter gate holds either way (V2 Appendix B).
+- **V2 is APPROVED and controlling (owner directive, 2026-08-01).** The V1→V2
+  mapping is `spotme/docs/14-ROADMAP-V1-TO-V2-MAPPING.md`; V1
+  (`spotme/docs/MIGRATION-PLAN-V1.md`) is historical, and where V1 is stricter
+  the stricter gate still holds (V2 Appendix B). The A1–A7 labels are retired
+  wherever they conflict with V2. Owner phase order for remaining Priority 1:
+  review #30/#31 → signing-key storage (ADR-008) → X3DH → Double Ratchet →
+  multi-device → completion evidence; AI Communication ADRs are planning-only
+  until Priority 1 closes.
 - **V1/V2 priority numbers differ.** Owner blocks were issued against V1
   numbers — the mapping §1 restates them under V2 numbering. Never treat a
   renumbering as an unblock.
