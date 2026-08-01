@@ -181,10 +181,44 @@ the five-state machine in ADR-005 are open. The pure layer was built first
 deliberately: it is testable on Node against real WebCrypto with no mocks, which
 is where the security argument can actually be checked.
 
-**Multi-device remains out of scope.** Signing keys are per-device, exactly like
-agreement keys. A signing identity shared across a user's devices is a different
-and much larger design (it needs key transfer, which needs extractable keys or a
-transfer protocol) and nothing here anticipates it.
+**Multi-device is outside the scope of this signing-foundation PR, but remains a
+mandatory Priority 1 completion requirement.**
+
+An earlier draft of this ADR said multi-device was "out of scope" without
+qualification. That was wrong, and the correction matters more than the wording:
+the migration plan lists *"Add Multi-device support"* among Priority 1's tasks,
+and Priority 1 cannot be declared complete without it. An ADR is an
+implementation record; it does not have standing to narrow the controlling
+document, and a scope note in one PR must never read as a scope decision for the
+programme.
+
+What this PR does and does not do: signing keys here are **per-device**, exactly
+like agreement keys, and the binding already carries a `deviceId` field — so the
+format anticipates a device set even though nothing yet manages one.
+
+### The minimum acceptable multi-device implementation for Priority 1
+
+Normative. Anything less does not close the requirement:
+
+1. Each device has its own identity/device keys.
+2. A sender encrypts **separately for every active recipient device**.
+3. New devices require an **authenticated linking or approval flow**.
+4. Device removal stops future message delivery to that device.
+5. Existing devices can detect newly added or removed devices.
+6. Identity and safety-number behaviour accounts for device-set changes.
+7. Ratchet state is maintained **per remote device**.
+8. Offline devices can recover messages within documented limits.
+9. The server never receives plaintext or private key material.
+
+**Deferrable, if explicitly documented:** full account backup, unlimited device
+history, and seamless restoration to a brand-new device. **Not deferrable:** the
+core multi-device cryptographic flow above.
+
+Note what item 6 implies for this ADR: once a user has a device *set*, a safety
+number computed over one device's key is no longer a complete statement about
+the person. That interacts with the safety-number construction discussed below
+and is unresolved — recorded here so the multi-device work does not discover it
+late.
 
 **No forward secrecy is added or claimed.** A binding is an authentication
 artefact. ADR-004's ratchet work is independent and still outstanding.
