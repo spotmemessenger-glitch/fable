@@ -41,6 +41,9 @@ const A7 = [
   // Phase 2 (Roadmap V2): the storage half. Inside the fence — it may import
   // the foundation; the app still may not reach key material through it.
   'src/lib/crypto/signing-key-store.js',
+  // Phase 2B: the publication half. Inside the fence, SWITCHED OFF — the flag
+  // default is asserted below, and no app module may import it at all.
+  'src/lib/crypto/signing-key-publication.js',
 ]
 
 function walk (dir, out = []) {
@@ -97,6 +100,22 @@ const testFiles = walk(TEST).map((f) => ({ path: relative(ROOT, f), body: readFi
   check('…and the wipe path touches ONLY forgetSigningIdentity — never load or rotate',
     Boolean(wipe) && wipe.body.includes('forgetSigningIdentity') &&
     !/loadSigningIdentity|rotateSigningIdentity|generateSigningIdentity/.test(wipe.body))
+
+  /* Phase 2B: publication EXISTS now, and the fence tightens rather than
+   * loosens. NO app module may import the publication module — there is no
+   * permitted crack here, not even db.js — and the flag that would arm it
+   * must default to false in the shipped source. The behavioural default is
+   * asserted by test/signing-key-publication.test.js importing the real
+   * module; this source check catches a flip that hides behind a build-time
+   * substitution. */
+  const publicationUsers = appFiles.filter((f) => f.body.includes('signing-key-publication'))
+  check('PUBLICATION IS NOT WIRED: no app module imports the publication module',
+    publicationUsers.length === 0)
+  if (publicationUsers.length) console.log('    imported by:', publicationUsers.map((f) => f.path).join(', '))
+
+  const pub = srcFiles.find((f) => f.path === 'src/lib/crypto/signing-key-publication.js')
+  check('THE PUBLICATION FLAG IS OFF IN SOURCE: SIGNING_PUBLICATION_ENABLED = false',
+    Boolean(pub) && /export const SIGNING_PUBLICATION_ENABLED = false/.test(pub.body))
 }
 
 /* ------------------------------------------ 2. …but it is not unexamined -- */
@@ -112,6 +131,8 @@ const testFiles = walk(TEST).map((f) => ({ path: relative(ROOT, f), body: readFi
   check('…and the STORAGE half is exercised too — load, rotate, wipe-forget',
     exercised('loadSigningIdentity') && exercised('rotateSigningIdentity') &&
     exercised('forgetSigningIdentity'))
+  check('…and the PUBLICATION half is exercised too — gate, payload, supersession',
+    exercised('publishSigningIdentity') && exercised('signSupersession'))
 
   // Both modules must be imported by a test, or "covered" is an assumption.
   for (const p of A7) {
