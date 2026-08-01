@@ -95,6 +95,14 @@ export function wipeDevice () {
     .then((m) => m.forgetIdentity?.())
     .catch(() => { /* crypto never loaded on this device; nothing cached */ })
   try { indexedDB.deleteDatabase('spotme-e2e') } catch { /* private mode, or no IDB at all */ }
+
+  /* Media lives in IndexedDB, not localStorage, so a prefix sweep cannot reach
+   * it. Without this line "Clear all data" would leave every photo and voice
+   * note this device ever received on disk — a worse leak than the one the
+   * button exists to fix, and an invisible one. Imported lazily and never
+   * awaited so db.js keeps no load-time dependency on a browser API that the
+   * packaged WebView, private mode, or the Node tests may not provide. */
+  void import('./blobstore.js').then((blobs) => blobs.clearAll()).catch(() => {})
 }
 
 function randomHex (bytes = 8) {
