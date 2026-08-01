@@ -125,6 +125,24 @@ async function bootstrap() {
     new ValidationPipe({ whitelist: true, transform: true, forbidNonWhitelisted: true }),
   );
   app.setGlobalPrefix('api');
+
+  /* Encrypted media slices arrive as raw bytes, not JSON.
+   *
+   * Registered HERE, before listen() installs Nest's own JSON parser, for the
+   * same reason the web-api bridge below is: Express runs middleware in
+   * registration order, so a later raw parser would never see the request and
+   * the route would get an empty `req.body` — a silent failure that looks like
+   * "the upload did nothing". 16 MB is one 8 MB slice plus headroom; it is
+   * ciphertext, so nothing here inspects it. */
+  {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { raw } = require('express') as { raw: (o?: unknown) => unknown };
+    app.getHttpAdapter().getInstance().use(
+      '/api/v2/media/local',
+      raw({ type: '*/*', limit: '16mb' }),
+    );
+  }
+
   await mountWebApiBridge(app);
   const port = process.env.PORT ? Number(process.env.PORT) : 4000;
   await app.listen(port);
