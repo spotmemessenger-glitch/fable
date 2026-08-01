@@ -272,3 +272,44 @@ This is the asynchronous handshake only; the Double Ratchet it seeds is Phase 4.
 session persistence to IndexedDB, the v3 envelope on the wire, and version
 negotiation in `reach.js`/`socket-transport.js`. §13's Q5 ("build the ratchet
 or defer") is resolved by the owner's Priority 1 mandate: build it.
+
+---
+
+## Implementation status — Phase 4 (Double Ratchet) · 2026-08-01
+
+**IMPLEMENTED, behind the `spotme.e2e3` flag, NOT wired in.** `web/src/lib/
+crypto/ratchet.js` (PURE), seeded by the Phase 3 X3DH root.
+
+- **The KDF ladder, byte-for-byte against the 004b oracle** (Syndace, 004c Q1):
+  root/DH step `HKDF(salt=root, ikm=DH, info="spotme/e2e_v3/chain", 64) →
+  root'‖chain`; message step `HKDF(salt=chain, ikm=0x01, info="spotme/e2e_v3/
+  msg", 64) → chain'‖msgKey`. The initial root is the X3DH shared secret.
+- **Wire format is 004a**: steady-state header (73 B), AAD binding version +
+  room + full header, `MAGIC/VER/HDRLEN` framing, structural rejection before
+  any key material is touched.
+- **Conformance is against the spec, not itself** (`test/ratchet.test.js`,
+  13/13). Tier 1 reproduces the oracle's `header_hex`, `ratchet_pub` and full
+  `ciphertext_hex` for vectors 01/03/05 by injecting the oracle's
+  deterministic keygen and its derived-IV AEAD — a wrong label, salt, counter
+  or field order diverges the ciphertext. Tier 2 exercises every 004b
+  scenario on the SHIPPED random-IV seams: out-of-order, skipped keys
+  (structural count matches vector 07), duplicate/replay rejection (08),
+  tamper + room-binding rejection (10/11), the MAX_SKIP_PER_CHAIN DoS refusal,
+  serialization round-trip (09), forward secrecy and break-in recovery.
+- **Bounds are message-loss policies, fail-closed** (004a §5): skipped keys
+  FIFO-evicted at MAX_SKIPPED_STORED=2000, a gap beyond MAX_SKIP_PER_CHAIN=
+  1000 REFUSED with a defined `RatchetError`, never an auto-reset (the
+  tempting silent forward-secrecy downgrade).
+- **Injected seams** keep the module pure and the shipped bytes testable:
+  `keygen` (random X25519 in prod, counter-KDF in the vector test) and `aead`
+  (random IV in prod, oracle's derived IV in the test).
+- **Benchmarks** (`test/bench/ratchet.bench.mjs`, shipped seams): steady-state
+  encrypt ~0.29 ms median / p99 1.06 ms; in-order decrypt ~0.23 ms; DH-ratchet
+  decrypt ~0.91 ms; 50-key skip ~7.1 ms (linear, bounded at 1000).
+
+**Still to wire (later PRs, still flag-gated):** session persistence to
+IndexedDB (`spotme-e2e` v-bump considerations, 004a §5c), the X3DH prologue
+header form combined with the ratchet, attachment per-message keys (004d),
+and version negotiation in `reach.js`/`socket-transport.js`. Multi-device
+(SDEV/RDEV fan-out) is Phase 5, gated on the ADR-008 §BLOCKING safety-number
+decision.

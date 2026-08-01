@@ -30,6 +30,7 @@ const TEST = join(ROOT, 'test')
  *  nothing under src/ outside this set may import them until activation. */
 const V3 = [
   'src/lib/crypto/x3dh.js',
+  'src/lib/crypto/ratchet.js',
 ]
 
 function walk (dir, out = []) {
@@ -73,6 +74,7 @@ const testFiles = walk(TEST).map((f) => ({ path: relative(ROOT, f), body: readFi
   const exercised = (needle) => testFiles.some((f) => f.body.includes(needle))
   check('the suite runs the full X3DH handshake', exercised('x3dhInitiator') && exercised('x3dhResponder'))
   check('…and verifies signed prekeys', exercised('verifyBundleSpk'))
+  check('…and drives the Double Ratchet through encrypt/decrypt', exercised('initInitiator') && exercised('initResponder'))
   for (const p of V3) {
     const name = p.split('/').pop()
     check(`${name} is imported by at least one test`,
