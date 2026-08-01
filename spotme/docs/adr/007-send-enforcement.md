@@ -147,3 +147,30 @@ target one toggle.
 
 **Block on `Unverified`.** Rejected outright — first contact is not an attack,
 and blocking it would make the app unusable for its actual purpose.
+
+## Rollback
+
+**With the flag off — the state this ships in — reverting changes nothing
+observable.** No message is being refused, so removing the code that would
+refuse them alters no behaviour. The verdict cache is in memory only and dies
+with the tab; nothing it holds is persisted, so there is no data to migrate or
+purge.
+
+Two things survive a revert, and both are safe:
+
+- **Records written by the Accept / Keep-the-old-one buttons.** Those are
+  ordinary `ACCEPT` and `REJECT` events in the A1 state machine, which predates
+  this change and continues to read them. A user who accepted a key change on
+  this build has a correctly pinned record on a build without it.
+- **Nothing else.** This change adds no schema, no field, and no database.
+
+**If enforcement had been switched on first,** reverting is a *reduction in
+protection*, not a data loss: a `Changed` peer stops being blocked and goes back
+to being merely flagged. That is the same framing ADR-005 §6 uses for A2–A5, and
+it is recoverable by re-applying. It is stated here rather than inherited,
+because ADR-005 asks each of these changes to state it for itself.
+
+**Reverting is not the way to disable enforcement.** Flip `ENFORCING` to false —
+one boolean, no diff to the decision logic, and the verdicts keep being computed
+so the next attempt has evidence. Reverting to turn it off would also remove the
+review UI, leaving a user with a `Changed` peer and no way to resolve it.
