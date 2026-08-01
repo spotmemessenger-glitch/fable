@@ -31,6 +31,7 @@ import * as profile from './views/profile.js'
 import * as contacts from './views/contacts.js'
 import * as groups from './views/groups.js'
 import * as groupManage from './views/group-manage.js'
+import * as verify from './views/verify.js'
 import * as notifications from './views/notifications.js'
 import * as stories from './views/stories.js'
 
@@ -196,6 +197,15 @@ function render () {
   if (threadMatch) {
     navEl.style.display = 'none'
     currentCleanup = chat.render(viewContainer, ctx, decodeURIComponent(threadMatch[1]))
+    return
+  }
+
+  /* Key verification is a full screen entered from one chat, and its back
+   * button returns to that chat — same shape as group management below. */
+  const verifyMatch = hash.match(/^#\/verify\/(.+)$/)
+  if (verifyMatch) {
+    navEl.style.display = 'none'
+    currentCleanup = verify.render(viewContainer, ctx, decodeURIComponent(verifyMatch[1]))
     return
   }
 

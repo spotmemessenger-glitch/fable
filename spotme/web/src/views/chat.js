@@ -2148,10 +2148,20 @@ export function render (root, ctx, roomId) {
   const e2eVersionNow = () => db.convo(roomId)?.e2eVersion || convo?.e2eVersion
 
   function sysLine () {
+    const v2 = e2eVersionNow() === 'e2e_v2'
     return el('div', { class: 'sys firstrun', html: IC.spark }, [
-      e2eVersionNow() === 'e2e_v2'
+      v2
         ? 'Encrypted with keys made on your devices. Translation runs on-device when possible.'
-        : 'Older chat — its key came from both account IDs, so the server could read it.'
+        : 'Older chat — its key came from both account IDs, so the server could read it.',
+      /* Only a v2 room has a device identity to compare, so only a v2 room gets
+       * the link — see views/verify.js. It sits HERE, on the line that already
+       * makes the encryption claim, because that is the claim it lets someone
+       * check. A verification screen filed under a settings menu is one nobody
+       * finds at the moment they doubt the claim. */
+      v2 ? el('button', {
+        class: 'linkbtn', type: 'button',
+        onclick: () => ctx.nav(`#/verify/${roomId}`)
+      }, ['Verify']) : null
     ])
   }
 
