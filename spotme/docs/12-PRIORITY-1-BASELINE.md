@@ -1,8 +1,19 @@
 # Priority 1 — IndexedDB and media-path baseline
 
-**Baseline commit:** `acb630d` — which is `b0423b2` plus this harness and
-nothing else. The added files live under `test/bench/` and are not imported by
-any measured code path, so these figures describe `b0423b2`'s behaviour.
+**Baseline: `b0423b2`.**
+
+These numbers were measured on `b0423b2` plus this harness and nothing else —
+originally commit `acb630d`, which **this branch has since been rebased past, so
+that SHA is no longer an ancestor of anything.** The JSON records it because
+that is what the harness stamped at run time; the citable baseline is
+`b0423b2`.
+
+The distinction matters and is not pedantry: the added files live under
+`test/bench/` and are imported by no measured code path, so the figures describe
+`b0423b2`'s behaviour regardless of which commit the harness happened to sit on.
+**They were not re-measured after the rebase**, deliberately — re-running would
+have produced different numbers from a different machine state and quietly
+replaced the documented baseline with an undocumented one.
 
 **Reproduce:**
 
