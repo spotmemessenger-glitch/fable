@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, NotFoundException, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Delete, Get, NotFoundException, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { CurrentUser, AuthenticatedPrincipal } from '../common/decorators/current-user.decorator';
 import { UsersService } from './users.service';
@@ -43,8 +43,20 @@ export class UsersLookupController {
   constructor(private users: UsersService) {}
 
   @Get('lookup')
-  async lookup(@Query('username') username: string) {
-    const user = await this.users.findByUsername(username);
+  async lookup(@Query('username') username?: string) {
+    /* A MISSING PARAMETER MUST NOT BECOME A MISSING FILTER.
+     *
+     * `@Query` with nothing to bind yields `undefined`, Prisma strips undefined
+     * values out of a `where`, and `findFirst` was left with nothing but
+     * `deletedAt: null` — so `GET /api/users/lookup`, with no query string at
+     * all, returned an arbitrary real account. Verified against the live
+     * database, not inferred.
+     *
+     * This is the general shape worth watching for: any `@Query`/`@Param` that
+     * reaches a Prisma filter unvalidated degenerates to "match anything". */
+    const name = String(username ?? '').trim().toLowerCase();
+    if (!/^[a-z0-9_]{3,16}$/.test(name)) throw new BadRequestException('invalid username');
+    const user = await this.users.findByUsername(name);
     if (!user) throw new NotFoundException('no user with that username');
     return user;
   }

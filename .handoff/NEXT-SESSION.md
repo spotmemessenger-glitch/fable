@@ -1,174 +1,214 @@
 # START HERE — pickup brief
 
-**Written:** 2026-07-29, end of session (~$341 spent).
-**Updated:** 2026-07-30 late evening. Everything below was verified by RUNNING
-it, not by exit codes.
+**Written:** 2026-07-29, end of session.
+**Updated:** 2026-07-31 overnight. Everything below was verified by RUNNING it.
 
 ---
 
-## 00000000. LATEST (2026-07-31, late) — SUPERSEDES EVERYTHING BELOW
+## 0. LATEST (2026-07-31 overnight) — SUPERSEDES EVERYTHING BELOW
 
-**Nothing is merged. Two PRs are open and both are green.**
-
-```
-master   bc4fd92   unchanged this session
-PR #6    claude/next-session-b6ypc5   377372a   DRAFT, CI green, 8 commits
-PR #2    feature/centrifugo-transport ad31fd2   OPEN, mergeable_state clean
-```
-
-### THE HEADLINE: the "notification but no message" bug is FOUND AND FIXED
-
-It was never crypto. The opening line of a chat travels INSIDE the knock, and
-both sides wrote it to the convo's `last` preview and fired `pushNote` with it —
-and **never added it to the message store**. The notification quoted the text,
-the inbox row quoted the text, the thread was empty. `inbox.js` states the
-intent outright ("what both sides see as the first message once the chat
-opens"), so this was a gap, not a decision. Fixed by `rooms.injectLocal` +
-`msgId` in the knock payload (`8848bd5`).
-
-**Found only by driving the real app in a real browser.** Every module test
-passed against it, because no module was wrong.
-
-### SEVEN defects fixed, then FIVE MORE found in those fixes
-
-`377372a` is the important commit — it fixed five bugs introduced by the seven
-before it, and two of those meant a shipped feature was inert:
-
-- `emit({ type: 'undecryptable', ...info })` — `info` carries the FRAME's type,
-  spread wins, event arrived as `{type:'msg'}`. **The room-broken banner was
-  dead code.** `room-broken-alert.test.js` passed because it stops at the
-  transport boundary and never crosses `rooms.js`.
-- `deletedAt` is stamped by BOTH `softDeleteAccount` AND `releaseUsername` (which
-  renames the row and deliberately keeps the user alive). The new auth gates read
-  both as deletion = **permanent lockout of a live user**. `isDeletedAccount`
-  now distinguishes them and fails safe.
-- The replay-cursor hold could stick FOREVER on rooms with no key provider (v1,
-  group, inbox) — a pinned inbox eventually stops delivering chat requests.
-- `unopenedFloor = null` sat above `await currentKey()`, and `join` retries every
-  2s on exactly that throw — burning one held frame per cycle.
-- A dropped network request told users to delete their chat on both phones.
-
-**Every one lived in a seam between two correct pieces.** That is this
-codebase's dominant failure mode — same shape as the original bug.
-
-### The other big one: messages were being DESTROYED
-
-`dispatch`'s `finally` advanced the replay cursor whether or not the frame
-opened, and the server replays strictly `id > since`. One undecryptable frame
-burned its own place in the window, permanently, on both devices. **That is why
-repairing a key never brought a chat back — there was nothing left to bring
-back.** Fixed in `0ea0db5`. Messages lost before that fix are still lost.
-
-### PROVEN by running, not by reading
-
-Local Postgres + the real NestJS backend + two shipping web clients in separate
-processes, and separately two Chromium contexts against the real UI:
-
-| Scenario | Result |
-|---|---|
-| Server, protocol, crypto, key agreement | **all sound** — ruled out by measurement |
-| Normal delivery / origin split / stale peer key | works / self-heals / self-heals |
-| **Own published key overwritten by another origin** | **reproduced, unrecoverable** |
-| Browser E2E (onboard → search → knock → both ways → reload) | **10/11** |
-
-`refreshRoomKey` re-agrees the PEER's key, so it cannot help a device whose OWN
-key was overwritten. **Not fixed — it is a product call.** Republish-on-mismatch
-is the tempting fix and it is a trap: two live origins would fight, each
-overwriting the other every launch.
-
-### Harnesses that now exist — use them, do not rebuild them
-
-- `spotme/web/test/e2e/browser-e2e.mjs` — real Chromium ×2 against the real UI.
-  Needs backend on :4000 and vite on :5173. NOT in `npm test`.
-- Postgres 16 binaries are installed in the cloud container even though the
-  docker daemon is not running:
-  `su postgres -c "/usr/lib/postgresql/16/bin/initdb -D <dir> -U postgres --auth=trust"`
-  then `pg_ctl -o '-p 5433 -k /tmp'`. PGDATA must be somewhere the postgres user
-  can write — /var/lib/postgresql, NOT the root-owned scratchpad.
-- Chromium is at `/opt/pw-browsers/chromium-1194/chrome-linux/chrome`; the
-  `playwright` npm package is not installed, install it with
-  `PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1`.
-- To run the shipping web modules under Node, `mock.module` `lib/api.js` — its
-  `API_BASE` is inlined from `import.meta.env` at BUILD time and is '' in Node.
-
-### MERGE RECIPE for #6 → then #2 (SIMULATED AND PROVEN, do not re-derive)
-
-The whole sequence was run on throwaway local branches before anything was
-merged. Result: **web 27 suites / 26 fully green, backend 10 suites / 86 tests,
-both builds clean.** The simulation is gone with that container, but every
-decision it made is below.
-
-**The overlap is NINE files, not the four usually quoted.** `chat.js` is NOT one
-of them:
+PR #6 is MERGED. `master` is at `81858cc`. The designated branch was restarted
+from it (documented procedure for a merged branch) and now carries TEN
+commits, all pushed, on **PR #7 (draft)**. PR #2 is still open, still rebased,
+still unmerged.
 
 ```
-.handoff/NEXT-SESSION.md   spotme/web/package.json
-spotme/web/src/lib/reach.js   src/lib/rooms.js   src/lib/socket-transport.js
-spotme/web/src/net.js
-spotme/web/test/{media,requests,viewonce}.test.js
+master  81858cc
+PR #7   claude/next-session-b6ypc5   cc0057d   DRAFT — this session's work
+PR #2   feature/centrifugo-transport 02611cf   OPEN, unmerged
 ```
 
-**Conflicts and how each was resolved:**
+### How this session was run
 
-1. `package.json` — recurs on nearly every replayed commit. Both branches append
-   suites to one `&&` chain. Resolve as a UNION, never by taking a side, or the
-   dropped side's tests silently stop running. 26 suites is the correct total.
-2. `rooms.js` import — PR #2 adds a rationale comment above the import; PR #6
-   extends the import list with `clearRoomKey`/`clearRoomCursor` and adds a
-   `media-transfer.js` import. Keep the comment, the extended list, and the
-   extra import. **Watch for a duplicated `import { setRoomKeyProvider,
-   freshTokens }` line** — that was caught only by `node --check`.
-3. `socket-transport.js` — both sides add a new export inside a SHARED `/**`
-   block, with the closing `}` also shared. Ours (`clearRoomCursor`) needs its
-   own `}` and a fresh `/**` before theirs (`sealForRoom`/`openForRoom`).
-4. `media/requests/viewonce.test.js` — purely additive stub entries, union them.
-5. `.handoff/NEXT-SESSION.md` — take OURS. Master+#6 is strictly newer and
-   already carries the superseding section.
+Five audit agents in parallel (transport, crypto/storage, backend security,
+UX wiring, build/PWA), each told to prove a fault or drop it, while I drove the
+real app in two browsers against a real local stack (Postgres + NestJS on :4000
++ Vite on :5173). **Every fix below was verified independently before it was
+applied** — several agent claims were wrong or narrower than reported, and one
+("reactions are broken") turned out to be my own harness clicking inside a
+deliberate 400 ms ghost-click window.
 
-**THE TRAP THAT ONLY EXISTS WHEN BOTH LAND.** A partial ESM `mock.module` is a
-LINK-time SyntaxError. Two new test files each stub `socket-transport.js`
-without knowing about the other branch's exports, and the combined suite dies at
-12 of 27 suites:
+### What was actually wrong, and is now fixed
 
-- `send-failure-visible.test.js` (new in #6) needs `sealForRoom`/`openForRoom`
-  — **already added on this branch**, since an extra stub name is harmless
-  (verified) while a missing one is fatal.
-- `transport-seam.test.js` (new in #2) needs `clearRoomCursor` — **still to do,
-  during the merge.** It is the one remaining known break.
+**Message loss — four separate paths, all in transport:**
 
-**Verify with `node --check` on every file you touch by hand.** It caught a real
-mistake here that the eye did not.
+1. `rejoin()` read `ack.events` and ignored `ack.envelopes`, then advanced the
+   cursor anyway. The server strips `bin` rows from `events`
+   (`type: { not: 'bin' }`), so an envelope is the ONLY way a missed attachment
+   returns. Every photo/voice note/file received across a reconnect was dropped
+   and marked consumed. `joinPromise` is cached, so `join` runs once per page
+   load and every drop after that took this path — the common case on a phone.
+2. Every room joined TWICE on first connect (`on('connect')` is registered above
+   the `once('connect', resolve)` that settles `socketPromise`). Duplicate
+   messages were absorbed by `store.add`'s id check, so it was invisible — but
+   the second loop's `unopenedFloor = null` cleared a floor the first had just
+   set, and the cursor then advanced past a frame it could not open.
+3. Live frames dispatched concurrently while the replay loops are sequential. A
+   frame that decrypted could move the cursor while an earlier failing frame was
+   still inside `refreshRoomKey`, before its hold was set. Same race reordered
+   `edit` past the `msg` it edits, which returns silently.
+4. `replay()` capped events at `REPLAY_LIMIT` but computed `lastEventId` from an
+   UNCAPPED attachments query — a client far enough behind advanced past events
+   it was never sent (1200 messages in the case worked through). Now the
+   frontier is where the capped query stopped, the ack says `truncated`, and the
+   client drains pages.
 
+**Identity — two catastrophic:**
 
-### Blocked on the user
+5. `loadIdentity` did `.catch(() => null)` on its readonly get, collapsing
+   "nothing stored" into "the read threw" — and that branch generates a key and
+   `put`s it over the existing one. Non-extractable, so no copy: every v2
+   conversation dies. A quota blip or an iOS-suspended tab was enough, and the
+   device then reported `identityStatus() === 'ok'`.
+6. `wipeDevice` walked localStorage only; the identity key lives in IndexedDB.
+   "Clear all data" left it, and the next launch published the same key under a
+   new account id.
 
-1. **Merge order matters.** #6 and #2 both touch `socket-transport.js`,
-   `rooms.js`, `net.js`, `chat.js`. Whichever merges first, **the other needs
-   rebasing again**. #2 was rebased this session; merging #6 undoes that.
-2. **Two product decisions.** Should `guestAuth` refuse deleted accounts (a user
-   who deletes their account then cannot return by reopening the app)? And what
-   to do about an account open on two origins?
-3. **Merging #6 needs a Railway deploy too** — `cd spotme/backend && npm run
-   deploy`. Additive and admin-guarded, so no Vercel-first hazard.
-4. Rotate the R2 secret and the `cfat_…` Cloudflare token. **Still not done.**
-5. Delete `probedesk9` / `smoketest_desk`. `DELETE /api/admin/users/:id` now
-   exists (admin-only, needs a STAFF login, not a user token). The API is on
-   **Railway**, not Vercel.
-6. **Safari DevTools may no longer be needed.** The device banner was dead code
-   until `377372a`; once #6 ships, @vijay22's phone should say so on its own
-   screen.
+**Accounts and data:**
 
-### Traps found this session
+7. `POST /api/push` — no guard, `userId` from the body, no FK behind it. Anyone
+   could wipe a victim's push registrations, or point their own endpoint at a
+   victim's id and receive a live feed of which rooms were active (`tag: roomId`).
+8. `GET /api/knock?userId=<anyone>` — **no authentication at all**, and every
+   stored knock carries `roomId` AND `secret`, the room's encryption key, for 30
+   days. `_auth.js` (written for exactly this hole in `/api/translate`) was one
+   file away and never imported.
+9. `guestAuth` never cleared `deletedAt`, so re-claiming a released username left
+   {deletedAt set, ordinary username} = permanently 403. **Our own reset flow
+   does this** when the wipe half fails (private mode / quota).
+10. Three endpoints returned other users' full `User` rows including
+    `claimSecretHash` — the sole credential `guestAuth` checks. A chat request
+    was enough to harvest one.
+11. `GET /api/users/lookup` with NO parameter returned an arbitrary real account
+    (`@Query` -> undefined -> Prisma strips it -> no filter). Verified live.
+12. A knock's sender was taken from the payload while the authenticated sender
+    sat unused in `meta.peerId`. Any user could knock as anyone, and
+    `receiveKnock` stores the ATTACKER's roomId and secret.
 
-- **A cloud session still cannot reach `*.vercel.app` / `*.railway.app`** (403 at
-  the proxy). But it CAN run the whole stack locally — see harnesses above.
-- **`try { return f() } finally {}` runs the finally AT the return**, not when
-  the returned promise settles. That silently broke the first cut of the cursor
-  fix.
-- **A partial ESM `mock.module` is a link-time SyntaxError.** Adding an export to
-  `socket-transport.js` breaks four test files until their stubs list it.
-- `test/viewonce.test.js` is still 17/21 on Linux — verified pre-existing at
-  `origin/master` in the same container. Untouched, still undiagnosed.
+13a. The bridged /api handlers verified a token's SIGNATURE but never asked
+    whether the account still existed, so a deleted user's token kept working
+    against /api/knock, /api/translate, /api/voice and /api/presence for its
+    full 15-minute life while /api/auth/* refused it. One gate now covers all
+    four (`src/middleware/guestAuth.ts`). `/api/turn` is deliberately NOT gated
+    — it is fetched at boot before a token can exist and `readyRTC()` caches the
+    result, so a 401 there pins the session to STUN-only. It is still
+    unauthenticated and still mints Cloudflare credentials: see item 4 below.
+
+**Shipped-broken and unreachable:**
+
+13. A cloud build with `VITE_SPOTME_SERVER` unset resolved `API_BASE` to `''` and
+    pointed the socket at the static host. App loads, onboarding works, chat
+    never connects. Exit 0, no warning. `api.js` now falls back to the hosted
+    API (DEPLOY.md's address); `.vercelignore` covers `.env*`.
+14. `profile.js` claimed usernames against a DIFFERENT origin from the one
+    everyone searches — two registries really do exist.
+15. `#/groups` (~1200 lines: wizard, roles, bans, join-by-@handle) was a closed
+    loop with no way in. `#/contacts` had no `nav()` anywhere. The Bluetooth
+    scanner's only door was an empty state that vanished after first use.
+16. A brand-new chat said "the server could read it" while actually on e2e_v2 —
+    `convo` is captured once and `reach` upgrades asynchronously. The same stale
+    read made `keyWarning` **unreachable** on exactly those rooms.
+17. A failed TEXT message had no retry and nothing retried it (socket.io splices
+    the packet once the ack times out). A group created in-app could never be
+    shared. `inertNet` was missing `sendEdit`. "Last seen & online",
+    "Transliteration" and "Read aloud" all wrote settings nothing read.
+
+### THE TRAP THAT COST ME TWO FALSE ALARMS
+
+Both were the harness, not the app:
+
+- **Photo**: an earlier harness waited on `.psheet .pdone` (the view-once sheet).
+  The ordinary photo path goes through the EDITOR and `.pe-send`. Photos work.
+- **Reactions**: the message sheet arms itself against ghost clicks for 400 ms
+  (`chat.js`, `Date.now() - mountedAt < 400`) because a long-press mounts a sheet
+  under the finger. Playwright clicks faster than that. Reactions work.
+- **Reload "data loss"**: sampling the thread once, 5 s after reload. With
+  polling it reports *all persisted, all kept*.
+
+**Rule: before believing a UI feature is broken, check the harness isn't
+fighting deliberate armour.** Assert on what a user would see, and poll.
+
+### Verification standard used throughout
+
+Every fix has a regression test, and the important ones are MUTATION-VERIFIED —
+revert the fix and exactly the checks that name it fail. Proven for: the
+identity read fix, the knock impersonation guard, the relay auth gate, and text
+retry.
+
+```
+web       25 suites green   (viewonce 17/21 is PRE-EXISTING — confirmed at
+                             17/21 before any of this session's changes)
+backend   6 suites / 44 tests, tsc --noEmit clean
+build     vite build clean; a no-env build now bakes the Railway origin
+E2E       test/e2e/full-journey.mjs — two real browsers, see below
+```
+
+### The E2E harness is the thing to run first next session
+
+`spotme/web/test/e2e/full-journey.mjs` drives two isolated browser contexts
+through: onboarding, @username discovery, the knock, text both ways, unicode, a
+**20-message burst checked for loss / duplication / ordering**, read receipts,
+typing, reactions, replies, a photo through the real editor, an offline window,
+and a reload. It needs Postgres + backend + Vite up (see below).
+
+```bash
+su postgres -c "/usr/lib/postgresql/16/bin/pg_ctl -D /var/lib/postgresql/spotme-test \
+  -l /var/lib/postgresql/pg.log -o '-k /tmp -p 5432 -h 127.0.0.1' start"
+cd spotme/backend && set -a && . /tmp/be.env && set +a && node dist/main.js &
+cd spotme/web && npx vite --host 127.0.0.1 --port 5173 &
+node test/e2e/full-journey.mjs
+```
+
+`/tmp/be.env` needs DATABASE_URL, JWT_ACCESS_SECRET (**now >= 32 chars or the
+backend refuses to boot** — that is deliberate), JWT_REFRESH_SECRET, PORT=4000.
+Playwright lives in the scratchpad and is symlinked into `web/node_modules`;
+recreate the symlink if the container is new.
+
+### STILL OPEN — ranked, with the evidence already gathered
+
+1. **Any authenticated user can join any DM room.** `onJoin` refuses only
+   `policy?.banned`, and `policyFor` returns null for every DM. Room ids are
+   `dm-${cyrb53(sorted ids)}` — a pure function of two public ids. So: enumerate
+   ids via username search, compute the room id, mint a guest token, join,
+   replay 5000 events. For v1 rooms the secret is derivable the same way.
+   **The data to fix it already exists** — `push.remember()` writes a
+   `RoomMember` row on every join and it is never consulted. Suggested: refuse
+   the join if `RoomMember` rows exist for that room and the caller is not one.
+2. **`POST /api/groups` accepts an arbitrary `roomId`.** Plant a Group on
+   someone's DM room and `policyFor` starts returning `banned: true` for the
+   real participants — they are locked out of their own conversation. Fix:
+   refuse a roomId that already has `RoomMember` rows.
+3. **No rate limiting anywhere.** `@nestjs/throttler` is not a dependency.
+   `verifyOtp` has no attempt counter — a 6-digit code with unlimited parallel
+   guesses. `/api/username` enumerates the whole registry with ids attached.
+4. **`/api/presence` is still unauthenticated** (same shape as `/api/knock`,
+   returns `roomKey`/`writerKey`). Same one-file fix; I did knock only.
+5. **Both JWT strategies use the same secret**, so `EmployeeAuthGuard` accepts an
+   ordinary user token. Only `RolesGuard` stands between that and the admin
+   surface, and every staff route does carry `@Roles` — so it is a loaded gun,
+   not a fired one. Fix with an `aud` claim.
+6. **Deleting an account leaves the session alive**: tokens valid till expiry,
+   open sockets never re-checked, GroupMember/PushSubscription rows untouched.
+7. **`fetchreq`/`fetchres` bypass the cursor hold** (`return void handle…`) and
+   `handleFetchRes` clears its timer before awaiting, so a decrypt failure hangs
+   the caller forever.
+8. **`unwrapMeta` falls back to server cleartext** when the sealed copy fails to
+   authenticate — the only place in the codebase a GCM tag failure does not drop
+   the data. Attacker-chosen `id` can also pre-empt a real message via dedupe.
+9. **No `navigator.storage.persist()`**, and the identity key is non-extractable
+   with no backup. iOS evicts script-writable storage after ~7 days unused, which
+   silently kills every conversation. Needs a product decision, not a patch.
+10. **A device whose own published key was overwritten by the same account on
+    another origin cannot self-heal.** Unchanged and still deliberate —
+    republish-on-mismatch makes two live origins fight each launch.
+
+### Blocked on the owner (I cannot do these)
+
+- Handset test on @Justice12 / @mistry11.
+- `cd spotme/backend && npm run deploy` (Railway CLI, not authenticated here).
+- Purge ghost accounts `probedesk9`, `smoketest_desk`.
+- **Rotate the R2 secret access key and the `cfat_…` Cloudflare token.**
+- Decide whether to merge PR #2.
 
 ---
 

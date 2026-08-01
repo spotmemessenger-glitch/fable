@@ -12,7 +12,26 @@
  * where the static app and the API are on different hosts sets
  * VITE_SPOTME_SERVER at build time.
  */
-export const API_BASE = (import.meta.env?.VITE_SPOTME_SERVER || '').replace(/\/$/, '')
+/* The deployed backend, as recorded in DEPLOY.md. This is a FALLBACK, not the
+ * configuration: VITE_SPOTME_SERVER still wins whenever it is set.
+ *
+ * It exists because the failure without it is invisible and total. The static
+ * app is on Vercel and the API is on Railway, so an unset variable left
+ * API_BASE as '' — every /api call and `io('/rooms')` then pointed at the
+ * static host, which runs no server. The app loaded, onboarding worked, and
+ * every conversation sat forever unable to connect. The build exited 0 and said
+ * nothing, and a git-connected Vercel build (which sets no variables of its
+ * own) produced exactly that.
+ *
+ * Same-origin is still the right answer for the dev server, which proxies /api
+ * and /socket.io — hence the localhost check rather than a blanket default. */
+const HOSTED_API = 'https://api-production-0a4ca.up.railway.app'
+const sameOriginServes = typeof location !== 'undefined' &&
+  (location.hostname === 'localhost' || /^[\d.:[\]]+$/.test(location.hostname))
+
+export const API_BASE = (
+  import.meta.env?.VITE_SPOTME_SERVER || (sameOriginServes ? '' : HOSTED_API)
+).replace(/\/$/, '')
 
 /** Absolute URL for an /api path — accepts '/api/x' or 'api/x'. */
 export const apiUrl = (path) => `${API_BASE}/${String(path).replace(/^\//, '')}`

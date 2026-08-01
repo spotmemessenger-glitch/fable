@@ -4,6 +4,9 @@ import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { pathToFileURL } from 'node:url';
 import { join } from 'node:path';
 import { AppModule } from './app.module';
+import { PrismaService } from './prisma/prisma.service';
+import { createGuestAuthGate, GateUser } from './middleware/guestAuth';
+import { JwtService } from '@nestjs/jwt';
 
 // TS compiles `import()` to `require` under CommonJS; this keeps it a real
 // dynamic import so the ESM handlers in spotme/web/api load correctly.
@@ -34,6 +37,34 @@ async function mountWebApiBridge(app: INestApplication) {
   // TURN credentials and voice cloning were dead in production while every
   // local test passed.
   const apiDir = process.env.WEB_API_DIR || join(process.cwd(), '..', 'web', 'api');
+
+  /* THE DELETED-ACCOUNT CHECK THE BRIDGED HANDLERS DO NOT DO.
+   *
+   * Each handler verifies its own token, which proves the token was signed by
+   * us and nothing more. Whether the account still EXISTS is a database
+   * question none of them asks — so a purged user's access token went on
+   * working here for its full remaining lifetime, while `/api/auth/*` refused
+   * it. One gate in front of all five, so the next handler someone bridges
+   * inherits it instead of having to remember. */
+  const prisma = app.get(PrismaService);
+  const jwt = app.get(JwtService);
+  const gate = createGuestAuthGate(async (token: string): Promise<GateUser | null> => {
+    const payload = jwt.verify<{ sub?: string }>(token, {
+      secret: process.env.JWT_ACCESS_SECRET,
+    });
+    if (!payload?.sub) return null;
+    return prisma.user.findUnique({
+      where: { id: payload.sub },
+      select: { id: true, username: true, deletedAt: true },
+    });
+  });
+  /* `turn` is deliberately NOT gated. It is fetched once at boot, BEFORE
+   * onboarding can have produced a token, and `readyRTC()` caches its result
+   * for the life of the page — so a 401 there would pin a session to STUN-only
+   * relaying for reasons that have nothing to do with the caller. It is
+   * unauthenticated today and that is its own finding, recorded in the handoff;
+   * it wants a fix that does not depend on a token existing yet. */
+  const GATED = new Set(['translate', 'voice', 'knock', 'presence']);
   // `push` is NOT bridged: PushController owns /api/push now. The old handler
   // stored subscriptions in Upstash and had the sender poke the recipient,
   // which the server can do better and more honestly from the event log.
@@ -46,7 +77,8 @@ async function mountWebApiBridge(app: INestApplication) {
       // (that happens during listen()), and Express runs middleware in
       // registration order — so without this the handlers see req.body
       // undefined and answer "need q" to a request that plainly had one.
-      express.all(`/api/${name}`, jsonBody, (req: unknown, res: BridgeResponse) => {
+      const guards = GATED.has(name) ? [jsonBody, gate] : [jsonBody];
+      express.all(`/api/${name}`, ...guards, (req: unknown, res: BridgeResponse) => {
         Promise.resolve((handler as (rq: unknown, rs: unknown) => unknown)(req, res)).catch((e: unknown) => {
           // Log the detail, return none of it. This used to answer 500 with the
           // raw error message, which for a vendor proxy names the vendor, the
@@ -70,6 +102,24 @@ async function mountWebApiBridge(app: INestApplication) {
 }
 
 async function bootstrap() {
+  /* REFUSE TO BOOT WITH A SIGNING KEY ANYONE CAN READ.
+   *
+   * Six places sign or verify with `process.env.JWT_ACCESS_SECRET ||
+   * 'dev-only-secret'`. That fallback is published in this repository, so if the
+   * variable is ever unset or blank on the host, the server comes up looking
+   * completely healthy while anyone who has seen the source can forge
+   * `{ sub: <any user id>, role: 'ADMIN' }` and be that person, or be staff.
+   *
+   * A missing secret is a deployment mistake, and the moment to find out is at
+   * boot, in the logs, not afterwards. */
+  const jwtSecret = process.env.JWT_ACCESS_SECRET;
+  if (!jwtSecret || jwtSecret.length < 32) {
+    throw new Error(
+      'JWT_ACCESS_SECRET must be set to at least 32 characters. ' +
+        'Refusing to boot: the fallback signing key is public, and anyone could mint admin tokens with it.',
+    );
+  }
+
   const app = await NestFactory.create(AppModule, { cors: true });
   app.useGlobalPipes(
     new ValidationPipe({ whitelist: true, transform: true, forbidNonWhitelisted: true }),
@@ -81,4 +131,11 @@ async function bootstrap() {
   // eslint-disable-next-line no-console
   console.log(`Spot Me backend listening on :${port}`);
 }
-bootstrap();
+// A bare `bootstrap()` meant any failure to start — Postgres unreachable, port
+// taken, the assertion above — died as an unhandled rejection with no usable
+// line in the Railway log.
+bootstrap().catch((err) => {
+  // eslint-disable-next-line no-console
+  console.error('fatal: Spot Me backend failed to start —', err instanceof Error ? err.message : err);
+  process.exit(1);
+});

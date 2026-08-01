@@ -1,6 +1,7 @@
 import { Injectable, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { RequestSource, RequestStatus } from '@prisma/client';
+import { PUBLIC_USER } from '../common/prisma/public-user';
 
 const REQUEST_TTL_DAYS = 7;
 
@@ -90,7 +91,7 @@ export class ChatRequestsService {
   pendingForUser(userId: string) {
     return this.prisma.chatRequest.findMany({
       where: { toUserId: userId, status: RequestStatus.PENDING, expiresAt: { gt: new Date() } },
-      include: { fromUser: true },
+      include: { fromUser: { select: PUBLIC_USER } },
       orderBy: { createdAt: 'desc' },
     });
   }

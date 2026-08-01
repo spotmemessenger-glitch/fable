@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { Sex } from '@prisma/client';
+import { SELF_USER } from '../common/prisma/public-user';
 
 export interface UpdateProfileInput {
   name?: string;
@@ -17,7 +18,10 @@ export class UsersService {
   constructor(private prisma: PrismaService) {}
 
   findById(id: string) {
-    return this.prisma.user.findUnique({ where: { id } });
+    // Even your OWN row must not hand back `passwordHash`/`claimSecretHash` —
+    // the claim secret is the only credential `guestAuth` checks, so anything
+    // that can read this response can work offline on becoming you.
+    return this.prisma.user.findUnique({ where: { id }, select: SELF_USER });
   }
 
   /** Public-safe lookup for starting a chat by username — no email/phone/demographics returned. */

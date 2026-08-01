@@ -553,8 +553,20 @@ export function render (root, ctx, roomId) {
     if (c.myLang !== base) db.upsertConvo({ roomId, myLang: base })
   }
 
-  /** Whole-chat transliteration switch, independent of the composer mode. */
-  const xlitOn = () => Boolean((db.convo(roomId) || convo).xlit)
+  /**
+   * Whole-chat transliteration switch, independent of the composer mode.
+   *
+   * A chat that has never been toggled falls back to the Settings preference.
+   * That switch — "Transliteration · Type in English, send in your script" —
+   * wrote `profile.translit` and NOTHING read it, so turning it on or off did
+   * nothing anywhere in the app; the only working control was the 文A button in
+   * each chat's header. `undefined` rather than a truthiness test is what keeps
+   * a deliberate per-chat "off" from being overridden by a global "on".
+   */
+  const xlitOn = () => {
+    const c = db.convo(roomId) || convo
+    return c.xlit === undefined ? Boolean(db.profile().translit) : Boolean(c.xlit)
+  }
 
   function setCompose (patch) {
     db.upsertConvo({ roomId, ...patch })
@@ -1879,9 +1891,15 @@ export function render (root, ctx, roomId) {
     // reading "Sent" is the whole complaint.
     if (m.failed) {
       const row = el('div', { class: 'readRow failed', html: IC.check1 }, ['Not delivered'])
-      // A failed send used to be the end of the road — the only remedy on
-      // offer was to record the whole note again. The bytes are still here.
-      if (m.kind && m.kind !== 'text' && m.data) {
+      /* A failed send used to be the end of the road — the only remedy on
+       * offer was to record the whole note again. The bytes are still here.
+       *
+       * TEXT WAS EXCLUDED, and that was the worse half: a typed message that
+       * failed showed "Not delivered" with no way to send it again, and
+       * nothing behind the scenes retried it either (socket.io drops a packet
+       * from its send buffer once the ack times out). The text is sitting in
+       * the store, intact — only the button was missing. */
+      if ((!m.kind || m.kind === 'text') || m.data) {
         row.appendChild(el('button', {
           class: 'retryTx', type: 'button', text: 'Retry',
           onclick (e) { e.stopPropagation(); retrySend(m) }
@@ -2055,6 +2073,12 @@ export function render (root, ctx, roomId) {
   }
 
   function appendMessage (m, skipAlbumCheck) {
+    /* The first-run line belongs to an EMPTY thread and nothing else. It is
+     * rendered at the one moment the room is guaranteed to still look v1 — the
+     * chat opens before key agreement resolves — so leaving it in place once
+     * messages start arriving pinned a stale, and wrong, security claim above a
+     * conversation that had since upgraded. */
+    thread.querySelector('.sys.firstrun')?.remove()
     // A newly arrived photo may complete a run of four — the whole thread has
     // to regroup, which incremental appending cannot do.
     if (!skipAlbumCheck && albumable(m) && completesAlbum(m)) {
@@ -2102,9 +2126,30 @@ export function render (root, ctx, roomId) {
     if (replyTarget?.id === id) clearReply()
   }
 
+  /**
+   * The room's encryption version AS IT IS NOW, not as it was when this view
+   * was built.
+   *
+   * `convo` is captured once at construction (`const convo = db.convo(roomId)`),
+   * and `reach()` deliberately writes the convo record as E2E_V1 FIRST and
+   * upgrades it to E2E_V2 only once key agreement resolves — that ordering is
+   * what stops a new chat bouncing off "Conversation not found". The chat view
+   * opens in between, so the snapshot it captured says v1 for a room that is
+   * about to be, and then is, v2.
+   *
+   * Two things read this field, and the stale value broke both:
+   *   - `sysLine` told the user "the server could read it" about a brand-new
+   *     end-to-end encrypted chat. A false alarm is not harmless — it is how
+   *     people learn to disregard the real one.
+   *   - `keyWarning` returns null for anything that is not v2, so on exactly
+   *     these rooms the "messages are arriving and can't be read" banner could
+   *     never render at all.
+   */
+  const e2eVersionNow = () => db.convo(roomId)?.e2eVersion || convo?.e2eVersion
+
   function sysLine () {
-    return el('div', { class: 'sys', html: IC.spark }, [
-      convo?.e2eVersion === 'e2e_v2'
+    return el('div', { class: 'sys firstrun', html: IC.spark }, [
+      e2eVersionNow() === 'e2e_v2'
         ? 'Encrypted with keys made on your devices. Translation runs on-device when possible.'
         : 'Older chat — its key came from both account IDs, so the server could read it.'
     ])
@@ -2124,7 +2169,7 @@ export function render (root, ctx, roomId) {
    * cold open of a perfectly healthy device.
    */
   function keyWarning () {
-    if (convo?.e2eVersion !== 'e2e_v2') return null   // a v1 room never used this key
+    if (e2eVersionNow() !== 'e2e_v2') return null   // a v1 room never used this key
 
     /* THIS ROOM specifically is unreadable, whatever the device's own key is
      * doing. Ranked above the device-level warning because it is the stronger
@@ -2792,6 +2837,27 @@ export function render (root, ctx, roomId) {
         canBlock ? act(' danger', IC.block, 'Block', confirmBlock) : null
       ]),
       el('div', { class: 'cp-list' }, [
+        /* A GROUP'S ONLY DOOR IS ITS LINK, and no screen a user could reach was
+         * building one. The two link builders that emit the `&g=` parameter
+         * `adoptRoomLink` needs both live behind `#/groups`, and the group you
+         * get from the inbox's "New group" is created locally — so it was a
+         * room of one, permanently, with no button anywhere to invite anyone. */
+        convo.kind === 'group'
+          ? row(IC.link, 'Share invite link', null, () => {
+              close()
+              const c = db.convo(roomId) || convo
+              const url = `${location.origin}${location.pathname}#r=${c.roomId}&k=${c.secret}` +
+                `&g=${encodeURIComponent(c.title || 'Group')}`
+              if (navigator.share) {
+                navigator.share({ title: 'Spot Me', text: 'Join our group on Spot Me', url })
+                  .catch(() => { /* dismissed, or unavailable mid-flight */ })
+                return
+              }
+              navigator.clipboard?.writeText(url)
+                .then(() => ctx.toast('Invite link copied'))
+                .catch(() => ctx.toast('Could not share the link'))
+            })
+          : null,
         row(IC.link, 'Connected through', CONNECTED_VIA[convo.mode] || 'Invite link', null),
         row(IC.clock, 'Disappearing messages', msgTtl ? fmtTtlLong(msgTtl) : 'Off',
           () => { close(); openTimerSheet() }),
@@ -2837,7 +2903,7 @@ export function render (root, ctx, roomId) {
        * truth per room instead of one reassuring sentence for both. */
       el('p', {
         class: 'cp-enc',
-        text: convo.e2eVersion === 'e2e_v2'
+        text: e2eVersionNow() === 'e2e_v2'
           ? '🔒 Encrypted with keys created on your device and your contact\'s. The server carries the messages but holds no key to them.'
           : '⚠️ This is an older chat. Its key was derived from both account IDs, so the server could read it. Start a new chat for device-held keys.'
       })
@@ -3453,6 +3519,12 @@ export function render (root, ctx, roomId) {
 
   /** Push a failed attachment's bytes again — they never left this device. */
   function retrySend (m) {
+    // Text has no bytes and no progress ring — it just goes again.
+    if (!m.kind || m.kind === 'text') {
+      if (!rooms.retryMessage(roomId, m.id)) { ctx.toast('That message is no longer here'); return }
+      refreshRow(m.id)
+      return
+    }
     inFlight.add(m.id)
     if (!rooms.retryAttachment(roomId, m.id, (p) => paintProgress(m.id, p))) {
       inFlight.delete(m.id)
@@ -4345,6 +4417,14 @@ export function render (root, ctx, roomId) {
          * the user's own sends cannot clear it by accident. */
         if (roomUndecryptable) { roomUndecryptable = false; roomUndecryptableReason = null; renderList() }
         clearRxProgress(event.message?.id)
+        /* The "Read messages aloud" switch wrote `settings.readAloud` and
+         * nothing read it — the only working read-aloud was the manual
+         * per-message item in the long-press sheet, which is not what the
+         * toggle offers. This is the incoming path only, so it never reads the
+         * user's own sends back to them. */
+        if (db.settings().readAloud && event.message?.text) {
+          speak(event.message.text, db.profile().lang)
+        }
         const stick = nearBottom()
         appendMessage(event.message)
         rooms.markRead(roomId)

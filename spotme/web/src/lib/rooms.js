@@ -12,6 +12,9 @@
 import { createNet, randomId } from '../net.js'
 import { createStore } from '../store.js'
 import { db, ROOM_PREFIX } from './db.js'
+// For the receiving half of the "Last seen & online" setting — discovery does
+// not import rooms, so this direction is acyclic.
+import { lobby } from './discovery.js'
 import { alertMessage } from './notify.js'
 import { pokePeer } from './push.js'
 import { setRoomKeyProvider, freshTokens, clearRoomKey, clearRoomCursor } from './socket-transport.js'
@@ -86,12 +89,36 @@ function bufferToDataURL (payload, mime) {
   return `data:${mime};base64,${btoa(binary)}`
 }
 
+/**
+ * May we record when this peer was last online?
+ *
+ * Their announcement carries the answer (`seen`), set from their own
+ * "Last seen & online" row. Unknown peers default to yes — a peer we have never
+ * seen in the lobby has expressed no preference, and refusing by default would
+ * silently break the header for everyone on an older build.
+ *
+ * 'contacts' is honoured symmetrically: we record only if they are in OUR
+ * contacts, which is the closest a client can get without asking the server who
+ * is in theirs. Cooperative by design, as the setting's own subtitle says.
+ */
+function peerAllowsSeen (peerId) {
+  if (!peerId) return true
+  const announced = lobby.peers().find((p) => p.id === peerId)?.seen
+  if (announced === 'nobody') return false
+  if (announced === 'contacts') return db.contacts().some((c) => c.id === peerId)
+  return true
+}
+
 /** Legacy demo conversations in old storage — inert, never networked. */
 function inertNet () {
   const noop = () => {}
   return {
     sendMessage: noop, sendReaction: noop, sendProfile: noop, sendDelete: noop,
-    sendTyping: noop, sendRead: noop, sendSeen: noop, sendCall: noop, sendLocup: noop,
+    // `sendEdit` was the one member of createNet's surface missing here, and
+    // `editMessage` calls it AFTER it has already patched the store — so
+    // editing your own text in a legacy demo convo threw a TypeError with the
+    // text already changed and the sheet still open, saying nothing.
+    sendTyping: noop, sendRead: noop, sendSeen: noop, sendCall: noop, sendLocup: noop, sendEdit: noop,
     sendBinary: () => Promise.resolve(),
     sendBinAck: noop,
     fetchFrom: () => Promise.resolve(null),
@@ -361,8 +388,11 @@ function createConnection (convo) {
 
     onPeers (count) {
       // Track when the peer was last connected, so the header can say
-      // "Last seen 14:32" instead of a vague waiting message.
-      if (count > 0 || conn.peerCount > 0) {
+      // "Last seen 14:32" instead of a vague waiting message — unless they
+      // asked us not to. `peerAllowsSeen` is the receiving half of the
+      // "Last seen & online" setting; without it the choice never left the
+      // device that made it.
+      if ((count > 0 || conn.peerCount > 0) && peerAllowsSeen(convo.peer?.id)) {
         db.upsertConvo({ roomId: convo.roomId, peerSeen: Date.now() })
       }
       /* Every successful connection files them as a contact — reach.js already
@@ -845,6 +875,32 @@ export const rooms = {
    * it does not do yet; duplicate slices are already harmless (the receiver
    * ignores a seq it holds, and the log now reports DISTINCT seqs held).
    */
+  /**
+   * Send a failed TEXT message again.
+   *
+   * `retryAttachment` below refuses text explicitly, and the "Not delivered"
+   * row only offered a Retry button for attachments — so a text message that
+   * failed to send was the end of the road. There was no queue behind it
+   * either: `sendAction` recovers only a `not joined` error, and socket.io
+   * splices a packet out of its send buffer once the ack times out, so a
+   * fifteen-second outage discarded the message for good.
+   *
+   * The text never left this device. It is sitting in the store, fully intact,
+   * one call away from being sent — the only thing missing was the offer.
+   */
+  retryMessage (roomId, id) {
+    const conn = this.ensure(roomId)
+    if (!conn) return false
+    const message = conn.store.list().find((m) => m.id === id)
+    if (!message || (message.kind && message.kind !== 'text')) return false
+    conn.store.patch(id, { failed: false })
+    // `onSendError` flips it back if this attempt fails too, exactly as the
+    // first attempt did — so a retry that fails is honest rather than silent.
+    conn.net.sendMessage(message)
+    wakeIfUnreachable(conn, roomId)
+    return true
+  },
+
   retryAttachment (roomId, id, onProgress) {
     const conn = this.ensure(roomId)
     if (!conn) return false

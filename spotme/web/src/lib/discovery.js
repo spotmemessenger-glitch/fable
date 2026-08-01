@@ -56,6 +56,16 @@ function createLobby () {
       avatar: p.avatar,
       lang: p.lang,
       ghost: !show,
+      /* The "Last seen & online" choice has to TRAVEL before any device can
+       * honour it. It never did: the setting was written by the Settings screen
+       * and read back only by its own label, so choosing "Nobody" changed
+       * nothing at all — every peer went on recording and showing exactly the
+       * same last-seen time. A privacy control that does nothing is worse than
+       * no control, because it is believed.
+       *
+       * Cooperative, and the row says so: it asks peers not to record, the way
+       * a standard client honours it, and cannot compel one. */
+      seen: db.settings().lastSeen || 'everyone',
       lat: show && position ? position.lat : null,
       lon: show && position ? position.lon : null,
       ts: Date.now()

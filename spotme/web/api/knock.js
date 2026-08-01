@@ -1,3 +1,5 @@
+// The gate written for /api/translate; this endpoint needed it just as much.
+import { verifyAccessToken } from './_auth.js'
 /**
  * Spot Me — pending-knock relay (Vercel Node serverless function).
  *
@@ -191,23 +193,53 @@ async function handleAck (res, body) {
 export default async function handler (req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*')
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization')
   res.setHeader('Cache-Control', 'no-store')
   if (req.method === 'OPTIONS') { res.status(204).end(); return }
 
+  /* WHOSE INBOX THIS IS COMES FROM THE TOKEN.
+   *
+   * This endpoint had no authentication of any kind, and every stored knock
+   * carries `roomId` AND `secret` — the room's encryption key. So
+   * `GET /api/knock?userId=<anyone>` handed out, for any account whose id you
+   * knew, the room id and key of every chat they had been invited to and not
+   * yet opened, held for thirty days. User ids come free from the username
+   * search. `POST {action:'ack'}` then deleted the evidence, so the victim
+   * never learned the invitation had arrived.
+   *
+   * The guard this needed already existed one file over — `_auth.js` was
+   * written for exactly this shape of hole in `/api/translate`, and says so.
+   *
+   * `store` is the deliberate exception. It writes into someone ELSE's inbox,
+   * which is the whole point of a knock, so the caller's own identity is not
+   * the inbox being addressed — but it is still forced onto the record below so
+   * a knock cannot claim to be from a third party. */
+  const bearer = String(req.headers?.authorization || '').replace(/^Bearer\s+/i, '')
+  const claims = verifyAccessToken(bearer)
+  if (!claims?.sub) { send(res, 401, { error: 'unauthorized' }); return }
+
   try {
-    if (req.method === 'GET') { await handleGet(res, req.query?.userId); return }
+    // Never `req.query.userId` — that parameter was the vulnerability.
+    if (req.method === 'GET') { await handleGet(res, claims.sub); return }
 
     if (req.method === 'POST') {
       const body = (typeof req.body === 'string' ? safeJson(req.body) : req.body) || {}
-      if (body.action === 'store') { await handleStore(res, body); return }
-      if (body.action === 'ack') { await handleAck(res, body); return }
+      if (body.action === 'store') {
+        // The sender is who the token says, not who the payload claims.
+        const knock = { ...(body.knock || {}) }
+        if (knock.from && typeof knock.from === 'object') knock.from = { ...knock.from, id: claims.sub }
+        await handleStore(res, { ...body, knock })
+        return
+      }
+      if (body.action === 'ack') { await handleAck(res, { ...body, userId: claims.sub }); return }
       send(res, 400, { error: 'unknown action' })
       return
     }
 
     send(res, 405, { error: 'method not allowed' })
   } catch (error) {
-    send(res, 500, { error: error?.message || 'server error' })
+    // The raw message names internals. `main.ts` strips exactly this for
+    // exceptions that escape a handler — this one answered its own 500 first.
+    send(res, 500, { error: 'server error' })
   }
 }

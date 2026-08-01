@@ -2,3 +2,8 @@ node_modules
 android
 test
 *.apk
+
+# .env.local would bake a laptop address into a production bundle, and the
+# Vercel CLI does not consult .gitignore when this file exists.
+.env
+.env.*

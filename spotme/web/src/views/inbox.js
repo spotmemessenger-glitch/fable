@@ -221,6 +221,21 @@ export function render (root, ctx) {
         nameInput.focus()
       }),
       groupForm,
+      /* THE DOORS TO TWO WHOLE SCREENS THAT NOTHING NAVIGATED TO.
+       *
+       * `#/groups` (the list, the create wizard with roster and per-role
+       * permissions, join-by-public-@handle, share invite link, manage members,
+       * roles, bans, transfer ownership) was only ever reachable FROM
+       * `#/group/:id`, which is only reachable from `#/groups` — a closed loop
+       * with no way in. `#/contacts` had no `nav()` call anywhere at all. Both
+       * were registered in ROUTES and shipped in the bundle; ~1400 lines of
+       * finished feature that a user could not open.
+       *
+       * The local "New group" above still works and is still simpler, but it
+       * makes a room with no roster and no server-side group, so it is not a
+       * substitute for the wizard. */
+      item(ICON.group, 'Groups', 'Create with roles, or join by @handle', () => { close(); ctx.nav('#/groups') }),
+      item(ICON.at, 'Contacts', 'Everyone you have talked to', () => { close(); ctx.nav('#/contacts') }),
       item(ICON.pin, 'Find people nearby', null, () => { close(); ctx.nav('#/discovery') }),
       item(ICON.at, 'Search by username', null, () => { close(); searchInput.focus() }),
       item(ICON.archBox, 'Archived chats', null, () => {
@@ -545,6 +560,16 @@ export function render (root, ctx) {
     chatsHead.style.display = ''
     chatsHead.textContent = TABS.find((t) => t.key === tab)?.label || 'Chats'
     const rows = db.convos().filter(matches)
+    /* The scanner's ONLY entrance was the empty state below — so it closed the
+     * moment the first Bluetooth chat existed, and `bluetooth.js`'s own back
+     * button goes to `#/chat`, leaving no way back in either. One chat and the
+     * whole 300-line screen became unreachable for good. */
+    if (tab === 'bt') {
+      listEl.appendChild(el('button', {
+        class: 'pill ok btscan', type: 'button', text: 'Scan for people nearby',
+        onclick: () => ctx.nav('#/bluetooth')
+      }))
+    }
     if (!rows.length) { listEl.appendChild(buildEmpty()); return }
     rows.forEach((convo, i) => listEl.appendChild(buildRow(convo, online, i)))
   }

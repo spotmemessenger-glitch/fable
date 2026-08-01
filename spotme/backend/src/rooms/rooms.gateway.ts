@@ -236,7 +236,7 @@ export class RoomsGateway implements OnGatewayConnection, OnGatewayDisconnect {
       client.to(`r:${roomId}`).emit('peer', { roomId, peerId: userId, action: 'join' });
     }
     const since = Number.isFinite(body.since) ? Math.max(0, Number(body.since)) : 0;
-    const { events, envelopes, lastEventId } = await this.roomsService.replay(roomId, since);
+    const { events, envelopes, lastEventId, truncated } = await this.roomsService.replay(roomId, since);
     return {
       peers: [...room.keys()].filter((id) => id !== userId),
       events: events.map((e) => ({
@@ -248,6 +248,9 @@ export class RoomsGateway implements OnGatewayConnection, OnGatewayDisconnect {
       })),
       envelopes: envelopes.map((e) => ({ seq: e.id, from: e.senderId, meta: e.meta, attachId: e.attachId })),
       lastEventId,
+      // More is waiting above lastEventId — the client should come straight
+      // back rather than sit on a partial history until the next reconnect.
+      truncated,
     };
   }
 
