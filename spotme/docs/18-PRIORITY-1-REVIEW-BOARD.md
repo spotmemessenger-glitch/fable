@@ -7,6 +7,15 @@ will follow. All five specialist reviews and the coordinator have reported; the
 consolidated Final Review Board Report and the single evidence-based verdict are
 at the end of this document.
 
+**Owner directive (2026-08-01, incorporated):** every HIGH finding carries a full
+twelve-axis engineering analysis (below); findings are cross-verified, de-duped,
+and merged into one consolidated risk register and one dependency-ordered cleanup
+plan. **Revised merge plan:** the crypto stack does *not* merge as-is — one
+focused cleanup iteration (HIGH-only first: H1, H2, NEW-4, B1) lands and is
+re-verified by the board *before* merge, after which the verdict is expected to
+flip to APPROVED. The board remains in review-freeze — no code modified, nothing
+merged, Priority 2 not begun — until the owner authorizes the cleanup iteration.
+
 **Method (owner-mandated):** independent, evidence-based specialist reviews
 grounded in the repository, ADRs, tests, vectors, and review documents (`15`,
 `16`, `17`). No fabricated consensus — disagreements are recorded and the
@@ -429,181 +438,377 @@ production today.**
 
 ---
 
-## Cross-verification of HIGH findings (minimal safe fix + regression risk)
+## HIGH / CRITICAL findings — full engineering analysis
 
-Per the review directive, each HIGH is assessed for: true defect vs false
-positive, cross-domain confirmation, whether it blocks Priority 1, the *minimal*
-safe fix, and the regression risk that fix introduces. Cross-specialist
-confirmation from reviewers 3–5 is folded in on completion.
+Per the owner directive (2026-08-01), each HIGH is given a structured
+engineering analysis on twelve axes. **CRITICAL: none** — no finding reached
+CRITICAL; the worst are HIGH, all authenticated-principal or local-adversary,
+none a remote break of messaging confidentiality. Cross-verification is folded in
+per finding; disagreements are preserved, not averaged (NEW-1).
 
-### H1 — signing-lifecycle concurrency / withdrawal clobber
-- **True defect:** yes. Reproducible: two concurrent `PUT`s of different keys at
-  Postgres READ COMMITTED both read "no active" and both create; `supersede`
-  reads the active row *outside* its `$transaction`, so a `withdraw` committing
-  in the gap is flipped back to active.
-- **Domains / confirmation:** Backend Architecture + Database Engineering +
-  Reliability + Security. **Confirmed by reviewer 3** (independently reproduced
-  all three failure modes; added NEW-1) **and reviewer 5** (no `FOR UPDATE`/
-  `Serializable`/`isolationLevel`/advisory lock anywhere in `backend/src/auth`;
-  supersede reads active via `this.prisma` not `tx`). Three-way confirmation.
-- **Blocks P1:** YES — security-critical identity path; identity-splitting +
-  rollback-clobber during exactly the incident a withdrawal responds to.
-- **Minimal safe fix:** at the top of each mutating transaction
-  (publish/supersede/withdraw) take a transaction-scoped per-user advisory lock
-  `SELECT pg_advisory_xact_lock(hashtext($userId))`, then read the active row
-  *inside* the transaction and mutate; catch Prisma P2002 in `publish` as the
-  idempotent path. (Defense-in-depth: a partial unique index
-  `(userId) WHERE status='active'` in a migration — noting CI's `db push` won't
-  apply it, so the lock is the actual fix.)
-- **Regression risk:** LOW. Advisory locks serialize only per-user lifecycle
-  writes — rare, administrative operations, never the message path or any read.
-  The lock auto-releases on commit/rollback. The only behavioral change is that
-  two concurrent same-user lifecycle writes serialize (correct). Risk to watch:
-  the lock must be taken in *all three* mutating paths or it protects nothing —
-  the fix's own test must prove the withdraw-vs-supersede race.
+### H1 — signing-key lifecycle concurrency / withdrawal clobber (HIGH)
 
-### H2 — base64 malleability lets a retired key return
-- **True defect:** yes. `Buffer.from(b64,'base64')` ignores the final quantum's
-  unused bits, so ~4 strings decode to one key; retirement/idempotency/uniqueness
-  compare the *string*, so re-encoding a retired key's bytes as a different
-  string passes the "never returns" guard.
-- **Domains / confirmation:** Backend + Security. **Empirically confirmed by
-  execution twice** — reviewer 3 (four distinct base64 strings decoding
-  byte-identical for a 32-byte key) and reviewer 5 (two variant strings both
-  passing the server regex, decoding identical). Cross-module: `device-set.js`
-  commits over *bytes*, so the two modules disagree on key identity — an
-  inconsistency to reconcile.
-- **Blocks P1:** YES — defeats a stated security guarantee (ADR-008: a retired
-  key never returns).
-- **Minimal safe fix:** canonicalize at ingress —
-  `Buffer.from(b64,'base64').toString('base64')` — and use the canonical form for
-  the stored value and every comparison/constraint.
-- **Regression risk:** VERY LOW. Canonicalization is idempotent on already-
-  canonical input, and honest clients emit canonical base64 (`btoa`/standard),
-  so no real-world stored key changes and no data migration is needed. Risk to
-  watch: confirm no existing stored key is non-canonical before relying on the
-  equality (true for all client-generated keys).
+- **Root cause.** The "≤1 active row per user" invariant is a read-modify-write
+  with no serialization. `publish()` reads the active row inside a txn but takes
+  no row lock; `supersede()` reads the active row *outside* its write txn.
+  `prisma.service.ts` sets no `isolationLevel`, so interactive txns run at
+  Postgres default READ COMMITTED. There is no DB-level partial unique index and
+  no P2002 catch.
+- **Affected modules.** `backend/src/auth/signing-keys.service.ts` (publish
+  :74-99, supersede :108-156, withdraw :166-183); `backend/src/prisma.service.ts`
+  (no isolationLevel); `backend/prisma/schema.prisma` :592-593; migration
+  `20260801170000_signing_keys`.
+- **Security impact.** Two simultaneously-valid trust anchors (split-brain
+  identity); an incident-response withdrawal (ADR-008 §12 rollback) silently
+  reverted by a racing supersede — in the exact module whose purpose is a
+  tamper-evident anchor.
+- **Operational impact.** Nondeterministic key served to peers (`fetch` picks
+  whichever sorts first); HTTP 500 on a concurrent same-key PUT (uncaught P2002)
+  where the contract promises an idempotent 200; the rollback tool cannot be
+  trusted to stick under load.
+- **Reproduction conditions.** Two concurrent `PUT /v2/auth/signing-key` with
+  *different* keys for one principal → two active rows. `DELETE` (withdraw)
+  concurrent with `POST /supersede` → active key resurrected. Two identical
+  first-publishes → one 500. Authenticated-principal only (self-racing one's own
+  account).
+- **Why tests did / did not catch it.** Did **not**: the signing-keys e2e suite
+  is fully sequential — there is *no* concurrency test for the signing lifecycle,
+  while OPK single-use *did* get a 10-way race test (the asymmetry reviewer 5
+  flagged). Confirmed by inspection + schema by reviewers 3 and 5.
+- **Minimal safe fix.** Per-user transaction-scoped advisory lock
+  `pg_advisory_xact_lock(hashtext(userId))` as the first statement in *all three*
+  mutating txns; move the active-row read inside the txn; catch Prisma P2002 in
+  `publish` as the idempotent path. Application-level, CI-verifiable today.
+- **Regression risk introduced by the fix.** LOW. Advisory locks serialize only
+  per-user lifecycle writes (rare, administrative) — never the message path or
+  any read — and auto-release on commit/rollback. Risk to watch: the lock must
+  be in *all three* paths or it protects nothing.
+- **Additional tests required after the fix.** publish/supersede/withdraw
+  concurrency race incl. the withdraw-vs-supersede clobber; P2002→idempotent-200.
+  (Both run against the `db push` schema — the lock is behavioral.)
+- **Blocks Priority 1?** **YES.**
+- **Affects backward compatibility?** No. No wire/schema/API contract change; the
+  lock is invisible to clients and P2002-catch returns the 200 the contract
+  always specified. No stored-data migration.
+- **Affects e2e_v3 activation?** Indirectly — it gates the signing-key
+  publication trust anchor e2e_v3 builds on, so it must be fixed before
+  `SIGNING_PUBLICATION_ENABLED` is turned on. Does not touch the ratchet/X3DH
+  wire.
 
-### B1 — conformance vector 13 mis-generated + untested
-- **True defect:** yes, but in the **vector/test artifact, not `ratchet.js`.**
-  Root cause confirmed: the generator derives vector 13 with the *illustrative*
-  `HMAC(ck,"…/msg/0")` form, not the authoritative ratchet step
-  `HKDF(salt=ck,ikm=0x01,info="…/msg",64)` that vectors 01/03/05 use and
-  `ratchet.js` reproduces byte-for-byte.
-- **Domains / confirmation:** Testing + Cryptography. **Confirmed by execution
-  (reviewer 5):** fed vector 13's `chain_key` through the shipped `messageStep`;
-  the result matches neither the vector's `correct_message_key` nor its
-  `off_by_one`, and grep shows no test references the vector's fields. Reviewer 5
-  additionally found a *third* divergent formula in the superseded 004a `.mjs`
-  sketch (imported by no test).
-- **Blocks P1:** NO for the implementation (ratchet.js is correct; the test
-  correctly never referenced the broken vector). YES as a **fix-before-
-  activation** assurance gap — the negative vector must actually guard.
-- **Minimal safe fix:** regenerate vector 13's `correct_message_key` /
-  `off_by_one_message_key` from the real construction, update the JSON (group 13
-  only), and add a `ratchet.test.js` assertion feeding vector 13's `chain_key`
-  through `messageStep`. Delete or wire-up the stale 004a `.mjs` sketch so the
-  third formula cannot mislead a future engineer.
-- **Regression risk:** NONE to shipped code — only the vector file and a new
-  test assertion change. (No one "fixed" code to match the broken vector; the
-  test never used it.)
+### H2 — base64 malleability lets a retired signing key return (HIGH)
 
-### NEW-4 — `wipeDevice` self-blocks its own IndexedDB deletes
-- **True defect:** yes — independently verified in this board (module-cached pin
-  connection, no `onversionchange`/`close()` anywhere in `src/`, `onblocked`
-  reported as failure). A real bug in **shipped** wipe code, not fenced.
-- **Domains / confirmation:** Frontend/Storage (reviewer 4). Single-specialist
-  by dimension (the crypto passes did not cover storage lifecycle), so it was
-  re-verified here against the code rather than by a second reviewer — the
-  facts are direct and unambiguous (grep + spec behavior), which substitutes
-  for a second opinion.
-- **Blocks P1:** YES for the "Priority 1 complete" declaration — the ADR-008 §5
-  wipe guarantee is part of the P1 security posture, this is shipped code, and
-  the defect both breaks the honest-failure contract and can leave the
-  pin store on disk on Safari/WebView. Not remotely exploitable; a local
-  post-wipe-inspection adversary only.
-- **Minimal safe fix:** set `db.onversionchange = () => db.close()` in each
-  store's `openDb()` (`identity-pin-store.js`, `signing-key-store.js`,
-  `identity-store.js`), and sequence explicit `close()` of every cached
-  connection *before* `dropDatabase` rather than firing them concurrently; add a
-  wipe-test mock that models a still-open handle blocking the delete.
-- **Regression risk:** LOW–MEDIUM. `onversionchange→close()` is the standard
-  IndexedDB idiom and only fires during a delete/upgrade; the risk to watch is a
-  live read/write in flight when the close lands — sequence the closes after
-  in-flight ops settle (the stores already serialize through a promise cache, so
-  this is a matter of ordering the wipe steps, not adding locking). The new test
-  must actually reproduce the block (the current mock cannot), or the fix is
-  unverified.
+- **Root cause.** `Buffer.from(b64,'base64')` ignores the final quantum's unused
+  bits, so ~4 strings decode to one key; retirement / idempotency / uniqueness
+  compare the *string* (and the DB `@@unique` is on the string) while identity is
+  really the decoded bytes — a many-to-one string→identity mapping treated as
+  one-to-one.
+- **Affected modules.** `backend/src/auth/signing-keys.service.ts` (`validKey`
+  :47-68 returns the original string; comparisons :79, :86-88, :114, :138-139);
+  `schema.prisma` `@@unique([userId, publicKeyB64])` :592. Cross-module
+  inconsistency with `web/src/lib/crypto/device-set.js`, which commits over
+  *bytes*.
+- **Security impact.** Defeats ADR-008's "a retired key never returns":
+  re-encode a withdrawn/superseded key's bytes as a sibling string and
+  `publish()` re-activates it (retired-lookup misses, create succeeds). Also
+  breaks PUT idempotency the other way (409 on a non-canonical re-publish of
+  one's own active key), and lets `supersede` "rotate" to a byte-identical key.
+- **Operational impact.** Polluted chain (same key, two rows, divergent status) a
+  string-keyed client could mis-render; 409s on innocent retries.
+- **Reproduction conditions.** Publish + withdraw key S1; publish S2 (a sibling
+  encoding of the same bytes) → 200 active, guard bypassed. App-layer,
+  independent of DB, reachable in CI today.
+- **Why tests did / did not catch it.** Did **not**: no base64-malleability /
+  retired-key-returns test exists; the e2e suite exercises only canonical
+  client-generated keys. **Reproduced by execution twice** — reviewer 3 (four
+  distinct strings decode byte-identical for a 32-byte key) and reviewer 5 (two
+  variant strings both pass the server regex, decode identical).
+- **Minimal safe fix.** Canonicalize at ingress
+  (`Buffer.from(b64,'base64').toString('base64')`); store / compare / constrain
+  on the canonical form.
+- **Regression risk introduced by the fix.** VERY LOW. Canonicalization is
+  idempotent on already-canonical input; honest clients emit canonical base64, so
+  no stored key changes and no migration is needed.
+- **Additional tests required after the fix.** publish→withdraw→republish-as-
+  variant must refuse (409/blocked); non-canonical re-publish of one's own active
+  key → idempotent 200.
+- **Blocks Priority 1?** **YES.**
+- **Affects backward compatibility?** No for honest clients (already canonical). A
+  malicious non-canonical string is now normalized/rejected — that *is* the fix.
+  No migration (verify no stored key is non-canonical — true for all
+  client-generated keys).
+- **Affects e2e_v3 activation?** Same as H1 — gates the publication trust anchor;
+  fix before enabling publication.
 
-### NEW-5 — read-back ≠ cross-launch persistence (publication gate fail-open)
-- **True defect:** yes, on Safari/WebView specifically; gated OFF today.
-- **Domains / confirmation:** Frontend/Storage (reviewer 4). Consistent with the
-  review package's own §14 "Safari round-trip unproven" caveat — reviewer 4
-  sharpens it from "unproven" to "the current mitigation does not fail closed."
-- **Blocks P1:** NO while `SIGNING_PUBLICATION_ENABLED=false`; **YES before #39
-  is activated on Safari/WebView.** Also a documentation correction: the review
-  package's "fails closed to ephemeral" claim (§2, §12.2) is wrong for the
-  cross-launch eviction case.
-- **Minimal safe fix:** on the launch *after* publication, re-verify the stored
-  key matches the published `publicKeyB64` before trusting `ok`; on absence,
-  surface identity-loss and refuse to silently regenerate-and-republish.
-- **Regression risk:** LOW — adds a boot-time check on an already-gated path;
-  no change to honest-client behavior (the key is present, the check passes).
+### NEW-4 — `wipeDevice` self-blocks its own IndexedDB deletes (HIGH)
 
-## Final cleanup-PR plan (verdict = APPROVED WITH FIXES)
+- **Root cause.** IndexedDB `deleteDatabase` fires `versionchange` at every open
+  connection and blocks until they close; the stores never set
+  `db.onversionchange` and never `.close()`, and `identity-pin-store.js` caches
+  its connection at module level (`dbPromise`) for the module lifetime — so the
+  app blocks its own delete.
+- **Affected modules.** `web/src/lib/crypto/identity-pin-store.js` (:33,41-45,74
+  module-cached connection); `web/src/lib/crypto/signing-key-store.js` (loadOnce
+  local-var connection); `web/src/lib/crypto/identity-store.js`
+  (loadIdentityOnce); `web/src/lib/db.js` (:139-147 forget+drop fired
+  concurrently; :173-195 `dropDatabase` treats `onblocked` as failure);
+  `web/test/wipe-device.test.js` (:127-231 mock cannot model blocking).
+- **Security impact.** `wipeDevice()` returns `{ok:false, failures:[…]}` whenever
+  a chat was opened; if the wipe UX does not force a reload, `spotme-identity-pins`
+  ("who this device talked to and when") **survives on disk**. Undercuts ADR-008
+  §5 ("`wipeDevice` must delete `spotme-signing`") and the §13 device-thief claim
+  — on real browsers, strictly enforced on Safari/WebView.
+- **Operational impact.** Trains users/UI to ignore a wipe failure and thus hides
+  a *real* one; the certain damage is the broken `{ok, failures}` contract, the
+  data-survival conditional on no-reload.
+- **Reproduction conditions.** Real browser: open a chat (populates `dbPromise`),
+  call `wipeDevice()`, observe `onblocked` on `spotme-identity-pins` and
+  `ok:false`. The signing/e2e connections (local vars) block non-deterministically
+  by GC.
+- **Why tests did / did not catch it.** Did **not**: `wipe-device.test.js`'s
+  hand-rolled `indexedDB` mock fires `onsuccess`/`onblocked` on command and never
+  models a still-open handle blocking the delete → CI is green over a real bug.
+  Single-specialist dimension (crypto passes didn't cover storage lifecycle);
+  **re-verified against the source in this board** (no `onversionchange`/`.close()`
+  anywhere in `src/`; `db.js:193` reports `onblocked` as failure).
+- **Minimal safe fix.** Set `db.onversionchange = () => db.close()` in each
+  store's `openDb()`; sequence explicit `close()` of cached connections *before*
+  `dropDatabase` (not concurrently); add a wipe-test mock that models a still-open
+  handle blocking the delete.
+- **Regression risk introduced by the fix.** LOW–MEDIUM. `onversionchange→close()`
+  is the standard idiom and fires only during delete/upgrade; risk to watch is a
+  live read/write in flight when the close lands — sequence closes after in-flight
+  ops settle (stores already serialize through a promise cache). Without the new
+  mock the fix is unverified.
+- **Additional tests required after the fix.** A wipe test whose mock models a
+  still-open handle blocking the delete, asserting `wipeDevice()` returns
+  `ok:true` *and* the pin DB is actually gone.
+- **Blocks Priority 1?** **YES** — shipped code, ADR-008 §5/§13 guarantee.
+- **Affects backward compatibility?** No — `onversionchange`/`close()` is internal
+  lifecycle; no data format, wire, or API change. It *improves* wipe correctness.
+- **Affects e2e_v3 activation?** Yes, forward-looking: when e2e_v3 ships,
+  `wipeDevice` must also drop the v3 session store (root/chain/skipped keys); that
+  new delete would hit the *same* block, so NEW-4 must be fixed before the v3
+  session store is added to the wipe path.
 
-The *minimum* changes to clear every confirmed blocker, one small reviewable PR
-per owning stack layer, each with the named test and full green CI. Ordered by
-blocking weight. **These are the only code changes authorized by this verdict;
-everything else stays frozen.**
+### B1 — conformance vector 13 mis-generated + untested (HIGH, assurance)
 
-1. **#39 backend layer (blockers H1 + H2 + M1).** H1 **primary fix**: per-user
-   transaction-scoped advisory lock
-   (`$executeRaw pg_advisory_xact_lock(hashtext(userId))`) as the first
-   statement in *all three* mutating txns (publish/supersede/withdraw), move the
-   active-row read *inside* the txn, and catch Prisma P2002 in `publish` as the
-   idempotent path — CI-verifiable today (behavioral, `db push`-independent).
-   H2: base64 canonicalization at ingress
-   (`Buffer.from(b64,'base64').toString('base64')`), store/compare on the
-   canonical form. Tests: publish/supersede/withdraw concurrency race (incl. the
-   withdraw-vs-supersede clobber), base64-malleability resurrection, server
-   ECDSA-P-256 supersede verify (M1), P2002→idempotent-200 (not 500).
-2. **Client storage layer (blocker NEW-4 + NEW-5).** NEW-4: set
-   `db.onversionchange = () => db.close()` in `identity-pin-store.js`,
-   `signing-key-store.js`, `identity-store.js`, and sequence explicit `close()`
-   of cached connections *before* `dropDatabase` (not concurrently); add a
-   wipe-test mock that models a still-open handle blocking the delete (the
-   current mock cannot — without it the fix is unverified). NEW-5: boot-time
-   re-verification that the stored key still matches the published
-   `publicKeyB64` on the launch after publication; on absence surface
-   identity-loss, never silently regenerate-and-republish. Correct the review
-   package's "fails closed to ephemeral" claim (§2, §12.2).
-3. **#42 ratchet/vectors layer (B1 blocker + B2/B3/B6 pre-activation).** B1:
-   regenerate vector 13's `correct_message_key`/`off_by_one` from the real
-   `messageStep` construction and add the `ratchet.test.js` assertion; delete or
-   wire the stale 004a `.mjs` sketch. B2: wrap `dhRatchet`'s DH and the step-3
-   `messageStep` so every `decrypt` failure raises `RatchetError` (add the
-   low-order-`ratchetPub` and pre-first-receive `messageStep(null)` tests). B3:
-   throw on non-string plaintext in `encrypt`. B6: `deserializeSession` checks
-   `selfKeyPair.pub === plain.selfPub` and `v:1`.
-4. **#41 prekey layer (L2).** Reject the OPK sentinel `keyId` `0xFFFFFFFF` and
-   bound `keyId` above — small, low-risk.
-5. **Coverage-only (M-class hardening + refusal branches).** Tests for
-   `rotateSigningIdentity` EPHEMERAL-refusal, `publishSigningIdentity`
-   UNREADABLE-refusal, device-set duplicate-id, `MAX_SKIPPED_STORED` FIFO
-   eviction, the `pn`-path skip bound (B4). No behavior change.
+- **Root cause.** Vector 13's message keys were hand-computed with the
+  *illustrative* `HMAC(ck, LABEL+"/n")` form (copied from the superseded 004a
+  `.mjs` sketch, itself a *third* divergent `HKDF(ck, info="msg/0")` formula), not
+  the authoritative ratchet step `HKDF(salt=ck, ikm=0x01, info="…/msg", 64)[32:64]`
+  that vectors 01/03/05 and `ratchet.js` use. Never wired into any test.
+- **Affected modules.** `spotme/docs/adr/004b-e2e-v3-ratchet-vectors.py`
+  (generator ~:358-373); the committed vectors JSON (group 13 only); the stale
+  `spotme/docs/adr/004a-e2e-v3-vectors.mjs` sketch (:90). **NOT `ratchet.js`** —
+  it is correct.
+- **Security impact.** None on shipped code — the real off-by-one *is* caught
+  byte-for-byte by tested vector 03. The flagship *negative* vector provides zero
+  assurance.
+- **Operational impact.** A live trap: an engineer who "wires up vector 13," sees
+  it fail against correct code, and "fixes" `messageStep` to match would **break**
+  real conformance.
+- **Reproduction conditions.** Feed vector 13's `chain_key` through the shipped
+  `messageStep` → result matches neither `correct_message_key` nor `off_by_one`
+  (executed by reviewer 5, `scratchpad/verify_b1.mjs`); grep → no test references
+  the vector's fields.
+- **Why tests did / did not catch it.** Did **not**: the vector was never
+  consumed by an assertion (data with no test), and the `.mjs` sketch is imported
+  by no test (only cited in an `x3dh.test.js` comment). A differential-KDF test
+  would have caught it at authoring time.
+- **Minimal safe fix.** Regenerate vector 13's `correct_message_key` /
+  `off_by_one` from the real construction (`correct = messageStep(ck).messageKey`,
+  `off_by_one = messageStep(messageStep(ck).chainKey).messageKey`); add a
+  `ratchet.test.js` assertion feeding vector 13's `chain_key` through `messageStep`
+  (`=== correct && !== off_by_one`); delete or wire the stale `.mjs` sketch.
+- **Regression risk introduced by the fix.** NONE to shipped code — only the
+  vector file and a new test assertion change.
+- **Additional tests required after the fix.** The vector-13 assertion itself;
+  optionally the differential-KDF property (`messageStep`/`rootStep` vs an
+  independent HKDF implementation).
+- **Blocks Priority 1?** NO for the shipped build (ratchet.js correct, vector
+  unused); **YES for 004b vector-package sign-off** — the owner has elected to
+  correct it inside this cleanup iteration so the negative vector actually guards
+  before the stack merges.
+- **Affects backward compatibility?** No — vectors/tests only; no shipped code or
+  wire touched.
+- **Affects e2e_v3 activation?** Yes as an assurance gate — the negative vector
+  must guard before e2e_v3 is trusted in production; does not change the wire or
+  behavior.
 
-**Deferred (own PRs, non-blocking, documented):** the H1 defense-in-depth
-partial unique index — requires first moving CI from `prisma db push` to
-`migrate deploy` + a schema/migration parity guard (NEW-1), a MEDIUM follow-up;
-M2 OPK-depletion throttle; NEW-2/NEW-3/NEW-6/L3; `e2eVersion` monotonicity guard,
-version-mismatch cursor mapping, the 145-byte prologue parser, and extending
-`wipeDevice` to the v3 session store — all **activation-layer** work that lands
-with the future e2e_v3 wire-up PR, not now. A property/fuzz/mutation test suite
-(reviewer 5's proposal) is a recommended follow-up, not a P1 gate.
+### NEW-1 — H1 DB-backstop not applicable under CI's `db push` (HIGH, process — recorded disagreement)
 
-**No code is written until the owner accepts this verdict and lifts the freeze
-for the cleanup PRs specifically.**
+- **Root cause.** CI provisions the DB with `npx prisma db push` (`ci.yml:117`,
+  `:207`), not `migrate deploy`; Prisma `^5.22.0` cannot express a partial/filtered
+  unique index — so the `(userId) WHERE status='active'` backstop can only live as
+  raw SQL in a migration that `db push` never applies.
+- **Disagreement, preserved.** The Database reviewer (R3) rates this as *blocking*
+  because it makes the *index* fix un-verifiable in CI. The coordinator +
+  applied-crypto position: the **advisory lock is the CI-verifiable primary fix**
+  (application-level, behavioral, `db push`-independent), so H1 is closable now;
+  the partial index is *deferred defense-in-depth* that additionally requires
+  moving CI to `migrate deploy` + a schema/migration parity guard. **Board
+  conclusion (stronger evidence):** NEW-1 does *not* independently block Priority
+  1 given the advisory lock; the CI-to-migrations change is a MEDIUM follow-up.
+  Facts undisputed and verified in this board; only the blocking classification
+  differed.
+- **Blocks Priority 1?** No (as a standalone) — folded into H1's fix as the
+  primary-vs-defense-in-depth split.
+- **Backward compatibility / e2e_v3 activation.** None / none directly.
+
+### NEW-5 — read-back ≠ cross-launch persistence; publication gate can fail OPEN (MEDIUM)
+
+Kept here for continuity with NEW-4 (same storage/Safari surface). Same-session
+read-back proves *commit*, not *survival across a restart*; Safari ITP / 7-day
+eviction can drop the key before next launch, after which `loadOnce` regenerates
+a *different* key and could republish it (the ADR-008 §4 identity-change
+catastrophe) — **fail-open**, contradicting the review package's "fails closed to
+ephemeral" claim (§2, §12.2, a documentation correction). **Blocks P1:** no while
+publication is OFF; **YES before #39 is activated on Safari/WebView.** **Fix:**
+boot-time re-verification that the stored key matches the published
+`publicKeyB64`; on absence surface identity-loss, never silently
+regenerate-and-republish. **Backward compat:** none. **e2e_v3 activation:** a
+Safari/WebView activation gate.
+
+## Consolidated risk register
+
+**This is the single canonical risk register**, de-duplicated and merged across
+all five specialist passes (severity + likelihood + impact + confirmation +
+blocks-P1). Final Report §3 is the *same* rows presented as a mitigation/action
+view (R-1..R-5 align exactly); where the two differ in tail numbering, this table
+governs. No two rows describe the same defect (H1 and NEW-2 share a *root cause*
+but are distinct sites; NEW-1 is a process caveat on H1's fix, not a second
+defect).
+
+| # | Finding | Sev | Likelihood | Impact | Confirmation | Blocks P1 |
+|---|---|---|---|---|---|---|
+| R-1 | H1 signing concurrency / withdraw-clobber | HIGH | Med (self-race) once published | High | Pass A + R3 + R5 (3-way) | YES |
+| R-2 | H2 base64 malleability → retired key returns | HIGH | Med once published | High | Pass A + R3 + R5, executed ×2 | YES |
+| R-3 | NEW-4 `wipeDevice` IndexedDB self-block | HIGH | High on Safari/WebView today | High | R4 + verified here | YES |
+| R-4 | B1 broken+untested negative vector 13 | HIGH (assurance) | Med (latent trap) | Med | Pass B + R5, executed | Sign-off |
+| R-5 | NEW-5 read-back ≠ persistence (fail-open) | MED | Med on Safari when active | High | R4 | At activation |
+| R-6 | B2 `decrypt` not total (raw non-RatchetError) | MED | Low (fenced) | Med | Pass B + R4 + R5, executed | At activation |
+| R-7 | B3 non-string plaintext → silent empty | MED | Low (fenced) | Med | Pass B + R5, executed | At activation |
+| R-8 | M1 server P-256 supersede verify untested | MED | — | Med (silent lockout) | Pass A + R3 + R5 | Recommend |
+| R-9 | M2 OPK depletion no throttle | MED | Med when active | Low–Med | Pass A + R3 + R5 | No |
+| R-10 | NEW-1 H1 index unenforceable under `db push` | HIGH (process) | n/a | Med | R3 + CI verified | No (see H1) |
+| R-11 | B6/B7 session-restore/verify binding gaps | LOW→watch | Low | Med | Pass B + R4 + R5 | At activation |
+| R-12 | L2 OPK sentinel `keyId` not excluded | LOW | Low | Low | Pass A + R3 + R5 | No |
+| R-13 | NEW-2/L3/NEW-6/NEW-3 + L1/L4/L5/B4/B5/B8 | LOW/INFO | Low | Low | various | No |
+| R-14 | No observability for an activated rollout | — | n/a until activation | Med | Coordinator | At activation |
+| R-15 | No secret zeroization (memory/disk residue) | INFO | Low | Low | R5 | No |
+
+## Consolidated cleanup plan (implementation-ready, dependency-ordered)
+
+Per the owner's revised merge plan (2026-08-01): **one focused cleanup iteration
+before the crypto stack merges**, containing *only* confirmed review findings —
+no refactoring, no new features, no ADR expansion, no "while we're here." Grouped
+by severity; within each PR, findings that fixed the same file are done together.
+Each PR carries the seven required fields.
+
+**These PRs are authorized to be *written* only after the owner accepts the
+verdict and lifts the freeze for the cleanup iteration.**
+
+### Cleanup PR-1 — CRITICAL
+**None.** No finding reached CRITICAL. This slot is intentionally empty; the
+iteration begins at PR-2.
+
+### Cleanup PR-2 — HIGH (H1, H2, NEW-4, B1) — the Priority-1 gate
+- **Scope.** Exactly the four HIGH fixes. Nothing else.
+- **Files affected.** `backend/src/auth/signing-keys.service.ts` (H1 locks +
+  in-txn reads + P2002 catch; H2 canonicalization); `web/src/lib/crypto/`
+  `identity-pin-store.js` + `signing-key-store.js` + `identity-store.js` and
+  `web/src/lib/db.js` (NEW-4 `onversionchange`/`close` + close-before-drop
+  sequencing); `spotme/docs/adr/004b-e2e-v3-ratchet-vectors.py` + the vectors
+  JSON (group 13) + remove/wire `004a-e2e-v3-vectors.mjs` (B1).
+- **Tests to update / add.** Backend: signing publish/supersede/withdraw
+  concurrency race incl. withdraw-vs-supersede clobber; base64-malleability
+  retired-key-returns; canonical-idempotency; P2002→idempotent-200; server
+  ECDSA-P-256 supersede verify (M1, adjacent to H1/H2 in the same file — folded
+  in). Web: `wipe-device.test.js` with a connection-blocking mock;
+  `ratchet.test.js` vector-13 assertion.
+- **Benchmarks required.** None. The fixes touch rare administrative paths
+  (signing lifecycle) and the wipe path — neither is a steady-state hot path.
+  Per the owner's earlier ruling, a supersession/lifecycle microbenchmark is not
+  required; the existing ratchet/X3DH benchmarks are unaffected (no ratchet code
+  changes). If the advisory lock is suspected to serialize under load, a one-off
+  lifecycle-latency check suffices — not a gate.
+- **Rollback strategy.** Clean `git revert` of the PR. No data migration, no wire
+  change, no schema change (advisory lock is runtime SQL; canonicalization is
+  idempotent; wipe lifecycle is internal; vectors are test data), so revert is
+  immediate and lossless. All flags remain OFF throughout.
+- **Expected regression risk.** H1 LOW, H2 VERY LOW, NEW-4 LOW–MEDIUM, B1 NONE
+  to shipped code. Aggregate LOW.
+- **CI validation required.** Full green CI (backend Postgres suite incl. the new
+  concurrency test; web suite incl. wipe + vector-13; e2e). The fence tests
+  (`signing-not-shipped.test.js`, `e2e-v3-not-shipped.test.js`) must still pass —
+  flags stay OFF, nothing gets wired into the app.
+
+### Cleanup PR-3 — MEDIUM (B2, B3, NEW-5; M2 optional)
+- **Scope.** Pre-activation error-contract + fail-open fixes. B2, B3, NEW-5;
+  M2 (OPK throttle) may ride along or defer.
+- **Files affected.** `web/src/lib/crypto/ratchet.js` (B2 wrap DH + step-3 to
+  `RatchetError`; B3 throw on non-string); `web/src/lib/crypto/signing-key-store.js`
+  (NEW-5 post-publication re-verify); `backend/src/auth/prekeys.service.ts` (M2,
+  if included). Correct the "fails closed to ephemeral" text in doc `16` §2/§12.2.
+- **Tests to update / add.** `decrypt` totality (low-order `ratchetPub`,
+  pre-first-receive `messageStep(null)`) raises `RatchetError`; non-string
+  plaintext rejected; post-publication persistence re-verify; (M2) OPK-depletion
+  throttle.
+- **Benchmarks required.** None — B2/B3/NEW-5 are guard clauses on
+  already-benchmarked paths; confirm the ratchet encrypt/decrypt medians are
+  within noise of the existing numbers (Final Report §Performance).
+- **Rollback strategy.** `git revert`; all e2e_v3 code is fenced/flag-off, so a
+  revert has no production effect.
+- **Expected regression risk.** LOW — added guard clauses and a gated boot check.
+- **CI validation required.** Full green CI + fence tests still passing.
+
+### Cleanup PR-4 — LOW + documentation
+- **Scope.** LOW findings + documentation corrections. No behavior change to hot
+  paths.
+- **Files affected.** `backend/src/auth/prekeys.service.ts` (L2 sentinel/upper
+  bound; L3 contention retry); `web/src/lib/crypto/ratchet.js` (B4 pn-path bound
+  test; B5 FLAGS bit; B6 `deserializeSession` binding); `web/src/lib/crypto/`
+  `device-set.js` (L4 duplicate-id); docs (remove non-reproducible
+  mutation-testing comment claims; NEW-3 `opksStored` comment; NEW-6
+  evicted-vs-duplicate note).
+- **Tests to update / add.** `rotateSigningIdentity` EPHEMERAL-refusal;
+  `publishSigningIdentity` UNREADABLE-refusal; device-set duplicate-id;
+  `MAX_SKIPPED_STORED` FIFO eviction; pn-path skip bound; `deserializeSession`
+  mismatch.
+- **Benchmarks required.** None.
+- **Rollback strategy.** `git revert`; documentation and low-risk guards only.
+- **Expected regression risk.** VERY LOW.
+- **CI validation required.** Full green CI + fence tests still passing.
+
+**Deferred beyond the cleanup iteration (activation-layer, own future PRs):** the
+H1 defense-in-depth partial unique index (requires CI `db push`→`migrate deploy`
++ parity guard, NEW-1); `e2eVersion` monotonicity guard; version-mismatch cursor
+mapping; the 145-byte X3DH prologue parser; extending `wipeDevice` to the v3
+session store; observability/metrics wiring; and the property/fuzz/mutation test
+suite (reviewer 5's proposal, a recommended follow-up). None of these is a
+Priority-1 gate; all land with the future e2e_v3 wire-up.
+
+## Board re-verification protocol (post-cleanup)
+
+The verdict below is **APPROVED WITH FIXES**. Per the owner's revised plan, after
+Cleanup PR-2 (HIGH) lands the board re-convenes to verify — not assume — closure
+before the verdict is allowed to flip to APPROVED:
+
+1. **Rerun CI** on the fixed stack — full backend/web/e2e green.
+2. **Rerun vector validation** — the 13-group conformance suite green, *including*
+   the newly-wired vector-13 assertion (B1).
+3. **Rerun wipe tests** — with the connection-blocking mock in place, `wipeDevice`
+   returns `ok:true` and the pin DB is gone (NEW-4).
+4. **Rerun concurrency tests** — the signing publish/supersede/withdraw race +
+   withdraw-clobber hold the ≤1-active invariant (H1); base64-malleability refused
+   (H2).
+5. **Confirm the fences still pass** — flags OFF, nothing wired in.
+
+Only if all four HIGH findings verify resolved **and no new HIGH/CRITICAL
+finding appears** does the board issue **APPROVED**. If any HIGH remains open or a
+new HIGH surfaces, the verdict stays APPROVED WITH FIXES and the iteration
+repeats. **No verdict flip is issued on the promise of a fix — only on re-verified
+evidence.**
 
 # Final Review Board Report
 
@@ -661,6 +866,10 @@ section above; disagreements are recorded, not averaged away).
 | Production operations (coordinator) | 7.5 / 10 | Safe hold posture; observability is the pre-activation gap |
 
 ## 3. Risk register
+
+*Mitigation/action view of the single canonical register (see "Consolidated risk
+register" above, which governs on severity, confirmation, and blocks-P1). R-1..R-5
+align exactly.*
 
 | # | Risk | Likelihood | Impact | Current mitigation | Required action |
 |---|---|---|---|---|---|
@@ -728,11 +937,24 @@ add the differential-KDF and metamorphic-ratchet properties reviewer 5 specified
 
 ## 9. Required cleanup before merge
 
-The five-PR plan in "Final cleanup-PR plan" above (backend H1/H2/M1 → client
-storage NEW-4/NEW-5 → ratchet/vectors B1/B2/B3/B6 → prekey L2 → coverage-only),
-each a small reviewable PR with its named test and full green CI, merged into the
-existing stack in dependency order. No behavior of the shipped app changes with
-flags off; the fixes are localized to the fenced/gated modules and the wipe path.
+Per the owner's revised merge plan (2026-08-01): **the crypto stack does not
+merge until one focused cleanup iteration lands and the board re-verifies it.**
+The full plan is in "Consolidated cleanup plan" above — severity-grouped and
+dependency-ordered, containing *only* confirmed review findings (no refactoring,
+no new features, no ADR expansion, no "while we're here"):
+
+- **Cleanup PR-1 (CRITICAL):** none.
+- **Cleanup PR-2 (HIGH — the Priority-1 gate):** H1, H2, NEW-4, B1 — and nothing
+  else. M1 folds in (same file as H1/H2).
+- **Cleanup PR-3 (MEDIUM):** B2, B3, NEW-5 (+ M2 optional).
+- **Cleanup PR-4 (LOW + docs):** L2/L3/B4/B5/B6/L4/NEW-2/NEW-3/NEW-6 + doc
+  corrections.
+
+Each carries Scope / Files affected / Tests / Benchmarks / Rollback / Regression
+risk / CI validation (above). No behavior of the shipped app changes with flags
+off; the fixes are localized to the signing backend, the wipe path, the fenced
+ratchet, and test vectors. After PR-2 lands, the **Board re-verification protocol**
+(above) runs before the verdict is permitted to flip to APPROVED.
 
 ## 10. Priority 1 verdict
 
@@ -756,17 +978,27 @@ forward-secrecy break.
   systemic problem. The design held up under five adversarial passes; the fix
   list is bounded and cheap relative to the work already done.
 
-**Conditions to clear the "WITH FIXES" and declare Priority 1 complete:** land
-the five-PR cleanup plan (§9) — every named test green in CI, each PR reviewed,
-none merged without review, nothing else unfrozen — then re-run this board's
-confirmation checks against the fixed code. Activation of `e2e_v3` /
-`SIGNING_PUBLICATION_ENABLED` remains a **separate** future step behind its own
-gates (observability, negotiation, monotonicity, prologue parsing, Safari
-persistence re-verification), unchanged by this verdict.
+**Revised merge plan (owner directive, 2026-08-01) — the path to APPROVED.** The
+crypto stack does **not** merge as-is. Instead:
+1. Land **Cleanup PR-2 (HIGH)** — H1, H2, NEW-4, B1 only — each with its named
+   test and full green CI, each reviewed, none merged without review.
+2. Run the **Board re-verification protocol** (rerun CI, vector validation, wipe
+   tests, concurrency tests; confirm the fences still pass).
+3. If all four HIGH verify resolved **and no new HIGH/CRITICAL appears**, the
+   board issues **APPROVED** — the stronger place to begin Priority 2 from. If any
+   HIGH remains open or a new one surfaces, the verdict stays APPROVED WITH FIXES
+   and the iteration repeats. *No flip on the promise of a fix — only on
+   re-verified evidence.*
+4. Cleanup PR-3 (MEDIUM) and PR-4 (LOW+docs) land before activation; they are not
+   the P1-complete gate. Activation of `e2e_v3` / `SIGNING_PUBLICATION_ENABLED`
+   remains a **separate** future step behind its own gates (observability,
+   negotiation, monotonicity, prologue parsing, Safari persistence
+   re-verification), unchanged by this verdict.
 
-**The freeze holds until the owner accepts this verdict.** This board modified no
-code and merged nothing. The cleanup PRs are authorized to be *written* only on
-the owner's acceptance, and only as scoped in §9.
+**The freeze holds until the owner authorizes the cleanup iteration.** This board
+modified no code and merged nothing. The cleanup PRs are authorized to be
+*written* only on the owner's authorization, and only as scoped in §9 / the
+Consolidated cleanup plan — confirmed review findings, nothing more.
 
 ---
 
