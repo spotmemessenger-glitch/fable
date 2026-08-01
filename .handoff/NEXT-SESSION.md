@@ -11,21 +11,29 @@ stays unproven until re-run. Every number below says where it was measured.
 
 ---
 
-## 0. Repository state (verified 2026-08-01 ~15:00 UTC)
+## 0. Repository state (verified 2026-08-01 ~16:10 UTC)
 
 ```
-master  a934e11  feat(web): a signing identity, and bindings that prove possession (A7) (#29)
-        ad36a37  test(e2e): Playwright foundation, and the silent backend build it uncovered (#32)
-        8fc603b  feat(web): wire the QR scanner into the verify screen (#28)
+master  fb02b99   feat(web): signing-key storage per ADR-008 (#36)
+        43fce9e  feat(web): send enforcement, computed always and switched off (A5) (#31)
+        d29c1b6  test(web): mechanise the A5 device matrix, and fix the race it found (#30)
+        7f78a11  docs: roadmap V2 controlling + V1→V2 mapping (#35)
+        f9a5af8  docs(handoff): rewrite the pickup brief for the post-#29 state (#33)
+        a934e11  feat(web): a signing identity, and bindings that prove possession (A7) (#29)
 ```
 
-Measured on `master` in this container: **web 833/833**, backend 13 suites /
-121 tests (in CI), **e2e 15/15** (local + CI).
+Measured on post-#36 `master` in this container: **web 936/936**, lint clean,
+build clean; backend 13 suites / 121 tests (in CI); **e2e 15/15** (in CI).
 
 ### Merged this session, newest first
 
 | PR | What | Merge SHA |
 |---|---|---|
+| #36 | ADR-008 signing-key **storage** (publication still design-only) | `fb02b99` |
+| #31 | A5 enforcement — verdict always computed, flag **OFF** | `43fce9e` |
+| #30 | A5 matrix mechanised + `loadIdentity` race fix | `d29c1b6` |
+| #35 | Roadmap V2 controlling + V1→V2 mapping | `7f78a11` |
+| #33 | Handoff rewrite (the pre-V2 edition of this file) | `f9a5af8` |
 | #29 | A7 signing foundation + six review revisions | `a934e11` |
 | #32 | Playwright E2E foundation + warm-build fix | `ad36a37` |
 | #28 | QR scanner wired into verify screen | `8fc603b` |
@@ -35,23 +43,22 @@ Measured on `master` in this container: **web 833/833**, backend 13 suites /
 | #24 | A1 trust state machine | `08e3c0a` |
 | #23 | MinIO in CI + R2 smoke test | `8f3cebc` |
 
+#30/#31/#36 were merged on the owner's explicit 2026-08-01 approval ("Approve
+#30, #31, and #36 — those are all foundational security work"), each only
+after GitHub CI ran green **on its exact head** and the displayed diff showed
+only its own files. #31 and #36 were rebuilt onto master first (§5's
+`checkout -B` + cherry-pick discipline; #36's two conflicts resolved as a
+union — every test suite kept, `wipeDevice` keeps `clearedTrust` +
+`clearedSigning` + all three `dropDatabase` calls).
+
 ### Open PRs
 
-| PR | Branch | Base | Own files | Local suite | CI |
-|---|---|---|---|---|---|
-| **#30** A5 device matrix | `feat/a5-matrix` @ `3c9dbc1` | `master` | 5 | 864/864 | confirm green before review |
-| **#31** A5 enforcement, flag **OFF** | `feat/a5-enforcement` @ `3884db3` | `feat/a5-matrix` | 8 (12 vs master — `package.json` is shared with #30) | 912/912, lint+build clean | confirm green before review |
+| PR | Branch | State |
+|---|---|---|
+| **#34** product audit (draft) | `docs/product-audit-2026-08-01` | voice-cloning + translation-provider corrections pushed; awaiting owner review |
+| governance amendment | `docs/execution-order-2026-08-01` | the PR carrying this very edit + the roadmap "Owner Amendment" + CLAUDE.md pointer |
 
-Both are **held for independent owner review**. Do not infer either is safe
-from the stacked tip passing — the owner said so explicitly.
-
-**#31 RULE (owner-set):** while stacked on #30, its displayed diff vs its base
-branch is its own 8 files. **After #30 squash-merges, #31 MUST be rebuilt**
-(reset to `origin/master`, cherry-pick only its own two commits) so GitHub's
-displayed diff shows ONLY those 8 files against master. **Do not merge #31
-while its displayed diff includes #30's files.**
-
-For #30/A5: enforcement stays default-OFF, and **disabling the flag — not
+For A5: enforcement stays default-OFF, and **disabling the flag — not
 reverting — is the supported operational rollback** (ADR-007 §Rollback says
 why: reverting removes the review UI and strands a `Changed` peer).
 
@@ -94,9 +101,21 @@ multi-device implementation, not during.
 on every coding change — CLAUDE.md now points at it. Its V1→V2 mapping
 (`14-ROADMAP-V1-TO-V2-MAPPING.md`) was **APPROVED by owner directive
 2026-08-01** — V2 is controlling; V1 is historical; stricter gate still wins
-(V2 Appendix B). Owner phase order: review #30/#31 → Phase 2 signing-key
-storage (ADR-008, incl. rollback-after-publication) → X3DH → Double Ratchet →
-multi-device → completion evidence. AI Communication ADRs: planning only. **V1/V2 priority numbers differ — the mapping
+(V2 Appendix B). **Execution order AMENDED by the owner 2026-08-01** (recorded
+in the roadmap's "Owner Amendment" section — read that, not the superseded
+phase list): #30/#31/#36 were approved and merged, and the strategic order is
+now ① push notifications (Android+iOS, background/terminated/foreground,
+production-grade) → ② translation platform (provider abstraction over the
+existing multi-provider engine in `web/api/translate.js`) → ③ live voice
+translation (flagship; dedicated architecture, NOT a voice-notes extension;
+MVP < 2.5 s) → ④ adaptive communication layer (automatic transport switching
+incl. native Bluetooth offline) → ⑤ remaining Priority 1 crypto (X3DH →
+Double Ratchet → multi-device → completion evidence), which **remains
+mandatory before Priority 1 is declared complete**. AI Communication ADRs:
+planning may proceed. New standing principle: every AI feature optimises
+accuracy + latency + privacy simultaneously; no hard provider dependency.
+ADR-008 §12 is UNCHANGED by the amendment. **V1/V2 priority numbers differ —
+the mapping
 §1 restates every standing owner block under V2 numbering; renumbering never
 unblocks.** Our A1–A7 / B1–B10 labels remain an implementation breakdown only.
 Priority 1 completes only when every requirement and checklist item passes.
@@ -112,31 +131,46 @@ Priority 1 checklist, honestly, as of this write:
 | Identity benchmarks | ❌ scope defined by owner (pin-store r/w, concurrent observations, verification persistence, Changed resolution, startup, 100s–1000s of peers, A5 gate overhead on/off) |
 | Formal security review | ❌ owner wants a dedicated adversarial report (silent substitution, decrypt-refetch, TOFU limits, stale verification, replay, cross-device binding, wipe, key export, IndexedDB tampering, flag bypass, rollback risks) — self-review + mutation testing is evidence, not the report |
 | Performance review | ❌ |
-| Secure key storage | design done (ADR-008), **implementation blocked by §1** |
+| Secure key storage | **storage half implemented + merged (#36)** — `spotme-signing` DB, promise-cached load, write-then-read-back, UNREADABLE≠absent, explicit-only rotation, wipe integration; publication + rollback-after-publication remain design-only (§1 / ADR-008 §12, the second Phase 2 PR) |
 | Prekeys / X3DH / Double Ratchet / FS / break-in recovery / rotation | ❌ blocked by §1 |
 | Multi-device | ❌ blocked by §1 + the safety-number question; minimum spec is **normative in ADR-006** (9 points; backup/history/restore deferrable if documented, core crypto flow not) |
 | Manual device matrix | ❌ owner executes; the automatable rows are #30 |
 
 ---
 
-## 3. Next work, in the owner's stated order
+## 3. Next work — the owner's AMENDED order (2026-08-01)
 
-1. **Confirm #30's CI green** (its run was still reporting at write time).
-2. Handoff updated ← this file.
-3. Fresh session starts here.
-4. **Build the E2E test seam** in a new isolated PR — full design in §4.
-   Present the seam design in the PR description before merge.
-5. **Add E2E scenarios 2–12** (same PR as the seam per the owner's scope:
-   "tests, fixtures, and the minimal test-only seam").
-6. Run complete backend, web, lint, build, and E2E CI.
-7. **Prove the seam is absent in a production-mode startup.**
-8. Return the PR for review before merge.
-9. Review #30 and #31 independently after their CI is green (owner does this;
-   #31 needs a scope/dependency summary from us — the owner said the update
-   they had "does not provide enough detail to authorize it").
+The pre-amendment queue (E2E seam next, then scenarios 2–12) is
+**re-sequenced, not cancelled**. The strategic order is now:
 
-Do NOT mix into the E2E PR: A5 activation, signing-key persistence,
-publication, revocation transport, prekeys, X3DH, ratchet code, multi-device.
+1. **① Push notifications** — Android AND iOS; background/terminated/
+   foreground; messages, calls, mentions, group events, stories;
+   production-grade delivery. Starting point: web-push/VAPID and Android FCM
+   are live; **iOS APNs is a dead dep** (`@parse/node-apn` installed, 0
+   imports) and needs Apple Developer/APNs credentials from the owner.
+2. **② Translation platform** — formal provider abstraction over the
+   existing multi-provider engine (`web/api/translate.js`: Google Cloud v2,
+   Azure v3, Sarvam, Gemini leg + Anthropic/Gemini/OpenAI LLM chain);
+   dynamic best-provider by language pair/latency/quality/availability;
+   conversation context; quality metrics, fallback, retries, caching,
+   observability.
+3. **③ Live voice translation** — flagship; DEDICATED architecture (owner:
+   "Do not treat this as an extension of voice notes"); capture → streaming
+   STT → incremental translation → streaming TTS → voice preservation;
+   MVP < 2.5 s end-to-end, production target < 1 s.
+4. **④ Adaptive communication layer** — flagship; Socket.IO, Centrifugo,
+   P2P, native Bluetooth offline messaging; automatic transport switching
+   ("Users should never manually select a transport"); offline sync; future
+   Wi-Fi Direct/mesh.
+5. **⑤ Remaining Priority 1 crypto** — X3DH → Double Ratchet → multi-device
+   → completion evidence. **Still mandatory before Priority 1 is declared
+   complete**; the §1 hard stop governs when this begins.
+
+The approved E2E seam design (§4) and scenarios 2–12 stay valid and fold
+into the completion-evidence phase (or earlier if the owner pulls them
+forward). Do NOT mix into any feature PR: A5 activation, signing-key
+publication, revocation transport, prekeys, X3DH, ratchet code,
+multi-device.
 
 ---
 
