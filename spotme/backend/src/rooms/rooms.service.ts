@@ -16,6 +16,21 @@ const PERSISTED = new Set([
   'knock', 'knockAck', 'bin', 'binack',
 ]);
 
+/**
+ * Relayed but never persisted — no ghost replays.
+ *
+ * fetchreq/fetchres are the transport's peer-to-peer lazy-fetch fallback.
+ * `hello` is the discovery lobby's presence heartbeat: replaying an old
+ * "I am nearby" would tell the user something untrue, so it must never reach
+ * the log.
+ *
+ * Lives here rather than in the gateway because the HTTP publish proxy needs
+ * the same answer, and two lists of what may cross the wire would drift.
+ */
+const EPHEMERAL = new Set([
+  'typing', 'call', 'locup', 'rtc', 'history', 'fetchreq', 'fetchres', 'hello',
+]);
+
 /** Replay never carries attachment bytes — envelopes only, bytes on demand. */
 const REPLAY_LIMIT = 5000;
 
@@ -25,6 +40,16 @@ export class RoomsService {
 
   isPersisted(type: string): boolean {
     return PERSISTED.has(type);
+  }
+
+  /** Relayed live but never logged. */
+  isEphemeral(type: string): boolean {
+    return EPHEMERAL.has(type);
+  }
+
+  /** Whether this action type may cross the wire at all. */
+  isKnownType(type: string): boolean {
+    return PERSISTED.has(type) || EPHEMERAL.has(type);
   }
 
   async append(

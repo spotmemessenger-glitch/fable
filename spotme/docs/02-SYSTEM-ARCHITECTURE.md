@@ -386,3 +386,115 @@ that contract, which is precisely why the P1 monolith is safe to build now.
 | E2E | AES-GCM, room-secret derived | Signal double ratchet, encrypted knocks | same + CRDT user-state sync |
 | Observability | logs | Sentry + OTel + Prometheus/Grafana | Envoy/Istio mesh, VictoriaMetrics |
 | Infra | Docker on Railway/Fly/Hetzner | + CI/CD, Trivy | Multi-region K8s, Terraform, Helm |
+
+---
+
+## 9. The transport abstraction layer (migration Phase 2)
+
+> **Naming collision, read this first.** §5 above calls the 100K→10M scaling
+> tier "Phase 2". That is a *capacity* tier. This section documents migration
+> **Phase 2 (Realtime Transport)** from the ADR roadmap
+> (Audit → Security → **Realtime** → Media → Storage → …). They are unrelated
+> and the numbers coincide by accident. Full rationale: [ADR-002](adr/002-realtime-centrifugo-abstraction.md).
+
+### 9.1 Why it exists
+
+`rooms.gateway.ts` keeps `Map<roomId, Map<userId, Set<Socket>>>` in process
+memory and fans out with `client.to('r:' + roomId)`. Two instances behind a load
+balancer would **each see half a room and neither would know**. That is not a
+tuning limit — the topology forbids a second instance. Recovery is also a
+hand-rolled `RoomEvent` cursor that loses ephemeral events (typing, presence
+`hello`) entirely on a drop.
+
+### 9.2 `ITransportAdapter`
+
+`web/src/lib/transport/ITransportAdapter.js`. Seven methods, deliberately no
+more — a wider contract would leak Socket.IO's semantics into it and the second
+implementation would become a Socket.IO emulator rather than a peer.
+
+| Method | Shape |
+|---|---|
+| `connect(opts)` | `Promise<void>` — establish the session |
+| `disconnect()` | `Promise<void>` — tear down, release resources |
+| `subscribe(roomId, handlers)` | `Promise<sub>` |
+| `unsubscribe(roomId)` | `Promise<void>` |
+| `publish(roomId, frame)` | `Promise<{seq?}>` — **opaque bytes only** |
+| `presence(roomId)` | `Promise<Array<{userId}>>` |
+| `status()` | `TransportStatus` |
+
+`TransportStatus`: `idle · connecting · connected · reconnecting · closed · failed`.
+`TransportEvents`: `connect · disconnect · presence · room_event` — the four
+names both adapters normalise onto, whatever the wire calls them.
+
+**The wire frame** is `{ roomId, type, payload, meta, target }`. `payload` is
+**base64 TEXT, never a Buffer** — socket.io frames each Buffer separately after
+the JSON packet, and when anything interleaves, the decoder reads text where it
+expects binary and drops the socket with `parse error`. That cost a day once;
+`makeFrame()` throws on a non-string payload so the lesson is inherited rather
+than rediscovered. `meta` is cleartext routing only (attachment id/seq/total) —
+never content.
+
+### 9.3 THE INVARIANT: no adapter may hold a room key
+
+ADR-001 stopped V-19 by giving `roomKey()` a **provider** with no password
+fallback for `e2e_v2` rooms. That defence lives in `socket-transport.js`. A
+transport rewrite is the single most likely way to undo it: an adapter that grew
+its own `deriveKey`/`roomKey`/`password` handling would silently restore the
+cyrb53 key, **both peers would degrade identically**, and nothing would surface.
+
+So adapters move opaque bytes, and `FORBIDDEN_KEY_SURFACE` in
+`ITransportAdapter.js` makes `test/transport.test.js` **fail** if either adapter
+ever exposes `roomKey`, `deriveKey`, `setRoomKey`, `password`, `encrypt`,
+`decrypt` or similar. `SocketIOAdapter` declines to re-export `setRoomKey` even
+though it wraps the module that defines it. Sealing and opening stay above the
+transport; keys enter only via `rooms.js` → `setRoomKeyProvider`.
+
+### 9.4 Runtime switching
+
+`localStorage['spotme.transport']` — the flag that **already existed** for the
+legacy P2P path, extended rather than duplicated. Two switches for one decision
+is how a device reaches a state neither switch describes.
+
+| Value | Adapter |
+|---|---|
+| `socketio` *(default, and the fallback)* | `SocketIOAdapter` — wraps `socket-transport.js` |
+| `centrifugo` | `CentrifugoAdapter` — `centrifuge` SDK, dynamically imported |
+| `p2p` | legacy Trystero, handled inside `socket-transport.js` (adapter is `null`) |
+
+`createTransport()` returns `{ adapter, requested, actual, reason }`, not a bare
+adapter. **A fallback is therefore visible rather than inferred** — asking for
+Centrifugo and silently getting Socket.IO would be the worst outcome, because
+you would believe you had tested Centrifugo. An unknown stored value falls back
+to `socketio` instead of throwing.
+
+### 9.5 Centrifugo gateway design
+
+- **Channels** are `room:<roomId>` (`roomChannel()`), so the server-side ACL can
+  mirror the client's naming exactly.
+- **Connection auth** is a short-lived JWT minted by us at
+  `POST /api/v2/realtime/token`, HS256 over `CENTRIFUGO_TOKEN_HMAC_SECRET_KEY` —
+  a secret only the backend and the broker share. The broker never needs to know
+  what a Spot Me account is. `sub` comes from the verified principal, never the
+  request body.
+- **Recovery** uses Centrifugo's own history (`recoverable: true`,
+  `delta: 'fossil'`) rather than re-querying the `RoomEvent` cursor. Recovered
+  publications are replayed through the *same* handler as live ones, so nothing
+  downstream needs to know which it was.
+- **Publishing goes through the server, never the broker.** Centrifugo would
+  accept a client publication directly, bypassing both group policy
+  (`policy()` → `refuse()`: role, mute, ban) and `RoomEvent` persistence, which
+  is what makes offline replay work. The audit already found this gateway once
+  "authorised NOTHING". Client-side publish must also be **disabled in the
+  Centrifugo channel config** — an unused capability is still a capability.
+
+### 9.6 Current status — do not read this as a migration
+
+**The app does not use this layer yet.** `rooms.js` still calls
+`socket-transport.js` directly; there are zero app-code imports of `transport/`.
+`centrifuge` is not installed and Centrifugo is not deployed.
+`POST /api/v2/realtime/centrifugo/publish` returns **501 on purpose** (see
+[04-API-DOCUMENTATION.md §8](04-API-DOCUMENTATION.md)).
+
+Phase 2 delivered **the seam, not the migration.** Wiring `rooms.js` onto
+`createTransport()` is the next step and is deliberately separate, because it
+touches the live message path.

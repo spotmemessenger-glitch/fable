@@ -11,9 +11,12 @@ import { Logger } from '@nestjs/common';
 import { Server, Socket } from 'socket.io';
 import { JwtService } from '@nestjs/jwt';
 import { PushService } from '../push/push.service';
+// The DM gate stays here: it is a property of joining, not of group policy, and
+// RoomsAuthService has no business knowing about DM pairing. GroupPolicy and
+// GroupsService are gone from this file because policy() moved wholesale.
 import { isDmRoom, verifyDmJoin } from './dm-room';
-import { GroupPolicy, GroupsService } from '../groups/groups.service';
 import { RoomsService } from './rooms.service';
+import { RoomsAuthService } from './rooms-auth.service';
 
 interface JoinPayload {
   roomId: string;
@@ -40,20 +43,6 @@ interface FetchPayload {
   attachId: string;
   seq: number;
 }
-
-/** Ephemeral action types relayed but never persisted (no ghost replays).
- * fetchreq/fetchres are the transport's peer-to-peer lazy-fetch fallback.
- * `hello` is the discovery lobby's presence heartbeat: replaying an old
- * "I am nearby" would tell the user something untrue, so it must never
- * reach the log. */
-const EPHEMERAL = new Set([
-  'typing', 'call', 'locup', 'rtc', 'history', 'fetchreq', 'fetchres', 'hello',
-]);
-
-/** How long a cached group policy is trusted — also the worst-case delay
- *  before a ban or mute takes effect on an already-connected socket. */
-const POLICY_TTL_MS = 5_000;
-const POLICY_CACHE_MAX = 10_000;
 
 /**
  * PAYLOADS TRAVEL AS BASE64 TEXT, NEVER AS BINARY ATTACHMENTS.
@@ -98,41 +87,15 @@ export class RoomsGateway implements OnGatewayConnection, OnGatewayDisconnect {
   // the Redis adapter replaces this map when the gateway scales out.
   private rooms = new Map<string, Map<string, Set<Socket>>>();
 
-  // Group policy is consulted on every send, so it is cached briefly rather
-  // than hitting Postgres per keystroke-sized event. The TTL is the blast
-  // radius: a ban or mute takes at most this long to bite.
-  private policyCache = new Map<string, { policy: GroupPolicy | null; expires: number }>();
-
   constructor(
     private roomsService: RoomsService,
     private jwt: JwtService,
     private push: PushService,
-    private groups: GroupsService,
+    // Group policy and the refusal rules live here, shared with the HTTP
+    // publish proxy. They were private methods on this class until ADR-002 §3
+    // needed a second caller and a second copy would have drifted.
+    private auth: RoomsAuthService,
   ) {}
-
-  /**
-   * Null means "not a group" — a DM, where knowing the roomId is still the
-   * whole access model. For groups this is the ONLY thing standing between a
-   * banned or muted member and the room, because the client cannot be trusted
-   * to enforce its own restrictions.
-   */
-  private async policy(roomId: string, userId: string): Promise<GroupPolicy | null> {
-    const key = `${roomId}|${userId}`;
-    const hit = this.policyCache.get(key);
-    if (hit && hit.expires > Date.now()) return hit.policy;
-    const policy = await this.groups.policyFor(roomId, userId).catch(() => null);
-    this.policyCache.set(key, { policy, expires: Date.now() + POLICY_TTL_MS });
-    if (this.policyCache.size > POLICY_CACHE_MAX) {
-      // Cheap bound: drop the oldest insertions rather than track LRU.
-      const excess = this.policyCache.size - POLICY_CACHE_MAX;
-      let dropped = 0;
-      for (const k of this.policyCache.keys()) {
-        this.policyCache.delete(k);
-        if (++dropped >= excess) break;
-      }
-    }
-    return policy;
-  }
 
   /** Users with at least one live socket anywhere — they need no push. */
   private connectedUsers(): Set<string> {
@@ -228,8 +191,8 @@ export class RoomsGateway implements OnGatewayConnection, OnGatewayDisconnect {
     // For a group room, membership is authoritative and knowing the id is NOT
     // enough — a removed or banned member still has the id and would otherwise
     // walk straight back in and replay the whole history.
-    const policy = await this.policy(roomId, userId);
-    if (policy?.banned) return { error: 'not a member of this group' };
+    const refusal = await this.auth.authorizeJoin(roomId, userId);
+    if (refusal) return { error: refusal };
 
     /* AND THE SAME IS TRUE OF A DM, WHICH NOTHING CHECKED.
      *
@@ -304,11 +267,8 @@ export class RoomsGateway implements OnGatewayConnection, OnGatewayDisconnect {
     // Group permissions are enforced here or not at all: the client cannot be
     // trusted to honour its own mute, and every restriction below is invisible
     // to the transport otherwise.
-    const policy = await this.policy(roomId, userId);
-    if (policy) {
-      const refusal = this.refuse(policy, type, body.meta);
-      if (refusal) return { error: refusal };
-    }
+    const refusal = await this.auth.authorizeAction(roomId, userId, type, body.meta);
+    if (refusal) return { error: refusal };
 
     const payload = decodeB64(body.payload);
     let seq: number | undefined;
@@ -323,7 +283,7 @@ export class RoomsGateway implements OnGatewayConnection, OnGatewayDisconnect {
       if (type === 'msg' || type === 'knock') {
         this.pushForEvent(roomId, type, userId);
       }
-    } else if (!EPHEMERAL.has(type)) {
+    } else if (!this.roomsService.isEphemeral(type)) {
       return { error: `unknown action type: ${type}` };
     }
 
@@ -351,49 +311,6 @@ export class RoomsGateway implements OnGatewayConnection, OnGatewayDisconnect {
       client.to(`r:${roomId}`).emit('action', frame);
     }
     return { seq };
-  }
-
-  /**
-   * Why a group action is refused, or null to allow it.
-   *
-   * DELETE IS ONLY PARTLY ENFORCEABLE. The id of the message being deleted
-   * travels inside the ciphertext, so the server cannot tell whose message it
-   * is. Clients therefore put the original sender in cleartext meta.owner —
-   * the same "routing only, no content" channel attachment slices use. When it
-   * is absent (older clients) the delete is allowed, because refusing every
-   * unlabelled delete would break existing installs. Tightening this to a hard
-   * requirement is safe once clients have rolled forward.
-   */
-  private refuse(
-    policy: GroupPolicy,
-    type: string,
-    meta: Record<string, unknown> | undefined,
-  ): string | null {
-    if (policy.banned) return 'not a member of this group';
-    switch (type) {
-      case 'msg':
-        if (!policy.canMessage) {
-          return policy.muted ? 'you are muted in this group' : 'members cannot send messages here';
-        }
-        return null;
-      case 'bin':
-        if (!policy.canMedia) {
-          return policy.muted ? 'you are muted in this group' : 'members cannot send media here';
-        }
-        return null;
-      case 'edit':
-        // You may only ever edit your own message, so a mute is the only bar.
-        return policy.muted ? 'you are muted in this group' : null;
-      case 'del': {
-        const owner = typeof meta?.owner === 'string' ? meta.owner : null;
-        if (owner && owner !== policy.selfId && !policy.canDeleteOthers) {
-          return 'you cannot delete other people’s messages';
-        }
-        return null;
-      }
-      default:
-        return null;
-    }
   }
 
   @SubscribeMessage('fetch')
