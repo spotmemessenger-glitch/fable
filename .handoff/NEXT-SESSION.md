@@ -1,854 +1,327 @@
 # START HERE — pickup brief
 
-**Written:** 2026-07-29, end of session.
-**Updated:** 2026-07-31 overnight. Everything below was verified by RUNNING it.
+**Written:** 2026-08-01, end of the identity-sequence + E2E-foundation session.
+**Supersedes** the 2026-07-31 brief entirely (PRs #2–#7 era). That text is in
+git history (`git log .handoff/NEXT-SESSION.md`) and in `SESSION-*.md`; nothing
+below depends on it.
+
+**Rule that has not changed:** never claim something works because this brief
+says so. The brief is a record, not a live check. Anything marked UNPROVEN
+stays unproven until re-run. Every number below says where it was measured.
 
 ---
 
-## 0. LATEST (2026-07-31 overnight) — SUPERSEDES EVERYTHING BELOW
-
-PR #6 is MERGED. `master` is at `81858cc`. The designated branch was restarted
-from it (documented procedure for a merged branch) and now carries TEN
-commits, all pushed, on **PR #7 (draft)**. PR #2 is still open, still rebased,
-still unmerged.
+## 0. Repository state (verified 2026-08-01 ~15:00 UTC)
 
 ```
-master  81858cc
-PR #7   claude/next-session-b6ypc5   cc0057d   DRAFT — this session's work
-PR #2   feature/centrifugo-transport 02611cf   OPEN, unmerged
+master  a934e11  feat(web): a signing identity, and bindings that prove possession (A7) (#29)
+        ad36a37  test(e2e): Playwright foundation, and the silent backend build it uncovered (#32)
+        8fc603b  feat(web): wire the QR scanner into the verify screen (#28)
 ```
 
-### How this session was run
+Measured on `master` in this container: **web 833/833**, backend 13 suites /
+121 tests (in CI), **e2e 15/15** (local + CI).
 
-Five audit agents in parallel (transport, crypto/storage, backend security,
-UX wiring, build/PWA), each told to prove a fault or drop it, while I drove the
-real app in two browsers against a real local stack (Postgres + NestJS on :4000
-+ Vite on :5173). **Every fix below was verified independently before it was
-applied** — several agent claims were wrong or narrower than reported, and one
-("reactions are broken") turned out to be my own harness clicking inside a
-deliberate 400 ms ghost-click window.
+### Merged this session, newest first
 
-### What was actually wrong, and is now fixed
-
-**Message loss — four separate paths, all in transport:**
-
-1. `rejoin()` read `ack.events` and ignored `ack.envelopes`, then advanced the
-   cursor anyway. The server strips `bin` rows from `events`
-   (`type: { not: 'bin' }`), so an envelope is the ONLY way a missed attachment
-   returns. Every photo/voice note/file received across a reconnect was dropped
-   and marked consumed. `joinPromise` is cached, so `join` runs once per page
-   load and every drop after that took this path — the common case on a phone.
-2. Every room joined TWICE on first connect (`on('connect')` is registered above
-   the `once('connect', resolve)` that settles `socketPromise`). Duplicate
-   messages were absorbed by `store.add`'s id check, so it was invisible — but
-   the second loop's `unopenedFloor = null` cleared a floor the first had just
-   set, and the cursor then advanced past a frame it could not open.
-3. Live frames dispatched concurrently while the replay loops are sequential. A
-   frame that decrypted could move the cursor while an earlier failing frame was
-   still inside `refreshRoomKey`, before its hold was set. Same race reordered
-   `edit` past the `msg` it edits, which returns silently.
-4. `replay()` capped events at `REPLAY_LIMIT` but computed `lastEventId` from an
-   UNCAPPED attachments query — a client far enough behind advanced past events
-   it was never sent (1200 messages in the case worked through). Now the
-   frontier is where the capped query stopped, the ack says `truncated`, and the
-   client drains pages.
-
-**Identity — two catastrophic:**
-
-5. `loadIdentity` did `.catch(() => null)` on its readonly get, collapsing
-   "nothing stored" into "the read threw" — and that branch generates a key and
-   `put`s it over the existing one. Non-extractable, so no copy: every v2
-   conversation dies. A quota blip or an iOS-suspended tab was enough, and the
-   device then reported `identityStatus() === 'ok'`.
-6. `wipeDevice` walked localStorage only; the identity key lives in IndexedDB.
-   "Clear all data" left it, and the next launch published the same key under a
-   new account id.
-
-**Accounts and data:**
-
-7. `POST /api/push` — no guard, `userId` from the body, no FK behind it. Anyone
-   could wipe a victim's push registrations, or point their own endpoint at a
-   victim's id and receive a live feed of which rooms were active (`tag: roomId`).
-8. `GET /api/knock?userId=<anyone>` — **no authentication at all**, and every
-   stored knock carries `roomId` AND `secret`, the room's encryption key, for 30
-   days. `_auth.js` (written for exactly this hole in `/api/translate`) was one
-   file away and never imported.
-9. `guestAuth` never cleared `deletedAt`, so re-claiming a released username left
-   {deletedAt set, ordinary username} = permanently 403. **Our own reset flow
-   does this** when the wipe half fails (private mode / quota).
-10. Three endpoints returned other users' full `User` rows including
-    `claimSecretHash` — the sole credential `guestAuth` checks. A chat request
-    was enough to harvest one.
-11. `GET /api/users/lookup` with NO parameter returned an arbitrary real account
-    (`@Query` -> undefined -> Prisma strips it -> no filter). Verified live.
-12. A knock's sender was taken from the payload while the authenticated sender
-    sat unused in `meta.peerId`. Any user could knock as anyone, and
-    `receiveKnock` stores the ATTACKER's roomId and secret.
-
-13a. The bridged /api handlers verified a token's SIGNATURE but never asked
-    whether the account still existed, so a deleted user's token kept working
-    against /api/knock, /api/translate, /api/voice and /api/presence for its
-    full 15-minute life while /api/auth/* refused it. One gate now covers all
-    four (`src/middleware/guestAuth.ts`). `/api/turn` is deliberately NOT gated
-    — it is fetched at boot before a token can exist and `readyRTC()` caches the
-    result, so a 401 there pins the session to STUN-only. It is still
-    unauthenticated and still mints Cloudflare credentials: see item 4 below.
-
-**Shipped-broken and unreachable:**
-
-13. A cloud build with `VITE_SPOTME_SERVER` unset resolved `API_BASE` to `''` and
-    pointed the socket at the static host. App loads, onboarding works, chat
-    never connects. Exit 0, no warning. `api.js` now falls back to the hosted
-    API (DEPLOY.md's address); `.vercelignore` covers `.env*`.
-14. `profile.js` claimed usernames against a DIFFERENT origin from the one
-    everyone searches — two registries really do exist.
-15. `#/groups` (~1200 lines: wizard, roles, bans, join-by-@handle) was a closed
-    loop with no way in. `#/contacts` had no `nav()` anywhere. The Bluetooth
-    scanner's only door was an empty state that vanished after first use.
-16. A brand-new chat said "the server could read it" while actually on e2e_v2 —
-    `convo` is captured once and `reach` upgrades asynchronously. The same stale
-    read made `keyWarning` **unreachable** on exactly those rooms.
-17. A failed TEXT message had no retry and nothing retried it (socket.io splices
-    the packet once the ack times out). A group created in-app could never be
-    shared. `inertNet` was missing `sendEdit`. "Last seen & online",
-    "Transliteration" and "Read aloud" all wrote settings nothing read.
-
-### THE TRAP THAT COST ME TWO FALSE ALARMS
-
-Both were the harness, not the app:
-
-- **Photo**: an earlier harness waited on `.psheet .pdone` (the view-once sheet).
-  The ordinary photo path goes through the EDITOR and `.pe-send`. Photos work.
-- **Reactions**: the message sheet arms itself against ghost clicks for 400 ms
-  (`chat.js`, `Date.now() - mountedAt < 400`) because a long-press mounts a sheet
-  under the finger. Playwright clicks faster than that. Reactions work.
-- **Reload "data loss"**: sampling the thread once, 5 s after reload. With
-  polling it reports *all persisted, all kept*.
-
-**Rule: before believing a UI feature is broken, check the harness isn't
-fighting deliberate armour.** Assert on what a user would see, and poll.
-
-### Verification standard used throughout
-
-Every fix has a regression test, and the important ones are MUTATION-VERIFIED —
-revert the fix and exactly the checks that name it fail. Proven for: the
-identity read fix, the knock impersonation guard, the relay auth gate, and text
-retry.
-
-```
-web       25 suites green   (viewonce 17/21 is PRE-EXISTING — confirmed at
-                             17/21 before any of this session's changes)
-backend   6 suites / 44 tests, tsc --noEmit clean
-build     vite build clean; a no-env build now bakes the Railway origin
-E2E       test/e2e/full-journey.mjs — two real browsers, see below
-```
-
-### The E2E harness is the thing to run first next session
-
-`spotme/web/test/e2e/full-journey.mjs` drives two isolated browser contexts
-through: onboarding, @username discovery, the knock, text both ways, unicode, a
-**20-message burst checked for loss / duplication / ordering**, read receipts,
-typing, reactions, replies, a photo through the real editor, an offline window,
-and a reload. It needs Postgres + backend + Vite up (see below).
-
-```bash
-su postgres -c "/usr/lib/postgresql/16/bin/pg_ctl -D /var/lib/postgresql/spotme-test \
-  -l /var/lib/postgresql/pg.log -o '-k /tmp -p 5432 -h 127.0.0.1' start"
-cd spotme/backend && set -a && . /tmp/be.env && set +a && node dist/main.js &
-cd spotme/web && npx vite --host 127.0.0.1 --port 5173 &
-node test/e2e/full-journey.mjs
-```
-
-`/tmp/be.env` needs DATABASE_URL, JWT_ACCESS_SECRET (**now >= 32 chars or the
-backend refuses to boot** — that is deliberate), JWT_REFRESH_SECRET, PORT=4000.
-Playwright lives in the scratchpad and is symlinked into `web/node_modules`;
-recreate the symlink if the container is new.
-
-### STILL OPEN — ranked, with the evidence already gathered
-
-1. **Any authenticated user can join any DM room.** `onJoin` refuses only
-   `policy?.banned`, and `policyFor` returns null for every DM. Room ids are
-   `dm-${cyrb53(sorted ids)}` — a pure function of two public ids. So: enumerate
-   ids via username search, compute the room id, mint a guest token, join,
-   replay 5000 events. For v1 rooms the secret is derivable the same way.
-   **The data to fix it already exists** — `push.remember()` writes a
-   `RoomMember` row on every join and it is never consulted. Suggested: refuse
-   the join if `RoomMember` rows exist for that room and the caller is not one.
-2. **`POST /api/groups` accepts an arbitrary `roomId`.** Plant a Group on
-   someone's DM room and `policyFor` starts returning `banned: true` for the
-   real participants — they are locked out of their own conversation. Fix:
-   refuse a roomId that already has `RoomMember` rows.
-3. **No rate limiting anywhere.** `@nestjs/throttler` is not a dependency.
-   `verifyOtp` has no attempt counter — a 6-digit code with unlimited parallel
-   guesses. `/api/username` enumerates the whole registry with ids attached.
-4. **`/api/presence` is still unauthenticated** (same shape as `/api/knock`,
-   returns `roomKey`/`writerKey`). Same one-file fix; I did knock only.
-5. **Both JWT strategies use the same secret**, so `EmployeeAuthGuard` accepts an
-   ordinary user token. Only `RolesGuard` stands between that and the admin
-   surface, and every staff route does carry `@Roles` — so it is a loaded gun,
-   not a fired one. Fix with an `aud` claim.
-6. **Deleting an account leaves the session alive**: tokens valid till expiry,
-   open sockets never re-checked, GroupMember/PushSubscription rows untouched.
-7. **`fetchreq`/`fetchres` bypass the cursor hold** (`return void handle…`) and
-   `handleFetchRes` clears its timer before awaiting, so a decrypt failure hangs
-   the caller forever.
-8. **`unwrapMeta` falls back to server cleartext** when the sealed copy fails to
-   authenticate — the only place in the codebase a GCM tag failure does not drop
-   the data. Attacker-chosen `id` can also pre-empt a real message via dedupe.
-9. **No `navigator.storage.persist()`**, and the identity key is non-extractable
-   with no backup. iOS evicts script-writable storage after ~7 days unused, which
-   silently kills every conversation. Needs a product decision, not a patch.
-10. **A device whose own published key was overwritten by the same account on
-    another origin cannot self-heal.** Unchanged and still deliberate —
-    republish-on-mismatch makes two live origins fight each launch.
-
-### Blocked on the owner (I cannot do these)
-
-- Handset test on @Justice12 / @mistry11.
-- `cd spotme/backend && npm run deploy` (Railway CLI, not authenticated here).
-- Purge ghost accounts `probedesk9`, `smoketest_desk`.
-- **Rotate the R2 secret access key and the `cfat_…` Cloudflare token.**
-- Decide whether to merge PR #2.
-
----
-
-## 0000000. EARLIER (2026-07-31 night) — superseded by the section above
-
-**`master` is `c5c9e07`. PRs #3 and #4 are MERGED. Vercel builds from master, so
-the fixes are shipping. No Railway deploy is needed — both changes are
-client-side only, so the Vercel-before-Railway rule does not bite this time.**
-
-```
-master  c5c9e07  Self-healing key re-fetch (#4)
-        f09d49d  Hotfix: stop a keyless device poisoning every chat (#3)
-PR #2   feature/centrifugo-transport — STILL OPEN, and now conflicts on THIS FILE
-```
-
-### READ THIS BEFORE TESTING ON THE HANDSETS
-
-**The two merged PRs do NOT fix @vijay22 ↔ @ajith11 while that phone still
-cannot persist its key.** This is the single most likely way to misread the next
-test, so it is first. Walk the changes through that device:
-
-1. It cannot write IndexedDB, so it mints a fresh keypair every launch.
-2. PR #3 now makes it **refuse to publish** that ephemeral key. The server keeps
-   the ORIGINAL key, V₁.
-3. But the phone holds Vₙ's private half, not V₁'s. It derives a different room
-   key than @ajith11 does. That pair stays broken.
-4. PR #4 on @ajith11's side re-fetches @vijay22's CURRENT published key — and
-   gets V₁ back, because #3 just froze it. Same key, so the repair cannot land.
-
-That is not a bug in either PR. It is the deliberate trade in #3 (protect every
-other chat at the cost of that one device's session), and #4 repairs the PEERS
-of such a device, not the device itself. **Neither makes Safari store the key.**
-
-What the merge does buy, today: every other chat @vijay22 is in stops being
-poisoned on each launch; any conversation broken by an ORDINARY key rotation now
-repairs itself on the first undecryptable frame; a failed send says so instead
-of showing "✓ Sent"; and the moment that device does persist a key, @ajith11's
-side self-heals on the first message and stays healed.
-
-**Messages already dropped stay lost either way** — the cursor advances in
-`dispatch`'s `finally` whether or not the frame opened. Those two chats need
-recreating once the storage bug is fixed.
-
-### TASK 3 IS NOW A ONE-LINE ANSWER, NOT AN INVESTIGATION
-
-Connect @vijay22's iPhone to the Mac by cable, open Safari DevTools,
-**hard-reload the PWA so the phone actually has the new bundle**, and read the
-console:
-
-- `spotme identity: NOT republishing — this device cannot persist its key`
-  → the IndexedDB/Safari bug is still there, that chat will NOT heal, and this
-  is the blocker. Everything else is downstream of it.
-- **No warning** → the key persisted. Send one message; @ajith11's side should
-  repair on that frame, and both directions then work.
-
-The `persisted` flag from PR #3 is what makes this observable at all. Before it,
-the failure was invisible by construction.
-
-### What PR #4 added (`spotme/web`, 452 lines, one new test file)
-
-`roomKeyForConvo(convo, fetchToken, opts)` takes `forceRefetch` — the stored
-`convo.peerKey` was PREFERRED and only fetched when absent, which is what made a
-stale key permanent. Evicting the transport's key cache alone fixes nothing; the
-provider re-derives from the same stored value. `onPeerKeyChanged` reports a
-recovered key back because this module must not import `db` (import cycle).
-
-`refreshRoomKey(roomId)` in `socket-transport.js`, called from `dispatch` on
-**`OperationError` only** — AES-GCM refusing to authenticate means the key is
-wrong; a `SyntaxError` from `JSON.parse` means we DID decrypt and the sender
-sent nonsense. Guardrails: one retry per frame, one re-fetch per room per 30s,
-concurrent failures coalesce onto one fetch, v1 rooms never offered a repair.
-
-The captured `keyPromise` had to go — it resolved once for the life of the page,
-so a repaired room would have healed in the cache and stayed broken in the room.
-
-`test/key-self-heal.test.js`, 15 checks, **fails 4/22 against the pre-fix tree**.
-It drives the room's real `onFrame` (what `socket.on('action')` calls), not the
-modules alone — deliberately, because this project's most expensive bug was a
-V-19 cut with correct crypto that was never called and passed its module tests.
-
-### The two test users — there IS a route, with a catch
-
-`DELETE /api/users/me` exists but is **self-service**: it acts on the JWT's
-subject. **`AdminController` has NO user-deletion route at all** (growth, health,
-audit log, employees only) — that is why the admin dashboard could not do it.
-
-So you need a token AS each user. `auth.service.ts:152` rejects a mismatched
-claim secret, and `claimSecretHash` is set ONLY at creation. The web client
-generates `claimSecret: randomHex(16)` (`db.js:139`) while the transport falls
-back to `anon_<id>` (`socket-transport.js:307`) — so it depends on how the
-probes were made:
-
-```bash
-API=https://api-production-0a4ca.up.railway.app
-curl -sS -X POST $API/api/auth/guest -H 'content-type: application/json' \
-  -d '{"id":"ed112d1b973ba7b860f471f01e3acc8d","username":"smoketest_desk","secret":"anon_ed112d1b973ba7b860f471f01e3acc8d"}'
-# tokens -> curl -X DELETE $API/api/users/me -H "authorization: Bearer <accessToken>"
-# 401    -> random claim secret, gone with the device; neither route can reach it
-```
-
-Same shape for `probedesk9` / `731ffdf1a5e30958`. It is a **soft** delete
-(`deletedAt` set, email/phone nulled) — enough to drop them from username
-search, key lookup, group member search and the admin counts; the row stays.
-**If the 401 comes back, the real fix is adding an admin delete route.**
-
-### Traps found this session — do not rediscover
-
-- **A cloud session cannot reach `*.vercel.app` or `*.railway.app`.** The agent
-  proxy answers 403 to CONNECT. Verifying a deploy or touching production has to
-  happen from your own machine. Build locally and grep `dist/assets/index-*.js`
-  instead — that proves the minifier kept the fix, which is most of the value.
-- **`test/viewonce.test.js` is 17/21 on Linux/node 22**, failing the four checks
-  that assert media reaches disk. Identical at `67bacf7`, `e8ee362`, `9c81ffd`
-  and `a453b9e`, so it PREDATES PR #1 — not caused by any recent change. Not
-  module mocking either: `media.test.js` uses the same flag and passes 41/41.
-  Prior sessions measured on Windows. Flagged, not diagnosed.
-- **The container's local `master` was a divergent 26-July line** (`c88c214`,
-  57 ahead / 50 behind `origin/master`). Building or pushing from it would ship
-  five-day-old code. Check `git rev-parse master origin/master` before trusting
-  a local branch name in a fresh clone.
-- A stop hook may offer to `--reset-author` unsigned commits onto Claude. Those
-  50 commits are **Youvaraja's own work**; rewriting them would misattribute
-  them, they are not on any remote, and changing an author email does not sign
-  anything — "Unverified" is about GPG/SSH signing.
-
-### Still blocked on the user
-
-1. **Safari DevTools on @vijay22's iPhone** — task 3 above. Everything about
-   those two chats is downstream of it.
-2. **Rotate the R2 secret access key and the `cfat_…` Cloudflare token** — both
-   were pasted into the 2026-07-31 transcript, which is on disk. Still not done.
-3. Delete the two test users (see above).
-4. **PR #2 is open and now conflicts with this file.** This section was written
-   directly on master by agreement, accepting that. PR #2's branch carries its
-   own `## 00000` section, which the section you are reading supersedes on every
-   point they disagree.
-
----
-
-## 000. LATEST (2026-07-31 morning) — READ THIS FIRST, IT SUPERSEDES 00
-
-**Repo: `spotmemessenger-glitch/fable`, branch `master`, HEAD `ad0b123`, fully
-pushed.** Git here is HTTPS + Windows Credential Manager — there is NO ssh key
-on this machine and never was. On the Mac: `gh auth login` then
-`gh repo clone spotmemessenger-glitch/fable`.
-
-### What is live, and what is not
-
-- **Vercel IS live with every fix.** Verified in the served bundle:
-  `sends 'authorization' 1`, `view-once burn 3`, `'Storage full' 2`.
-- **Railway is NOT deployed.** Server-side view-once deletion and the
-  voice-note truncation guard are inert until
-  `cd spotme/backend && npm run deploy`. Nothing is broken meanwhile: the new
-  bundle sends a token, the old backend ignores it.
-- **DEPLOY ORDER MATTERS: Vercel first, then Railway.** Railway-first makes the
-  new backend demand a token from every user still on the old bundle → 401 on
-  every call, and `lib/voice.js` throws on non-OK, so voice breaks visibly.
-
-**TRAP THAT COST AN HOUR — read before writing any verification loop.** The
-bundle path is `/assets/index-*.js`. A check that greps `index-*.js` without
-the `/assets/` prefix fetches a 404 PAGE and reports 0 matches forever. That
-produced 19 consecutive false "not deployed" readings against a deploy that
-had already succeeded.
-
-### The overnight audit — 12 agents, 12 reports in `.reports/`
-
-8 auditors (T1 T2 TL1 TL2 V1 V2 P1 P2) then 4 fixers (voice, viewonce,
-language, security). ~40 fixes in 17 commits. Gates on the combined tree:
-web 11 suites / 241 checks, backend 34/34, both builds real.
-
-**Two decisions are waiting on the user — neither is engineering:**
-
-1. **V-19, the biggest open item.** DM room keys derive from
-   `stableHash("spotme-dm-secret-v1:" + sorted user ids)` — cyrb53, a
-   NON-cryptographic hash of two values the server already stores. The server
-   can recompute any room key and decrypt everything. Four agents independently
-   ranked this top; none touched it because changing the derivation makes every
-   existing conversation permanently unreadable. Safe shape: VERSIONED
-   derivation — old rooms keep the old scheme, new rooms get real entropy.
-   **The onboarding screen says "no server reading your messages." That is
-   currently false — change the copy even if the fix waits.**
-2. **View-once in PUBLIC groups.** The server holds the room key there, and the
-   composer offers the "Private photo" tile with no warning. Disable it in
-   public groups, or warn unmissably.
-
-### Environment changes made 2026-07-31
-
-- `ANTHROPIC_API_KEY` + `READ_MODEL=claude-haiku-4-5-20251001` set on Railway
-  AND Vercel. Haiku ~1.6s vs the old 3.7s read path. **Caveat:** on
-  `"naan innaiku vetuku varen"` both Claude models said "hunting" where the
-  chain says "coming home" — Anthropic is now the PRIMARY reader, so if
-  quality dips that is why, and the fix is reordering one list in `llmRead`.
-- **All 7 vendor keys were REMOVED from Vercel** (Anthropic/OpenAI/Gemini/
-  Sarvam/ElevenLabs/Azure/Google) because both `/api/translate` and
-  `/api/voice` were open, unauthenticated and unthrottled there. The app is
-  unaffected — it calls Railway (`VITE_SPOTME_SERVER`), so those Vercel
-  functions are vestigial. The code fix is deployed now too, but the keys are
-  still absent: **restore them only if something is actually meant to serve
-  from Vercel.**
-- 260 shell-debris files deleted from the repo (names like `!(m.viewOnce`,
-  `(4-n%4)%4`). List at the session scratchpad `deleted-junk.txt`. **Do not
-  bulk-delete untracked entries**: real cloned tools (`MetaGPT/`,
-  `OmniParser/`, `ClaudeDesktopCommander/`, `eas-cli/`) are untracked too.
-
-### iPhone re-test list — EVERY measurement was Chromium on Windows
-
-The reported bugs were iPhone Safari, where the codec (AAC/mp4 vs Opus/webm),
-autoplay policy, storage limit and tab suspension all differ. Five minutes on
-the phone, in order:
-1. 30s voice note — sends fast? first tap makes sound?
-2. Several notes, then reload — any "tap to load"? (that was bytes discarded)
-3. Note while the other phone is locked — still "Not delivered"?
-4. Plain English in a Tamil chat — stays English?
-5. Private photo — countdown appears on the SENDER's side?
-
-If 1 or 2 fail, the `audioBitsPerSecond: 24000` hint is being ignored by Safari
-and the fix has to become a transcode, not a tweak.
-
-### Still uncommitted, deliberately (predates the audit, separate track)
-
-`spotme/admin-dashboard/`, `spotme/app/lib/{db,reach}.js`,
-`spotme/app/screens/`, `spotme/app/theme.js`, and modifications to
-`spotme/app/package.json` + `worklet/app.bundle.mjs`.
-
-### TestFlight
-
-Blocked on the Mac — Windows cannot build iOS. There is still no
-`spotme/web/ios/`. Start with `cd spotme/web && npm install && npx cap add ios`,
-then an APNs `.p8` uploaded to Firebase project `spot-messenger-48a74`.
-
----
-
-## 00. LATEST (2026-07-30 late evening) — read this first
-
-**The Vercel 404 had a root cause nobody had found, and it was not the code.**
-The Vercel project is git-linked to `spotmemessenger-glitch/fable` with **no
-Root Directory set**, so every push to master built the REPO ROOT: no app
-there, empty `/vercel/output`, a 1-second "success", and that empty deployment
-then took the production alias away from the good CLI deploy. That is why the
-site went 404 within minutes of each `git push` — including right after the
-"fix" commit `c76f097`. Root Directory is now set to `spotme/web` via the
-Vercel API. A git-triggered deploy was then run and verified: root **200**,
-real HTML, `api/*` lambdas built, `/api/translate` returning
-`{"engine":"sarvam+azure/openai","confirmed":true}`.
-**If the site 404s again, check that setting before touching any code.**
-
-**Groups v2 P3 (web UI) is BUILT and verified** — see
-`spotme/docs/GROUPS-BUILD.md` for the full record. New: `lib/groups-api.js`,
-`lib/group-perms.js`, `views/group-new.js` (3-step wizard),
-`views/group-manage.js`, rewritten `views/groups.js`, route `#/group/<id>`.
-Driven in a real browser against the local backend: wizard create → 3 members
-+ OWNER on the server, promote to ADMIN, permission toggle persisted, ban,
-lift ban. Backend 26/26, web +11 new tests. Commit is local — **not pushed**.
-
-**Three bugs found by building it, all fixed:**
-1. `ui.js el()` wrote `disabled="false"`, which HTML reads as disabled — the
-   wizard's Create button was dead from first paint.
-2. **Un-banning was impossible**: `setBan` stamps `leftAt` too, `memberInclude`
-   filtered on it and `requireTarget` rejected it, so banned members vanished
-   from every payload and the unban route 404'd.
-3. Lifting a ban cleared only `bannedAt`, leaving `leftAt` set and the
-   `RoomMember` row deleted — restored to the roster but still receiving
-   nothing.
-
-**New trap — `nest build` can exit 0 and emit NOTHING.** `deleteOutDir: true`
-wipes `dist/` while `incremental: true` makes tsc decide there is nothing to
-emit, so you get an empty `dist` and a 0 exit code. Worse: a stale backend may
-still hold :4000, so you are testing hours-old code. Delete
-`tsconfig.build.tsbuildinfo` before building, and prove a route you just added
-actually answers (404 on a new route = stale process).
-
-**Google Maps was dead in production for the same class of reason.**
-`VITE_GMAPS_KEY` lives only in `spotme/web/.env.local` (gitignored, correctly),
-and it had never been added to Vercel — the only `VITE_*` var there was
-`VITE_SPOTME_SERVER`. Vite inlines `import.meta.env.*` at BUILD time, so every
-production bundle shipped `maps/api/js?key=` with nothing after it and Google
-refused the script; the app fell back to its drawn map. Fixed by adding
-`VITE_GMAPS_KEY` to the Vercel project (production+preview+development) and
-redeploying; the live bundle now carries the real key and the Maps API
-authenticates on the Vercel origin with no `gm_authFailure`. **Rule: any new
-`VITE_*` var must be added to Vercel too — `.env.local` never travels.**
-
-**Everything above is pushed and deployed.** Web is live; the backend ban/unban
-fix was confirmed in production by running a real ban → unban round trip
-(Railway served the PREVIOUS container for ~4 minutes after `npm run deploy`
-reported success — a health check cannot tell the difference).
-
----
-
-## 0a. IF YOU ARE ON THE MacBOOK — this is your task
-
-The Windows PC cannot do iOS at all (verified: `MINGW64_NT-10.0-19045`, no
-`/System/Library`, no `sw_vers`). Xcode is macOS-only, so everything iOS was
-blocked until now. The user has a MacBook AND an Apple Developer account, and
-both an Android and an iOS device connected **to the Mac**.
-
-**There is no `spotme/web/ios/` directory yet.** First commands:
-
-```bash
-cd spotme/web && npm install && npx cap add ios && npx cap sync ios
-```
-
-Then, for iOS push:
-1. Apple Developer → Keys → create an **APNs key** (`.p8`).
-2. Upload it into the Firebase project **`spot-messenger-48a74`**
-   (Project Settings → Cloud Messaging → APNs Authentication Key).
-3. Build/run on the connected iPhone from Xcode.
-
-**The server needs NO changes for iOS.** Already deployed and live: the `apns`
-block (`apns-priority: 10`, `content-available`, `thread-id`),
-`DeviceToken.platform` accepts `'ios'`, and the client's `registerNativePush()`
-already reports `ios` via `Capacitor.getPlatform()`.
-
-**Do not commit `.keys/`** — gitignored, and the Mac does not need it. Only the
-server does, and Railway already holds it.
-
-## 0b. THE ONE THING STILL UNPROVEN
-
-**No real phone has ever received a push.** Production holds exactly ONE device
-token (`@qa_probe_02`, the Android emulator) and ZERO web-push subscriptions.
-The whole chain is verified on the emulator — real chat message → server → FCM
-→ tray notification on an idle, screen-off device — but never on a real handset.
-Getting one notification onto a real phone is the next milestone.
-
-This route was IMPOSSIBLE until 2026-07-30 late evening — the site was 404, so
-there was nothing to add to a Home Screen. It is live now (see section 00), and
-the PWA prerequisites were checked on the live site: `display: standalone`,
-`apple-mobile-web-app-capable`, `/sw.js` 200, `/api/push` reports
-`enabled:true` with a VAPID public key.
-
-Fastest route on iPhone, needing no build at all: open
-https://spotme-messenger.vercel.app in Safari → **Add to Home Screen** → open
-**from the icon** → allow notifications. iOS 16.4+ supports Web Push only for a
-Home Screen install, and the first-run prompt now asks directly.
-
-## 0c. What landed 2026-07-30 (6 commits, `8fe2753..47247d5`, pushed)
-
-- **The Railway deploy had been silently failing for a DAY.** `.deploy/` was
-  gitignored and `railway up` skips gitignored paths, so the staged `web/api`
-  never reached the build context, the Dockerfile's own assert failed the
-  build, and Railway kept serving the PREVIOUS container. Staging is now
-  `deploy-api/` (untracked but NOT ignored). A `.railwayignore` does not help —
-  it only ADDS exclusions. Production now returns
-  `{"engine":"sarvam+azure/openai","confirmed":true}`.
-- **The Vercel site had been 404 for days**, same class of bug: `spotme-core`
-  was `"file:.."`, outside the only directory Vercel uploads. Now a real local
-  package at `web/vendor/spotme-core` — which must NEVER be gitignored.
-- **Azure Translator key was dead** (401 everywhere). Replaced; the new key
-  works ONLY against the resource endpoint
-  (`ytranslator-yuvraj-2026.cognitiveservices.azure.com`) — the global host
-  `api.cognitive.microsofttranslator.com` 401s for every region. Do not
-  "simplify" `azureBase()` to the global host.
-- **Groups v2**: roles (OWNER/ADMIN/MODERATOR/MEMBER), granular grants,
-  ban/mute, transfer, public groups with @username, 30-day soft delete. 26
-  tests pass. **The rooms gateway previously authorised NOTHING** — knowing a
-  roomId was the whole access model, so a ban was decorative; join/send are now
-  policy-checked. Delete-permission is only partly enforceable (the target id
-  is inside the ciphertext — clients must send cleartext `meta.owner`).
-- **FCM push** built and verified on the emulator. Web Push can NEVER work in
-  the packaged app: Capacitor's WebView has no `PushManager` and no
-  `Notification` (verified on-device).
-- Composer no longer zooms the app on mobile (16px floor on coarse pointers).
-
-**Groups has NO web UI yet** — `groups.js` still says "no admin, no server".
-The 3-step wizard, roles screens and chat-list integration are unbuilt.
-
----
-
-## 0. LATEST (2026-07-30 overnight): Spot Me now runs on a server backend
-
-**IT IS LIVE.** Web: https://spotme-messenger.vercel.app — Backend API +
-`/rooms` socket: https://api-production-0a4ca.up.railway.app (Railway project
-`spotme-backend`, services `api` + `Postgres`). Deploy commands and the reasons
-behind them are in `spotme/web/DEPLOY.md`. Verified in production: username
-availability + search, knock opens the chat on both devices, and a message sent
-while the recipient's tab was CLOSED arrived on reopen. Note: a Railway "Deploy
-Crashed" email refers to the FIRST attempt (Prisma/libssl), fixed in `8e734e2`.
-
-**FIRST TASK NEXT SESSION (one command, then one check):**
-```
-cd spotme/backend && npm run deploy
-curl -s -X POST https://api-production-0a4ca.up.railway.app/api/translate \
-  -H "content-type: application/json" -d '{"q":"are you coming tonight?","target":"ta"}'
-```
-Expect a `"confirmed"` field. At the end of 2026-07-30 production was still
-answering `{"engine":"azure"}` with no `confirmed` — the cross-confirmation
-deploy had not taken effect. Code and keys are committed and set; it just needs
-the deploy to land. **Never plain `railway up`** — `npm run deploy` stages
-`web/api` into the image, and without it every /api/* route 404s.
-
-**Also done 2026-07-30 (all committed):**
-- **Push notifications** live: the server pushes when an event lands for
-  someone not connected. Only msg/knock, never the sender, no text in the
-  payload. Real-device delivery still unverified.
-- **Translation + transliteration fixed** after five packaging faults —
-  see the memory note `spotme-language-pipeline`. Engines now cross-confirm:
-  Sarvam in parallel with Azure/Google, LLM adjudicates disagreements. User
-  confirmed Google Input Tools should win transliteration disputes.
-- **ybot**: voice loop (ElevenLabs streaming, real barge-in, ctrl+space
-  push-to-talk) and a 3D saree avatar with 15-viseme lip sync, wired live to
-  the voice service. Run: `python run.py --voice` plus
-  `python -m ybot.avatar_server`. Never tested with a real microphone — that
-  needs the user.
-- Working keys: Sarvam `sk_w64e4low…`, OpenAI `sk-proj-OrZ…`. Gemini
-  authenticates but its AI Studio project has no credit (429).
-
-**What happened:** the web app's Trystero/BitTorrent-tracker transport was
-replaced by a server-backed one. Commits `7aad447` (backend), `43cfc02` (web),
-`9603543` (docs). The UI is UNTOUCHED (user: "stick to this UI").
-
-**PROVEN by two-browser Playwright E2E** (screenshots in
-`spotme/docs/verification/`): onboarding + username registry on the backend,
-knock→chat both sides, live encrypted text, presence Online/Last-seen, Read
-receipts, **offline text delivery via replay**, live photo (5 encrypted slices
-+ binack), **offline photo (envelope replay + tap-to-load lazy fetch from the
-server)** — the old P0 media-persistence bug is structurally fixed. Test
-suites: web 24/24 + 32/32 + 21/21.
-
-**How to run:**
-```
-docker start spotme-postgres                     # port 5433
-cd spotme/backend && node dist/main.js           # :4000 (or npm run start:dev)
-cd spotme/web && npx vite                        # :5173, proxies /api + /socket.io
-```
-Two isolated identities for testing: open localhost:5173 AND 127.0.0.1:5173
-(different origins → different localStorage). `?fresh` resets a device.
-
-**Architecture (see spotme/docs/02-SYSTEM-ARCHITECTURE.md):** rooms are
-Socket.IO rooms on NestJS; persistent actions append to Postgres `RoomEvent`
-(AES-GCM ciphertext, key derived client-side from the room secret — server
-never sees plaintext); clients replay from a per-room cursor. Calls remain
-true P2P (WebRTC, signalling relayed). `web/src/lib/socket-transport.js` is a
-drop-in for the Trystero API; `localStorage['spotme.transport']='p2p'` reverts.
-
-**Morning session (2026-07-30 ~10:30-11:30) — one serious bug found and fixed.**
-Commit `8e1853c`. Symptom: chat silently stopped delivering. Cause: payloads
-crossed the wire as Buffers, and socket.io frames each Buffer separately after
-the JSON packet; when anything interleaves (a heartbeat, another emit) the
-client decoder reads text where it expects binary and drops the socket with
-`parse error`. A join replaying ~8-11 events did that every time, then sat in a
-permanent reconnect loop — invisible because sends fail asynchronously.
-Fix: base64 text payloads end to end, token minted per handshake (so a tab that
-slept past the 15-min TTL can reconnect), one retry when a send beats its
-room's rejoin, per-profile replay cursors (a stale cursor used to survive
-Clear-all-data and start the next identity mid-history). Also moved the
-Discovery lobby onto the same transport — it was still on BitTorrent trackers;
-nearby peers now appear in ~1s instead of ~25s, and `hello` is ephemeral so no
-replayed "I am nearby" can lie. **Backend now has its first 4 tests**
-(`spotme/backend/test/rooms.gateway.e2e-spec.ts`), the first of which fails if
-payload framing ever regresses to binary. `npx jest` in spotme/backend.
-Additionally verified live: reaction, edit (with the "edited" label on the
-receiver), delete-for-everyone, peer-to-peer history backfill, nearby discovery.
-
-**UNPROVEN / open:** calls over the new signalling path (machinery written,
-never dialed — needs fake media devices to test headless); **video** media
-specifically (photos are verified both live and offline); groups/bluetooth
-screens on server transport; multi-tab same-profile; knock payloads are
-server-readable (Phase 2: seal to recipient publicKey — field already in
-schema); RoomEvent retention/TTL job not written (disappearing messages are
-still client-enforced only); translate/voice/push bridges return 400 locally
-until their vendor env keys are set in backend/.env (client degrades
-gracefully). One global lobby room is Phase-1 only — presence needs geo-
-sharding before it scales.
-
-**Deploy decision (deliberate):** spotme-messenger.vercel.app is still 404 and
-was NOT redeployed — the new build needs a hosted backend first (Railway/Fly +
-Neon per backend/README.md, then set VITE_SPOTME_SERVER at build). Deploying
-the new web build to Vercel without that would ship a dead transport.
-
----
-
-## 1. The one constraint that shapes every decision
-
-**ybot runs Python 3.14. Every ML stack runs Python 3.11** — torch publishes no
-3.14 wheels. They cannot share a process. Anything touching torch/whisper/
-OmniParser must run in a 3.11 venv and talk to ybot over a socket.
-
-| Interpreter | Path | Holds |
+| PR | What | Merge SHA |
 |---|---|---|
-| ybot | `py -3.14` (system) | pyautogui, pywinauto, pynput, mss, watchdog, GitPython |
-| vision | `~/.venvs/vision` | OmniParser, SAM 2, EasyOCR, OpenCV, **torch 2.13.0+cu126** |
-| voice | `~/.venvs/voice` | whisper, piper-tts, kokoro, coqui-tts, sounddevice, webrtcvad |
-| threed | `~/.venvs/threed` | cadquery, build123d, trimesh, open3d, usd-core, MaterialX, warp |
-| others | `~/.venvs/` | metagpt, sweagent, langchain, crewai, mem0, browser-use, autogen |
+| #29 | A7 signing foundation + six review revisions | `a934e11` |
+| #32 | Playwright E2E foundation + warm-build fix | `ad36a37` |
+| #28 | QR scanner wired into verify screen | `8fc603b` |
+| #27 | A6a availability axis | `6f0fd15` |
+| #26 | A4 scanned code bound before believed | `0fa467b` |
+| #25 | A2+A3 propose-never-adopt | `a7235d1` |
+| #24 | A1 trust state machine | `08e3c0a` |
+| #23 | MinIO in CI + R2 smoke test | `8f3cebc` |
+
+### Open PRs
+
+| PR | Branch | Base | Own files | Local suite | CI |
+|---|---|---|---|---|---|
+| **#30** A5 device matrix | `feat/a5-matrix` | `a934e11` | 5 | 864/864 | re-running at write time — **confirm green before anything else** |
+| **#31** A5 enforcement, flag **OFF** | `feat/a5-enforcement` | stacked on #30 | 7 (12 displayed) | 912/912, lint+build clean | green incl. e2e at 14:51 UTC |
+
+Both are **held for independent owner review**. Do not infer either is safe
+from the stacked tip passing — the owner said so explicitly.
+
+**#31 RULE (owner-set):** while stacked, "12 displayed = 5 inherited + 7 own"
+is acceptable. **After #30 squash-merges, #31 MUST be rebuilt** (reset to
+`origin/master`, cherry-pick only its own commits) so GitHub's displayed diff
+shows ONLY its seven files. **Do not merge #31 while its displayed diff
+includes #30's five files.**
+
+For #30/A5: enforcement stays default-OFF, and **disabling the flag — not
+reverting — is the supported operational rollback** (ADR-007 §Rollback says
+why: reverting removes the review UI and strands a `Changed` peer).
+
+### Untouched / blocked (standing)
+
+- **#8 (ybot)** untouched. **Railway deployment blocked.** **Priorities 2 and 3
+  blocked.**
+- `r2-staging` GitHub environment (required reviewers + R2_* secrets) is
+  owner-only work; the proxy blocks the environments API from here.
+- Stage B of the S3 plan blocked.
 
 ---
 
-## 2. THE NEXT TASK (agreed with the user)
+## 1. THE HARD STOP — read before writing any crypto code
 
-**Bolt OmniParser + a verify-after-every-action loop onto ybot. Not a rewrite.**
+> **No production signing-key generation, persistence, publication, revocation
+> transport, prekeys, X3DH, ratchet implementation, or multi-device
+> implementation may begin until the publication-rollback problem in ADR-008
+> §12 is resolved or separately authorized by the owner.**
 
-Why this and nothing else: ybot today is 2057 lines that screenshot, ask a
-model, and click a guessed coordinate. It never checks the click worked. The
-single biggest cause of "autonomous agent failed" is a missing verification
-step, not a wrong decision.
+ADR-008 §12, short form: before a key is published, rollback is free; after,
+reverting the client leaves a signing key on the server that peers may have
+pinned, and withdraw-vs-leave-inert needs a server-side key lifecycle that does
+not exist. A rollback plan that cannot be executed is not a rollback plan.
 
-Target loop:
-```
-PERCEIVE (OmniParser -> numbered elements)
-  -> GROUND (pick element id, never a bare coordinate)
-  -> ACT
-  -> VERIFY (re-capture; did the expected change happen?)
-  -> RECOVER (retry with a DIFFERENT strategy, then escalate)
-```
+Enforced in code today: `test/signing-not-shipped.test.js` fails the build if
+any app module imports the signing foundation, names the generator, or
+references a signing-key field.
 
-Read `ybot/ybot/agent.py` (420 lines) and `screen.py` / `uia.py` **before**
-editing — target the real code paths, not assumed ones.
-
-After that: `langgraph` 1.2.9 is installed and is the intended fix for ybot
-having **no durable state** (a crash currently loses everything).
+Also blocking, recorded in ADR-008 §BLOCKING: **what a safety number represents
+under multi-device** (four candidate constructions). Must be decided before
+multi-device implementation, not during.
 
 ---
 
-## 3. Hard-won traps — do NOT rediscover these
+## 2. Governance
 
-- `uv pip install torch` on Windows silently installs **CPU-only**. Always
-  `--index-url https://download.pytorch.org/whl/cu126`.
-- **OmniParser v3 weights are broken** (TorchScript; `RecursiveScriptModule has
-  no attribute 'fuse'`). Use `weights/icon_detect/model.pt` (v2) **and pin
-  `ultralytics==8.3.70`** — 8.4.x cannot load them.
-- **Import success proves nothing.** SAM 2 imported fine but shipped no
-  checkpoints; trimesh imported fine but decimation needed
-  `fast-simplification`; MetaGPT "installed" from PyPI as a v0.1 stub. Always
-  run a functional check.
-- **PyPI `metagpt` is v0.1**, unrelated to the real project. Install from GitHub.
-- **UAC-elevated winget installers always fail** here (`0x800704c7`):
-  Tesseract, FreeCAD, MeshLab. Per-user installs work fine.
-- **Never install NVIDIA Kaolin** into `vision`/`threed` — it pins older torch
-  and would break OmniParser + SAM 2 + Warp. Isolated venv only.
-- `pyassimp` is installed but **dead** (missing native lib). Use trimesh.
-- **graphify must be scoped to one project.** At fable root it swept
-  node_modules: 134,090 nodes / **0 edges**. Scoped to spotme: 1627 / 2823.
-- Blender: `len(obj.data.vertices)` reports the **pre-modifier** cage — use the
-  depsgraph. `ng.interface.new_socket` is the 4.0+ API (Blender here is 5.2).
-- **Redirect big install logs to a file and grep them.** Streaming pip output
-  into context was the main driver of this session's $341.
+**The migration document is the controlling source** — the owner restated this
+explicitly. Our A1–A7 / B1–B10 labels are an implementation breakdown only;
+they appear nowhere in the document. Priority 1 completes only when every
+document requirement and every completion-checklist item passes.
 
----
+Priority 1 checklist, honestly, as of this write:
 
-## 3b. Git on this machine — already fixed, do not re-debug
-
-`git push` / `git ls-remote` used to **hang forever** (exit 124), while `gh`
-worked fine. Cause: the Windows credential helper blocking. Fixed with:
-
-```bash
-gh auth setup-git      # points git at gh's token
-```
-
-If git ever hangs again, that is the fix. Also: **never read a git exit code
-through a pipe** — `git ... | head; echo $?` reports *head's* status, so a
-hanging command looks successful. Redirect to a file and check `$?` directly.
-
-Everything is committed and pushed to `origin/master`:
-- `e4c8987` handoff docs + CLAUDE.md pointer
-- `5035d7f` ybot voice subsystem (10 files, 8/8 self-checks passing)
-
-`ybot/voice_memory/` is gitignored — it holds runtime conversation transcripts
-and must not be committed.
-
-## 4. Measured numbers (GTX 1050 Ti, 4 GB VRAM)
-
-| Operation | Measured |
+| Item | State |
 |---|---|
-| OmniParser detect (warm, GPU) | **0.17 s, 222 elements** @1920x1080 |
-| OmniParser cold start | ~7 s CUDA warmup — keep a long-running process |
-| EasyOCR full screen | 4.4 s, 166 regions (25x slower — fallback only) |
-| SAM 2 tiny segment | 0.54 s |
-| OmniParser + SAM 2 co-resident | **0.75 GB / 4 GB** |
+| Compile / lint / unit / integration / no regressions / docs | ✅ |
+| End-to-end tests | ✅ foundation + scenario 1 in CI; **scenarios 2–12 open** |
+| Rollback documented | ✅ ADR-005/006/007/008 |
+| Web type checking | ❌ plan approved (tsconfig `allowJs`+`checkJs`, JSDoc on crypto modules, `tsc --noEmit` in CI, must fail on a deliberate error) — not built |
+| Identity benchmarks | ❌ scope defined by owner (pin-store r/w, concurrent observations, verification persistence, Changed resolution, startup, 100s–1000s of peers, A5 gate overhead on/off) |
+| Formal security review | ❌ owner wants a dedicated adversarial report (silent substitution, decrypt-refetch, TOFU limits, stale verification, replay, cross-device binding, wipe, key export, IndexedDB tampering, flag bypass, rollback risks) — self-review + mutation testing is evidence, not the report |
+| Performance review | ❌ |
+| Secure key storage | design done (ADR-008), **implementation blocked by §1** |
+| Prekeys / X3DH / Double Ratchet / FS / break-in recovery / rotation | ❌ blocked by §1 |
+| Multi-device | ❌ blocked by §1 + the safety-number question; minimum spec is **normative in ADR-006** (9 points; backup/history/restore deferrable if documented, core crypto flow not) |
+| Manual device matrix | ❌ owner executes; the automatable rows are #30 |
 
 ---
 
-## 5. What exists now
+## 3. Next work, in the owner's stated order
 
-**8 agents** (`~/.claude/agents/`): ceo-agent, planner-agent, vision-agent,
-desktop-operator, browser-operator, memory-agent, recovery-agent,
-optimization-agent. Coding/QA/Security/Research were deliberately NOT built —
-~89 existing agents already cover them.
+1. **Confirm #30's CI green** (its run was still reporting at write time).
+2. Handoff updated ← this file.
+3. Fresh session starts here.
+4. **Build the E2E test seam** in a new isolated PR — full design in §4.
+   Present the seam design in the PR description before merge.
+5. **Add E2E scenarios 2–12** (same PR as the seam per the owner's scope:
+   "tests, fixtures, and the minimal test-only seam").
+6. Run complete backend, web, lint, build, and E2E CI.
+7. **Prove the seam is absent in a production-mode startup.**
+8. Return the PR for review before merge.
+9. Review #30 and #31 independently after their CI is green (owner does this;
+   #31 needs a scope/dependency summary from us — the owner said the update
+   they had "does not provide enough detail to authorize it").
 
-**8 3D skills** (`~/.claude/skills/`): blender-automation,
-cad-parametric-modeling, mesh-optimization, usd-gltf-pipeline,
-pbr-materials-openpbr, game-ready-3d-assets, physics-simulation-3d,
-web3d-development. Every code sample was executed before being written.
-
-**118 skills installed**: google/skills (93), android/skills (20),
-compose-kotlin (4), modern-jetpack-compose (1). A Windows Scheduled Task
-`AndroidSkillsDailyUpdate` refreshes the official Android set daily at 09:07;
-log at `fable/android-skills/.update.log`. Google/community sets do NOT
-auto-update.
-
-**ybot voice subsystem** — `fable/ybot/ybot/voice/`, 1059 lines, 9 modules,
-every one with a passing `demo()`:
-`mic, vad, providers, style, memory, intent, orchestrator, service, bridge`
-```bash
-~/.venvs/voice/Scripts/python.exe -m ybot.voice.service --demo
-```
-`bridge.py` is stdlib-only, verified on 3.14 — it must never import
-torch/numpy/sounddevice. Service emits newline-JSON on `127.0.0.1:8765`:
-`{"type":"transcript|reply|error","text":..,"domain":..,"agent":..}`.
-Long-term memory JSONL: `{"ts","role","text","tags"}`.
+Do NOT mix into the E2E PR: A5 activation, signing-key persistence,
+publication, revocation transport, prekeys, X3DH, ratchet code, multi-device.
 
 ---
 
-## 6. UNPROVEN / NOT DONE — never claim otherwise
+## 4. The E2E seam — APPROVED design (build exactly this)
 
-- **Voice has never run with a real microphone.** Whisper needs a model
-  download; Piper needs `YBOT_PIPER_VOICE` pointing at a `.onnx` voice.
-- ElevenLabs TTS provider raises `NotImplementedError` (marked SCAFFOLD).
-- **Orchestrator handlers are unregistered** — every route currently returns
-  "No handler registered".
-- Voice is **not wired into ybot `main.py`**. `Operator`, `Settings` and
-  `main.py` were deliberately untouched; the package is additive/opt-in.
-- Florence-2 captioner untested under VRAM pressure.
-- The "study 40-70 repos and extract prompts" brief was **never done as a
-  literal crawl**. The skills distil installed+verified tooling instead.
-- `llama-cpp-python` failed to build (needs MSVC). Ollama covers local serving.
-- Not installed by choice: vLLM (no Windows), Milvus/Qdrant/Prometheus/Grafana
-  servers (daemons, no agent value), CUA (would replace ybot), Kaolin.
+Purpose, narrow: *"for E2E fixture account X, the next
+`GET /api/v2/auth/keys/:userId` returns this controlled alternate public
+key."* One-shot, one account, public keys only. Needed by scenario 7.
+
+### Gates and controls (all owner-approved, all required)
+
+- `NODE_ENV=test` **AND** `SPOTME_E2E_CONTROL=1` — either alone does nothing.
+- **Production boot FAILS** if `SPOTME_E2E_CONTROL` is set while
+  `NODE_ENV !== 'test'` (same pattern as the existing JWT-length boot guard in
+  `backend/src/main.ts`).
+- Namespace **`/__e2e/`** — outside `/api`, never confusable with product
+  surface.
+- Loopback binding — **defense in depth only, not the security boundary**
+  (owner: CI container networking makes loopback ambiguous).
+- **Per-run random token**, generated by the Playwright config, passed via
+  env; **constant-time comparison** (`crypto.timingSafeEqual` with a length
+  pre-check).
+- **Fixture/run ownership**: allowlisted fixture-account prefix / run id;
+  reject if the target account is not owned by the current E2E run.
+- **Short expiry** (~60s), **one successful use only**.
+- **In-memory only**; cleared on process restart; never persisted to
+  PostgreSQL, Redis, files, logs, or application caches; never logged.
+- **No read endpoint.** Accepts a public key + fixture id, returns an
+  acknowledgement only. It cannot read or return private key material.
+
+### The path stays real (owner refinement 2)
+
+The seam substitutes **only the public-key value at the final serialization
+boundary** of the keys route. It must NOT bypass: authentication, account
+lookup, authorization, normal route handling, response serialization, client
+fetch logic, socket transport, `identity-store.js`, `rooms.js`. The test is
+valuable only because everything around the substituted value is production
+code.
+
+### Forbidden (owner-listed)
+
+No general DB mutation endpoint. No hidden query parameter on production APIs.
+No Playwright IndexedDB edits for scenario 7. No mocking of `rooms.js`,
+`identity-store.js`, or the transport. Not reachable in previews or Railway.
+No separate compile-time build shape (owner: runtime gates + absence tests are
+better than maintaining a second build).
+
+### The 12 seam tests (all required)
+
+1. Missing token → rejected
+2. Wrong token → rejected
+3. Wrong run/account prefix → rejected
+4. Invalid public-key encoding → rejected
+5. Oversized body → rejected
+6. Override applies once only
+7. Override expires unused
+8. Restart clears it
+9. A second E2E run cannot consume the first run's override
+10. No key value or token appears in logs
+11. Endpoint absent (404) in production mode
+12. Boot fails when the flag is set outside `NODE_ENV=test`
+
+### Scenarios 2–12 (owner-scoped)
+
+Conversation create/open · **real two-context send/receive over the socket
+path** (sender sees sent; recipient receives via socket; reload preserves;
+reconnect does not duplicate; contexts isolated) · reload/history · offline/
+reconnect · first-key pinning · different-key proposal (via the seam; 8 proofs:
+initial key trusted → server returns different key → original pin unchanged →
+proposal raised → warning/review UI appears → send behaviour matches flag state
+→ reload preserves pin AND proposal → restoring the original server key does
+NOT silently clear Changed) · verification persists across reload · A5
+flag-off behaviour · **device wipe deletes localStorage + `spotme-e2e` +
+media/blob IndexedDB + `spotme-identity-pins`, and a store that cannot be
+cleared surfaces a failure to the user** (`wipeDevice` returns
+`{ ok, failures }` — assert both paths) · unauthorized room access rejected ·
+log/secret hygiene (harness already exists in
+`spotme/e2e/tests/log-hygiene.spec.js`).
 
 ---
 
-## 7. Blocked on the user — will stall work if forgotten
+## 5. Process guidance — learned the hard way this session
 
-1. **`CEREBRAS_API_KEY` in `fable/.env` is EMPTY** (verified: length 0, API
-   returns `Not authenticated`). Free signup at cloud.cerebras.ai, no card.
-2. **Rotate the exposed OpenRouter keys** — still live.
-3. **getlayers OAuth** — needs an interactive session.
-4. MetaGPT `fable/MetaGPT/config/config2.yaml` still has `YOUR_API_KEY`.
-5. OpenHands v1.6.1 at `:8000` is showing its onboarding wizard — needs an
-   agent + LLM key chosen.
-6. Tesseract / FreeCAD / MeshLab need installing from an **elevated** terminal.
+### The squash-merge stacked-rebase trap (this happened today)
+
+After #29 squash-merged, `git rebase origin/master` on the stacked #30
+**conflicted with its own parent's content** — the four A7 commits were now in
+master as one squash. Worse: commands were chained with `;`, so
+`git push --force-with-lease` ran on a conflicted tree and **briefly pushed an
+invalid state**. A second `;`-chain then made a `cd` failure read as a passing
+test run (`exit=0` was the failed `cd`, not the suite).
+
+**Recovery that works:** `git checkout -B <branch> origin/master` then
+`git cherry-pick <only its own commits>`. Verify, then push.
+
+**Rules, permanent:**
+
+- `set -euo pipefail`, or chain **only** with `&&`. Never `;` between
+  a mutation and its verification.
+- Before EVERY push: `git status --short` (clean?) →
+  `git merge-base HEAD origin/master` (expected base?) →
+  `git diff --stat origin/master...HEAD` (only intended files?) →
+  `npm test` (exit code checked on its own line).
+- After every push: verify **GitHub's displayed file list**, not just the
+  local three-dot diff. (Standing owner rule since the PR #2 era.)
+- **GitHub CI is the final authority before any merge — never local runs.**
+
+### Environment traps (all hit and verified this session)
+
+- `curl` to `api.github.com` `/actions` paths → **403 via the proxy**. Use the
+  GitHub MCP tools (`mcp__github__*`); they work.
+- The check-runs endpoint **served stale `in_progress` ~10 min after a job
+  finished** (once). Before diagnosing a "hung" job, re-fetch;
+  `actions_get get_workflow_job` was accurate when the check-runs list was not.
+- Playwright in this sandbox: the pinned browser needs
+  `E2E_CHROMIUM=/opt/pw-browsers/chromium-1194/chrome-linux/chrome`. CI
+  installs its own (`playwright install --with-deps chromium`) and must NOT
+  set `E2E_CHROMIUM`. Do not run `playwright install` locally.
+- `reuseExistingServer: !CI` means a **stale local backend** (`pkill -f
+  "dist/main.js"`) will be reused — the build-identity spec then fails,
+  *correctly*. Kill stale backends before local e2e runs.
+- The web app uses **hash routing** and assigns `location.hash` during boot —
+  a navigation that kills in-flight `page.evaluate`. Use the `booted(page)`
+  helper in `spotme/e2e/tests/foundation.spec.js`; never inspect the page
+  before it.
+- Local stack bring-up (verified): `service postgresql start` →
+  `su postgres -c "createdb spotme_e2e"` → backend env `DATABASE_URL`,
+  `JWT_ACCESS_SECRET` (**≥32 chars or it refuses to boot — keep that guard**),
+  `PORT`. Guest accounts: `POST /api/auth/guest` with client-chosen
+  `{id: hex 8-64, username: /^[a-z0-9_]{3,16}$/, secret: ≥8}` — this is what
+  makes `spotme/e2e/lib/accounts.js` deterministic.
+- The backend warm-build bug (emit-nothing-exit-0) is fixed
+  (`tsBuildInfoFile` inside `dist/`) and regression-tested as its own CI step.
+  `dist/BUILD_ID` is a **source** hash served at `GET /api/version`; the e2e
+  suite fails if the running process does not report the current source's id.
 
 ---
 
-## 8. Working style the user expects
+## 6. Map of the identity code
 
-- **Verify by running, not by exit code.** They said "registered isn't the same
-  as working" and were right every time.
-- **Say what failed.** Partial success reported as success is the thing to avoid.
-- **Flag cost.** This session hit $341; they want to choose that spend.
-- Terse prompts, wants end-to-end delivery, will course-correct directly.
+| Module | Role | Where |
+|---|---|---|
+| `web/src/lib/crypto/e2e-v2.js` | X25519/P-256 ECDH → HKDF → AES-GCM room keys | master |
+| `…/identity-pin.js` | pure five-state trust machine (Unverified·Pinned·Verified·Changed·Revoked) | master |
+| `…/identity-pin-store.js` | its own DB `spotme-identity-pins`; refused transition ABORTS | master |
+| `…/identity-availability.js` | server axis only; structurally cannot touch trust | master |
+| `…/identity-store.js` | device identity; pin seeded from local, never fetch; `loadIdentity` caches the **promise** (race fix in #30) | master (+#30 fix) |
+| `…/safety-number.js` | 60 digits; v2 QR payload binds room+time+version before digits | master |
+| `…/signing-identity.js` | Ed25519/P-256 signing, canonical `transcript()` (normative, ADR-006 §3a/3b), runtime non-extractability | master |
+| `…/identity-binding.js` | claim + signature + DH proof-of-possession; HISTORICAL vs LIVE results are **typed**, `requireLiveAuthentication` throws on the weaker; unknown trust fails **closed** | master |
+| `…/identity-enforcement.js` | A5 send verdicts, always computed, flag OFF | **#31 only** |
+| `web/src/lib/qr-scan.js` | native BarcodeDetector, lazy jsQR fallback | master |
+| `spotme/e2e/` | Playwright foundation, 15/15 | master |
 
-See also memory note `ai-os-stack-2026-07-29` and `SESSION-2026-07-29.md`
-in this folder for the full chronological log.
+ADRs: 005 (pinning), 006 (signing + normative claim fields + multi-device
+minimum), 007 (**#31 branch only** until merged), 008 (storage design +
+§12 hard stop + §BLOCKING multi-device safety numbers).
+
+Deliberate asymmetry a reviewer WILL flag: `identity-binding.js` fails
+**closed** on unknown trust; `identity-enforcement.js` fails **open** on an
+unreadable pin store. Different questions — "should I START trusting this
+claim" vs "may I send to a peer I already trust (message still goes to the
+pinned key)". Both headers cross-reference. Keep them doing so.
+
+---
+
+## 7. Standing constraints (owner-set, all still in force)
+
+- No AGPL code or dependencies (lockfile is the audit trail: jsqr
+  Apache-2.0, qrcode-generator MIT).
+- No cryptographic primitives from scratch — WebCrypto only.
+- Private keys never reach the server; non-extractable everywhere.
+- **No production signing keys** until the owner confirms — see §1.
+- ADR-008 §6: there is **no backup and no recovery** for the signing key;
+  the eventual UI must warn before key creation and before destructive local
+  actions, and must never imply account recovery restores identity trust.
+- R2 credentials: rotated, least-privilege, GitHub-secrets only, one isolated
+  bucket/prefix, unique object names, delete after, never in memory/chat/
+  code/logs/PR text, never connected to production.
+- A `Changed` peer gets NO "dismiss" — verify, accept, or reject only.
+- CLAUDE.md: files under 500 lines; read before edit; no Co-Authored-By; never
+  commit secrets; `.handoff/` updated and committed at session end.
+
+---
+
+## 8. UNPROVEN — do not claim these work
+
+- The camera scan path on real hardware (no phone in any session yet).
+- Genuine multi-device, real OS key loss, IndexedDB version-change blocking
+  between live connections — the manual matrix rows (#30 prints them every run).
+- The E2E seam: **designed, approved, not built.**
+- Socket transport under Playwright (scenario 3): expected to work, never run.
+- The A5 gate in `rooms.js` under enforcement ON: covered by decision tests +
+  a source tripwire; the tripwire cannot catch a present-but-wrong gate.
+  Scenario 9 / the manual matrix close this.
