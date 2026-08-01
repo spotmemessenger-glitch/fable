@@ -215,3 +215,9 @@ BluetoothChat/
 # Telegram Desktop, kept as an interaction reference. GPL-3.0 with an OpenSSL
 # exception: read it for BEHAVIOUR, never copy its code into Spot Me.
 tdesktop/
+
+# Playwright artefacts. Repo-level rather than only in spotme/e2e/, so a
+# branch that does not carry that package still cannot commit a stray run.
+spotme/e2e/test-results/
+spotme/e2e/playwright-report/
+spotme/e2e/playwright/.cache/

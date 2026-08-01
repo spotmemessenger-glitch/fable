@@ -83,6 +83,59 @@ given them and is kept only because it costs four bytes and makes a buffer
 self-describing — mutation testing confirms no test can distinguish its absence,
 and it is documented as such rather than cited as a defence.
 
+### 3a. The canonical transcript rule — NORMATIVE
+
+**Every signed structure in Spot Me MUST be encoded by `transcript()`.** No
+signed structure may use concatenation, delimiter joins, `JSON.stringify`, or
+any ad hoc serialisation. JSON in particular is disqualified outright: key order
+is unspecified, whitespace is free, and number formatting varies by engine, so
+one object has many byte encodings and a signature over one of them is a
+signature over all the readings an attacker can reach.
+
+The format, completely:
+
+| Aspect | Rule |
+|---|---|
+| **Length encoding** | `uint32` big-endian, preceding every field |
+| **Field count** | `uint32` big-endian at offset 0 — redundant given per-field lengths, kept as documentation of intent, and **not** load-bearing |
+| **Field order** | fixed per structure, defined in exactly one place in code, normative in this ADR (§3b) |
+| **Text encoding** | UTF-8, no BOM, no normalisation |
+| **Integer encoding** | decimal string, UTF-8. Chosen over fixed-width because every number in this protocol is a millisecond timestamp that already travels as decimal; two encodings for one value is the hazard being removed |
+| **Empty fields** | permitted and **distinct from absent** — an empty field contributes a zero length prefix, so `['']` and `[]` differ in both count and byte length |
+| **Max field** | 64 KiB |
+| **Max transcript** | 256 KiB |
+| **Max fields** | 64 |
+| **Domain separation** | first element, always, a non-empty ASCII label |
+| **Versioning** | the version is **inside the domain label** (`spotme-identity-binding-v1`), so a transcript from one protocol version can never be checked as another. Bumping it invalidates every existing proof, deliberately |
+
+The bounds are not tight — a public key is 65 bytes and an account id is tens —
+so reaching one means something is wrong. They exist because a transcript is
+attacker-influenced input to a cryptographic primitive, and an unbounded one is
+a memory-exhaustion path reachable by anyone who can put a long string in a
+field.
+
+### 3b. The claim fields — NORMATIVE
+
+The binding claim has exactly seven fields, in exactly this order. The order is
+part of the wire format: two peers that disagreed would produce different bytes
+and every signature would fail closed. That is the right failure, and it is only
+safe while the order lives in one place.
+
+<!-- CLAIM_FIELDS:BEGIN -->
+1. `signingAlgo`
+2. `signingKeyB64`
+3. `agreementAlgo`
+4. `agreementKeyB64`
+5. `accountId`
+6. `deviceId`
+7. `issuedAt`
+<!-- CLAIM_FIELDS:END -->
+
+**This block is machine-read.** `test/identity-binding.test.js` parses it and
+compares it to `CLAIM_FIELDS` in `identity-binding.js`; the build fails if they
+drift, in either direction. Editing one without the other is not possible
+quietly, which is the only way a normative document stays normative.
+
 ### 4. Two proofs, because a signature is not possession
 
 A binding carries **both**:
@@ -175,11 +228,18 @@ payload (`sv`) so a mismatch is refused rather than compared against numbers it
 cannot equal. **Not implemented here** — it cannot be exercised until keys exist,
 and shipping an unexercisable path is what this ADR's gating section rejects.
 
-**Storage is not designed yet.** Where a device's signing key lives, how peer
-bindings are persisted alongside pin records, and how a binding interacts with
-the five-state machine in ADR-005 are open. The pure layer was built first
-deliberately: it is testable on Node against real WebCrypto with no mocks, which
-is where the security argument can actually be checked.
+**Storage is designed in ADR-008 and still unimplemented.** That ADR settles the
+database, schema and versioning, portability, restart persistence, wipe,
+corruption, multi-tab concurrency, device replacement, the relationship to the
+agreement key, and rollback both before and after a key is published — and
+records that there is **no backup and no recovery**, which is the direct cost of
+the non-extractability in §1. It must be reviewed before generation is
+authorised. The pure layer was built first deliberately: it is testable on Node
+against real WebCrypto with no mocks, which is where the security argument can
+actually be checked.
+
+How peer bindings are persisted alongside pin records, and how a binding
+interacts with ADR-005's five-state machine, remain open.
 
 **Multi-device is outside the scope of this signing-foundation PR, but remains a
 mandatory Priority 1 completion requirement.**
@@ -214,11 +274,17 @@ Normative. Anything less does not close the requirement:
 history, and seamless restoration to a brand-new device. **Not deferrable:** the
 core multi-device cryptographic flow above.
 
-Note what item 6 implies for this ADR: once a user has a device *set*, a safety
-number computed over one device's key is no longer a complete statement about
-the person. That interacts with the safety-number construction discussed below
-and is unresolved — recorded here so the multi-device work does not discover it
-late.
+**BLOCKING DESIGN QUESTION raised by item 6.** Once a user has a device *set*, a
+safety number computed over one device's key is no longer a complete statement
+about the person — two people comparing sixty digits would be verifying
+something narrower than they believe. A single-device fingerprint cannot
+honestly represent a multi-device identity unless the device set is
+cryptographically bound into what users compare.
+
+This is **not** resolved in this PR, which does not own that protocol decision.
+It is written up with its four candidate constructions in **ADR-008 §BLOCKING
+DESIGN QUESTION**, and it must be answered *before* multi-device is implemented,
+not during.
 
 **No forward secrecy is added or claimed.** A binding is an authentication
 artefact. ADR-004's ratchet work is independent and still outstanding.

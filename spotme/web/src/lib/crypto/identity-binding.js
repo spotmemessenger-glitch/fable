@@ -77,9 +77,20 @@ export const BIND_ERR = Object.freeze({
   FUTURE_DATED: 'FUTURE_DATED',
   ALGO_MISMATCH: 'ALGO_MISMATCH',
   NOT_MY_CLAIM: 'NOT_MY_CLAIM',
+  /* THE FRESHNESS CODES. A signature stays cryptographically valid forever;
+   * none of these is about the maths. They are the difference between "this was
+   * correctly signed" and "this device is trusted right now". */
+  TRUST_UNKNOWN: 'TRUST_UNKNOWN',
+  TRUST_BLOCKING: 'TRUST_BLOCKING',
+  REVOKED: 'REVOKED',
 })
 
 const fail = (code, message) => ({ ok: false, error: { code, message } })
+
+/** Trust states that stop a live authentication. Mirrors `identity-pin.isBlocking`
+ *  by VALUE rather than by import: this module must stay usable by a verifier
+ *  that has no pin store, and the two lists drifting is caught by a test. */
+export const BLOCKING_TRUST = Object.freeze(['Changed', 'Revoked'])
 
 const SIGNING_ALGO_OK = (a) => a === ED25519 || a === ECDSA_P256
 const AGREEMENT_ALGO_OK = (a) => a === 'X25519' || a === 'P-256'
@@ -95,7 +106,7 @@ const AGREEMENT_ALGO_OK = (a) => a === 'X25519' || a === 'P-256'
  * closed. Which is the right failure, but only if the order lives in exactly one
  * place. This is that place.
  */
-const CLAIM_FIELDS = Object.freeze([
+export const CLAIM_FIELDS = Object.freeze([
   'signingAlgo', 'signingKeyB64', 'agreementAlgo', 'agreementKeyB64',
   'accountId', 'deviceId', 'issuedAt',
 ])
@@ -146,20 +157,57 @@ export async function signBinding (signingIdentity, signingKeyB64, rest) {
 }
 
 /**
- * Check the SIGNATURE only. Boolean, never throws.
+ * The two kinds of answer this module gives, and they are NOT interchangeable.
  *
- * NAMED FOR WHAT IT IS NOT. This answers "did S sign this claim", which is a
- * HISTORICAL question — it is the right check for a binding already stored and
- * already verified. It is NOT sufficient for a claim arriving now: a signature
- * is replayable by anyone who has ever seen it, and says nothing about whether
- * the agreement key it names is held by the claimant. Use `verifyLiveBinding`
- * for that. The two names are deliberately not variants of one another.
+ * TYPES, NOT NAMES. An earlier version distinguished these only by function
+ * name and by returning a bare boolean from the weaker one — and a bare boolean
+ * fits anywhere a boolean is expected, so nothing structural stopped a
+ * historical signature check being used where current authentication was
+ * required. That is the failure this tagging exists to make impossible:
+ * `requireLiveAuthentication` refuses anything that is not the stronger result.
+ */
+export const RESULT = Object.freeze({
+  HISTORICAL: 'historical-signature-only',
+  LIVE: 'live-authentication',
+})
+
+/**
+ * Check the SIGNATURE only. Never throws.
+ *
+ * Answers exactly one question: **did this signing key sign this claim.** That
+ * is a HISTORICAL fact and it stays true forever — which is precisely why it is
+ * not authentication. A signature is replayable by anyone who has ever seen
+ * one, and it says nothing about whether the agreement key it names is held by
+ * whoever is presenting it, nor whether that identity is still trusted.
+ *
+ * Returns a TAGGED result. `.signed` is the boolean, and the tag is what stops
+ * it being spent as authentication.
  */
 export async function verifyBindingSignature (claim, sig) {
-  if (claimProblem(claim)) return false
+  const historical = (signed) => ({ kind: RESULT.HISTORICAL, signed, claim })
+  if (claimProblem(claim)) return historical(false)
   let bytes
-  try { bytes = bindingBytes(claim) } catch { return false }
-  return verifyBytes({ publicKeyB64: claim.signingKeyB64, algo: claim.signingAlgo }, bytes, sig)
+  try { bytes = bindingBytes(claim) } catch { return historical(false) }
+  return historical(
+    await verifyBytes({ publicKeyB64: claim.signingKeyB64, algo: claim.signingAlgo }, bytes, sig))
+}
+
+/**
+ * The gate a caller must pass a result through before acting on it as identity.
+ *
+ * THROWS on anything that is not a successful live authentication — including a
+ * perfectly valid historical signature check, `true`, or any other shape. A
+ * caller that wants the weaker answer has to ask for it by name and cannot
+ * arrive at it by accident.
+ */
+export function requireLiveAuthentication (result) {
+  if (result?.kind !== RESULT.LIVE) {
+    throw new Error(
+      `this path requires live authentication; got ${result?.kind || typeof result}. ` +
+      'A signature that was valid once is not proof that a device is trusted now.')
+  }
+  if (!result.ok) throw new Error(`live authentication failed: ${result.error?.code}`)
+  return result
 }
 
 /* --------------------------------------------------- proof of possession --- */
@@ -285,44 +333,84 @@ export async function verifyPopAnswer ({ claim, challenge, challengePrivateKey, 
 /* ------------------------------------------------------- the whole check --- */
 
 /**
- * Everything, in the order a verifier should ask it. Returns `{ ok }` or
- * `{ ok: false, error: { code } }` — never throws, never a bare boolean.
+ * Everything, in the order a verifier should ask it. Returns a LIVE-tagged
+ * result — never throws, never a bare boolean.
  *
- * THE ORDER IS THE POINT, exactly as in `verifyScannedPayload`. A valid
- * signature over a well-formed claim is easy to obtain and proves only that
- * SOMEBODY signed SOMETHING; it becomes meaningful only once the claim is known
- * to be about the account, the key and the identity this verifier is actually
- * asking about. So every binding is checked before either proof, and the
- * expensive proof-of-possession runs last.
+ * FIVE INDEPENDENT QUESTIONS, and conflating any two of them is a real bug:
  *
- * `expect.signingKeyB64` is optional and is the difference between two very
- * different questions. Omitted, this asks "is this a coherent, live binding" —
- * true of a stranger's. Supplied, it asks "is this the identity I already
- * pinned", which is the one that lets a rotation be accepted.
+ *   1. is the claim well-formed and about what I am asking about
+ *   2. is the SIGNATURE valid                      — cryptographic, permanent
+ *   3. was POSSESSION proved against my nonce      — cryptographic, momentary
+ *   4. is this identity currently TRUSTED          — policy, changes over time
+ *   5. has it been REVOKED or the device removed   — policy, changes over time
+ *
+ * 2 is true forever once true. 3 is true only for the challenge it was made
+ * against. 4 and 5 are not cryptographic facts at all and cannot be derived
+ * from the bytes — the caller must supply them, and a caller that cannot is
+ * told so rather than having its silence read as consent.
+ *
+ * THIS FAILS CLOSED ON UNKNOWN TRUST, and that is deliberately the OPPOSITE of
+ * what `identity-enforcement.js` does when the pin store is unreadable. They
+ * are different questions. A5 asks "may I send to a peer I already trust", and
+ * the answer without the store is yes, because the message still goes to the
+ * pinned key. This asks "should I START trusting this claim", and the honest
+ * answer without trust state is no. Read them together before changing either.
+ *
+ * `expect.signingKeyB64` is optional and is the difference between "is this a
+ * coherent live binding" — true of a stranger's — and "is this the identity I
+ * already pinned", which is the one that lets a rotation be accepted.
  */
 export async function verifyLiveBinding ({ claim, sig, challenge, challengePrivateKey, mac, expect = {} }) {
-  const problem = claimProblem(claim)
-  if (problem) return fail(BIND_ERR.MALFORMED, problem)
+  const evidence = {
+    signatureValid: false,
+    possessionProved: false,
+    challengeNonceB64: challenge?.nonceB64 || null,
+    checkedAt: typeof expect.at === 'number' ? expect.at : null,
+    trustState: expect.trust?.state ?? null,
+    revoked: expect.trust?.revoked ?? null,
+    trustChecked: Boolean(expect.trust),
+  }
+  const no = (code, message) => ({ kind: RESULT.LIVE, ok: false, error: { code, message }, evidence, claim })
 
-  if (typeof expect.at !== 'number') return fail(BIND_ERR.MALFORMED, 'a verifier must supply its clock')
+  const problem = claimProblem(claim)
+  if (problem) return no(BIND_ERR.MALFORMED, problem)
+
+  if (typeof expect.at !== 'number') return no(BIND_ERR.MALFORMED, 'a verifier must supply its clock')
   if (claim.issuedAt - expect.at > MAX_CLOCK_SKEW_MS) {
-    return fail(BIND_ERR.FUTURE_DATED, 'this binding claims to have been issued in the future')
+    return no(BIND_ERR.FUTURE_DATED, 'this binding claims to have been issued in the future')
   }
   if (expect.accountId && claim.accountId !== expect.accountId) {
-    return fail(BIND_ERR.WRONG_ACCOUNT, 'this binding is for a different account')
+    return no(BIND_ERR.WRONG_ACCOUNT, 'this binding is for a different account')
   }
   if (expect.agreementKeyB64 && claim.agreementKeyB64 !== expect.agreementKeyB64) {
-    return fail(BIND_ERR.WRONG_AGREEMENT_KEY, 'this binding is for a different agreement key')
+    return no(BIND_ERR.WRONG_AGREEMENT_KEY, 'this binding is for a different agreement key')
   }
   if (expect.signingKeyB64 && claim.signingKeyB64 !== expect.signingKeyB64) {
-    return fail(BIND_ERR.WRONG_SIGNING_KEY, 'this binding is signed by a different identity')
+    return no(BIND_ERR.WRONG_SIGNING_KEY, 'this binding is signed by a different identity')
   }
 
-  if (!(await verifyBindingSignature(claim, sig))) {
-    return fail(BIND_ERR.BAD_SIGNATURE, 'the signature does not check out')
-  }
+  const signed = await verifyBindingSignature(claim, sig)
+  if (!signed.signed) return no(BIND_ERR.BAD_SIGNATURE, 'the signature does not check out')
+  evidence.signatureValid = true
+
   if (!(await verifyPopAnswer({ claim, challenge, challengePrivateKey, mac }))) {
-    return fail(BIND_ERR.BAD_POP, 'the claimant did not prove it holds the agreement key')
+    return no(BIND_ERR.BAD_POP, 'the claimant did not prove it holds the agreement key')
   }
-  return { ok: true, claim }
+  evidence.possessionProved = true
+
+  /* CRYPTOGRAPHY IS DONE. Everything above could be true of a device that was
+   * revoked an hour ago, because none of it can know that. */
+  if (!expect.trust) {
+    return no(BIND_ERR.TRUST_UNKNOWN,
+      'the signature and the proof are good, but current trust state was not supplied — ' +
+      'a binding that was valid once is not evidence that this device is trusted now')
+  }
+  if (expect.trust.revoked) {
+    return no(BIND_ERR.REVOKED, 'this identity has been revoked')
+  }
+  if (expect.trust.state && BLOCKING_TRUST.includes(expect.trust.state)) {
+    return no(BIND_ERR.TRUST_BLOCKING, `this identity is in a blocking trust state: ${expect.trust.state}`)
+  }
+
+  return { kind: RESULT.LIVE, ok: true, claim, evidence }
 }

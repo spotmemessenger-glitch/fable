@@ -26,6 +26,7 @@ import {
   negotiateSigningAlgo, resetSigningAlgoCache,
   generateSigningIdentity, exportSigningPublicKeyB64, importSigningPublicKey,
   signBytes, verifyBytes, transcript, toB64,
+  MAX_FIELD_BYTES, MAX_FIELDS,
 } from '../src/lib/crypto/signing-identity.js'
 import { generateIdentity, exportPublicKeyB64 } from '../src/lib/crypto/e2e-v2.js'
 
@@ -80,6 +81,34 @@ await checkAsync('…nor as a JWK', async () => {
 await checkAsync('…and extractable is false on the key itself, not just by convention', () =>
   identities[ED25519].privateKey.extractable === false &&
   identities[ECDSA_P256].privateKey.extractable === false)
+
+await checkAsync('…nor via wrapKey, which is the export path a grep is most likely to miss', async () => {
+  const id = identities[ED25519]
+  // A wrapping key that WOULD work if the private key were extractable, so a
+  // pass here is WebCrypto refusing on extractability and not on setup.
+  const kek = await crypto.subtle.generateKey({ name: 'AES-KW', length: 256 }, false, ['wrapKey'])
+  try { await crypto.subtle.wrapKey('pkcs8', id.privateKey, kek, 'AES-KW'); return false } catch { return true }
+})
+
+await checkAsync('…and deriveBits cannot be talked into leaking it either', async () => {
+  const id = identities[ED25519]
+  // Not a signing operation at all — a signing key must simply refuse it.
+  try { await crypto.subtle.deriveBits({ name: 'X25519', public: id.publicKey }, id.privateKey, 256); return false } catch { return true }
+})
+
+await checkAsync('THE KEY STILL WORKS — non-extractable is not the same as unusable', async () => {
+  /* The other half of the proof, and the half that is easy to forget. A test
+   * suite that only shows exports failing would pass against a key object that
+   * was broken in every direction. */
+  for (const algo of SIGNING_ALGOS) {
+    const id = identities[algo]
+    const msg = bytes('still usable')
+    const sig = await signBytes(id, msg)
+    if (!(await verifyBytes({ publicKeyB64: id.publicKeyB64, algo }, msg, sig))) return false
+    if (id.privateKey.extractable !== false) return false
+  }
+  return true
+})
 
 await checkAsync('the MODULE offers no path that would serialise it either', async () => {
   const mod = await import('../src/lib/crypto/signing-identity.js')
@@ -239,6 +268,28 @@ await checkAsync('signing without a private key is refused', async () => {
     }
     return true
   })())
+
+  check('a field larger than the bound is refused, not signed', (() => {
+    try { transcript('d', ['x'.repeat(MAX_FIELD_BYTES + 1)]); return false } catch { return true }
+  })())
+
+  check('…and so is a transcript whose TOTAL exceeds the bound', (() => {
+    // Each field is individually legal; together they are not — which is why
+    // the total is bounded separately and not implied by the per-field limit.
+    const many = new Array(20).fill('y'.repeat(MAX_FIELD_BYTES))
+    try { transcript('d', many); return false } catch { return true }
+  })())
+
+  check('…and more fields than the format allows', (() => {
+    try { transcript('d', new Array(MAX_FIELDS + 1).fill('a')); return false } catch { return true }
+  })())
+
+  check('a field exactly AT the bound is still accepted, so the limit is not off by one',
+    transcript('d', ['x'.repeat(MAX_FIELD_BYTES)]).length > MAX_FIELD_BYTES)
+
+  check('an EMPTY field is legal and is NOT the same as an absent one',
+    hex(transcript('d', [''])) !== hex(transcript('d', [])) &&
+    hex(transcript('d', ['a', ''])) !== hex(transcript('d', ['a'])))
 
   check('a transcript with no domain is refused', (() => {
     try { transcript('', ['a']); return false } catch { return true }

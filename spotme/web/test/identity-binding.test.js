@@ -22,8 +22,10 @@
  *
  *   node test/identity-binding.test.js
  */
+import { readFileSync } from 'node:fs'
 import {
   bindingBytes, claimProblem, signBinding, verifyBindingSignature,
+  RESULT, requireLiveAuthentication, BLOCKING_TRUST, CLAIM_FIELDS,
   makePopChallenge, answerPopChallenge, verifyPopAnswer, verifyLiveBinding,
   BIND_ERR, MAX_CLOCK_SKEW_MS, NONCE_BYTES,
 } from '../src/lib/crypto/identity-binding.js'
@@ -40,6 +42,10 @@ const checkAsync = async (name, fn) => {
 }
 
 const NOW = 1_750_000_000_000
+
+/** What a verifier that HAS checked its trust store passes in. Live
+ *  authentication fails closed without it — see section 8. */
+const TRUSTED = Object.freeze({ state: 'Pinned', revoked: false })
 
 /** A whole device: a signing identity and an agreement identity, both real. */
 async function device (accountId, { signingAlgo = ED25519, agreementAlgo = 'X25519' } = {}) {
@@ -77,7 +83,7 @@ async function fullCheck (claim, sig, answerer, expect) {
   })
   const out = await verifyLiveBinding({
     claim, sig, challenge, challengePrivateKey: privateKey, mac: answer.mac,
-    expect: { at: NOW, ...expect },
+    expect: { at: NOW, trust: TRUSTED, ...expect },
   })
   return { answer, out }
 }
@@ -138,13 +144,13 @@ await checkAsync('a challenge nonce is the full length and is not reused', async
   for (const [field, value] of Object.entries(mutations)) {
     if (signed.claim[field] === value) { stillSame.push(field); continue }
     const tampered = { ...signed.claim, [field]: value }
-    if (await verifyBindingSignature(tampered, signed.sig)) allRefused = false
+    if ((await verifyBindingSignature(tampered, signed.sig)).signed) allRefused = false
   }
   check(`EVERY FIELD IS BOUND: changing any one of the ${Object.keys(mutations).length} refuses the signature`, allRefused)
   check('…and every mutation really did change its field', stillSame.length === 0)
 
   await checkAsync('the untampered claim still verifies, so the above is not vacuous',
-    async () => await verifyBindingSignature(signed.claim, signed.sig))
+    async () => (await verifyBindingSignature(signed.claim, signed.sig)).signed)
 
   await checkAsync('a claim with a field removed does not encode at all', async () => {
     for (const f of Object.keys(mutations)) {
@@ -171,7 +177,7 @@ await checkAsync('a challenge nonce is the full length and is not reused', async
   })
 
   await checkAsync('the forged binding\'s SIGNATURE is perfectly valid — that is the problem',
-    async () => await verifyBindingSignature(forged.claim, forged.sig))
+    async () => (await verifyBindingSignature(forged.claim, forged.sig)).signed)
 
   await checkAsync('THE POP REFUSES IT: Mallory cannot answer for a key she does not hold', async () => {
     const { challenge, privateKey } = await makePopChallenge({ agreementAlgo: forged.claim.agreementAlgo })
@@ -186,7 +192,7 @@ await checkAsync('a challenge nonce is the full length and is not reused', async
     // Her own guard does not stop her — she controls her client. The verifier does.
     const out = await verifyLiveBinding({
       claim: forged.claim, sig: forged.sig, challenge, challengePrivateKey: privateKey,
-      mac: mac.mac || 'AAAA', expect: { at: NOW },
+      mac: mac.mac || 'AAAA', expect: { at: NOW, trust: TRUSTED },
     })
     return out.ok === false && out.error.code === BIND_ERR.BAD_POP
   })
@@ -257,7 +263,7 @@ await checkAsync('A CAPTURED MAC DOES NOT REPLAY against a fresh challenge', asy
   const second = await makePopChallenge({ agreementAlgo: 'X25519' })
   const out = await verifyLiveBinding({
     claim: signed.claim, sig: signed.sig, challenge: second.challenge,
-    challengePrivateKey: second.privateKey, mac: answer.mac, expect: { at: NOW },
+    challengePrivateKey: second.privateKey, mac: answer.mac, expect: { at: NOW, trust: TRUSTED },
   })
   return out.ok === false && out.error.code === BIND_ERR.BAD_POP
 })
@@ -291,7 +297,7 @@ await checkAsync('A VALID PROOF DOES NOT EXCUSE A BAD SIGNATURE — the two chec
   })
   const out = await verifyLiveBinding({
     claim: later.claim, sig: earlier.sig,                // Alice's signature, wrong claim
-    challenge, challengePrivateKey: privateKey, mac: answer.mac, expect: { at: NOW },
+    challenge, challengePrivateKey: privateKey, mac: answer.mac, expect: { at: NOW, trust: TRUSTED },
   })
   // The proof really is good — otherwise this would pass for the wrong reason.
   const proofIsGood = await verifyPopAnswer({ claim: later.claim, challenge, challengePrivateKey: privateKey, mac: answer.mac })
@@ -309,18 +315,18 @@ await checkAsync('…and a signature from ANOTHER identity is refused even with 
   })
   const out = await verifyLiveBinding({
     claim: forged, sig: signed.sig, challenge, challengePrivateKey: privateKey,
-    mac: key.mac, expect: { at: NOW },
+    mac: key.mac, expect: { at: NOW, trust: TRUSTED },
   })
   return key.ok === true && out.ok === false && out.error.code === BIND_ERR.BAD_SIGNATURE
 })
 
 await checkAsync('THE NAMES ARE NOT VARIANTS: a replayed binding passes the signature check and fails the live one',
   async () => {
-    const stale = await verifyBindingSignature(signed.claim, signed.sig)
+    const stale = (await verifyBindingSignature(signed.claim, signed.sig)).signed
     const second = await makePopChallenge({ agreementAlgo: 'X25519' })
     const live = await verifyLiveBinding({
       claim: signed.claim, sig: signed.sig, challenge: second.challenge,
-      challengePrivateKey: second.privateKey, mac: 'AAAA', expect: { at: NOW },
+      challengePrivateKey: second.privateKey, mac: 'AAAA', expect: { at: NOW, trust: TRUSTED },
     })
     return stale === true && live.ok === false && live.error.code === BIND_ERR.BAD_POP
   })
@@ -359,7 +365,7 @@ await checkAsync('THE NAMES ARE NOT VARIANTS: a replayed binding passes the sign
     const out = await verifyLiveBinding({
       claim: { ...signed.claim, accountId: 'someone' }, sig: 'AAAA',
       challenge: null, challengePrivateKey: null, mac: null,
-      expect: { at: NOW, accountId: 'alice' },
+      expect: { at: NOW, trust: TRUSTED, accountId: 'alice' },
     })
     return out.error?.code === BIND_ERR.WRONG_ACCOUNT
   })
@@ -382,8 +388,8 @@ await checkAsync('claimProblem names the first thing wrong and never throws', ()
 await checkAsync('verifyLiveBinding never throws, whatever it is handed', async () => {
   const cases = [
     {}, { claim: null }, { claim: signed.claim }, { claim: signed.claim, sig: 'AAAA', expect: { at: NOW } },
-    { claim: signed.claim, sig: signed.sig, expect: { at: NOW } },
-    { claim: signed.claim, sig: signed.sig, challenge: {}, mac: 'x', expect: { at: NOW } },
+    { claim: signed.claim, sig: signed.sig, expect: { at: NOW, trust: TRUSTED } },
+    { claim: signed.claim, sig: signed.sig, challenge: {}, mac: 'x', expect: { at: NOW, trust: TRUSTED } },
   ]
   for (const c of cases) {
     let out
@@ -416,6 +422,131 @@ await checkAsync('answerPopChallenge never throws and reports a code', async () 
   }
   return true
 })
+
+
+/* ========== 8. HISTORICAL IS NOT LIVE, AND THE TYPE SYSTEM SAYS SO ========= */
+
+{
+  /* An earlier version distinguished these only by NAME, and returned a bare
+   * boolean from the weaker one. A bare boolean fits anywhere a boolean is
+   * expected, so nothing structural stopped a historical signature check being
+   * spent as current authentication. These assertions are that hole, closed. */
+
+  await checkAsync('a historical check is TAGGED as historical, not returned bare', async () => {
+    const h = await verifyBindingSignature(signed.claim, signed.sig)
+    return h.kind === RESULT.HISTORICAL && h.signed === true && typeof h !== 'boolean'
+  })
+
+  await checkAsync('THE NEGATIVE TEST: a VALID historical result is REFUSED where live auth is required',
+    async () => {
+      const h = await verifyBindingSignature(signed.claim, signed.sig)
+      if (h.signed !== true) return false          // it really is a good signature
+      try { requireLiveAuthentication(h); return false } catch { return true }
+    })
+
+  check('…and so is a bare true, which is what the old API would have handed over', (() => {
+    for (const junk of [true, 1, 'ok', {}, null, undefined, { ok: true }]) {
+      try { requireLiveAuthentication(junk); return false } catch { /* expected */ }
+    }
+    return true
+  })())
+
+  await checkAsync('a successful LIVE result passes the gate', async () => {
+    const { out } = await fullCheck(signed.claim, signed.sig, alice, {})
+    return out.kind === RESULT.LIVE && requireLiveAuthentication(out) === out
+  })
+
+  await checkAsync('…and a FAILED live result is refused even though it is correctly tagged', async () => {
+    const { out } = await fullCheck(signed.claim, signed.sig, alice, { accountId: 'somebody-else' })
+    if (out.kind !== RESULT.LIVE || out.ok !== false) return false
+    try { requireLiveAuthentication(out); return false } catch { return true }
+  })
+}
+
+/* ========== 9. CRYPTOGRAPHIC VALIDITY IS NOT TRUST FRESHNESS ============== */
+
+{
+  const liveWith = async (trust) => {
+    const { challenge, privateKey } = await makePopChallenge({ agreementAlgo: 'X25519' })
+    const answer = await answerPopChallenge({
+      agreement: alice.agreement, agreementKeyB64: alice.agreementKeyB64,
+      signingKeyB64: alice.signingKeyB64, claim: signed.claim, challenge,
+    })
+    return verifyLiveBinding({
+      claim: signed.claim, sig: signed.sig, challenge, challengePrivateKey: privateKey,
+      mac: answer.mac, expect: { at: NOW, ...(trust === undefined ? {} : { trust }) },
+    })
+  }
+
+  await checkAsync('THE POINT: perfect cryptography with UNKNOWN trust is NOT authentication', async () => {
+    const out = await liveWith(undefined)
+    return out.ok === false && out.error.code === 'TRUST_UNKNOWN' &&
+      // and the evidence says why it is not a crypto failure
+      out.evidence.signatureValid === true && out.evidence.possessionProved === true &&
+      out.evidence.trustChecked === false
+  })
+
+  await checkAsync('a REVOKED identity fails even with a perfect signature and proof', async () => {
+    const out = await liveWith({ state: 'Verified', revoked: true })
+    return out.ok === false && out.error.code === 'REVOKED' &&
+      out.evidence.signatureValid === true && out.evidence.possessionProved === true
+  })
+
+  await checkAsync('every blocking trust state fails, and none of them is a crypto error', async () => {
+    for (const state of BLOCKING_TRUST) {
+      const out = await liveWith({ state, revoked: false })
+      if (out.ok !== false || out.error.code !== 'TRUST_BLOCKING') return false
+      if (out.evidence.signatureValid !== true) return false
+    }
+    return true
+  })
+
+  await checkAsync('a trusted, unrevoked identity authenticates', async () => {
+    const out = await liveWith(TRUSTED)
+    return out.ok === true && out.evidence.trustChecked === true &&
+      out.evidence.revoked === false && out.evidence.trustState === 'Pinned'
+  })
+
+  await checkAsync('the evidence records WHICH challenge the proof was bound to', async () => {
+    const out = await liveWith(TRUSTED)
+    return typeof out.evidence.challengeNonceB64 === 'string' &&
+      out.evidence.challengeNonceB64.length > 0 && out.evidence.checkedAt === NOW
+  })
+
+  await checkAsync('the SIGNATURE remains valid regardless — that is the separation', async () => {
+    // The same claim whose live authentication just failed for revocation still
+    // has a correct signature. Both statements are true; only one is authority.
+    const h = await verifyBindingSignature(signed.claim, signed.sig)
+    const live = await liveWith({ state: 'Verified', revoked: true })
+    return h.signed === true && live.ok === false
+  })
+
+  check('BLOCKING_TRUST matches identity-pin\'s own blocking states', (() => {
+    const src = readFileSync(new URL('../src/lib/crypto/identity-pin.js', import.meta.url), 'utf8')
+    // isBlocking is the definition; this list mirrors it by value on purpose.
+    const m = src.match(/isBlocking\s*=\s*\(rec\)\s*=>[^\n]*\n?[^\n]*/)
+    return Boolean(m) && BLOCKING_TRUST.every((st) => m[0].includes(st.toUpperCase()) || m[0].includes(st))
+  })())
+}
+
+/* ========== 10. THE ADR AND THE CODE AGREE ON THE FIELD ORDER ============= */
+
+{
+  /* REVISION 4. The claim's field order is part of the wire format: two peers
+   * that disagreed would produce different bytes and every signature would fail
+   * closed. That is the right failure, and it is only safe if the order lives in
+   * exactly one place and the document that specifies it cannot drift from the
+   * code that implements it. This test is that mechanism. */
+  const adr = readFileSync(
+    new URL('../../docs/adr/006-signing-identity-and-key-binding.md', import.meta.url), 'utf8')
+  const block = adr.match(/<!-- CLAIM_FIELDS:BEGIN -->([\s\S]*?)<!-- CLAIM_FIELDS:END -->/)
+  check('ADR-006 carries a machine-readable claim-field block', Boolean(block))
+  const documented = block ? [...block[1].matchAll(/^\s*\d+\.\s*`([A-Za-z0-9_]+)`/gm)].map((m) => m[1]) : []
+  check('THE DRIFT GUARD: the ADR\'s field order is exactly the code\'s',
+    JSON.stringify(documented) === JSON.stringify([...CLAIM_FIELDS]))
+  check('…and it is the full set, not a prefix that happens to match',
+    documented.length === CLAIM_FIELDS.length && documented.length === 7)
+}
 
 console.log('\n========================================')
 console.log('  identity binding — a signature is not possession')

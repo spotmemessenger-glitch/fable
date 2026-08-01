@@ -237,19 +237,52 @@ const enc = new TextEncoder()
  * anything ever parses one out of a longer stream — but it is not carrying the
  * canonicality argument, the per-field lengths are.
  */
+/**
+ * Bounds. A transcript is signed, so it is attacker-influenced input to a
+ * primitive, and an unbounded one is a memory-exhaustion path reachable by
+ * anyone who can put a long string in a claim field. Both limits are far above
+ * any legitimate value — a public key is 65 bytes and an account id is tens —
+ * so hitting one means something is wrong, not that the limit is tight.
+ */
+export const MAX_FIELD_BYTES = 64 * 1024
+export const MAX_TRANSCRIPT_BYTES = 256 * 1024
+
+/** The canonical field count limit. `uint32be` could carry more; nothing
+ *  legitimate needs it, and a bound that is never reached is free. */
+export const MAX_FIELDS = 64
+
 export function transcript (domain, fields) {
   if (typeof domain !== 'string' || !domain) throw new Error('a transcript needs a domain')
   if (!Array.isArray(fields)) throw new Error('a transcript needs a list of fields')
+  if (fields.length > MAX_FIELDS) throw new Error(`a transcript may not have more than ${MAX_FIELDS} fields`)
 
   const parts = [enc.encode(domain), ...fields.map((f) => {
+    /* THE ACCEPTED TYPES, AND WHY NO OTHERS. Bytes pass through. Strings are
+     * UTF-8, which is the only text encoding this format has. Finite numbers
+     * become their DECIMAL STRING — chosen over a fixed-width integer because
+     * every value in this protocol that is a number is a millisecond timestamp
+     * that already round-trips through JSON as decimal, and two encodings for
+     * one value is the whole hazard this function exists to remove.
+     *
+     * Everything else throws. Accepting `null` as empty, or an object via
+     * toString, would make two different claims encode identically — which is
+     * the collision property, arrived at through the type system instead of
+     * through the delimiter. */
     if (f instanceof Uint8Array) return f
     if (typeof f === 'string') return enc.encode(f)
     if (typeof f === 'number' && Number.isFinite(f)) return enc.encode(String(f))
     throw new Error(`a transcript field must be bytes, a string or a finite number, got ${typeof f}`)
   })]
 
+  for (const p of parts) {
+    if (p.length > MAX_FIELD_BYTES) throw new Error(`a transcript field may not exceed ${MAX_FIELD_BYTES} bytes`)
+  }
+
   let total = 0
   for (const p of parts) total += 4 + p.length
+  if (4 + total > MAX_TRANSCRIPT_BYTES) {
+    throw new Error(`a transcript may not exceed ${MAX_TRANSCRIPT_BYTES} bytes`)
+  }
   const out = new Uint8Array(4 + total)
   const view = new DataView(out.buffer)
   view.setUint32(0, parts.length, false)
