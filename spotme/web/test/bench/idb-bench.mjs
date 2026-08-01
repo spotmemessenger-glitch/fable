@@ -131,8 +131,16 @@ async function main () {
       const payload = new Uint8Array(bytes)
       crypto.getRandomValues(payload.subarray(0, Math.min(bytes, 65536)))
       const put = [], get = [], del = []
-      // Warm the connection so these measure the operation, not the open.
-      await blobs.put(blobs.mediaKey('warm', 'seed'), new Uint8Array(8), 'application/octet-stream')
+      // WARM-UP, DISCARDED. One seed write is not enough: the first few
+      // full-size transactions still pay for buffer allocation and JIT, and
+      // including them inflated the 8 MB read spread to 78% between runs.
+      for (let w = 0; w < 5; w++) {
+        const k = blobs.mediaKey('warmup', `w${w}`)
+        await blobs.put(k, payload, 'image/jpeg')
+        const b = await blobs.get(k)
+        if (b && typeof b.arrayBuffer === 'function') await b.arrayBuffer()
+        await blobs.del(k)
+      }
       for (let i = 0; i < iterations; i++) {
         const key = blobs.mediaKey('warm', `m${i}`)
         let t = performance.now()
@@ -208,6 +216,14 @@ async function main () {
     const slice = new Uint8Array(128 * 1024)          // rooms.js SLICE_BYTES
     crypto.getRandomValues(slice.subarray(0, 65536))
     const seal = [], open = []
+    // WARM-UP, DISCARDED. Measured across three runs, the first iterations
+    // reported ~1.1 ms and the steady state ~0.4 ms — a 175% run-to-run spread
+    // that was entirely JIT and subtle-crypto initialisation, not the workload.
+    for (let w = 0; w < 10; w++) {
+      const iv = crypto.getRandomValues(new Uint8Array(12))
+      await crypto.subtle.decrypt({ name: 'AES-GCM', iv },
+        key, await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, slice))
+    }
     for (let i = 0; i < 50; i++) {
       const iv = crypto.getRandomValues(new Uint8Array(12))
       let t = performance.now()
