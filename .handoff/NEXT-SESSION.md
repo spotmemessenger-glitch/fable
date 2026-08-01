@@ -39,17 +39,17 @@ Measured on `master` in this container: **web 833/833**, backend 13 suites /
 
 | PR | Branch | Base | Own files | Local suite | CI |
 |---|---|---|---|---|---|
-| **#30** A5 device matrix | `feat/a5-matrix` | `a934e11` | 5 | 864/864 | re-running at write time — **confirm green before anything else** |
-| **#31** A5 enforcement, flag **OFF** | `feat/a5-enforcement` | stacked on #30 | 7 (12 displayed) | 912/912, lint+build clean | green incl. e2e at 14:51 UTC |
+| **#30** A5 device matrix | `feat/a5-matrix` @ `3c9dbc1` | `master` | 5 | 864/864 | confirm green before review |
+| **#31** A5 enforcement, flag **OFF** | `feat/a5-enforcement` @ `3884db3` | `feat/a5-matrix` | 8 (12 vs master — `package.json` is shared with #30) | 912/912, lint+build clean | confirm green before review |
 
 Both are **held for independent owner review**. Do not infer either is safe
 from the stacked tip passing — the owner said so explicitly.
 
-**#31 RULE (owner-set):** while stacked, "12 displayed = 5 inherited + 7 own"
-is acceptable. **After #30 squash-merges, #31 MUST be rebuilt** (reset to
-`origin/master`, cherry-pick only its own commits) so GitHub's displayed diff
-shows ONLY its seven files. **Do not merge #31 while its displayed diff
-includes #30's five files.**
+**#31 RULE (owner-set):** while stacked on #30, its displayed diff vs its base
+branch is its own 8 files. **After #30 squash-merges, #31 MUST be rebuilt**
+(reset to `origin/master`, cherry-pick only its own two commits) so GitHub's
+displayed diff shows ONLY those 8 files against master. **Do not merge #31
+while its displayed diff includes #30's files.**
 
 For #30/A5: enforcement stays default-OFF, and **disabling the flag — not
 reverting — is the supported operational rollback** (ADR-007 §Rollback says
