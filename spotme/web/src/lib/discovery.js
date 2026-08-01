@@ -17,7 +17,7 @@
 // behind carrier NAT, which is exactly when "nobody is nearby" was a lie.
 // Presence stays ephemeral server-side (see the gateway's EPHEMERAL set), and
 // one global lobby room is a Phase-1 shape — geo-sharded presence is Phase 2.
-import { joinRoom } from './socket-transport.js'
+import { joinRoom } from './transport/room.js'
 import { RTC_CONFIG, readyRTC } from '../net.js'
 import { db } from './db.js'
 import { pushNote } from './notify.js'

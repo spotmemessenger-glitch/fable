@@ -50,7 +50,10 @@
  * relay only ever holds the OPENING knock, never anything exchanged after
  * the chat is live — everything past that stays P2P-only, unchanged.
  */
-import { joinRoom, setRoomKey, freshTokens, serverMode } from './socket-transport.js'
+// Rooms come from the transport seam; setRoomKey stays a direct import because
+// it is KEY MATERIAL, which no adapter may carry (ADR-002 §2, FORBIDDEN_KEY_SURFACE).
+import { joinRoom } from './transport/room.js'
+import { setRoomKey, freshTokens, serverMode } from './socket-transport.js'
 import { RTC_CONFIG, readyRTC } from '../net.js'
 import { db } from './db.js'
 import { rooms } from './rooms.js'
