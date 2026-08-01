@@ -71,6 +71,23 @@ overhead today, v3 costs **+33 bytes** per message in steady state — about 0.0
 of a 128 KB attachment slice, and roughly a 25% overhead on a short text
 message. Stated so the cost is a decision rather than a discovery.
 
+### 2a. Exact envelope sizes
+
+Fixed by the layout above, so a parser can reject on length before it parses.
+
+| | Header | Overhead (magic+ver+hdrlen+header+IV+tag) |
+|---|---|---|
+| **Minimum** — steady state | 73 | 2 + 2 + 73 + 12 + 16 = **105 bytes** |
+| **Maximum** — with X3DH prologue | 145 | 2 + 2 + 145 + 12 + 16 = **177 bytes** |
+
+`HDRLEN` therefore has exactly two legal values, **73 and 145**, and they are
+determined by `FLAGS` bit 0. Any other value is malformed — this is checkable
+before a single byte of key material is touched, and it is the cheapest possible
+rejection.
+
+Minimum total payload = 105 bytes (empty plaintext). There is no maximum
+plaintext bound at this layer; the attachment path chunks at 128 KB.
+
 ## 3. Field-by-field justification
 
 | Field | Why it exists | What breaks without it |
@@ -93,6 +110,29 @@ message. Stated so the cost is a decision rather than a discovery.
 time; an in-envelope one adds a lie surface and nothing else), no sender userId
 (`SDEV` plus the session identifies it, and the server already knows), and no
 plaintext length (it is recoverable after decryption and leaks size before it).
+
+### 3a. Could any field be reconstructed instead of transmitted?
+
+Asked field by field, because a byte that can be derived is a byte that should
+not be on the wire.
+
+| Field | Reconstructable? | Verdict |
+|---|---|---|
+| `MAGIC`, `VERSION` | No — the room's version is local state, but a frame must be self-describing to be rejected safely (§7) | **Keep** |
+| `HDRLEN` | **Yes**, from `FLAGS` bit 0 (§2a: only 73 or 145) | **Keep anyway** — 2 bytes buys a length check that runs *before* `FLAGS` is trusted. Deriving length from a flag means trusting attacker-chosen input to tell you how far to read |
+| `FLAGS` | No | Keep |
+| `SDEV` | No — the server knows the user, not the device | Keep |
+| `RDEV` | Partly: with one device per account it is derivable. **Not** once multi-device exists | Keep — §9 |
+| `DH` | No. It *is* the ratchet input | Keep |
+| `PN` | No. Only the sender knows how long its previous chain was | Keep |
+| `N` | No — a receiver cannot infer position under loss or reordering, which is the case it exists for | Keep |
+| `IK` | Yes, from the sender's userId via the key service — **but that is the server, and the server is the adversary.** Transmitting it lets the recipient check the bundle it already fetched | **Keep** |
+| `EK` | No | Keep |
+| `SPKID`, `OPKID` | No — the recipient may hold several | Keep |
+
+**One field is genuinely redundant (`HDRLEN`) and is kept on purpose**; the
+rest cannot be derived without either trusting the server or guessing. That is
+the justification for 33 bytes, rather than an assertion that it is small.
 
 ## 4. Device and session identifiers
 
@@ -141,6 +181,23 @@ existing undecryptable surface rather than failing silently.
 decision, not an inherited one.** The reference implementation selected in
 `004c` also evicts FIFO, but an implementation choosing LRU would diverge while
 both looked correct, so it is stated here rather than discovered.
+
+> **These three numbers are PROVISIONAL, CONFIGURABLE DEFAULTS. The 7-day expiry
+> is NOT a protocol-level invariant and must not be described as one until it has
+> been measured** (`004c` Q3). They are centrally configurable and reported in
+> telemetry as counts and timings only — never keys, never message content.
+>
+> **Expiry is entirely Spot Me's to build.** The reference oracle deletes skipped
+> keys *only* when the maximum count is reached, and has no time- or event-based
+> deletion at all. Nothing upstream validates the expiry rule, and the oracle
+> must not be mistaken for doing so.
+
+**Failure behaviour is mandatory, not implementation-defined.** On crossing any
+bound the implementation **fails closed with a defined protocol error**. It must
+not loop, allocate without limit, silently lose state, or **automatically reset
+the session** — that last one is called out because it is the tempting fix and
+it is a silent downgrade, trading forward secrecy for availability without
+telling anyone.
 
 ### 5a. Prekey-message representation
 
@@ -309,8 +366,31 @@ Four independent mechanisms, because any one of them can be wrong:
 
 **What none of this protects against:** a peer who genuinely reinstalls and
 publishes a new identity key is indistinguishable, to the protocol, from an
-attacker substituting one. That is the TOFU gap R2 in `10-PRIORITY-0-AUDIT.md`,
-still open, and v3 makes it *more* consequential rather than less.
+attacker substituting one. That is the TOFU gap R2 in `10-PRIORITY-0-AUDIT.md`.
+
+### 8a. Identity states — required before v3 is activated
+
+**Identity pinning and verification ship BEFORE `e2e_v3` is activated**
+(`004c` Q4). v3's downgrade protection ultimately rests on `IK`'s authenticity,
+so activating v3 first would build forward secrecy on an unpinned foundation.
+
+| State | Meaning | UI obligation |
+|---|---|---|
+| **Unverified** | Key seen, never confirmed | **Visibly unverified** — not neutral, not silent |
+| **Pinned** | Key recorded for this peer | Baseline for change detection |
+| **Verified** | Confirmed by safety number or QR | Positively indicated |
+| **Changed** | Pinned key replaced by a different one | **Security event.** Explicit recovery or re-verification required |
+| **Revoked** | Key withdrawn | Refuse; never silently re-pin |
+
+**Silent TOFU is not sufficient** to claim protection from a malicious server at
+first contact, and nothing in this document should be read as claiming it is. An
+initial unverified conversation may be supported as an explicit product
+decision — but it must *look* unverified.
+
+**After pinning, an unexpected identity-key change is never silently accepted.**
+QR and safety-number verification are required by Priority 1; ADR-003 and PRs
+#12/#14 shipped the primitive and the screen, and the pinning plus this state
+machine are what remain.
 
 ## 9. Multi-device — what this format allows and what it does not
 
@@ -332,192 +412,22 @@ error, so that adding devices later does not spray alarms on old clients.
 
 ## 9a. Interaction with the merged transport and storage seams
 
-Checked against `master` at `b0423b2`, after phases A, B and C landed. Three
-interactions, and the first is a **design gap in this document** rather than a
-note.
-
-### 1. Attachments have no v3 key, and the storage path assumes one exists
-
-Phase C seals attachment bytes with:
-
-```js
-sealForRoom(roomId, bytes, password)  ->  roomKey(roomId, password)
-```
-
-A **long-lived, room-scoped** key. That is exactly what v2 provides and exactly
-what **v3 does not have**: a ratchet has no stable room key, only per-message
-keys that are *deleted after use*.
-
-This matters because of the path phase C added. A storage-backed attachment is
-fetched **lazily** — the envelope arrives, the bubble renders, and the bytes are
-pulled from the bucket when the user taps, which may be days later and several
-ratchet steps on. **A message key will not exist by then.**
-
-So `sealForRoom`/`openForRoom` have no v3 meaning as currently written, and
-nothing in this document said so.
-
-**The fix, which must be specified before implementation:** an attachment gets
-its **own random 32-byte key**, generated per attachment. The bytes in the
-bucket are encrypted under that key; the key itself travels **inside the
-ratcheted envelope** (`cm`). The ratchet then protects the *key*, and the
-long-lived object is encrypted under something that is allowed to be long-lived.
-This is how Signal handles attachments, for the same reason.
-
-Consequences to carry: the envelope grows by 32 bytes for attachment messages;
-forward secrecy for attachment *bytes* is bounded by that key's lifetime, not
-the ratchet's, and that limitation must be stated rather than glossed;
-`FORBIDDEN_STORAGE_SURFACE` continues to hold, because the adapter still never
-sees a key.
-
-### 2. Replay is idempotent under v2 and is NOT under v3
-
-`socket-transport.js` holds the replay cursor for a frame it could not open, so
-that frame is **re-delivered and re-dispatched on the next join** — the
-behaviour `replay-cursor-hold.test.js` exists to pin. Under v2 that is free: the
-room key is stable, so decryption is idempotent and a retry either works or
-fails the same way.
-
-Under v3 a message key is **consumed on successful decrypt**. Retrying is
-therefore not a neutral act, and the existing repairable-vs-unrepairable split
-does not map cleanly:
-
-- a frame that failed because the *session* was not yet established **is**
-  repairable and must hold the cursor, as today
-- a frame that decrypted and then failed *downstream* must **not** be retried,
-  because its key is gone and the second attempt will fail permanently — which
-  the current code would classify as unrepairable and skip, silently losing a
-  message it had already successfully decrypted
-
-**§5b's duplicate handling covers the wire case; this is the local one.** The
-implementation must commit the decrypted plaintext before deleting the key, or
-adopt the reverse order and accept re-derivation. Either way it is a decision,
-and it is not made here.
-
-### 3. `FORBIDDEN_KEY_SURFACE` does not yet know about ratchet state
-
-Phase A's adapter guard bans `roomKey`, `deriveKey`, `setRoomKey`, `password`,
-`secret`, `key`, `seal`, `open` and friends. Under v3 the **session state is key
-material too** — root key, chain keys, skipped keys — and none of those names is
-on the list.
-
-The list should gain `ratchet`, `session`, `chainKey`, `rootKey` and `skipped`
-before v3 ships. Small, but the guard's whole value is that it is asserted
-rather than assumed, and an adapter holding a chain key would pass it today.
-
----
-
-**None of these three changes anything already merged.** Phases A, B and C are
-correct for v1 and v2, which is what ships. They are recorded here because the
-first one in particular would have been discovered during implementation, at the
-point where it is most expensive to fix.
+**Moved to `004d-e2e-v3-seam-interactions.md`.** Three interactions with the
+merged phase A/B/C seams, all now mandatory design requirements: attachments
+need their own key, replay is not idempotent under v3, and the forbidden key
+surface must cover ratchet state.
 
 ## 10. Test vectors
 
-Computed by running the derivations (`node:crypto`, X25519 + HKDF-SHA256).
-Private keys are repeating bytes so they are unmistakably test-only.
-
-**Reproduce them rather than trusting them:**
-
-```
-node spotme/docs/adr/004a-e2e-v3-vectors.mjs
-```
-
-That script is the source of every hex value below. It is deliberately **not**
-in `npm test` — v3 is unapproved, and putting a spec-only artifact in the chain
-would presume a decision that has not been made.
-
-**Keys** — private `0x11`×32 etc., public derived:
-
-```
-alice_ik  pub = 7b4e909bbe7ffe44c465a220037d608ee35897d31ef972f07f74892cb0f73f13
-alice_ek  pub = 0faa684ed28867b97f4a6a2dee5df8ce974e76b7018e3f22a1c4cf2678570f20
-bob_ik    pub = 7b0d47d93427f8311160781c7c733fd89f88970aef490d8aa0ee19a4cb8a1b14
-bob_spk   pub = ff2ee45601ec1b67310c7790404585ae697331eee1c1f8cf2419731c1fff3e6b
-bob_opk   pub = 38ab664bd86f77d7e66bdd9ae0792913a94fd8b33a1260027e4b46c1f4884c67
-```
-
-**X3DH** — `SS = DH(IK_A,SPK_B) || DH(EK_A,IK_B) || DH(EK_A,SPK_B) || DH(EK_A,OPK_B)`:
-
-```
-DH1 = b21afd23cc289c5c693adc6d9c7198657e590320fa4dd7a0aaf606e441a2ea46
-DH2 = 1fdc192faa0212a9aae7bb4f41b580227fd5ad3e5d777faae230dfe973f3e805
-DH3 = d31a1338a14cf92083e61f66bf842151cf156318bcddc07e42443937c05dd640
-DH4 = 25bed864771ea4f3d83d9fdaa0ebe218d9feca2ba8f9b4940d069e505ff91d31
-```
-
-**HKDF ladder** — salt is 32 zero bytes; labels are domain-separated:
-
-```
-label "spotme/e2e_v3/root"     root key  = a3ed97dda551a5c3f96a52f6e57c0ad9aab98d74e1ce3a4e43154302c4a78ac2
-label "spotme/e2e_v3/chain"    root key' = c7266d479d2c1298dbe408feafc2ee3c9dea300a01218712dead712af9d90b87
-                               chain key = e86220bb4e5e444be58723d09b628324bb2ed64f012f4989dd103fc77bd8119f
-label "spotme/e2e_v3/msg/0"    msg key   = c4234af3fc1263c7acbfb2dddd5da81c88b3690637f021a9534a4f80756691f1
-label "spotme/e2e_v3/chain/next" chain'  = 595d0f705b465ba74d74c5d9eb914b4ccf98912ad8d101ad6a2d5269a248bceb
-```
-
-**Header encoding** — `SDEV = 0xa1`×16, `RDEV = 0xb2`×16:
-
-```
-steady state (PN=3, N=7), 73 bytes:
-00 a1×16 b2×16 0faa684e...78570f20 00000003 00000007
-
-with prologue (SPKID=1, OPKID=42), 145 bytes:
-01 a1×16 b2×16 0faa684e...78570f20 00000000 00000000
-   7b4e909b...b0f73f13 0faa684e...78570f20 00000001 0000002a
-
-prekeys exhausted — same as above but OPKID = ffffffff
-```
-
-**AAD**, `roomId = "dm_0123456789abcdef"`, 106 bytes, prefix:
-
-```
-73706f746d652f6532655f7633 03 646d5f30313233343536373839616263646566 00
-"spotme/e2e_v3"            v3  "dm_0123456789abcdef"                  header...
-```
-
-**Full payload framing** (IV `0x9c`×12, 20 bytes of stand-in ciphertext), 109
-bytes total:
-
-```
-5303 0049 [73-byte header] 9c9c9c9c9c9c9c9c9c9c9c9c eeee...
-MAGIC/VER HDRLEN=73
-```
-
-**These vectors cover framing, AAD and the KDF ladder — not the ratchet.**
-Chain-advance and skipped-key vectors must come from a reference implementation
-and **do not exist yet**; producing them is a prerequisite for implementation,
-not a follow-up. That is the single largest piece of unfinished work in this
-document.
+**Moved to `004b-e2e-v3-vector-package.md`**, which now holds every vector:
+the framing/AAD/KDF ladder generated by `004a-e2e-v3-vectors.mjs`, and the
+ratchet conformance vectors generated by `004b-e2e-v3-ratchet-vectors.py`.
 
 ## 11. Compatibility test plan
 
-Each of these must **fail against a deliberately broken build** to be worth
-writing — the standard the existing suites are held to.
-
-| # | Test | Must fail when |
-|---|---|---|
-| 1 | A v1 room's whole existing suite passes untouched | Any v3 code executes on a v1 path |
-| 2 | A v2 room's whole existing suite passes untouched | Same, for v2 |
-| 3 | A v3 frame delivered to a v2 room is refused and does **not** advance to a key fetch | The version check is missing |
-| 4 | A v2 frame delivered to a v3 room is refused | **This is the downgrade test** |
-| 5 | `e2eVersion` cannot be lowered by `upsertConvo` | The monotonic guard is absent |
-| 6 | Flipping one bit of `HEADER` fails the GCM tag | The header is not in the AAD |
-| 7 | Flipping `VERSION` fails the tag | Version is not in the AAD |
-| 8 | Replaying a frame into another `roomId` fails the tag | `roomId` is not in the AAD |
-| 9 | `N` beyond `MAX_SKIP_PER_CHAIN` is refused without deriving keys | The DoS bound is missing |
-| 10 | Out-of-order delivery (2,1,4,3) decrypts all four | Skipped-key storage is wrong |
-| 11 | A dropped message leaves the others readable | Chain advance is wrong |
-| 12 | A duplicate is detected and not re-processed | Replay within a chain is possible |
-| 13 | Messages across a DH ratchet step, delivered out of order, all decrypt | `PN` is unused or wrong |
-| 14 | A frame for another `RDEV` is ignored quietly, not alarmed | Multi-device forward compatibility broken |
-| 15 | `OPKID = 0xFFFFFFFF` establishes a session without a one-time prekey | Exhaustion is mishandled |
-| 16 | Reserved `FLAGS` bits set → refused | Unknown extensions silently accepted |
-| 17 | Cursor **advances** past a version-mismatch frame | A newer peer can freeze an older client's history |
-| 18 | Differential vectors match a reference implementation | The ratchet is subtly wrong — **blocked on §10** |
-
-Tests 1–17 are writable today against the design. **Test 18 is the one that
-actually proves correctness, and it cannot be written until a reference
-implementation is chosen.**
+**Moved to `004b-e2e-v3-vector-package.md`**, alongside the manifest that maps
+each test to the vector group supplying its expected values. Keeping the plan
+and the mapping apart invited them to drift.
 
 ## 12. Rollout and rollback
 
