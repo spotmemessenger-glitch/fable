@@ -103,6 +103,14 @@ export function wipeDevice () {
     .then((m) => { m.forgetIdentity?.(); return null })
     .catch(() => 'identity cache')
 
+  /* A5 keeps a synchronous per-room verdict cache, and it outlives the
+   * database exactly as the identity cache does. Left behind, the next account
+   * on this device inherits the last one's blocks — and, worse, its
+   * ALLOWS. */
+  const clearedTrust = import('./crypto/identity-enforcement.js')
+    .then((m) => { m.forgetAllTrust?.(); return null })
+    .catch(() => 'trust verdict cache')
+
   /* Media lives in IndexedDB, not localStorage, so a prefix sweep cannot reach
    * it. Without this, "Clear all data" would leave every photo and voice note
    * this device ever received on disk — a worse leak than the one the button
@@ -122,6 +130,7 @@ export function wipeDevice () {
    * empty one. */
   return Promise.all([
     cleared,
+    clearedTrust,
     media,
     dropDatabase('spotme-e2e'),
     dropDatabase('spotme-identity-pins'),
