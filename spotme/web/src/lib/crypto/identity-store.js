@@ -122,12 +122,42 @@ let cached = null
  * identity yet" unless it is recorded, and the UI has to tell all three apart. */
 let openFailed = false
 
+/* THE IN-FLIGHT LOAD, not just the finished one.
+ *
+ * Found by the A5 matrix. `if (cached) return cached` deduplicates SEQUENTIAL
+ * callers and does nothing for CONCURRENT ones: on a device with no stored
+ * identity, two callers both see null, both generate a pair, and both write it.
+ * Last write wins the database — and the loser keeps using its own key in
+ * memory for whatever it derived.
+ *
+ * That is reachable on any first launch. `main.js` fires `publishIdentity`
+ * fire-and-forget at boot; `rooms.js` registers `roomKeyForConvo` as a key
+ * provider that runs on room join; `reach.js` calls `loadIdentity` on an
+ * inbound knock. Any two overlapping produce two identities, so the key that
+ * gets PUBLISHED is not the key some rooms were DERIVED with, and those rooms
+ * go dark on the next launch with the server reporting everything fine.
+ *
+ * Symptomatically identical to the write-failure bug documented below, and a
+ * different cause — which is why fixing that one did not fix this one.
+ *
+ * `identity-pin-store.js` already solved the same problem the same way, for the
+ * same reason: cache the PROMISE so racing callers share one load. */
+let loading = null
+
 /**
  * This device's identity, generated once and reused. Generation is idempotent
  * per device; a SECOND device gets a DIFFERENT key, which is why a v2 chat does
  * not follow you across devices yet (ADR-001, Consequences).
  */
 export async function loadIdentity () {
+  if (cached) return cached
+  // Cleared on settle, not kept: a load that failed must be retryable, because
+  // private browsing can deny once and allow later.
+  if (!loading) loading = loadIdentityOnce().finally(() => { loading = null })
+  return loading
+}
+
+async function loadIdentityOnce () {
   if (cached) return cached
   let db
   try { db = await openDb() } catch { openFailed = true; return null }   // private mode, quota, etc.
@@ -247,6 +277,7 @@ export async function loadIdentity () {
  */
 export function forgetIdentity () {
   cached = null
+  loading = null
   openFailed = false
 }
 
