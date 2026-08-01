@@ -94,6 +94,8 @@ jobs:
 
       - name: Confirm the run left nothing behind
         # The suite cleans up in afterAll; this is the check that it did.
-        # A leak in a shared staging bucket is slow and silent.
+        # A leak in a shared staging bucket is slow and silent. The same script
+        # runs in ci.yml against MinIO, so this path is exercised on every PR
+        # rather than first being trusted here, against a real bucket.
         if: always()
-        run: node scripts/r2-verify-clean.mjs
+        run: node scripts/s3-verify-clean.mjs

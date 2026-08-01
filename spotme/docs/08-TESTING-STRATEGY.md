@@ -283,7 +283,19 @@ Credentials for stage 2 must be newly rotated, least-privilege, scoped to one
 isolated non-production bucket, and stored **only** as GitHub Actions secrets —
 never in the repository, in chat, in code, in logs, in PR text or in
 documentation. The suite uses a run-unique prefix and deletes what it created;
-`scripts/r2-verify-clean.mjs` runs afterwards and fails if anything was left.
+`scripts/s3-verify-clean.mjs` runs afterwards and fails if anything was left.
+
+**Cleanup is verified in both stages, with `if: always()`.** The same script runs
+in CI against MinIO, where nothing is at stake — the container is discarded
+seconds later. It runs there so the `afterAll` path is exercised on every pull
+request, rather than being trusted until a rare manual R2 run discovers it broke,
+which is both the worst place to find out and the place where it has already
+leaked. `always()` matters because a failing suite is the case most likely to
+have skipped its own cleanup.
+
+**The MinIO image is pinned by digest, not by tag.** `bitnami/minio:latest`
+vanishing mid-project is why: CI infrastructure must not change because an
+upstream tag moved. Upgrading it is a deliberate edit that CI then re-proves.
 
 **This validates the existing storage seam. It is not authorization to begin the
 Priority 2 media migration.**

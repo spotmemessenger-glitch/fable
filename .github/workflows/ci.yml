@@ -87,13 +87,21 @@ jobs:
       # `s3rver` serves completely unsigned requests with 200, so a green
       # authorization test against it proves nothing. Credentials here are this
       # container's own, created fresh per run and destroyed with it.
+      #
+      # PINNED BY DIGEST, NOT BY TAG. `bitnami/minio:latest` disappearing under
+      # us is exactly why: CI infrastructure must not change when an upstream
+      # tag moves. This digest is the image the run that established this job
+      # green actually pulled, confirmed against the registry. To upgrade,
+      # resolve a new digest deliberately and let CI prove it:
+      #   docker buildx imagetools inspect minio/minio:latest
       - name: Start MinIO
         run: |
           docker run -d --name minio \
             -p 9000:9000 \
             -e MINIO_ROOT_USER=spotmeci \
             -e MINIO_ROOT_PASSWORD=spotmeci-not-a-real-secret \
-            minio/minio:latest server /data
+            minio/minio@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e \
+            server /data
           for i in $(seq 1 30); do
             if curl -fsS http://localhost:9000/minio/health/live >/dev/null 2>&1; then
               echo "MinIO ready after ${i}s"; exit 0
@@ -117,6 +125,15 @@ jobs:
 
       - name: Test
         run: npm test
+
+      # `if: always()` so a FAILING suite — the case most likely to have skipped
+      # its own afterAll — is still checked. Nothing is at stake in the MinIO
+      # container itself; what this protects is the R2 staging bucket, by
+      # proving the cleanup path still works on every pull request instead of
+      # only during a rare manual run against a real bucket.
+      - name: Confirm the suite cleaned up after itself
+        if: always()
+        run: node scripts/s3-verify-clean.mjs
 
   web:
     name: web — tests and build
