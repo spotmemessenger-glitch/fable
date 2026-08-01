@@ -152,15 +152,51 @@ export function formatSafetyNumber (digits) {
  *
  * Versioned so a future format change is refused rather than misparsed.
  */
-export function encodeVerificationPayload (self, peer) {
+export const PAYLOAD_VERSION = 2
+
+/** Which safety-number construction produced the digits. Bound INTO the payload
+ *  so a code from a build with a different VERSION prefix is refused rather
+ *  than silently compared against numbers it cannot equal. */
+export const SAFETY_VERSION = VERSION.join('.')
+
+/**
+ * How long a scanned code stays acceptable.
+ *
+ * A QR code is scanned in person, off a screen that is in the room. Minutes is
+ * already generous. Without a bound, a code photographed once is valid forever:
+ * an attacker who captured it — over someone's shoulder, from a screenshot in a
+ * chat, from a shared screen — could present it later against a key that had
+ * since changed, and the scan would still say "verified".
+ */
+export const PAYLOAD_MAX_AGE_MS = 5 * 60_000
+
+export function encodeVerificationPayload (self, peer, opts = {}) {
   for (const p of [self, peer]) {
     if (!p?.publicKeyB64 || !p?.userId) throw new Error('both parties need a public key and an id')
   }
+  const { roomId, at } = opts
+  if (!roomId) throw new Error('a verification payload must name the conversation')
+  if (typeof at !== 'number') throw new Error('a verification payload must carry an issue time')
   return JSON.stringify({
-    v: 1,
+    v: PAYLOAD_VERSION,
     t: 'spotme-safety',
     a: { k: self.publicKeyB64, i: self.userId },
-    b: { k: peer.publicKeyB64, i: peer.userId }
+    b: { k: peer.publicKeyB64, i: peer.userId },
+    /* THE TWO FIELDS v1 LACKED, and the reason this is v2.
+     *
+     * `r` binds the code to ONE conversation. Without it a code proving
+     * "these two keys belong together" verifies any room those two people
+     * share, so scanning in one chat would silently mark another verified —
+     * including one whose key had since changed.
+     *
+     * `ts` bounds its life. See PAYLOAD_MAX_AGE_MS.
+     *
+     * `sv` binds the construction that produced the digits, so a build with a
+     * different VERSION prefix is refused rather than compared against numbers
+     * it can never equal. */
+    r: roomId,
+    ts: at,
+    sv: SAFETY_VERSION
   })
 }
 
@@ -175,7 +211,13 @@ export function decodeVerificationPayload (text) {
   let data
   try { data = JSON.parse(String(text)) } catch { throw new Error('not a Spot Me verification code') }
   if (data?.t !== 'spotme-safety') throw new Error('not a Spot Me verification code')
-  if (data?.v !== 1) throw new Error(`unsupported verification code version: ${data?.v}`)
+  /* v1 still DECODES. It predates conversation binding and expiry, so it can
+   * never satisfy `verifyScannedPayload` — but decoding it lets the caller say
+   * "this code is too old, generate a new one" instead of "not a Spot Me code",
+   * which would send someone hunting for the wrong problem. */
+  if (data?.v !== 1 && data?.v !== PAYLOAD_VERSION) {
+    throw new Error(`unsupported verification code version: ${data?.v}`)
+  }
   const a = data.a
   const b = data.b
   for (const p of [a, b]) {
@@ -184,8 +226,12 @@ export function decodeVerificationPayload (text) {
     }
   }
   return {
+    version: data.v,
     a: { publicKeyB64: a.k, userId: a.i },
-    b: { publicKeyB64: b.k, userId: b.i }
+    b: { publicKeyB64: b.k, userId: b.i },
+    roomId: typeof data.r === 'string' ? data.r : null,
+    issuedAt: typeof data.ts === 'number' ? data.ts : null,
+    safetyVersion: typeof data.sv === 'string' ? data.sv : null
   }
 }
 
@@ -197,8 +243,54 @@ export function decodeVerificationPayload (text) {
  * keys, which is exactly the claim a server-in-the-middle cannot satisfy: it
  * would have had to give each side a different key, so the two numbers diverge.
  */
-export async function verifyScannedPayload (text, expectedDigits) {
-  const { a, b } = decodeVerificationPayload(text)
+export const SCAN_ERR = Object.freeze({
+  UNREADABLE: 'UNREADABLE',
+  OLD_FORMAT: 'OLD_FORMAT',
+  WRONG_SAFETY_VERSION: 'WRONG_SAFETY_VERSION',
+  WRONG_ROOM: 'WRONG_ROOM',
+  EXPIRED: 'EXPIRED',
+  WRONG_SELF_KEY: 'WRONG_SELF_KEY',
+  WRONG_PEER_KEY: 'WRONG_PEER_KEY',
+  DIGITS_DIFFER: 'DIGITS_DIFFER'
+})
+
+export async function verifyScannedPayload (text, expectedDigits, ctx = {}) {
+  let decoded
+  try {
+    decoded = decodeVerificationPayload(text)
+  } catch (err) {
+    return { match: false, error: SCAN_ERR.UNREADABLE, message: err.message }
+  }
+  const { a, b, version, roomId, issuedAt, safetyVersion } = decoded
+  const no = (error) => ({ match: false, error, decoded })
+
+  /* EVERY BINDING IS CHECKED BEFORE THE DIGITS, and that ordering is the point.
+   * A matching 60 digits proves only that two keys belong together. It says
+   * nothing about WHICH conversation, WHEN, or whether those are the keys this
+   * device actually holds — so treating a digit match as sufficient is how a
+   * genuine code for one chat comes to verify another. */
+  if (version !== PAYLOAD_VERSION) return no(SCAN_ERR.OLD_FORMAT)
+  if (safetyVersion !== SAFETY_VERSION) return no(SCAN_ERR.WRONG_SAFETY_VERSION)
+  if (!ctx.roomId || roomId !== ctx.roomId) return no(SCAN_ERR.WRONG_ROOM)
+  if (typeof issuedAt !== 'number' || typeof ctx.at !== 'number' ||
+      ctx.at - issuedAt > PAYLOAD_MAX_AGE_MS || issuedAt - ctx.at > PAYLOAD_MAX_AGE_MS) {
+    // Future-dated too: a clock-skewed or hand-made code must not buy extra life.
+    return no(SCAN_ERR.EXPIRED)
+  }
+
+  /* The scanned code names two keys. They must be the two keys THIS device is
+   * working with — its own identity, and the key it actually trusts for this
+   * peer. Otherwise a valid code for a different pair, or for a peer key that
+   * has since been replaced, would verify against numbers computed elsewhere. */
+  const pair = [a, b]
+  const self = pair.find((p) => p.publicKeyB64 === ctx.selfKey)
+  if (!ctx.selfKey || !self) return no(SCAN_ERR.WRONG_SELF_KEY)
+  const peer = pair.find((p) => p !== self)
+  if (!ctx.peerKey || peer.publicKeyB64 !== ctx.peerKey) return no(SCAN_ERR.WRONG_PEER_KEY)
+
   const scanned = await safetyNumber(a, b)
-  return { match: scanned === expectedDigits, scanned }
+  if (scanned !== expectedDigits) return { match: false, error: SCAN_ERR.DIGITS_DIFFER, scanned, decoded }
+  /* `verifiedKey` is what the caller must record — the key that was ACTUALLY
+   * compared, taken from the scanned payload, never re-read from anywhere. */
+  return { match: true, scanned, decoded, verifiedKey: peer.publicKeyB64, peerId: peer.userId }
 }
