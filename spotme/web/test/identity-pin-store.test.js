@@ -2,23 +2,21 @@
  * Proves trust decisions SURVIVE — a reload, a schema change, and another tab
  * writing at the same moment.
  *
- * WHY A RICHER FAKE THAN THE OTHER SUITES USE. The existing IndexedDB stand-ins
- * in this repo return a fixed value and fire `oncomplete` on a microtask. That
- * is enough to test "did it write", and useless for the claim this module
- * actually makes: that a read-modify-write in ONE transaction cannot lose a
- * concurrent tab's decision. Proving that needs a fake that SERIALISES
- * overlapping readwrite transactions the way IndexedDB does — otherwise the
- * concurrency test passes against a store with no concurrency control at all,
- * which is the same class of false pass as a green authorization test against a
- * server with no authorization.
+ * THE FAKE IS SHARED, in `helpers/fake-idb.js`, and it SERIALISES overlapping
+ * readwrite transactions the way IndexedDB does. That is not decoration: the
+ * claim this module makes is that a read-modify-write in ONE transaction cannot
+ * lose a concurrent tab's decision, and against a stand-in with no concurrency
+ * control at all that test passes for free — the same class of false pass as a
+ * green authorization test against a server with no authorization.
  *
- * So the fake below models: keyPath stores, real per-key data, request
- * callbacks, `onupgradeneeded` on version change, and a per-store transaction
- * queue. Backing data outlives a connection, so "restart the app" is a real
- * operation here rather than a mocked one.
+ * It lives in a helper rather than here because the A5 matrix suite needs the
+ * same semantics over two databases at once, and a second copy of a
+ * concurrency model is how a concurrency test quietly stops modelling
+ * concurrency.
  *
  *   node test/identity-pin-store.test.js
  */
+import { makeIDB } from './helpers/fake-idb.js'
 import {
   readRecord, allRecords, applyToRecord, forgetRecord, _resetForTests,
 } from '../src/lib/crypto/identity-pin-store.js'
@@ -35,112 +33,6 @@ const checkAsync = async (name, fn) => {
   try { check(name, (await fn()) === true) } catch (e) { check(`${name} [threw: ${e.message}]`, false) }
 }
 
-/* ------------------------------------------------------ IndexedDB fake ---- */
-
-/**
- * @param backing Map<dbName, {version, stores: Map<name, {keyPath, data: Map}>}>
- *        Passed in so it can outlive a connection — that is what makes the
- *        restart test a restart rather than a fresh database.
- */
-function makeIDB (backing = new Map()) {
-  /** Per-store promise chain. A readwrite transaction does not begin until the
-   *  previous one on that store has finished, which is the behaviour the
-   *  concurrency claim rests on. */
-  const queues = new Map()
-  /** Every transaction's outcome, so "it aborted" is OBSERVED rather than
-   *  inferred from "nothing was written". Those are different claims: a
-   *  function that simply forgot to call put also writes nothing. */
-  const txLog = []
-
-  function connection (name) {
-    const entry = backing.get(name)
-    return {
-      objectStoreNames: { contains: (s) => entry.stores.has(s) },
-      createObjectStore (s, opts) {
-        entry.stores.set(s, { keyPath: opts.keyPath, data: new Map() })
-        return {}
-      },
-      transaction (storeName, mode) {
-        const rec = entry.stores.get(storeName)
-        if (!rec) throw new Error(`no such store: ${storeName}`)
-        const t = { oncomplete: null, onerror: null, onabort: null, _aborted: false }
-        let pending = 0
-        let settled = false
-        const snapshot = new Map(rec.data)
-
-        const prior = queues.get(storeName) || Promise.resolve()
-        let release
-        const mine = new Promise((r) => { release = r })
-        queues.set(storeName, prior.then(() => mine))
-        const started = prior
-
-        const finish = () => {
-          if (settled) return
-          settled = true
-          if (t._aborted) {
-            // Real IndexedDB rolls a transaction's writes back on abort.
-            // Restoring the snapshot is what makes the abort test meaningful.
-            rec.data = snapshot
-          }
-          txLog.push({ mode, outcome: t._aborted ? 'abort' : 'complete' })
-          release()
-          queueMicrotask(() => (t._aborted ? t.onabort?.() : t.oncomplete?.()))
-        }
-
-        const request = (work) => {
-          const r = { onsuccess: null, onerror: null, result: undefined }
-          pending++
-          started.then(() => {
-            if (t._aborted) { pending--; return }
-            r.result = work()
-            r.onsuccess?.()
-            pending--
-            // Commit once nothing is outstanding. A chained request registers
-            // synchronously inside onsuccess, so it is counted before this runs.
-            queueMicrotask(() => { if (pending === 0) finish() })
-          })
-          return r
-        }
-
-        t.abort = () => { t._aborted = true; finish() }
-        t.objectStore = () => ({
-          get: (k) => request(() => {
-            const v = rec.data.get(k)
-            return v === undefined ? undefined : JSON.parse(JSON.stringify(v))
-          }),
-          getAll: () => request(() => [...rec.data.values()].map((v) => JSON.parse(JSON.stringify(v)))),
-          put: (v) => request(() => {
-            rec.data.set(v[rec.keyPath], JSON.parse(JSON.stringify(v)))
-            return v[rec.keyPath]
-          }),
-          delete: (k) => request(() => { rec.data.delete(k); return undefined }),
-        })
-        // A transaction with no requests still has to complete.
-        queueMicrotask(() => { if (pending === 0) finish() })
-        return t
-      },
-    }
-  }
-
-  return {
-    _backing: backing,
-    _txLog: txLog,
-    open (name, version) {
-      const r = { result: null, onupgradeneeded: null, onsuccess: null, onerror: null, onblocked: null }
-      queueMicrotask(() => {
-        if (!backing.has(name)) backing.set(name, { version: 0, stores: new Map() })
-        const entry = backing.get(name)
-        r.result = connection(name)
-        if (version > entry.version) {
-          entry.version = version
-          r.onupgradeneeded?.()
-        }
-        r.onsuccess?.()
-      })
-      return r
-    },
-  }
-}
 
 const DB = 'spotme-identity-pins'
 const STORE = 'pins'
