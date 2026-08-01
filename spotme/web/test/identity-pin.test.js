@@ -26,7 +26,7 @@ import {
   STATES, EVENTS, ERR, HISTORY_LIMIT, SCHEMA_VERSION,
   UNVERIFIED, PINNED, VERIFIED, CHANGED, REVOKED,
   OBSERVE, VERIFY, ACCEPT, REJECT, REVOKE, CLEAR_REVOCATION,
-  isVerified, isBlocking, trustedKey,
+  isVerified, isBlocking, trustedKey, canonicalKey, algoOf,
 } from '../src/lib/crypto/identity-pin.js'
 
 const results = {}
@@ -39,9 +39,18 @@ const check = (name, pass) => { names.push(name); results[name] = pass === true 
  *  matters most, so every field read goes through this. */
 const nx = (r) => (r && r.next) || {}
 
-const K1 = 'AAAApublic-key-one'
-const K2 = 'BBBBpublic-key-two'
-const K3 = 'CCCCpublic-key-three'
+/** Real 32-byte X25519-length keys. The machine canonicalises and
+ *  length-checks, so placeholder strings are no longer valid input.
+ *
+ *  K1's bytes are chosen so its base64 contains BOTH `+` and `/` and needs
+ *  padding — otherwise the base64url and unpadded normalisation tests below
+ *  would have nothing to normalise and would pass without exercising the path.
+ *  The fixture asserts that itself, a few lines down. */
+const key = (b) => btoa(String.fromCharCode(...new Array(32).fill(b)))
+const PLUS_AND_SLASH = [0xFB, 0xEF, 0xBE, 0xFF, 0xFF, 0xFF]
+const K1 = btoa(String.fromCharCode(...Array.from({ length: 32 }, (_, i) => PLUS_AND_SLASH[i % 6])))
+const K2 = key(2)
+const K3 = key(3)
 
 let clock = 0
 const at = () => ++clock
@@ -70,8 +79,10 @@ const build = {
     [CLEAR_REVOCATION]: { type, at: at() },
   })[type]
 
+  // EVERY pair gets its OWN named assertion. An aggregate count would report
+  // "30/30 well formed" while hiding WHICH pair regressed, and a table this
+  // small has no excuse for that.
   let totalPairs = 0
-  let wellFormed = 0
   for (const s of STATES) {
     for (const e of EVENTS) {
       totalPairs++
@@ -81,18 +92,18 @@ const build = {
       } catch (err) {
         out = { threw: err.message }
       }
-      const good = out && !out.threw && (
+      const defined = out && !out.threw && (
         (out.ok === true && STATES.includes(out.next?.state)) ||
         (out.ok === false && typeof out.error?.code === 'string' && out.error.code in ERR)
       )
-      if (good) wellFormed++
-      else check(`(${s} x ${e}) is well formed`, false)
+      const outcome = out?.threw ? `THREW ${out.threw}`
+        : out?.ok ? `-> ${out.next?.state}`
+          : `-> ${out?.error?.code}`
+      check(`${s} x ${e} ${outcome}`, defined)
     }
   }
-  check(
-    `all ${totalPairs} (state x event) pairs return a defined result, none throw`,
-    wellFormed === totalPairs && totalPairs === STATES.length * EVENTS.length,
-  )
+  check(`the table is complete: ${totalPairs} pairs = ${STATES.length} states x ${EVENTS.length} events`,
+    totalPairs === STATES.length * EVENTS.length)
 
   // Malformed input is refused rather than crashing or being half-applied.
   check('an unknown event type is a defined error',
@@ -104,6 +115,74 @@ const build = {
       .error?.code === ERR.UNKNOWN_STATE)
   check('observe with no key is refused',
     applyEvent(emptyRecord('p'), { type: OBSERVE, at: at() }).error?.code === ERR.MISSING_KEY)
+}
+
+/* ------------------------------------------ 1b. one canonical encoding --- */
+
+{
+  // Two spellings of the SAME key must not read as a substitution. If they did,
+  // a peer who did nothing would trigger a MITM warning — and a warning that
+  // fires on innocent input is one users learn to click through.
+  const std = K1
+  check('the fixture key actually contains +, / and padding to normalise',
+    std.includes('+') && std.includes('/') && std.endsWith('='))
+  const urlSafe = std.replace(/\+/g, '-').replace(/\//g, '_')
+  const unpadded = std.replace(/=+$/, '')
+  const spaced = std.slice(0, 10) + '\n  ' + std.slice(10)
+
+  const pinned = applyEvent(emptyRecord('p'), { type: OBSERVE, at: at(), key: std }).next
+  for (const [label, variant] of [
+    ['base64url', urlSafe], ['unpadded', unpadded], ['whitespace', spaced],
+  ]) {
+    const out = applyEvent(pinned, { type: OBSERVE, at: at(), key: variant })
+    check(`a ${label} spelling of the pinned key is NOT a change`, nx(out).state === PINNED)
+  }
+  check('verification accepts a differently-spelled form of the pinned key',
+    nx(applyEvent(pinned, { type: VERIFY, at: at(), key: urlSafe })).state === VERIFIED)
+  check('the stored pin is the canonical form, not whatever spelling arrived',
+    applyEvent(emptyRecord('p'), { type: OBSERVE, at: at(), key: urlSafe }).next.pinnedKey === std)
+
+  // Length-checked against the curves this app actually issues.
+  check('a key of the wrong length is refused, not pinned',
+    applyEvent(emptyRecord('p'), { type: OBSERVE, at: at(), key: btoa('short') })
+      .error?.code === ERR.MALFORMED_KEY)
+  check('a non-base64 key is refused, not pinned',
+    applyEvent(emptyRecord('p'), { type: OBSERVE, at: at(), key: '!!!not base64!!!' })
+      .error?.code === ERR.MALFORMED_KEY)
+  check('a malformed key cannot be used to verify either',
+    applyEvent(build[PINNED](), { type: VERIFY, at: at(), key: 'nonsense' })
+      .error?.code === ERR.MALFORMED_KEY)
+  check('canonicalKey() reports the algorithm implied by the length',
+    algoOf(K1) === 'X25519' && algoOf(btoa('short')) === null)
+  check('canonicalKey() is idempotent',
+    canonicalKey(canonicalKey(urlSafe)) === canonicalKey(urlSafe))
+}
+
+/* -------------------------------------------- 1c. change provenance ------ */
+
+{
+  const out = applyEvent(build[PINNED](), {
+    type: OBSERVE, at: at(), key: K2,
+    source: 'server-refetch', reason: 'decrypt failure self-heal',
+  })
+  check('a change records WHO reported it', nx(out).changeSource === 'server-refetch')
+  check('a change records WHY they were asking', nx(out).changeReason === 'decrypt failure self-heal')
+  check('a change records WHEN it was detected', typeof nx(out).changedAt === 'number')
+  check('a change records the PRIOR trust level as provenance', nx(out).priorState === PINNED)
+
+  // Provenance is what rejection reads. It must not be inferred later.
+  const resolved = applyEvent(nx(out), { type: REJECT, at: at() })
+  check('resolving a change clears its provenance rather than leaving it stale',
+    nx(resolved).changeSource === null && nx(resolved).changeReason === null &&
+    nx(resolved).changedAt === null)
+
+  // A record whose provenance was lost must not be upgraded to Verified.
+  const noProvenance = { ...build[CHANGED](), priorState: null }
+  check('rejection with NO recorded provenance falls back to Pinned, never Verified',
+    nx(applyEvent(noProvenance, { type: REJECT, at: at() })).state === PINNED)
+  const bogus = { ...build[CHANGED](), priorState: 'Whatever' }
+  check('rejection with a bogus prior state falls back to Pinned',
+    nx(applyEvent(bogus, { type: REJECT, at: at() })).state === PINNED)
 }
 
 /* ---------------------------------- 2. the pin does not move on its own -- */

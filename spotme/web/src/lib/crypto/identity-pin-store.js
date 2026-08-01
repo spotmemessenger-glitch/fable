@@ -70,6 +70,15 @@ export function _resetForTests () {
   dbPromise = null
 }
 
+/**
+ * `fn` receives the object store AND the transaction, because a caller may need
+ * to ABORT rather than merely decline to write — see `applyToRecord`.
+ *
+ * A deliberate abort is signalled by throwing/rejecting with `ABORTED`, which
+ * resolves rather than rejects: it is an outcome, not a fault.
+ */
+const ABORTED = Symbol('deliberate abort')
+
 function run (db, mode, fn) {
   return new Promise((resolve, reject) => {
     let t
@@ -81,15 +90,25 @@ function run (db, mode, fn) {
     }
     let out
     let failed = null
-    try {
-      out = fn(t.objectStore(STORE))
-    } catch (err) {
+    const bail = (err) => {
       failed = err
       try { t.abort() } catch { /* already aborting */ }
     }
-    t.oncomplete = () => (failed ? reject(failed) : resolve(out))
-    t.onerror = () => reject(failed || t.error)
-    t.onabort = () => reject(failed || t.error || new Error('transaction aborted'))
+    try {
+      out = fn(t.objectStore(STORE), bail)
+      // An async body's failure arrives here, after the synchronous try block.
+      if (out && typeof out.then === 'function') out = out.catch((err) => { bail(err); return undefined })
+    } catch (err) {
+      bail(err)
+    }
+    const settle = () => {
+      if (failed === ABORTED) resolve(ABORTED)
+      else if (failed) reject(failed)
+      else resolve(out)
+    }
+    t.oncomplete = settle
+    t.onerror = () => (failed ? settle() : reject(t.error))
+    t.onabort = () => (failed ? settle() : reject(t.error || new Error('transaction aborted')))
   })
 }
 
@@ -138,7 +157,11 @@ export async function allRecords () {
 export async function applyToRecord (peerId, event) {
   if (!peerId) throw new Error('peerId is required')
   const db = await openDb()
-  return run(db, 'readwrite', (store) => {
+  /** Held outside the transaction: a refused transition ABORTS, so its result
+   *  cannot travel out as the transaction's resolved value. */
+  let refused = null
+
+  const out = await run(db, 'readwrite', (store, tx) => {
     // Returned as a promise chain INSIDE the transaction. IndexedDB keeps a
     // transaction alive while its own requests are outstanding, so chaining
     // get -> put through request callbacks stays within the same transaction;
@@ -146,11 +169,23 @@ export async function applyToRecord (peerId, event) {
     return req(store.get(peerId)).then((raw) => {
       const current = migrateRecord(raw, peerId)
       const result = applyEvent(current, event)
-      if (!result.ok) return result
+      if (!result.ok) {
+        // ABORT rather than simply not calling `put`. Stronger in two ways: it
+        // is enforced by IndexedDB rather than by this function remembering to
+        // return early, so a future edit that adds a write above this line
+        // still cannot persist anything on a refused transition; and it makes
+        // "nothing was written" observable instead of merely intended.
+        refused = result
+        tx(ABORTED)
+        return undefined
+      }
       if (!result.changed && raw) return result
       return req(store.put({ ...result.next, peerId })).then(() => result)
     })
-  }).then((p) => p)
+  })
+
+  if (refused) return refused
+  return out
 }
 
 /**

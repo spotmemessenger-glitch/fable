@@ -47,6 +47,10 @@ function makeIDB (backing = new Map()) {
    *  previous one on that store has finished, which is the behaviour the
    *  concurrency claim rests on. */
   const queues = new Map()
+  /** Every transaction's outcome, so "it aborted" is OBSERVED rather than
+   *  inferred from "nothing was written". Those are different claims: a
+   *  function that simply forgot to call put also writes nothing. */
+  const txLog = []
 
   function connection (name) {
     const entry = backing.get(name)
@@ -62,6 +66,7 @@ function makeIDB (backing = new Map()) {
         const t = { oncomplete: null, onerror: null, onabort: null, _aborted: false }
         let pending = 0
         let settled = false
+        const snapshot = new Map(rec.data)
 
         const prior = queues.get(storeName) || Promise.resolve()
         let release
@@ -72,6 +77,12 @@ function makeIDB (backing = new Map()) {
         const finish = () => {
           if (settled) return
           settled = true
+          if (t._aborted) {
+            // Real IndexedDB rolls a transaction's writes back on abort.
+            // Restoring the snapshot is what makes the abort test meaningful.
+            rec.data = snapshot
+          }
+          txLog.push({ mode, outcome: t._aborted ? 'abort' : 'complete' })
           release()
           queueMicrotask(() => (t._aborted ? t.onabort?.() : t.oncomplete?.()))
         }
@@ -113,6 +124,7 @@ function makeIDB (backing = new Map()) {
 
   return {
     _backing: backing,
+    _txLog: txLog,
     open (name, version) {
       const r = { result: null, onupgradeneeded: null, onsuccess: null, onerror: null, onblocked: null }
       queueMicrotask(() => {
@@ -132,8 +144,11 @@ function makeIDB (backing = new Map()) {
 
 const DB = 'spotme-identity-pins'
 const STORE = 'pins'
-const K1 = 'AAAA-key-one'
-const K2 = 'BBBB-key-two'
+/** Real 32-byte X25519-length keys. The machine canonicalises and
+ *  length-checks, so placeholder strings are no longer valid input. */
+const key = (b) => btoa(String.fromCharCode(...new Array(32).fill(b)))
+const K1 = key(1)
+const K2 = key(2)
 
 let clock = 1000
 const at = () => ++clock
@@ -384,6 +399,129 @@ await checkAsync('a failed open is not cached — a later attempt can still succ
   try { await readRecord('alice') } catch { /* expected */ }
   globalThis.indexedDB = makeIDB()          // storage becomes available
   return (await readRecord('alice')).state === UNVERIFIED
+})
+
+/* ------------------------------- 7. refused transitions leave no trace ---- */
+
+await checkAsync('a refused transition ABORTS the transaction, observably', async () => {
+  const idb = fresh()
+  await applyToRecord('alice', { type: OBSERVE, at: at(), key: K1 })
+  idb._txLog.length = 0
+  const out = await applyToRecord('alice', { type: ACCEPT, at: at() })   // nothing proposed
+  // Not merely "nothing was written" — a function that forgot to call put also
+  // writes nothing. The transaction itself must have aborted.
+  return out.ok === false && idb._txLog.some((t) => t.outcome === 'abort')
+})
+
+await checkAsync('a refused transition does not mutate the persisted record', async () => {
+  const idb = fresh()
+  await applyToRecord('alice', { type: OBSERVE, at: at(), key: K1 })
+  await applyToRecord('alice', { type: VERIFY, at: at(), key: K1 })
+  const before = JSON.stringify(rowsOf(idb).get('alice'))
+  for (const ev of [
+    { type: ACCEPT, at: at() },
+    { type: REJECT, at: at() },
+    { type: VERIFY, at: at(), key: K2 },
+    { type: OBSERVE, at: at(), key: 'not-a-key' },
+    { type: REVOKE, at: at(), source: 'server-assertion' },
+    { type: 'nonsense', at: at() },
+  ]) {
+    const out = await applyToRecord('alice', ev)
+    if (out.ok !== false) return false
+  }
+  return JSON.stringify(rowsOf(idb).get('alice')) === before
+})
+
+await checkAsync('a refused transition returns a defined error code, never a throw', async () => {
+  fresh()
+  const out = await applyToRecord('alice', { type: VERIFY, at: at(), key: K1 })
+  return out.ok === false && out.error.code === ERR.NO_PIN
+})
+
+/* --------------------------------- 8. database creation and upgrade ------ */
+
+await checkAsync('the object store is created on first use', async () => {
+  const idb = fresh()
+  await readRecord('alice')
+  const db = idb._backing.get(DB)
+  return db.version === 1 && db.stores.has(STORE)
+})
+
+await checkAsync('reopening an existing database does not re-run the upgrade', async () => {
+  const idb = fresh()
+  await applyToRecord('alice', { type: OBSERVE, at: at(), key: K1 })
+  restart(idb)
+  // A re-run of onupgradeneeded would have replaced the store with an empty
+  // one, silently wiping every trust decision on the device.
+  return (await readRecord('alice')).pinnedKey === K1 && rowsOf(idb).size === 1
+})
+
+await checkAsync('an upgrade that finds the store already present keeps the data', async () => {
+  const idb = fresh()
+  await applyToRecord('alice', { type: OBSERVE, at: at(), key: K1 })
+  // Force a version bump the way a future migration would.
+  idb._backing.get(DB).version = 0
+  restart(idb)
+  return (await readRecord('alice')).pinnedKey === K1
+})
+
+/* ------------------------------------- 9. two tabs, no last-writer-wins -- */
+
+await checkAsync('a second tab cannot silently replace a pin by writing last', async () => {
+  fresh()
+  await applyToRecord('alice', { type: OBSERVE, at: at(), key: K1 })
+  await applyToRecord('alice', { type: VERIFY, at: at(), key: K1 })
+  // Tab A verifies again; tab B sees a substituted key. Under last-writer-wins
+  // the later write would clobber the earlier decision outright. Serialised,
+  // the pin survives both orderings and the substitution stays a PROPOSAL.
+  const [a, b] = await Promise.all([
+    applyToRecord('alice', { type: VERIFY, at: at(), key: K1 }),
+    applyToRecord('alice', { type: OBSERVE, at: at(), key: K2, source: 'other-tab' }),
+  ])
+  const final = await readRecord('alice')
+  return a.ok && b.ok && final.pinnedKey === K1 && final.proposedKey !== K1
+})
+
+await checkAsync('a proposed-key event is never lost to a concurrent no-op', async () => {
+  fresh()
+  await applyToRecord('alice', { type: OBSERVE, at: at(), key: K1 })
+  await Promise.all([
+    applyToRecord('alice', { type: OBSERVE, at: at(), key: K2 }),
+    ...Array.from({ length: 5 }, () => applyToRecord('alice', { type: OBSERVE, at: at(), key: K1 })),
+  ])
+  const final = await readRecord('alice')
+  return final.state === CHANGED && final.proposedKey === K2 && final.pinnedKey === K1
+})
+
+/* ------------------------------------------- 10. nothing leaks sideways -- */
+
+await checkAsync('no identity key reaches localStorage', async () => {
+  const idb = fresh()
+  const writes = []
+  globalThis.localStorage = {
+    setItem: (k, v) => writes.push(`${k}=${v}`),
+    getItem: () => null, removeItem: () => {}, clear: () => {},
+  }
+  await applyToRecord('alice', { type: OBSERVE, at: at(), key: K1 })
+  await applyToRecord('alice', { type: OBSERVE, at: at(), key: K2 })
+  await applyToRecord('alice', { type: REJECT, at: at() })
+  delete globalThis.localStorage
+  return writes.length === 0 && rowsOf(idb).size === 1
+})
+
+await checkAsync('no identity key or record is written to the console', async () => {
+  fresh()
+  const said = []
+  const real = { log: console.log, warn: console.warn, error: console.error, info: console.info }
+  for (const k of Object.keys(real)) console[k] = (...a) => said.push(a.join(' '))
+  await applyToRecord('alice', { type: OBSERVE, at: at(), key: K1 })
+  await applyToRecord('alice', { type: OBSERVE, at: at(), key: K2 })
+  await applyToRecord('alice', { type: ACCEPT, at: at() })
+  await applyToRecord('alice', { type: VERIFY, at: at(), key: K2 })
+  await readRecord('alice')
+  for (const k of Object.keys(real)) console[k] = real[k]
+  const dump = said.join('\n')
+  return said.length === 0 || (!dump.includes(K1) && !dump.includes(K2))
 })
 
 console.log('\n========================================')

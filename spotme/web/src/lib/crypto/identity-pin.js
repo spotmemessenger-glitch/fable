@@ -64,11 +64,65 @@ export const ERR = Object.freeze({
   REVOKED: 'REVOKED',
   NOT_REVOKED: 'NOT_REVOKED',
   MISSING_KEY: 'MISSING_KEY',
+  MALFORMED_KEY: 'MALFORMED_KEY',
   UNKNOWN_EVENT: 'UNKNOWN_EVENT',
   UNKNOWN_STATE: 'UNKNOWN_STATE',
 })
 
 const fail = (code, message) => ({ ok: false, error: { code, message } })
+
+/* ------------------------------------------------- canonical key form --- */
+
+/** Raw byte lengths of the identity keys this app issues, from e2e-v2.js.
+ *  Anything else is not one of our keys and is refused rather than pinned. */
+const RAW_LEN = Object.freeze({ 32: 'X25519', 65: 'P-256' })
+
+const b64encode = (bytes) => {
+  let s = ''
+  for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i])
+  return btoa(s)
+}
+
+/**
+ * ONE canonical encoding, because trust comparisons are string equality.
+ *
+ * Two encodings of the SAME key — base64url instead of base64, padding
+ * stripped, a stray newline from a copy-paste — would compare unequal and
+ * therefore read as a key SUBSTITUTION: the user gets a MITM warning for a peer
+ * who did nothing. The opposite is worse but rarer. So every key entering the
+ * machine is decoded, length-checked against the curves this app actually
+ * issues, and re-encoded to the single form that gets stored and compared.
+ *
+ * Returns null for anything that is not one of our identity keys, and callers
+ * turn that into a defined MALFORMED_KEY error rather than pinning it.
+ */
+export function canonicalKey (input) {
+  if (typeof input !== 'string' || !input) return null
+  // Whitespace anywhere, and base64url's alphabet, both normalise away.
+  let s = input.replace(/\s+/g, '').replace(/-/g, '+').replace(/_/g, '/')
+  const pad = s.length % 4
+  if (pad === 1) return null           // never a valid base64 length
+  if (pad) s += '='.repeat(4 - pad)
+  let bytes
+  try {
+    const bin = atob(s)
+    bytes = new Uint8Array(bin.length)
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i)
+  } catch {
+    return null
+  }
+  if (!RAW_LEN[bytes.length]) return null
+  // Re-encoded from the BYTES, so the stored form cannot inherit an odd
+  // spelling of the input.
+  return b64encode(bytes)
+}
+
+/** The curve implied by a canonical key's length, or null. */
+export const algoOf = (key) => {
+  const c = canonicalKey(key)
+  if (!c) return null
+  return RAW_LEN[atob(c).length] || null
+}
 
 /** Only trusted sources may retire an identity. A server assertion is NOT one:
  *  a server can deny service, which is a different thing from proving that a
@@ -100,10 +154,20 @@ export function emptyRecord (peerId) {
     pinnedAlgo: null,
     proposedKey: null,
     proposedAlgo: null,
-    /** What `Changed` should fall back to when the user rejects a proposal.
-     *  Without it, rejecting a change would silently downgrade a VERIFIED peer
-     *  to merely pinned — losing verification the user actually performed. */
+    /**
+     * PROVENANCE, not a guess. What `Changed` must fall back to when the user
+     * rejects a proposal — recorded at the moment the change was detected,
+     * because by rejection time the only other way to answer "what was this
+     * before?" would be to ask the server, and the server is the thing whose
+     * answer is in question. Rejection is never hard-coded to Verified: a peer
+     * that was merely Pinned returns to Pinned.
+     */
     priorState: null,
+    /** Who reported the differing key, and why they were asking. Enough to
+     *  tell a routine re-fetch from the decrypt-failure self-heal path, which
+     *  is the one an attacker would drive. */
+    changeSource: null,
+    changeReason: null,
     pinnedAt: null,
     verifiedAt: null,
     changedAt: null,
@@ -126,6 +190,9 @@ function note (rec, at, event, from, to, detail) {
 
 function onObserve (rec, ev) {
   if (!ev.key) return fail(ERR.MISSING_KEY, 'observe requires a key')
+  const key = canonicalKey(ev.key)
+  if (!key) return fail(ERR.MALFORMED_KEY, 'not a well-formed identity key')
+  ev = { ...ev, key, algo: ev.algo ?? algoOf(key) }
   const from = rec.state
   const next = clone(rec)
 
@@ -158,6 +225,8 @@ function onObserve (rec, ev) {
       next.proposedKey = ev.key
       next.proposedAlgo = ev.algo ?? null
       next.changedAt = ev.at
+      next.changeSource = ev.source ?? null
+      next.changeReason = ev.reason ?? null
       note(next, ev.at, OBSERVE, from, CHANGED, 'a different key again')
       return { ok: true, next, changed: true }
     }
@@ -178,12 +247,22 @@ function onObserve (rec, ev) {
   next.proposedKey = ev.key
   next.proposedAlgo = ev.algo ?? null
   next.changedAt = ev.at
+  next.changeSource = ev.source ?? null
+  next.changeReason = ev.reason ?? null
   note(next, ev.at, OBSERVE, from, CHANGED, `proposed while ${from.toLowerCase()}`)
   return { ok: true, next, changed: true }
 }
 
 function onVerify (rec, ev) {
   if (!ev.key) return fail(ERR.MISSING_KEY, 'verify requires a key')
+  // Canonicalised the SAME way the pin was, so the comparison below is between
+  // two forms of the same thing. Verification must bind the key that was
+  // actually compared out of band — never whatever the server returns at
+  // commit time — so the caller passes the compared key in and it is matched
+  // against the stored pin or proposal, not re-fetched.
+  const key = canonicalKey(ev.key)
+  if (!key) return fail(ERR.MALFORMED_KEY, 'not a well-formed identity key')
+  ev = { ...ev, key }
   const from = rec.state
   if (from === REVOKED) return fail(ERR.REVOKED, 'this identity is revoked')
   if (from === UNVERIFIED) return fail(ERR.NO_PIN, 'nothing has been pinned to verify')
@@ -201,6 +280,8 @@ function onVerify (rec, ev) {
       next.proposedKey = null
       next.proposedAlgo = null
       next.priorState = null
+      next.changeSource = null
+      next.changeReason = null
       note(next, ev.at, VERIFY, from, VERIFIED, 'verified the proposed key')
       return { ok: true, next, changed: true }
     }
@@ -211,6 +292,8 @@ function onVerify (rec, ev) {
       next.proposedKey = null
       next.proposedAlgo = null
       next.priorState = null
+      next.changeSource = null
+      next.changeReason = null
       note(next, ev.at, VERIFY, from, VERIFIED, 'verified the pinned key; proposal dropped')
       return { ok: true, next, changed: true }
     }
@@ -244,6 +327,8 @@ function onAccept (rec, ev) {
   next.proposedKey = null
   next.proposedAlgo = null
   next.priorState = null
+  next.changeSource = null
+  next.changeReason = null
   note(next, ev.at, ACCEPT, from, PINNED, 'accepted the new key; verification cleared')
   return { ok: true, next, changed: true }
 }
@@ -254,12 +339,18 @@ function onReject (rec, ev) {
   if (from !== CHANGED) return fail(ERR.NOTHING_PROPOSED, 'there is no proposed key to reject')
 
   const next = clone(rec)
-  const to = next.priorState || PINNED
+  // The RECORDED prior state, never an inference and never hard-coded. A peer
+  // that was merely Pinned returns to Pinned; one that was Verified returns to
+  // Verified. PINNED is the fallback only for a record carrying no provenance
+  // at all, which means a corrupted row rather than a normal transition.
+  const to = STATES.includes(next.priorState) ? next.priorState : PINNED
   next.state = to
   next.proposedKey = null
   next.proposedAlgo = null
   next.priorState = null
   next.changedAt = null
+  next.changeSource = null
+  next.changeReason = null
   note(next, ev.at, REJECT, from, to, 'kept the pinned key')
   return { ok: true, next, changed: true }
 }
