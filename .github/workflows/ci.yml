@@ -1,0 +1,109 @@
+# Spot Me CI.
+#
+# WHY THIS EXISTS. Until now the only check on a pull request was "Vercel
+# Preview Comments", which is a preview *deployment*: it runs `vite build` and
+# no tests at all. A PR could go green having executed zero assertions, and the
+# backend suite in particular could not run anywhere — it needs Postgres, and
+# every local environment without one reports 44 identical
+# PrismaClientInitializationError failures that are trivially mistaken for a
+# stable baseline.
+#
+# So this workflow's job is to make a green check mean something: the backend
+# suite against a real Postgres, the web suite, type-check, and both builds.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [master]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: backend — tests against Postgres, typecheck, build
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: spotme_test
+        ports: ['5432:5432']
+        # Without the health check the first test can race the server's startup
+        # and fail as if the schema were wrong.
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/spotme_test?schema=public
+      # Not a secret and not read from the repository's real ones. No test
+      # references this variable or the 'dev-only-secret' default, so setting it
+      # changes no assertion — it is here so CI never exercises the hardcoded
+      # fallback, which is R5 in 10-PRIORITY-0-AUDIT.md.
+      #
+      # There is deliberately no JWT_REFRESH_SECRET: it does not exist. Both
+      # strategies read JWT_ACCESS_SECRET, which is the finding R5 records.
+      JWT_ACCESS_SECRET: ci-access-secret-not-a-real-key
+
+    defaults:
+      run:
+        working-directory: spotme/backend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: spotme/backend/package-lock.json
+
+      - run: npm ci
+
+      - name: Apply the Prisma schema
+        run: npx prisma db push --skip-generate --accept-data-loss
+
+      # Ordered cheapest-first so an obvious break fails in seconds.
+      - name: Type-check
+        run: npx tsc --noEmit
+
+      - name: Build
+        run: npm run build
+
+      - name: Test
+        run: npm test
+
+  web:
+    name: web — tests and build
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: spotme/web
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: spotme/web/package-lock.json
+
+      - run: npm ci
+
+      # `build` runs a prebuild that re-vendors ../core, so it also proves the
+      # vendored copy in the tree matches the source it was taken from.
+      - name: Build
+        run: npm run build
+
+      - name: Test
+        run: npm test

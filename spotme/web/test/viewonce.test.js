@@ -99,7 +99,28 @@ const { db } = await import(`${SRC}lib/db.js`)
 const results = {}
 const check = (name, value) => { results[name] = value === true }
 const tick = () => new Promise((r) => setTimeout(r, 0))
-const settle = async () => { for (let i = 0; i < 30; i++) await tick() }
+/**
+ * Drain the microtask/timer queue AND force the store's pending disk write.
+ *
+ * THE RACE THIS FIXES, which is the whole of the long-standing 17/21 on Linux.
+ * `store.js` debounces its localStorage write by SAVE_DEBOUNCE_MS (250ms), and
+ * `tick()` is setTimeout(0) — clamped to ~1ms — so thirty of them span roughly
+ * 30ms. Every assertion below that reads `onDisk()` was therefore reading the
+ * store BEFORE the write landed, and reported a leak that had not happened.
+ *
+ * It was environment-dependent rather than random: on a slower or more loaded
+ * machine thirty macrotasks can exceed 250ms and the same test passes. That is
+ * why it looked like a Linux-only product bug for four commits.
+ *
+ * `flush()` is the store's own public method — the same one `pagehide` and
+ * `beforeunload` call — and it writes synchronously, so this is deterministic
+ * rather than a longer sleep racing the same timer.
+ */
+const settle = async () => {
+  for (let i = 0; i < 30; i++) await tick()
+  try { rooms.ensure(ROOM).store.flush() } catch { /* room not created yet */ }
+  for (let i = 0; i < 5; i++) await tick()
+}
 
 const ROOM = 'vo-room'
 const PHOTO = `data:image/jpeg;base64,${Buffer.alloc(4000, 9).toString('base64')}`
