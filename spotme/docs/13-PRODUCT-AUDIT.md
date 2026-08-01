@@ -82,8 +82,10 @@ Vercel integration deploys); `ybot/` is the untouched #8; `desk/`, `jarvis/`,
 | Speech-to-text (dictation) | **ElevenLabs** | `web/api/voice.js` proxy → `api.elevenlabs.io/v1`; client `lib/voice.js` | 🟡 wired; needs server-side key; bearer-gated since 07-31 |
 | Text-to-speech (read aloud) | ElevenLabs | same proxy | 🟡 |
 | Voice cloning | ElevenLabs | **CORRECTED (V2 §10.5):** full product flow exists — `lib/voice.js` lifecycle (`cloneVoice`/`deleteClone`/cloned TTS), one-clone-per-profile enrollment UI (`views/profile.js:443–622`), quota-bucketed `clone`/`unclone` proxy ops; the first audit pass grepped the wrong terms | 🟡 implemented for voice notes; consent/audit UX and live-call use are roadmap items |
-| Text translation | unofficial Google `gtx` → MyMemory → backend `/api/translate` | `lib/translate.js` | ✅ working; ⚠️ primary endpoint is unofficial/ToS-fragile |
-| LLM / OCR / image generation / AI moderation / assistants | — | none in product code | 🔴 |
+| Text translation | **CORRECTED (V2 §10.5):** client order is on-device (Chrome Translator) → authed `/api/translate` proxy → keyless `gtx` → MyMemory (`lib/translate.js:150–153` — the first audit pass had the proxy last and `gtx` primary). The proxy is a **multi-provider engine**: official Google Cloud Translation v2 + Azure Translator v3 + Sarvam (Indic specialist) + a Gemini reading-translator leg, run with parallel cross-confirmation (`confirmedTranslate`), wrong-script disqualification (`scriptOk`), and LLM adjudication on disagreement (`adjudicate`, author-excluded) | `web/api/translate.js` (902 lines) | ✅ working; ⚠️ residual risk is the keyless `gtx` **fallback**, not the primary |
+| Romanized-Indic message reading (`?op=read`) | LLM chain **Anthropic → Gemini → OpenAI**, first success wins, failure reasons collected; prompt-injection fencing on all attacker-reachable strings | `llmRead` in `web/api/translate.js`; client `readMessage` in `lib/translate.js:277` | ✅ live; rate-limited 40/min/user |
+| LLM usage | **CORRECTED:** three LLM vendors are live inside translation (read / adjudicate / Gemini-translate legs) — the first pass claimed "none in product code" | `web/api/translate.js` | ✅ (scoped to translation) |
+| OCR / image generation / AI moderation / assistants | — | none in product code | 🔴 |
 
 ## 3. Third-Party Services
 
@@ -102,7 +104,13 @@ Vercel integration deploys); `ybot/` is the untouched #8; `desk/`, `jarvis/`,
 | NCMEC | stub | ❌ | moderation | `NCMEC_API_KEY` | 🔴 stub |
 | Railway | deploy script | — | backend hosting | — | 🟠 **blocked by owner** |
 | Vercel | — | serves `ysnap` + `web/api` functions | — | — | ✅ |
-| Redis/DragonflyDB, LiveKit, Twilio, Stripe/Razorpay, Sentry, OpenAI, Anthropic, Mapbox | — | — | — | — | ❌ absent (ioredis/bullmq installed but unused → §13) |
+| Google Cloud Translation v2 (official) | n/a (REST) | ✅ | translation | `GOOGLE_TRANSLATE_KEY` | ✅ **CORRECTED** — missed by the first pass |
+| Azure Translator v3 | n/a (REST) | ✅ translate + transliterate + detect | translation | `AZURE_TRANSLATOR_ENDPOINT`, `AZURE_TRANSLATOR_KEY` | ✅ **CORRECTED** |
+| Sarvam AI | n/a (REST) | ✅ translate + transliterate (Indic) | translation | `SARVAM_API_KEY` | ✅ **CORRECTED** |
+| Gemini | n/a (REST) | ✅ read/translate/judge legs | translation LLM chain | `GEMINI_API_KEY`, `GEMINI_MODEL` | ✅ **CORRECTED** |
+| OpenAI | n/a (REST) | ✅ read + adjudicate legs | translation LLM chain | `OPENAI_API_KEY` | ✅ **CORRECTED** — listed absent by the first pass |
+| Anthropic | n/a (REST) | ✅ read + adjudicate legs | translation LLM chain | `ANTHROPIC_API_KEY` | ✅ **CORRECTED** — listed absent by the first pass |
+| Redis/DragonflyDB, LiveKit, Twilio, Stripe/Razorpay, Sentry, Mapbox | — | — | — | — | ❌ absent (ioredis/bullmq installed but unused → §13) |
 
 ## 4. Packages (12 manifests read; signal only)
 
@@ -180,11 +188,34 @@ enroll/delete lifecycle). **Voice translation 🟡 — the voice-note form ships
 
 ## 10. Translation
 
-Per-message + whole-chat ✅. Provider chain: unofficial Google `gtx` →
-MyMemory → backend proxy, with guard tests (`english-guard`,
-`translate-guards`); transliteration ✅. Streaming/live translation 🔴;
-provider abstraction with quality scoring (Priority 7) 🔴. **Risk: the primary
-provider is an unofficial endpoint.**
+**CORRECTED (V2 §10.5)** — the first pass described the client fallback tail
+as the whole system and got the order backwards. The real shape:
+
+- **Client** (`lib/translate.js`): on-device Chrome Translator first (nothing
+  leaves the phone) → authed `/api/translate` proxy → keyless `gtx` →
+  MyMemory last resort; session-only plaintext caches; wrong-source retry
+  with cloud detection. Per-message + whole-chat ✅; transliteration ✅
+  (Sarvam/Azure/Google Input Tools server-side, rule tables client-side).
+- **Backend proxy** (`web/api/translate.js`, 902 lines): a multi-provider
+  engine — official Google Cloud Translation v2, Azure Translator v3
+  (translate/transliterate/detect), Sarvam (Indic specialist), and a Gemini
+  reading-translator leg. Primary + Sarvam run **in parallel** with
+  cross-confirmation; wrong-script answers are disqualified (`scriptOk` —
+  both Sarvam and Gemini have been caught answering in the wrong language);
+  genuine disagreement goes to an **LLM adjudicator** (OpenAI → Gemini →
+  Anthropic, the candidate's own author excluded, faithfulness-first brief).
+- **LLM reading** (`?op=read`): romanized-Indic chat (Tanglish etc.) read by
+  Anthropic → Gemini → OpenAI, first success wins; per-request nonce fencing
+  against prompt injection on every attacker-reachable string; graded against
+  a 26-sentence owner corpus. Rate-limited 40/min/user (LLM), 120/min (MT).
+- Guard tests: `english-guard`, `translate-guards`.
+
+Still 🔴: streaming/live translation; a *formalised* provider-abstraction
+layer with quality scoring and per-pair routing (V2 §6) — the raw material
+(multi-provider legs, cross-confirmation, adjudication, fallback order) now
+demonstrably exists. **Risk, restated: the unofficial `gtx` endpoint is a
+client-side fallback, not the primary; six metered vendors are now live with
+no cost caps in code.**
 
 ## 11. Feature Flags
 
@@ -250,8 +281,11 @@ never crosses the adapter (ADR-002). **Media** — client-encrypted, sliced,
 storage-adapter (local | S3) with a presigned v2 path. **Security** —
 zero-trust direction: v2 ECDH, TOFU pinning + verification, signing foundation,
 enforcement dark; the server is the adversary in the ADR threat models.
-**AI/Voice/Translation** — thin authed proxies (ElevenLabs, translate chain);
-no LLMs. **Database** — single Postgres; no Redis in practice.
+**AI/Voice/Translation** — authed proxies; ElevenLabs for voice, and a
+multi-provider translation engine (Google/Azure/Sarvam + Anthropic/Gemini/
+OpenAI LLM legs) with cross-confirmation and adjudication — **corrected**:
+the first pass said "no LLMs". **Database** — single Postgres; no Redis in
+practice.
 **Infrastructure** — CI with three jobs including a real-browser e2e suite,
 MinIO in CI, Railway deploy (blocked), Vercel bridge; **no observability
 stack** (no Sentry, no metrics, no tracing — only `AuditLog`/`HealthSample`/
@@ -268,7 +302,7 @@ stack** (no Sentry, no metrics, no tracing — only `AuditLog`/`HealthSample`/
 | Voice/video calls | 🟡 | Careful demo | No |
 | Stories | 🟡 | Barely | No |
 | Push web + Android | ✅ | Yes | Yes; **iOS ❌** |
-| Translation / transliteration | ✅ | **Yes** | Provider risk |
+| Translation / transliteration (multi-provider, cross-confirmed, LLM-adjudicated) | ✅ | **Yes** | Cost caps + provider-abstraction formalisation open |
 | Voice AI (STT/TTS) | 🟡 | Yes (with key) | Cost/limits unmodeled |
 | Admin / moderation | ✅ APIs | Yes | NCMEC/CSAM pipeline is a stub |
 | Native P2P track | 🟡 separate | Separate story | No |
@@ -280,17 +314,20 @@ dead env vars; fix R5 (distinct refresh-token secret); add `/metrics` +
 `/health` (prom-client is already installed); delete stale merged branches.
 **Missing for MVP parity:** iOS push, message search, mentions, media
 thumbnails, an account-recovery story.
-**High-risk:** unofficial Google translate endpoint; the calls path unproven on
-real networks; the serverless bridge duplicated between `web/api` and backend
-staging; one secret signing both token types.
+**High-risk:** the calls path unproven on real networks; the serverless bridge
+duplicated between `web/api` and backend staging; one secret signing both token
+types; (downgraded from the first pass: the unofficial `gtx` endpoint is a
+client-side *fallback* behind the authed multi-provider proxy, not the primary).
 **Technical debt:** `chat.js` at 4599 lines (~9× the repo's own limit); two
 parallel architectures with no stated disposition for the Hypercore track;
 unrelated projects sharing the product repo.
 **Security gaps beyond the planned crypto:** no rate limiting evident on
 auth/OTP; the owner-ordered formal security review is still open; the NCMEC
 stub is a legal-exposure item before any public launch.
-**Cost:** ElevenLabs and TURN are the only metered services; neither is
-usage-capped in code.
+**Cost (corrected):** eight metered services, none usage-capped in code beyond
+the translate proxy's per-user rate limits — ElevenLabs, TURN, Google Cloud
+Translation, Azure Translator, Sarvam, Gemini, OpenAI, Anthropic. The first
+pass counted two.
 
 ## Totals
 
@@ -298,14 +335,14 @@ usage-capped in code.
 |---|---|---|
 | 1 | User-visible features audited | ~45 — **22 ✅ · 12 🟡 · 11 🔴/❌** |
 | 2 | Backend capabilities | 14 controllers · 25 models · 1 gateway · 1 cron · 8 bridge functions |
-| 3 | AI capabilities | **4 live** (STT, TTS, translation, voice cloning for voice notes) — corrected per V2 §10.5 |
-| 4 | Third-party integrations | 8 active · 3 configured-but-dead · rest absent |
+| 3 | AI capabilities | **5 live** (STT, TTS, multi-provider translation with LLM adjudication, romanized-Indic LLM reading, voice cloning for voice notes) — corrected per V2 §10.5, twice |
+| 4 | Third-party integrations | **14 active** (incl. Google/Azure/Sarvam MT + Anthropic/Gemini/OpenAI LLM legs — corrected) · 3 configured-but-dead · rest absent |
 | 5 | REST endpoints | **72** |
 | 6 | WebSocket events | 4 server messages / ~21 client event types |
 | 7 | Database models | **25** (10 migrations) |
 | 8 | Feature flags | **6** |
 | 9 | Implementation vs the migration plan's full scope | **~45–50%** (estimate; messaging core ~90%, crypto programme ~55% through A7 foundation, Priorities 2–12 largely 🔴) |
-| 10 | Differentiators vs WhatsApp/Signal/Telegram | verified-identity UX designed as one system (TOFU + QR + enforcement) before scale; first-class in-chat translation + transliteration — **including voice notes translated and re-voiced in the sender's own cloned voice, which none of the three comparators ship**; proximity-first discovery (map + BLE); a transport seam that can drop to serverless P2P; and an auditable engineering trail — ADRs, mutation-tested suites, licence-auditable lockfile — which is itself a diligence asset |
+| 10 | Differentiators vs WhatsApp/Signal/Telegram | verified-identity UX designed as one system (TOFU + QR + enforcement) before scale; first-class in-chat translation + transliteration, cross-confirmed across independent engines with an LLM adjudicator — **including voice notes translated and re-voiced in the sender's own cloned voice, which none of the three comparators ship**; proximity-first discovery (map + BLE); a transport seam that can drop to serverless P2P; and an auditable engineering trail — ADRs, mutation-tested suites, licence-auditable lockfile — which is itself a diligence asset |
 
 ## Caveats — what was sampled, not exhaustively read
 
