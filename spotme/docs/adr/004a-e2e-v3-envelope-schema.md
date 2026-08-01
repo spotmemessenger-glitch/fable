@@ -330,6 +330,87 @@ preserves forward secrecy — re-encrypting history to a new device defeats it.
 `RDEV` does not match this device is ignored quietly rather than surfaced as an
 error, so that adding devices later does not spray alarms on old clients.
 
+## 9a. Interaction with the merged transport and storage seams
+
+Checked against `master` at `b0423b2`, after phases A, B and C landed. Three
+interactions, and the first is a **design gap in this document** rather than a
+note.
+
+### 1. Attachments have no v3 key, and the storage path assumes one exists
+
+Phase C seals attachment bytes with:
+
+```js
+sealForRoom(roomId, bytes, password)  ->  roomKey(roomId, password)
+```
+
+A **long-lived, room-scoped** key. That is exactly what v2 provides and exactly
+what **v3 does not have**: a ratchet has no stable room key, only per-message
+keys that are *deleted after use*.
+
+This matters because of the path phase C added. A storage-backed attachment is
+fetched **lazily** — the envelope arrives, the bubble renders, and the bytes are
+pulled from the bucket when the user taps, which may be days later and several
+ratchet steps on. **A message key will not exist by then.**
+
+So `sealForRoom`/`openForRoom` have no v3 meaning as currently written, and
+nothing in this document said so.
+
+**The fix, which must be specified before implementation:** an attachment gets
+its **own random 32-byte key**, generated per attachment. The bytes in the
+bucket are encrypted under that key; the key itself travels **inside the
+ratcheted envelope** (`cm`). The ratchet then protects the *key*, and the
+long-lived object is encrypted under something that is allowed to be long-lived.
+This is how Signal handles attachments, for the same reason.
+
+Consequences to carry: the envelope grows by 32 bytes for attachment messages;
+forward secrecy for attachment *bytes* is bounded by that key's lifetime, not
+the ratchet's, and that limitation must be stated rather than glossed;
+`FORBIDDEN_STORAGE_SURFACE` continues to hold, because the adapter still never
+sees a key.
+
+### 2. Replay is idempotent under v2 and is NOT under v3
+
+`socket-transport.js` holds the replay cursor for a frame it could not open, so
+that frame is **re-delivered and re-dispatched on the next join** — the
+behaviour `replay-cursor-hold.test.js` exists to pin. Under v2 that is free: the
+room key is stable, so decryption is idempotent and a retry either works or
+fails the same way.
+
+Under v3 a message key is **consumed on successful decrypt**. Retrying is
+therefore not a neutral act, and the existing repairable-vs-unrepairable split
+does not map cleanly:
+
+- a frame that failed because the *session* was not yet established **is**
+  repairable and must hold the cursor, as today
+- a frame that decrypted and then failed *downstream* must **not** be retried,
+  because its key is gone and the second attempt will fail permanently — which
+  the current code would classify as unrepairable and skip, silently losing a
+  message it had already successfully decrypted
+
+**§5b's duplicate handling covers the wire case; this is the local one.** The
+implementation must commit the decrypted plaintext before deleting the key, or
+adopt the reverse order and accept re-derivation. Either way it is a decision,
+and it is not made here.
+
+### 3. `FORBIDDEN_KEY_SURFACE` does not yet know about ratchet state
+
+Phase A's adapter guard bans `roomKey`, `deriveKey`, `setRoomKey`, `password`,
+`secret`, `key`, `seal`, `open` and friends. Under v3 the **session state is key
+material too** — root key, chain keys, skipped keys — and none of those names is
+on the list.
+
+The list should gain `ratchet`, `session`, `chainKey`, `rootKey` and `skipped`
+before v3 ships. Small, but the guard's whole value is that it is asserted
+rather than assumed, and an adapter holding a chain key would pass it today.
+
+---
+
+**None of these three changes anything already merged.** Phases A, B and C are
+correct for v1 and v2, which is what ships. They are recorded here because the
+first one in particular would have been discovered during implementation, at the
+point where it is most expensive to fix.
+
 ## 10. Test vectors
 
 Computed by running the derivations (`node:crypto`, X25519 + HKDF-SHA256).
