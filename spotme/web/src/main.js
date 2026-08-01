@@ -14,6 +14,7 @@ import { reach } from './lib/reach.js'
 import { rooms } from './lib/rooms.js'
 import { publishIdentity, identityStatus } from './lib/crypto/identity-store.js'
 import { freshTokens, setTerminalAuthHandler } from './lib/socket-transport.js'
+import { setBlockedSendHandler } from './lib/crypto/identity-enforcement.js'
 import { readyRTC } from './net.js'
 import { attachPullRefresh } from './lib/pullrefresh.js'
 import { el, clear, toast, avatar, actionSheet } from './lib/ui.js'
@@ -535,6 +536,20 @@ function boot () {
    * something the person holding the phone can read. */
   setTerminalAuthHandler(({ message }) => {
     toast(message || 'This account has been deleted. Start a new one to keep chatting.')
+  })
+
+  /* A5. What a refused send says out loud.
+   *
+   * Registered here rather than imported by `rooms.js` for the same reason as
+   * the handler above: the room layer must not reach into a view, and a
+   * refusal nobody is told about is indistinguishable from a message that
+   * quietly went nowhere — which is the ambiguity this codebase keeps
+   * rediscovering. `message` already names what would clear the block, so this
+   * does not compose its own sentence.
+   *
+   * Inert until enforcement is switched on: nothing is refused today. */
+  setBlockedSendHandler(({ message }) => {
+    toast(message || 'That message was not sent — check this contact’s verification.')
   })
 
   publishIdentity(freshTokens)

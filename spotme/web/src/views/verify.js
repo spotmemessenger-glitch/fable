@@ -35,7 +35,9 @@ import {
 } from '../lib/crypto/safety-number.js'
 import { readRecord } from '../lib/crypto/identity-pin-store.js'
 import { recordVerification } from '../lib/crypto/identity-store.js'
-import { VERIFIED, CHANGED, REVOKED } from '../lib/crypto/identity-pin.js'
+import { VERIFIED, CHANGED, REVOKED, ACCEPT, REJECT } from '../lib/crypto/identity-pin.js'
+import { applyToRecord } from '../lib/crypto/identity-pin-store.js'
+import { setRoomTrust, isEnforcing } from '../lib/crypto/identity-enforcement.js'
 import { canScan, unavailableReason, scanErrorMessage, startScanning } from '../lib/qr-scan.js'
 import qrcode from 'qrcode-generator'
 
@@ -202,6 +204,60 @@ export function render (root, ctx, roomId) {
       const line = trustLine(record)
       if (line) body.appendChild(el('div', { class: line.cls }, [line.text]))
 
+      /* A5. THE EXPLICIT ACTION A BLOCK REQUIRES.
+       *
+       * A `Changed` peer has exactly three honest resolutions, and every one of
+       * them is a decision only the person holding the phone can make:
+       *
+       *   verify  scan or compare, below — the strongest, and the only one that
+       *           establishes the new key is really theirs
+       *   accept  "I know why it changed" — pins the new key WITHOUT claiming
+       *           anyone checked it, so the record stays honest about what
+       *           actually happened
+       *   reject  restores what was trusted before, so a change nobody can
+       *           explain does not become the new normal by being ignored
+       *
+       * There is deliberately no "dismiss". A warning that can be waved away
+       * without choosing between these is one users learn to wave away, and
+       * then A5 is enforcing a signal nobody reads. */
+      if (record?.state === CHANGED) {
+        const review = el('div', { class: 'gm-row' })
+        const settle = async (type, key) => {
+          const out = await applyToRecord(peerId, { type, at: Date.now(), key })
+          if (cancelled) return
+          if (!out.ok) {
+            status.textContent = 'That could not be saved. Check that Spot Me is allowed to store data here.'
+            return
+          }
+          // The room's verdict is refreshed here rather than left to the next
+          // room join, or the block would outlive the decision that cleared it.
+          setRoomTrust(roomId, out.next)
+          status.textContent = type === ACCEPT
+            ? `Accepted. Spot Me will use ${peerName}’s new key — but nobody has checked it, ` +
+              'so compare the digits below when you next get the chance.'
+            : `Kept the key you already trusted. If ${peerName} really did change phones, ` +
+              'their messages will not open until you accept the new key or verify it.'
+        }
+        review.appendChild(el('button', {
+          class: 'gm-btn',
+          text: 'Accept the new key',
+          onclick: () => void settle(ACCEPT, record.proposedKey),
+        }))
+        review.appendChild(el('button', {
+          class: 'gm-btn',
+          text: 'Keep the old one',
+          onclick: () => void settle(REJECT),
+        }))
+        body.appendChild(review)
+        body.appendChild(el('p', {
+          class: 'gm-sub',
+          text: isEnforcing()
+            ? 'Messages to this contact are not being sent until you choose.'
+            : 'You can still send messages while you decide — they go to the key you ' +
+              'already trusted, not the new one.',
+        }))
+      }
+
       body.appendChild(el('p', {
         text: `Compare these 60 digits with ${peerName}, out loud or on another app you ` +
               `already trust. If they match on both phones, no one is sitting in the middle ` +
@@ -305,9 +361,15 @@ export function render (root, ctx, roomId) {
        * What is still true is the last part: detection is not yet a block. */
       body.appendChild(el('p', {
         class: 'gm-sub',
-        text: 'Spot Me remembers a successful check on this device, and marks the chat if ' +
-              'this contact’s key changes later. It does not yet stop you sending to a ' +
-              'changed key — check here if anything looks wrong.'
+        /* Reads the flag rather than hard-coding either answer. This paragraph
+         * has now been wrong twice by being a fixed sentence about behaviour
+         * that later changed; the third version asks. */
+        text: isEnforcing()
+          ? 'Spot Me remembers a successful check on this device. If this contact’s key ' +
+            'changes later, messages stop until you verify or accept the new one.'
+          : 'Spot Me remembers a successful check on this device, and marks the chat if ' +
+            'this contact’s key changes later. It does not yet stop you sending to a ' +
+            'changed key — check here if anything looks wrong.'
       }))
     } catch (error) {
       if (cancelled) return

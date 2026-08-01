@@ -33,6 +33,14 @@ import {
 } from './media-transfer.js'
 import { roomKeyForConvo } from './crypto/identity-store.js'
 import { E2E_V2 } from './crypto/e2e-v2.js'
+/* A5. `maySend` is SYNCHRONOUS on purpose — reading a trust record is not, and
+ * putting IndexedDB between a keypress and a bubble is the objection that made
+ * `identityStatus()` synchronous too. The verdict is computed where trust is
+ * already being consulted, below, and merely read here. */
+import {
+  maySend, reportBlocked, markKeyProposed, setRoomTrust,
+} from './crypto/identity-enforcement.js'
+import { readRecord } from './crypto/identity-pin-store.js'
 
 /** Attachments bigger than this never ride the history backlog — the bytes
  * are lazily fetched on demand instead, so reconnects stay instant. */
@@ -807,7 +815,16 @@ function createConnection (convo) {
           db.upsertConvo({ roomId: convo.roomId, peerKey })
         },
         onPeerKeyProposed: ({ proposed, pinned }) => {
-          // No write. Advisory in this step — A5 turns this into a block.
+          /* A5. Still no write — the pin is untouched and the room keeps
+           * deriving against it. What changes is that the room is marked
+           * blocking IMMEDIATELY, here, rather than after a store read: this
+           * callback already knows the answer, and the gap between knowing a
+           * substituted key exists and refusing to send to it is precisely the
+           * window an attacker provoking a decrypt failure is operating in.
+           *
+           * With enforcement OFF this records an advisory verdict and nothing
+           * is refused, which is today's behaviour. */
+          markKeyProposed(convo.roomId)
           console.warn(
             `spotme identity: ${convo.peer?.name || 'this contact'} is publishing a ` +
             'different key than the one this device trusts. It has NOT been adopted. ' +
@@ -815,6 +832,18 @@ function createConnection (convo) {
           )
         }
       }))
+
+      /* Seed the room's verdict from what is already stored. FIRE AND FORGET
+       * for the same reason `observePeerKey` is: a room must not wait on
+       * IndexedDB to open, and a room with no verdict yet is ALLOWED — it has
+       * not sent anything either. A `Changed` peer therefore blocks a moment
+       * after the room appears rather than before it, which is the right
+       * trade: the alternative is a chat list that stalls on a wedged origin. */
+      if (convo.peer?.id) {
+        void readRecord(convo.peer.id)
+          .then((record) => setRoomTrust(convo.roomId, record))
+          .catch(() => { /* store unavailable — see identity-enforcement.js: not a block */ })
+      }
     }
     // History backlog: never offer opened view-once photos, and strip heavy
     // attachment bytes (they'd re-ship megabytes on every reconnect — the
@@ -956,6 +985,13 @@ export const rooms = {
   sendMessage (roomId, partial) {
     const conn = this.ensure(roomId)
     if (!conn) return null
+    /* A5. THE CHOKE POINT. `views/chat.js` calls this from a dozen places —
+     * text, location, reactions, partials, timers — so the gate belongs here
+     * and not at each caller, where the thirteenth would forget it. Returning
+     * null is the existing failure contract; `reportBlocked` is what stops a
+     * refusal being indistinguishable from a message that quietly went
+     * nowhere. OFF by default: `maySend` is true unless enforcement is on. */
+    if (!maySend(roomId)) { reportBlocked(roomId); return null }
     const p = db.profile()
     const message = {
       id: randomId(8),
@@ -988,6 +1024,9 @@ export const rooms = {
   sendAttachment (roomId, partial, onProgress) {
     const conn = this.ensure(roomId)
     if (!conn || !partial?.data) return null
+    // The other choke point. A photo to a peer whose key changed is the same
+    // decision as a message to them, and a gate on only one of the two is not a gate.
+    if (!maySend(roomId)) { reportBlocked(roomId); return null }
     const p = db.profile()
     const message = {
       id: randomId(8),
