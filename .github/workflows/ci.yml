@@ -167,3 +167,80 @@ jobs:
 
       - name: Test
         run: npm test
+
+  e2e:
+    name: e2e — real browser against a real backend
+    runs-on: ubuntu-latest
+    # Every other suite in this repo runs a module against a fake. That is right
+    # for a state machine and cannot answer whether the send gate in rooms.js
+    # refuses a send in a real browser. This is where that gets answered.
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: spotme_e2e
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 10s
+          --health-timeout 5s --health-retries 5
+    env:
+      # Throwaway, and the only credentials this job has. The backend refuses to
+      # boot on a JWT secret under 32 characters, so this is long rather than
+      # that guard weakened. NOTHING here reads a repository secret.
+      E2E_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/spotme_e2e?schema=public
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/spotme_e2e?schema=public
+      JWT_ACCESS_SECRET: e2e-only-not-a-real-key-0123456789abcdefghijklmnop
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install backend
+        working-directory: spotme/backend
+        run: npm ci
+
+      - name: Apply the Prisma schema
+        working-directory: spotme/backend
+        run: npx prisma db push --skip-generate --accept-data-loss
+
+      - name: Build the backend
+        working-directory: spotme/backend
+        run: npm run build
+
+      # A build that emits nothing used to pass silently: nest-cli deletes
+      # dist/ while tsconfig's incremental build-info survived outside it, so
+      # TypeScript concluded the output was current and emitted nothing. Nothing
+      # in CI ran dist/main.js, so nobody noticed. This asserts the artefact.
+      - name: The build actually produced something
+        working-directory: spotme/backend
+        run: test -f dist/main.js || (echo "dist/main.js was not emitted"; exit 1)
+
+      - name: Install web
+        working-directory: spotme/web
+        run: npm ci
+
+      - name: Install e2e
+        working-directory: spotme/e2e
+        run: npm ci
+
+      - name: Install Chromium
+        working-directory: spotme/e2e
+        run: npx playwright install --with-deps chromium
+
+      - name: Run
+        working-directory: spotme/e2e
+        run: npm test
+
+      # Only on failure. A trace per passing test is artefact nobody opens.
+      - name: Traces and screenshots
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-failure-artifacts
+          path: |
+            spotme/e2e/test-results/
+            spotme/e2e/playwright-report/
+          retention-days: 7
