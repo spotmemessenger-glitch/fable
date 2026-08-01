@@ -51,12 +51,37 @@ only its own files. #31 and #36 were rebuilt onto master first (§5's
 union — every test suite kept, `wipeDevice` keeps `clearedTrust` +
 `clearedSigning` + all three `dropDatabase` calls).
 
-### Open PRs
+### Open PRs — the Priority 1 completion stack (autonomous mission, 2026-08-01)
 
-| PR | Branch | State |
-|---|---|---|
-| **#34** product audit (draft) | `docs/product-audit-2026-08-01` | voice-cloning + translation-provider corrections pushed; awaiting owner review |
-| governance amendment | `docs/execution-order-2026-08-01` | the PR carrying this very edit + the roadmap "Owner Amendment" + CLAUDE.md pointer |
+**The remaining Priority 1 crypto is BUILT as a reviewable stack, all behind
+flags, nothing activated.** Each is CI-green on its own head; review package is
+`spotme/docs/15-PRIORITY-1-COMPLETION-EVIDENCE.md`. Review/merge order:
+
+| PR | Branch | Phase | State |
+|---|---|---|---|
+| **#39** signing-key publication + rollback | `feat/signing-key-publication` | 2B | ready for review; ADR-008 §12 resolved |
+| **#41** X3DH + prekeys | `feat/x3dh-prekeys` (base #39) | 3 | byte-for-byte vs 004a vectors |
+| **#42** Double Ratchet | `feat/double-ratchet` (base #41) | 4 | byte-for-byte vs the 004b Syndace oracle |
+| **#43** multi-device safety numbers | `feat/multi-device` (base #42) | 5 | ⚠️ **safety-number construction awaits owner ratification** (ADR-013 §1 / ADR-008 §BLOCKING) |
+| **#44** Priority 1 completion evidence | `docs/priority-1-completion` (base #43) | 6 | the formal-review package |
+| **#40** platform-pillar ADRs 009–012 | `docs/platform-adrs` | planning | push/translation/live-voice/adaptive, PLANNING ONLY |
+| **#37/#38** governance amendments | merged / draft | — | Owner Amendment 1+2 recorded |
+| **#34** product audit | `docs/product-audit-2026-08-01` | — | voice + translation corrections; awaiting review |
+
+**THE ONE OWNER DECISION that gates Priority 1 closure:** ratify the
+multi-device safety-number construction. ADR-013 §1 recommends option 3 (a hash
+commitment to the device set) and implements it behind the flag as
+`device-set.js` so there is running, tested code to ratify; options 2 and 1 are
+ruled out/limited, option 4 is open. Device registration, fan-out, and the
+device UI are deliberately NOT built until this is chosen (building on an
+un-chosen model is what §BLOCKING forbids).
+
+**Hardware/scale items the container cannot run** (owner-executed, per §15 doc):
+mobile device matrix, Firefox/Safari/WebView compatibility, load testing.
+
+For A5: enforcement stays default-OFF, and **disabling the flag — not
+reverting — is the supported operational rollback** (ADR-007 §Rollback says
+why: reverting removes the review UI and strands a `Changed` peer).
 
 For A5: enforcement stays default-OFF, and **disabling the flag — not
 reverting — is the supported operational rollback** (ADR-007 §Rollback says
