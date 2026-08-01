@@ -12,13 +12,15 @@ deprecated · out of scope**. "blocked" always names the blocker.
 point onward, use Engineering Master Roadmap V2 as the controlling document.
 Do not continue following the old A1–A7 sequence where it conflicts with the
 new roadmap." Per Appendix B this makes V2 the controlling direction. Where V1
-is stricter, the stricter gate still remains. The owner's phase order for the
-remaining Priority 1 work: Phase 1 review #30/#31 (enforcement stays flagged
-off) → Phase 2 signing-key storage per ADR-008 incl. rollback-after-publication
-→ Phase 3 X3DH → Phase 4 Double Ratchet → Phase 5 multi-device → Phase 6
-completion evidence; AI Communication ADRs in parallel as PLANNING ONLY. No
-new work may depend on #30/#31 until merged or revised. Priority 2 does not
-begin until Priority 1 is formally closed.
+is stricter, the stricter gate still remains. **Sequencing is governed by the
+roadmap's "Owner Amendment 2" (2026-08-01, later):** #30/#31/#36 merged on
+owner approval; Phase 2 stays two PRs (#36 storage merged → **Phase 2B:
+publication + rollback-after-publication in one PR**) → X3DH → Double Ratchet
+→ multi-device → completion evidence; the five strategic pillars (adaptive
+communication network, AI platform, translation platform, live voice
+translation, launch-critical push) proceed in parallel as PLANNING ONLY.
+No merges without review. Priority 2 implementation does not begin until the
+owner schedules it.
 
 ---
 

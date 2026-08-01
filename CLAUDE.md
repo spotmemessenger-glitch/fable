@@ -35,20 +35,23 @@ against it.** The owner's instruction: refer to it each time you code.
   mapping is `spotme/docs/14-ROADMAP-V1-TO-V2-MAPPING.md`; V1
   (`spotme/docs/MIGRATION-PLAN-V1.md`) is historical, and where V1 is stricter
   the stricter gate still holds (V2 Appendix B). The A1–A7 labels are retired
-  wherever they conflict with V2. **Owner execution order (amended 2026-08-01
-  — roadmap "Owner Amendment" section):** ① push notifications (Android+iOS,
-  background/terminated/foreground, production-grade) → ② translation
-  platform (provider abstraction over the existing multi-provider engine) →
-  ③ live voice translation (flagship; dedicated architecture, NOT an
-  extension of voice notes; MVP < 2.5 s end-to-end) → ④ adaptive
-  communication layer (automatic transport switching incl. native Bluetooth
-  offline; users never pick a transport) → ⑤ remaining Priority 1 crypto
-  (X3DH → Double Ratchet → multi-device → completion evidence) — **still
-  mandatory before Priority 1 is declared complete**. AI Communication ADRs
-  may proceed as planning. New standing principle: every AI feature
-  optimises accuracy + latency + privacy simultaneously; no provider may
-  become a hard dependency — route/fall back on quality, availability, cost,
-  response time.
+  wherever they conflict with V2. **Owner execution order (Amendment 2,
+  2026-08-01 — supersedes Amendment 1's sequencing; roadmap "Owner
+  Amendment 2" section):** Phase 2 stays TWO PRs — #36 (storage, merged)
+  then **Phase 2B: publication together with rollback-after-publication**
+  (publish, withdraw, supersede, server lifecycle, rollback semantics) in
+  its own PR → then **X3DH → Double Ratchet → Multi-device**. In parallel,
+  PLANNING ONLY (no implementation): adaptive communication network, AI
+  communication platform, translation platform (provider abstraction:
+  OpenAI, Gemini, Azure, Sarvam, ElevenLabs where applicable), live voice
+  translation architecture (voice-note re-voicing is its shipped
+  foundation), push notifications elevated to launch-critical.
+  **No merges without review — every PR returns to the owner.** Small
+  reversible PRs; CI + benchmarks where applicable + rollback documentation
+  + updated ADRs BEFORE requesting review. Standing principle (Amendment 1,
+  kept): every AI feature optimises accuracy + latency + privacy
+  simultaneously; no provider may become a hard dependency — route/fall
+  back on quality, availability, cost, response time.
 - **V1/V2 priority numbers differ.** Owner blocks were issued against V1
   numbers — the mapping §1 restates them under V2 numbering. Never treat a
   renumbering as an unblock.
