@@ -35,7 +35,13 @@ const SRC = join(ROOT, 'src')
 const TEST = join(ROOT, 'test')
 
 /** The A7 modules themselves. They may import each other; nothing else may. */
-const A7 = ['src/lib/crypto/signing-identity.js', 'src/lib/crypto/identity-binding.js']
+const A7 = [
+  'src/lib/crypto/signing-identity.js',
+  'src/lib/crypto/identity-binding.js',
+  // Phase 2 (Roadmap V2): the storage half. Inside the fence — it may import
+  // the foundation; the app still may not reach key material through it.
+  'src/lib/crypto/signing-key-store.js',
+]
 
 function walk (dir, out = []) {
   for (const entry of readdirSync(dir)) {
@@ -78,6 +84,19 @@ const testFiles = walk(TEST).map((f) => ({ path: relative(ROOT, f), body: readFi
   check('NOTHING IS PUBLISHED: no app module posts or reads a signing key',
     publishers.length === 0)
   if (publishers.length) console.log('    referenced by:', publishers.map((f) => f.path).join(', '))
+
+  /* THE ONE PERMITTED CRACK IN THE FENCE, made exact. `wipeDevice` must clear
+   * the signing store's module cache (delete the bytes AND forget the live
+   * handle), so db.js may import the STORE — for that one function. Anything
+   * wider is the fence failing: an app module that can LOAD the identity can
+   * put key material on a code path nobody reviewed for it. */
+  const storeUsers = appFiles.filter((f) => f.body.includes('signing-key-store'))
+  check('the store is referenced by EXACTLY the wipe path and nothing else',
+    storeUsers.length === 1 && storeUsers[0].path === 'src/lib/db.js')
+  const wipe = appFiles.find((f) => f.path === 'src/lib/db.js')
+  check('…and the wipe path touches ONLY forgetSigningIdentity — never load or rotate',
+    Boolean(wipe) && wipe.body.includes('forgetSigningIdentity') &&
+    !/loadSigningIdentity|rotateSigningIdentity|generateSigningIdentity/.test(wipe.body))
 }
 
 /* ------------------------------------------ 2. …but it is not unexamined -- */
@@ -90,6 +109,9 @@ const testFiles = walk(TEST).map((f) => ({ path: relative(ROOT, f), body: readFi
   check('…and signs bindings with them', exercised('signBinding'))
   check('…and runs the proof of possession', exercised('answerPopChallenge'))
   check('…and drives the full verification', exercised('verifyLiveBinding'))
+  check('…and the STORAGE half is exercised too — load, rotate, wipe-forget',
+    exercised('loadSigningIdentity') && exercised('rotateSigningIdentity') &&
+    exercised('forgetSigningIdentity'))
 
   // Both modules must be imported by a test, or "covered" is an assumption.
   for (const p of A7) {

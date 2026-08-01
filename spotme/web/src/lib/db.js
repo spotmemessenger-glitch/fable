@@ -128,12 +128,22 @@ export function wipeDevice () {
    * device talked to and when. A1 created it; A2 is what first writes to it, so
    * this is the change that makes leaving it behind a real leak rather than an
    * empty one. */
+  /* The SIGNING identity (ADR-008) is the third database, and its module
+   * cache is the third cache — same two halves as the agreement identity
+   * above: delete the bytes AND forget the live handle, or the "wiped" device
+   * keeps signing as the old identity for the rest of the page. */
+  const clearedSigning = import('./crypto/signing-key-store.js')
+    .then((m) => { m.forgetSigningIdentity?.(); return null })
+    .catch(() => 'signing key cache')
+
   return Promise.all([
     cleared,
     clearedTrust,
+    clearedSigning,
     media,
     dropDatabase('spotme-e2e'),
     dropDatabase('spotme-identity-pins'),
+    dropDatabase('spotme-signing'),
   ]).then((results) => {
     const failures = results.filter(Boolean)
     return { ok: failures.length === 0, failures }

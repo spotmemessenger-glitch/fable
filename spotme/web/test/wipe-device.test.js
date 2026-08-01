@@ -144,6 +144,53 @@ await checkAsync('a wipe reports ok when every store WAS actually cleared', asyn
   return out.ok === true && out.failures.length === 0
 })
 
+await checkAsync('ALL THREE identity databases are deleted — e2e, pins, and SIGNING (ADR-008 §5)', async () => {
+  const deleted = []
+  globalThis.indexedDB = {
+    deleteDatabase: (name) => { deleted.push(name); const req = {}; queueMicrotask(() => req.onsuccess?.()); return req },
+    open: () => {
+      const req = { result: {
+        objectStoreNames: { contains: () => true },
+        createObjectStore: () => ({}),
+        transaction: () => {
+          const t = { objectStore: () => ({ clear: () => ({}) }) }
+          queueMicrotask(() => t.oncomplete?.())
+          return t
+        }
+      } }
+      queueMicrotask(() => { req.onupgradeneeded?.(); req.onsuccess?.() })
+      return req
+    }
+  }
+  await wipeDevice()
+  return ['spotme-e2e', 'spotme-identity-pins', 'spotme-signing'].every((d) => deleted.includes(d))
+})
+
+await checkAsync('…and a signing database that cannot be deleted is a reported failure', async () => {
+  globalThis.indexedDB = {
+    deleteDatabase: (name) => {
+      const req = {}
+      queueMicrotask(() => (name === 'spotme-signing' ? req.onblocked?.() : req.onsuccess?.()))
+      return req
+    },
+    open: () => {
+      const req = { result: {
+        objectStoreNames: { contains: () => true },
+        createObjectStore: () => ({}),
+        transaction: () => {
+          const t = { objectStore: () => ({ clear: () => ({}) }) }
+          queueMicrotask(() => t.oncomplete?.())
+          return t
+        }
+      } }
+      queueMicrotask(() => { req.onupgradeneeded?.(); req.onsuccess?.() })
+      return req
+    }
+  }
+  const out = await wipeDevice()
+  return out.ok === false && out.failures.includes('spotme-signing')
+})
+
 await checkAsync('THE POINT: a BLOCKED database delete is reported, not swallowed', async () => {
   /* The realistic failure, and the one a synchronous try/catch cannot see:
    * `deleteDatabase` returns a REQUEST. Another tab still holding the database
