@@ -12,7 +12,37 @@ export const IMAGE_QUALITY = 0.8
 /** Photo-editor flatten presets: standard (default) vs the HD toggle. */
 export const PHOTO_STD = { edge: 1280, q: 0.82 }
 export const PHOTO_HD = { edge: 2048, q: 0.9 }
-export const FILE_CAP_BYTES = 2_500_000    // ~2.5 MB keeps WebRTC + localStorage happy
+/**
+ * File size ceiling — now conditional, because the reason for it moved.
+ *
+ * 2.5 MB was "what keeps WebRTC and localStorage happy", and localStorage was
+ * the binding half: a data URL is ~1.33x the file, against a 5-10 MB quota
+ * shared with the entire conversation. Media now persists as Blobs in
+ * IndexedDB (lib/blobstore.js), which is bounded by a share of free disk, so
+ * that half of the constraint is gone.
+ *
+ * It is NOT raised unconditionally. Safari private mode and locked-down
+ * WebViews refuse IndexedDB, and store.js correctly falls back to data URLs in
+ * localStorage there — handing those devices a 25 MB file would put them
+ * straight into the quota-shedding ladder, which is exactly the "your voice
+ * note vanished" experience this work exists to end. So the cap follows the
+ * storage that is actually available.
+ *
+ * Videos are unaffected: they were already on the chunked binary path at
+ * VIDEO_CAP_BYTES and never consulted this number.
+ */
+const FILE_CAP_DURABLE = 25_000_000        // IndexedDB present
+const FILE_CAP_FALLBACK = 2_500_000        // localStorage only — unchanged
+
+export const FILE_CAP_BYTES = (() => {
+  try {
+    return (typeof indexedDB !== 'undefined' && indexedDB !== null)
+      ? FILE_CAP_DURABLE
+      : FILE_CAP_FALLBACK
+  } catch {
+    return FILE_CAP_FALLBACK
+  }
+})()
 export const VIDEO_CAP_BYTES = 40_000_000  // videos ride the chunked binary path; bigger waits for native streaming
 export const VOICE_MAX_SECS = 60
 
@@ -106,9 +136,12 @@ export function maskDataURL (dataURL, maxEdge = MASK_EDGE) {
 export function fileToDataURL (file, cap = FILE_CAP_BYTES) {
   return new Promise((resolve, reject) => {
     if (file.size > cap) {
+      // "the P2P cap" was wrong twice over: the app has been server-backed
+      // since the transport migration, and this limit is now a property of
+      // THIS device's storage — 25 MB with IndexedDB, 2.5 MB without.
       reject(new Error(cap === VIDEO_CAP_BYTES
         ? "Videos over 40 MB arrive with the native app's streaming transfer"
-        : `File is ${(file.size / 1e6).toFixed(1)} MB — the P2P cap is ${(cap / 1e6).toFixed(1)} MB`))
+        : `File is ${(file.size / 1e6).toFixed(1)} MB — the limit on this device is ${(cap / 1e6).toFixed(1)} MB`))
       return
     }
     const reader = new FileReader()

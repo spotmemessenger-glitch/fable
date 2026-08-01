@@ -18,6 +18,8 @@
  * disagree about order — an accepted limitation of the web transport.
  * ------------------------------------------------------------------------- */
 
+import * as blobs from './lib/blobstore.js'
+
 const STORAGE_PREFIX = 'spotme:room:'
 
 /** Bounded so a long-lived room cannot fill localStorage and start throwing. */
@@ -55,6 +57,20 @@ export function createStore (roomId, prefix = STORAGE_PREFIX, options = {}) {
   let saveTimer = null
   let dirty = false
 
+  /**
+   * Message ids whose bytes are confirmed in IndexedDB.
+   *
+   * TWO PHASE, AND THAT IS THE POINT. A message is only serialised as a
+   * `mediaRef` once its blob is actually written — never before. If the tab
+   * dies mid-offload, localStorage still holds the data URL and the room is
+   * exactly as recoverable as it was before this existed. The alternative,
+   * writing the reference optimistically, turns any interrupted write into
+   * silent media loss.
+   */
+  const offloaded = new Set()
+  /** In-flight offloads, so a burst of saves cannot queue the same blob twice. */
+  const offloading = new Set()
+
   load()
 
   /* A debounced write must not be able to lose the tail of a conversation
@@ -90,6 +106,108 @@ export function createStore (roomId, prefix = STORAGE_PREFIX, options = {}) {
       // empty room is a far better outcome than a white screen.
       localStorage.removeItem(key)
     }
+    rehydrate()
+  }
+
+  /**
+   * Put media back on the messages that were persisted as references.
+   *
+   * Deliberately AFTER the synchronous load and not awaited by it: the room
+   * renders from localStorage immediately and the photos fill in a tick later,
+   * which is the whole reason the envelope stays there. Blocking the first
+   * paint on an IndexedDB transaction would trade a real 5 MB ceiling for a
+   * visible stall on every open.
+   */
+  function rehydrate () {
+    const refs = list().filter((m) => m.mediaRef && !m.data)
+    if (!refs.length || !blobs.available()) return
+    void (async () => {
+      let filled = 0
+      for (const message of refs) {
+        try {
+          const blob = await blobs.get(blobs.mediaKey(roomId, message.id))
+          if (!blob) continue
+          const url = await blobToDataURL(blob)
+          if (!url) continue
+          const current = messages.get(message.id)
+          // It may have been deleted, tombstoned or re-received while we were
+          // in the transaction; only fill a hole that is still a hole.
+          if (!current || current.data) continue
+          messages.set(message.id, { ...current, data: url, detached: false })
+          offloaded.add(message.id)
+          filled++
+        } catch { /* one unreadable blob must not stop the rest */ }
+      }
+      if (filled) notify()
+    })()
+  }
+
+  /** Blob -> data URL, so rendering and mime recovery stay exactly as they were. */
+  function blobToDataURL (blob) {
+    if (typeof FileReader !== 'function') return Promise.resolve(null)
+    return new Promise((resolve) => {
+      const reader = new FileReader()
+      reader.onload = () => resolve(typeof reader.result === 'string' ? reader.result : null)
+      reader.onerror = () => resolve(null)
+      try { reader.readAsDataURL(blob) } catch { resolve(null) }
+    })
+  }
+
+  /** `data:<mime>;base64,<payload>` -> bytes, or null if it is not one. */
+  function dataURLToBytes (dataURL) {
+    if (typeof dataURL !== 'string' || !dataURL.startsWith('data:')) return null
+    const comma = dataURL.indexOf(',')
+    if (comma < 0) return null
+    try {
+      const binary = atob(dataURL.slice(comma + 1))
+      const out = new Uint8Array(binary.length)
+      for (let i = 0; i < binary.length; i++) out[i] = binary.charCodeAt(i)
+      return out
+    } catch {
+      return null
+    }
+  }
+
+  const mimeOf = (dataURL) =>
+    (typeof dataURL === 'string' && dataURL.startsWith('data:'))
+      ? dataURL.slice(5, dataURL.indexOf(';'))
+      : 'application/octet-stream'
+
+  /**
+   * Move any not-yet-durable media into IndexedDB, then persist again so those
+   * messages serialise as references instead of megabytes of base64.
+   *
+   * View-once is excluded here as well as in `blobstore.put`. Two guards for
+   * one rule is deliberate: this is the rule whose failure mode is a private
+   * photo surviving on disk forever.
+   */
+  function offloadMedia () {
+    if (!blobs.available()) return
+    const pending = list().filter((m) =>
+      typeof m.data === 'string' && m.data.startsWith('data:') &&
+      !m.viewOnce && !offloaded.has(m.id) && !offloading.has(m.id))
+    if (!pending.length) return
+
+    void (async () => {
+      let stored = 0
+      for (const message of pending) {
+        offloading.add(message.id)
+        try {
+          const bytes = dataURLToBytes(message.data)
+          if (!bytes) continue
+          const ok = await blobs.put(
+            blobs.mediaKey(roomId, message.id), bytes, mimeOf(message.data),
+            { viewOnce: Boolean(message.viewOnce) }
+          )
+          if (ok) { offloaded.add(message.id); stored++ }
+        } catch { /* stays a data URL in localStorage — the old behaviour */ } finally {
+          offloading.delete(message.id)
+        }
+      }
+      // Re-persist so the newly durable bytes leave localStorage. Without this
+      // the blob is written and the base64 copy stays put, costing both.
+      if (stored) writeNow()
+    })()
   }
 
   /**
@@ -132,9 +250,15 @@ export function createStore (roomId, prefix = STORAGE_PREFIX, options = {}) {
 
     try {
       localStorage.setItem(key, envelope(ordered.map(stripDerived)))
+      offloadMedia()
       return
     } catch {
       // Out of quota — almost always one video. Fall through and shed it.
+      //
+      // This ladder is now the FALLBACK, not the normal path: with IndexedDB
+      // available the bytes leave localStorage before it can fill up. It stays
+      // because private mode and locked-down WebViews still refuse IndexedDB,
+      // and there losing one video beats losing the conversation.
     }
 
     /* One 40 MB video base64s to ~53 MB against a quota of five to ten, so the
@@ -209,6 +333,13 @@ export function createStore (roomId, prefix = STORAGE_PREFIX, options = {}) {
   function stripDerived (message) {
     const { reactions: _ignored, ...rest } = message
     if (rest.viewOnce && typeof rest.data === 'string') return shedMedia(rest)
+    /* Bytes are durable in IndexedDB, so localStorage keeps a reference rather
+     * than ~1.33x the file as base64. NOT `detached`: that means "the bytes are
+     * on a peer, tap to fetch them", and these are already here — `rehydrate()`
+     * fills them in a tick after load with no tap and no network. */
+    if (offloaded.has(rest.id) && typeof rest.data === 'string') {
+      return { ...rest, data: null, mediaRef: true, mime: rest.mime || mimeOf(rest.data) }
+    }
     return rest
   }
 
@@ -272,6 +403,11 @@ export function createStore (roomId, prefix = STORAGE_PREFIX, options = {}) {
     tombstones.add(id)
     const existed = messages.delete(id)
     reactions.delete(id)
+    /* The bytes go too. "Delete without residue" stops meaning anything if the
+     * photo is still sitting in IndexedDB after the message is gone — and a
+     * tombstone would keep it invisible while it stayed on disk indefinitely. */
+    offloaded.delete(id)
+    void blobs.del(blobs.mediaKey(roomId, id))
     save()
     if (existed) notify()
     return existed
@@ -342,6 +478,10 @@ export function createStore (roomId, prefix = STORAGE_PREFIX, options = {}) {
     if (saveTimer) { clearTimeout(saveTimer); saveTimer = null }
     dirty = false
     localStorage.removeItem(key)
+    // Clearing a room has to reach the bytes as well, or "clear chat" leaves
+    // every photo in it on disk.
+    offloaded.clear()
+    void blobs.delRoom(roomId)
     notify()
   }
 
