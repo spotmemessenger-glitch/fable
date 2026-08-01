@@ -7,15 +7,22 @@ import {
   OnGatewayConnection,
   OnGatewayDisconnect,
 } from '@nestjs/websockets';
+import { Logger } from '@nestjs/common';
 import { Server, Socket } from 'socket.io';
 import { JwtService } from '@nestjs/jwt';
 import { PushService } from '../push/push.service';
+import { isDmRoom, verifyDmJoin } from './dm-room';
 import { GroupPolicy, GroupsService } from '../groups/groups.service';
 import { RoomsService } from './rooms.service';
 
 interface JoinPayload {
   roomId: string;
   since?: number;
+  /* Who the caller says the other participant is. The server does NOT trust it
+   * — it recomputes the room id from this plus the AUTHENTICATED user and
+   * compares, so a wrong peer simply fails to derive the room. Optional because
+   * clients older than this change do not send it; see verifyDmJoin. */
+  peerId?: string;
 }
 
 interface ActionPayload {
@@ -84,6 +91,8 @@ const decodeB64 = (data: string | null | undefined): Buffer =>
 })
 export class RoomsGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer() server!: Server;
+
+  private readonly log = new Logger(RoomsGateway.name);
 
   // roomId -> userId -> live sockets. In-memory: single node is Phase 1;
   // the Redis adapter replaces this map when the gateway scales out.
@@ -221,6 +230,28 @@ export class RoomsGateway implements OnGatewayConnection, OnGatewayDisconnect {
     // walk straight back in and replay the whole history.
     const policy = await this.policy(roomId, userId);
     if (policy?.banned) return { error: 'not a member of this group' };
+
+    /* AND THE SAME IS TRUE OF A DM, WHICH NOTHING CHECKED.
+     *
+     * `policy()` returns null for anything that is not a group, so a direct
+     * message was authorised by nothing at all — and a DM room id is a pure
+     * function of two PUBLIC user ids. Anyone who learned two ids could compute
+     * the room and be handed `replay(roomId, 0)` below: the entire history, in
+     * plaintext for an `e2e_v1` room whose key derives from those same two ids.
+     *
+     * The id is self-authenticating, so no new state is needed — see dm-room.ts.
+     * Checked BEFORE `remember()` runs, because enrolling first would let the
+     * intrusion mint the membership row that excuses it. */
+    const verdict = verifyDmJoin(
+      roomId,
+      userId,
+      typeof body.peerId === 'string' ? body.peerId : undefined,
+      isDmRoom(roomId) && !body.peerId ? await this.push.isMember(roomId, userId) : false,
+    );
+    if (!verdict.allow) {
+      this.log.warn(`refused DM join (${verdict.reason}) room=${roomId} user=${userId}`);
+      return { error: 'not a participant in this conversation' };
+    }
 
     // Rooms are opaque ids the server cannot decode, so membership is learned
     // from who joins — and it is the only way to know whom to notify later.

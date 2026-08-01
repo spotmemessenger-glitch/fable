@@ -1,0 +1,113 @@
+import { deriveDmRoomId, stableHash, verifyDmJoin } from '../src/rooms/dm-room';
+
+/**
+ * Proves a stranger cannot join a DM room, and — just as importantly — that a
+ * real participant still can.
+ *
+ * THE HOLE. `onJoin` authorised DMs with nothing: `policy()` returns null for
+ * anything that is not a group, and only `policy?.banned` was checked. A DM room
+ * id is a pure function of two PUBLIC user ids, so any authenticated user who
+ * learned two ids could compute the room id, join, and be handed
+ * `replay(roomId, 0)` — the whole stored history. For an `e2e_v1` room the key
+ * is derivable from those same two ids, so that is plaintext.
+ *
+ * THE RISK IN THE FIX is the mirror image: if the server's hash disagrees with
+ * the client's by one bit, every legitimate DM join is refused and the app is
+ * dead. A handful of fixed vectors would not catch that — a subtly wrong port
+ * agrees on short ASCII and diverges on length or high code points. So the
+ * client's function is reproduced verbatim below and the two are fuzzed against
+ * each other, including the inputs most likely to expose a bad port.
+ */
+
+/** Copied VERBATIM from web/src/lib/reach.js:72. Do not "clean up". */
+function clientStableHash(input: string): string {
+  let h1 = 0xdeadbeef ^ input.length;
+  let h2 = 0x41c6ce57 ^ input.length;
+  for (let i = 0; i < input.length; i++) {
+    const ch = input.charCodeAt(i);
+    h1 = Math.imul(h1 ^ ch, 2654435761);
+    h2 = Math.imul(h2 ^ ch, 1597334677);
+  }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  return (h1 >>> 0).toString(16).padStart(8, '0') + (h2 >>> 0).toString(16).padStart(8, '0');
+}
+
+/** Copied VERBATIM from web/src/lib/reach.js:107 (`directRoom`). */
+function clientRoomId(idA: string, idB: string): string {
+  const [a, b] = [idA, idB].sort();
+  return `dm-${clientStableHash(`spotme-dm-room-v1:${a}:${b}`)}`;
+}
+
+const ALICE = '3800d1531e8fcc87';
+const BOB = '15868af06346fd9f';
+const MALLORY = 'ffffffffffffffff';
+
+describe('the server derives the same DM room id as the client', () => {
+  it('agrees on the real handset ids from the field', () => {
+    expect(deriveDmRoomId(ALICE, BOB)).toBe(clientRoomId(ALICE, BOB));
+  });
+
+  it('is order-independent, as sorting the pair implies', () => {
+    expect(deriveDmRoomId(ALICE, BOB)).toBe(deriveDmRoomId(BOB, ALICE));
+  });
+
+  it('agrees across 2000 random id pairs', () => {
+    for (let i = 0; i < 2000; i++) {
+      const a = Math.random().toString(16).slice(2);
+      const b = Math.random().toString(16).slice(2);
+      expect(deriveDmRoomId(a, b)).toBe(clientRoomId(a, b));
+    }
+  });
+
+  it('agrees on the inputs a careless port gets wrong', () => {
+    // The seed is XORed with input.length, so length changes must matter; and
+    // charCodeAt returns UTF-16 units, so anything above ASCII is where a port
+    // via Buffer/bytes silently diverges.
+    const nasty = ['', 'a', 'ab', 'x'.repeat(64), 'ünïcödé', '日本語', '👍', '\u0000\uFFFF'];
+    for (const s of nasty) expect(stableHash(s)).toBe(clientStableHash(s));
+  });
+});
+
+describe('who may join a DM room', () => {
+  const room = deriveDmRoomId(ALICE, BOB);
+
+  it('lets a real participant in when they name their peer', () => {
+    expect(verifyDmJoin(room, ALICE, BOB, false)).toEqual({ allow: true, reason: 'derived' });
+    expect(verifyDmJoin(room, BOB, ALICE, false)).toEqual({ allow: true, reason: 'derived' });
+  });
+
+  it('THE HOLE: refuses a stranger who computed the id from two public ids', () => {
+    // Mallory knows both ids and can derive `room` perfectly well. What she
+    // cannot do is produce a peer that hashes WITH HER OWN id to this room.
+    expect(verifyDmJoin(room, MALLORY, ALICE, false)).toEqual({ allow: false, reason: 'peer-mismatch' });
+    expect(verifyDmJoin(room, MALLORY, BOB, false)).toEqual({ allow: false, reason: 'peer-mismatch' });
+  });
+
+  it('...and refuses her when she names no peer at all', () => {
+    expect(verifyDmJoin(room, MALLORY, undefined, false)).toEqual({ allow: false, reason: 'stranger' });
+  });
+
+  it('...and when she claims the room is with herself', () => {
+    expect(verifyDmJoin(room, MALLORY, MALLORY, false)).toEqual({ allow: false, reason: 'peer-mismatch' });
+  });
+
+  it('a participant on an older bundle, sending no peer, still gets in', () => {
+    expect(verifyDmJoin(room, ALICE, undefined, true)).toEqual({ allow: true, reason: 'existing-member' });
+  });
+
+  it('a claimed peer is checked even when membership already exists', () => {
+    // Otherwise the fallback would become a way to bypass the derivation: claim
+    // any peer, and prior membership waves it through.
+    expect(verifyDmJoin(room, ALICE, MALLORY, true)).toEqual({ allow: false, reason: 'peer-mismatch' });
+  });
+
+  it('leaves group rooms to policyFor, which already authorises them', () => {
+    expect(verifyDmJoin('group-abc', MALLORY, undefined, false)).toEqual({ allow: true, reason: 'not-a-dm' });
+  });
+
+  it('leaves INBOX rooms alone — they are derived from one id, so a knock from a stranger is the point', () => {
+    const inbox = `inbox-${stableHash(`spotme-inbox-v1:${ALICE}`)}`;
+    expect(verifyDmJoin(inbox, MALLORY, undefined, false)).toEqual({ allow: true, reason: 'not-a-dm' });
+  });
+});

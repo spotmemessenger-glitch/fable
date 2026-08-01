@@ -105,8 +105,8 @@ export { selfId }
  *                               onPeers, profile}
  * @param {function} getHistory called when a new peer needs backlog
  */
-export function createNet (roomId, secret, handlers, getHistory) {
-  const room = joinRoom({ appId: APP_ID, password: secret, rtcConfig: RTC_CONFIG }, roomId)
+export function createNet (roomId, secret, handlers, getHistory, peerId) {
+  const room = joinRoom({ appId: APP_ID, password: secret, rtcConfig: RTC_CONFIG, peerId }, roomId)
 
   // Trystero 0.25 API notes, all of which differ from older documentation:
   //   - makeAction returns an OBJECT, not a [send, receive] tuple
