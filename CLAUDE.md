@@ -24,6 +24,29 @@ of any substantial session, or the next remote session starts blind.
 **Never claim something works because the brief says so** — the brief is a
 record, not a live check. Anything marked UNPROVEN stays unproven until re-run.
 
+## ⭐ Controlling engineering document — consult before ANY coding
+
+**`spotme/docs/MASTER-ENGINEERING-ROADMAP-V2.md` is the engineering control
+document for Spot Me. Read it (at minimum §2 rules, §5 priorities, §8
+checklist, §10 instructions) before changing code, and check every change
+against it.** The owner's instruction: refer to it each time you code.
+
+- **V2 is APPROVED and controlling (owner directive, 2026-08-01).** The V1→V2
+  mapping is `spotme/docs/14-ROADMAP-V1-TO-V2-MAPPING.md`; V1
+  (`spotme/docs/MIGRATION-PLAN-V1.md`) is historical, and where V1 is stricter
+  the stricter gate still holds (V2 Appendix B). The A1–A7 labels are retired
+  wherever they conflict with V2. Owner phase order for remaining Priority 1:
+  review #30/#31 → signing-key storage (ADR-008) → X3DH → Double Ratchet →
+  multi-device → completion evidence; AI Communication ADRs are planning-only
+  until Priority 1 closes.
+- **V1/V2 priority numbers differ.** Owner blocks were issued against V1
+  numbers — the mapping §1 restates them under V2 numbering. Never treat a
+  renumbering as an unblock.
+- The **ADR-008 §12 hard stop** (no signing-key generation/persistence/
+  publication, prekeys, X3DH, ratchet, or multi-device until
+  rollback-after-publication is executable or separately authorized) is
+  unchanged by V2.
+
 ## Rules
 
 - Do what has been asked; nothing more, nothing less

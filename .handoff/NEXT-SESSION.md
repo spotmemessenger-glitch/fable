@@ -89,10 +89,17 @@ multi-device implementation, not during.
 
 ## 2. Governance
 
-**The migration document is the controlling source** — the owner restated this
-explicitly. Our A1–A7 / B1–B10 labels are an implementation breakdown only;
-they appear nowhere in the document. Priority 1 completes only when every
-document requirement and every completion-checklist item passes.
+**2026-08-01, later: the owner supplied `MASTER-ENGINEERING-ROADMAP-V2.md`**
+(committed under `spotme/docs/` with the source .docx) and ordered it consulted
+on every coding change — CLAUDE.md now points at it. Its V1→V2 mapping
+(`14-ROADMAP-V1-TO-V2-MAPPING.md`) was **APPROVED by owner directive
+2026-08-01** — V2 is controlling; V1 is historical; stricter gate still wins
+(V2 Appendix B). Owner phase order: review #30/#31 → Phase 2 signing-key
+storage (ADR-008, incl. rollback-after-publication) → X3DH → Double Ratchet →
+multi-device → completion evidence. AI Communication ADRs: planning only. **V1/V2 priority numbers differ — the mapping
+§1 restates every standing owner block under V2 numbering; renumbering never
+unblocks.** Our A1–A7 / B1–B10 labels remain an implementation breakdown only.
+Priority 1 completes only when every requirement and checklist item passes.
 
 Priority 1 checklist, honestly, as of this write:
 
