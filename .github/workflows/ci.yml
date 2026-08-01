@@ -42,6 +42,25 @@ jobs:
           --health-timeout 5s
           --health-retries 5
 
+      # MinIO, so S3StorageAdapter is tested against a server that ACTUALLY
+      # VERIFIES SIGNATURES. Measured: `s3rver`, the obvious local stand-in,
+      # serves completely unsigned requests with 200 — an emulator like that
+      # cannot prove authorization, and a green authorization test against one
+      # is worse than no test. No external credentials: the root user below is
+      # this container's, created fresh per run and thrown away with it.
+      minio:
+        image: bitnami/minio:latest
+        env:
+          MINIO_ROOT_USER: spotmeci
+          MINIO_ROOT_PASSWORD: spotmeci-not-a-real-secret
+          MINIO_DEFAULT_BUCKETS: spotme-itest
+        ports: ['9000:9000']
+        options: >-
+          --health-cmd "mc ready local"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
     env:
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/spotme_test?schema=public
       # Not a secret and not read from the repository's real ones. No test
@@ -52,6 +71,14 @@ jobs:
       # There is deliberately no JWT_REFRESH_SECRET: it does not exist. Both
       # strategies read JWT_ACCESS_SECRET, which is the finding R5 records.
       JWT_ACCESS_SECRET: ci-access-secret-not-a-real-key
+      # Points the integration suite at the MinIO service above. Absent these,
+      # s3-integration.spec.ts SKIPS LOUDLY rather than passing vacuously.
+      S3_ENDPOINT: http://localhost:9000
+      S3_BUCKET: spotme-itest
+      S3_REGION: us-east-1
+      S3_ACCESS_KEY_ID: spotmeci
+      S3_SECRET_ACCESS_KEY: spotmeci-not-a-real-secret
+      S3_FORCE_PATH_STYLE: 'true'
 
     defaults:
       run:

@@ -1,0 +1,99 @@
+# Cloudflare R2 staging smoke test — MANUALLY TRIGGERED, NEVER ON A PR.
+#
+# WHY THIS IS SEPARATE FROM ci.yml. CI's MinIO proves the adapter speaks S3
+# correctly against a server that verifies signatures. It does not prove
+# Cloudflare R2 accepts the same requests: R2 has its own quirks around
+# path-style addressing, presigned query parameters and error bodies, and
+# "works against an S3-compatible server" has never been the same claim as
+# "works against the provider we ship on".
+#
+# WHY IT IS NOT ON EVERY PR. It needs real credentials against a real bucket.
+# Running that from an untrusted pull request would expose them to anyone who
+# can open one, so this is `workflow_dispatch` only and gated on a GitHub
+# Environment, which is where approval and secret scoping actually live.
+#
+# WHAT IT IS NOT. Validation of the EXISTING storage seam. It is not
+# authorization to begin the Priority 2 media migration, and it does not touch
+# the application or the Railway production environment.
+#
+# ---------------------------------------------------------------------------
+# CREDENTIAL REQUIREMENTS — the whole point of the ceremony
+#
+#   - Newly rotated and LEAST-PRIVILEGE: object read/write/delete and list on
+#     ONE bucket or prefix. No account-level token, no bucket creation.
+#   - Stored ONLY as GitHub Actions secrets on the `r2-staging` environment.
+#     Never in the repository, in Claude memory, in chat, in code, in logs, in
+#     pull-request text or in documentation.
+#   - Scoped to an isolated, NON-PRODUCTION bucket.
+#
+# The suite generates a run-unique prefix and deletes everything it created, so
+# repeated runs cannot accumulate objects in a shared bucket.
+name: R2 staging smoke test
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type "staging" to confirm this is a NON-PRODUCTION bucket'
+        required: true
+        default: ''
+
+jobs:
+  r2-smoke:
+    name: S3StorageAdapter against real Cloudflare R2
+    runs-on: ubuntu-latest
+
+    # Gates the secrets behind an environment, so approval and scoping are
+    # enforced by GitHub rather than by convention.
+    environment: r2-staging
+
+    defaults:
+      run:
+        working-directory: spotme/backend
+
+    env:
+      S3_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+      S3_BUCKET: ${{ secrets.R2_BUCKET }}
+      S3_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      S3_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      # R2 ignores region but the SDK requires one; 'auto' is R2's convention.
+      S3_REGION: auto
+      S3_FORCE_PATH_STYLE: 'true'
+
+    steps:
+      - name: Refuse unless the operator confirmed a non-production bucket
+        if: ${{ inputs.confirm != 'staging' }}
+        run: |
+          echo "::error::Confirmation not given. Re-run and type 'staging'."
+          exit 1
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: spotme/backend/package-lock.json
+
+      - run: npm ci
+
+      - name: Verify the secrets are actually present
+        # A missing secret makes S3_ENDPOINT empty, and the suite would then
+        # SKIP and report success — evidence for a run that never happened.
+        run: |
+          test -n "$S3_ENDPOINT"          || { echo "::error::R2_ENDPOINT is not set"; exit 1; }
+          test -n "$S3_BUCKET"            || { echo "::error::R2_BUCKET is not set"; exit 1; }
+          test -n "$S3_ACCESS_KEY_ID"     || { echo "::error::R2_ACCESS_KEY_ID is not set"; exit 1; }
+          test -n "$S3_SECRET_ACCESS_KEY" || { echo "::error::R2_SECRET_ACCESS_KEY is not set"; exit 1; }
+          echo "all four secrets present"
+
+      - name: Run the integration suite against R2
+        # The SAME suite CI runs against MinIO. Testing the protocol rather than
+        # the vendor is what makes one suite meaningful in both places.
+        run: npx jest test/s3-integration.spec.ts --runInBand --verbose
+
+      - name: Confirm the run left nothing behind
+        # The suite cleans up in afterAll; this is the check that it did.
+        # A leak in a shared staging bucket is slow and silent.
+        if: always()
+        run: node scripts/r2-verify-clean.mjs
