@@ -167,3 +167,125 @@ jobs:
 
       - name: Test
         run: npm test
+
+  e2e:
+    name: e2e — real browser against a real backend
+    runs-on: ubuntu-latest
+    # Every other suite in this repo runs a module against a fake. That is right
+    # for a state machine and cannot answer whether the send gate in rooms.js
+    # refuses a send in a real browser. This is where that gets answered.
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: spotme_e2e
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 10s
+          --health-timeout 5s --health-retries 5
+    env:
+      # Throwaway, and the only credentials this job has. The backend refuses to
+      # boot on a JWT secret under 32 characters, so this is long rather than
+      # that guard weakened. NOTHING here reads a repository secret.
+      E2E_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/spotme_e2e?schema=public
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/spotme_e2e?schema=public
+      JWT_ACCESS_SECRET: e2e-only-not-a-real-key-0123456789abcdefghijklmnop
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install backend
+        working-directory: spotme/backend
+        run: npm ci
+
+      - name: Apply the Prisma schema
+        working-directory: spotme/backend
+        run: npx prisma db push --skip-generate --accept-data-loss
+
+      - name: Build the backend
+        working-directory: spotme/backend
+        run: npm run build
+
+      # THE WARM-BUILD REGRESSION, as its own step.
+      #
+      # The original bug: nest-cli deletes dist/ while tsconfig's incremental
+      # build-info survived OUTSIDE it, so TypeScript concluded the output was
+      # already current, emitted nothing, and exited 0. CI never caught it
+      # because a fresh checkout has no build-info file and nothing ran
+      # dist/main.js -- the Build step passed while building nothing.
+      #
+      # A fresh-checkout build therefore proves nothing about this. The second
+      # build, on the SAME workspace with nothing cleaned by hand, is the one
+      # that used to fail. This step stands alone so it keeps catching the
+      # regression even if the e2e suite is rewritten.
+      - name: Warm-build regression — a second build on the same workspace
+        working-directory: spotme/backend
+        run: |
+          set -euo pipefail
+          test -f dist/main.js || { echo "::error::first build emitted no dist/main.js"; exit 1; }
+          first_hash=$(sha256sum dist/main.js | cut -d' ' -f1)
+          first_id=$(cat dist/BUILD_ID)
+          echo "first build  main.js=${first_hash:0:12}… BUILD_ID=$first_id"
+
+          # Deliberately NO clean, NO rm -rf dist, NO cache reset.
+          npm run build
+
+          test -f dist/main.js || {
+            echo "::error::the SECOND build emitted nothing — the incremental/deleteOutDir bug is back"; exit 1; }
+          second_hash=$(sha256sum dist/main.js | cut -d' ' -f1)
+          second_id=$(cat dist/BUILD_ID)
+          echo "second build main.js=${second_hash:0:12}… BUILD_ID=$second_id"
+
+          # The artefact must still correspond to the CURRENT source, which is
+          # what a source-derived build id is for. Recomputed independently.
+          expected=$(node scripts/build-id.mjs)
+          [ "$second_id" = "$expected" ] || {
+            echo "::error::dist/BUILD_ID ($second_id) does not match current source ($expected)"; exit 1; }
+
+      - name: …and the twice-built artefact actually starts
+        working-directory: spotme/backend
+        env:
+          PORT: 3399
+        run: |
+          set -euo pipefail
+          node dist/main.js > /tmp/warm.log 2>&1 &
+          pid=$!
+          for i in $(seq 1 30); do
+            if curl -fsS "http://127.0.0.1:3399/api/version" > /tmp/ver.json 2>/dev/null; then break; fi
+            sleep 1
+          done
+          kill $pid 2>/dev/null || true
+          cat /tmp/ver.json
+          grep -q "$(cat dist/BUILD_ID)" /tmp/ver.json || {
+            echo "::error::the started process did not report the built BUILD_ID"; tail -20 /tmp/warm.log; exit 1; }
+
+      - name: Install web
+        working-directory: spotme/web
+        run: npm ci
+
+      - name: Install e2e
+        working-directory: spotme/e2e
+        run: npm ci
+
+      - name: Install Chromium
+        working-directory: spotme/e2e
+        run: npx playwright install --with-deps chromium
+
+      - name: Run
+        working-directory: spotme/e2e
+        run: npm test
+
+      # Only on failure. A trace per passing test is artefact nobody opens.
+      - name: Traces and screenshots
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-failure-artifacts
+          path: |
+            spotme/e2e/test-results/
+            spotme/e2e/playwright-report/
+          retention-days: 7

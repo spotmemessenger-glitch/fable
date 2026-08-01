@@ -121,6 +121,42 @@ async function bootstrap() {
   }
 
   const app = await NestFactory.create(AppModule, { cors: true });
+
+  /* THE BUILD IDENTITY. A hash of this backend's SOURCE, computed at build time
+   * by scripts/build-id.mjs and written into dist/BUILD_ID.
+   *
+   * It exists so a test can prove the process it is talking to was built from
+   * the source in front of it. Hashing the ARTEFACT would prove nothing — a
+   * stale dist/ hashes itself and matches — and a stale dist/ that looked
+   * plausible is exactly what hid the incremental-build bug, where the build
+   * emitted nothing and still exited 0.
+   *
+   * SAFE BY CONSTRUCTION: a hash of file paths and contents. No secret, no
+   * environment value, no path, no dependency inventory. Anyone can recompute
+   * it from a checkout, which is the whole point. Registered on the raw adapter
+   * so it sits outside the global prefix logic and cannot pick up guards that
+   * would make it unavailable to a health check.
+   *
+   * Absent in a source-run (ts-node, nest start) — reported as 'unknown'
+   * rather than crashing, and the e2e proof fails on 'unknown', which is
+   * correct: that is not the artefact under test. */
+  const buildId = (() => {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const { readFileSync } = require('fs') as typeof import('fs');
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const { join } = require('path') as typeof import('path');
+      return readFileSync(join(__dirname, 'BUILD_ID'), 'utf8').trim();
+    } catch {
+      return 'unknown';
+    }
+  })();
+  app
+    .getHttpAdapter()
+    .getInstance()
+    .get('/api/version', (_req: unknown, res: { json: (b: unknown) => void }) => {
+      res.json({ buildId });
+    });
   app.useGlobalPipes(
     new ValidationPipe({ whitelist: true, transform: true, forbidNonWhitelisted: true }),
   );
