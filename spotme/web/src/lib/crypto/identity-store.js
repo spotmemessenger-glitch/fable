@@ -94,7 +94,11 @@ function openDb () {
   return new Promise((resolve, reject) => {
     const req = indexedDB.open(DB_NAME, 1)
     req.onupgradeneeded = () => { req.result.createObjectStore(STORE) }
-    req.onsuccess = () => resolve(req.result)
+    req.onsuccess = () => {
+      // Close on versionchange so wipeDevice's deleteDatabase isn't self-blocked
+      // (deleteDatabase fires versionchange at every open connection).
+      const db = req.result; db.onversionchange = () => db.close(); resolve(db)
+    }
     req.onerror = () => reject(req.error)
   })
 }

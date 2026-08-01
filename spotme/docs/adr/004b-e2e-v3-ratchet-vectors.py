@@ -55,7 +55,8 @@ import sys
 
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey, X25519PublicKey
-from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives import serialization, hashes
+from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 
 from doubleratchet import (
     AEAD, DoubleRatchet, Header, EncryptedMessage,
@@ -83,6 +84,19 @@ SDEV = bytes([0xA1]) * 16
 RDEV = bytes([0xB2]) * 16
 
 hexs = lambda b: b.hex()
+
+
+def message_step(chain_key: bytes):
+    """The AUTHORITATIVE symmetric-ratchet step — byte-identical to ratchet.js
+    `messageStep` and to the construction behind vectors 01/03/05:
+
+        HKDF(salt=chain_key, ikm=0x01, info="spotme/e2e_v3/msg", 64)
+            -> chain_key' || message_key
+
+    NOT the illustrative `HMAC(ck, LABEL+"/n")` form: that self-consistent but
+    non-authoritative shape is exactly what vector 13 exists to reject."""
+    out = HKDF(algorithm=hashes.SHA256(), length=64, salt=chain_key, info=LABEL_MSG).derive(b"\x01")
+    return out[:32], out[32:]
 
 
 # ------------------------------------------------------------- determinism ---
@@ -355,12 +369,15 @@ async def main():
            note="RDEV additionally lets a non-target device ignore it quietly rather than alarm — see 004a §9")
 
     # 13 — the negative vector -------------------------------------------------
-    # Subtly wrong advancement: derive the message key from the chain key
-    # WITHOUT advancing, i.e. an off-by-one that still produces valid-looking
-    # AES-GCM output and self-consistent behaviour in a lone implementation.
+    # Subtly wrong advancement: an implementation that advances the chain one
+    # step early takes the NEXT message key instead of this one. Both are valid
+    # AES-GCM keys and self-consistent in a lone implementation; only a vector
+    # distinguishes them. Derived with the AUTHORITATIVE messageStep (the real
+    # HKDF construction, identical to ratchet.js and vectors 01/03/05) — NOT the
+    # illustrative HMAC form that made this vector reject the correct code.
     ck = hashlib.sha256(b"spotme/e2e_v3/testvector/chain-key-seed").digest()
-    correct_mk = hmac.new(ck, LABEL_MSG + b"/0", hashlib.sha256).digest()
-    offbyone_mk = hmac.new(ck, LABEL_MSG + b"/1", hashlib.sha256).digest()
+    ck_next, correct_mk = message_step(ck)          # messageStep(ck).messageKey
+    _ck2, offbyone_mk = message_step(ck_next)       # messageStep(messageStep(ck).chainKey).messageKey
     record("13_negative_subtly_wrong_advancement",
            description=("An implementation that advances the chain one step early produces a DIFFERENT "
                         "message key from the same chain key. Both look valid in isolation; only a "

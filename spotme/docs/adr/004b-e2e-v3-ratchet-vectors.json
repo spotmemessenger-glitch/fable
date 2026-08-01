@@ -191,10 +191,10 @@
   },
   "13_negative_subtly_wrong_advancement": {
     "chain_key": "212787eb89214957a2a8aaa074b4555b6f71087b04b45fe4a5590f418aacbf3b",
-    "correct_message_key": "77ab6651822b4230acb5051fecbbdc449a48051a8dd564f3b4ce8bef83d62982",
+    "correct_message_key": "3850d161a6969722ef1955b530d19ee13619754a25088b86d44d4f3e4cc52481",
     "description": "An implementation that advances the chain one step early produces a DIFFERENT message key from the same chain key. Both look valid in isolation; only a vector distinguishes them.",
     "must_hold": "an implementation matching off_by_one_message_key is WRONG and this vector fails it",
-    "off_by_one_message_key": "1689b393e2f6e46310e198f4209dfa8faea197508b9f34eb3a3a571d88b7a3fd",
+    "off_by_one_message_key": "69211725de80d175a1fedfda54c7f52bbe7409fa4c05bf1d91766ec9e3f529e7",
     "why": "this is the failure this whole package exists for: it is invisible to a self-test, invisible in review, and produces a transcript the peer cannot read"
   }
 }

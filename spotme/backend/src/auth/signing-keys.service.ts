@@ -4,6 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   RAW_LEN,
@@ -44,7 +45,19 @@ const CHAIN_CAP = 10;
 type PublishBody = { publicKeyB64?: string; algo?: string };
 type SupersedeBody = PublishBody & { supersessionSigB64?: string };
 
-function validKey(body: PublishBody): { publicKeyB64: string; algo: string } {
+/**
+ * Validate a submitted public key AND return it in CANONICAL base64.
+ *
+ * base64's final quantum leaves unused low bits that the decoder ignores, so
+ * ~4 distinct strings decode to identical bytes. Retirement, idempotency and
+ * the [userId, publicKeyB64] unique constraint all compare the STRING, so a
+ * re-encoded sibling of a retired key would otherwise slip past "a retired key
+ * never returns". Re-encoding the decoded bytes (`raw.toString('base64')`)
+ * collapses every sibling to one canonical form, which becomes the stored value
+ * and the basis of every comparison downstream. Exported so the canonicalization
+ * can be unit-tested without a database.
+ */
+export function validKey(body: PublishBody): { publicKeyB64: string; algo: string } {
   const publicKeyB64 = String(body?.publicKeyB64 ?? '').trim();
   const algo = String(body?.algo ?? '').trim();
   if (!RAW_LEN[algo]) {
@@ -64,7 +77,8 @@ function validKey(body: PublishBody): { publicKeyB64: string; algo: string } {
       `a raw ${algo} public key is ${RAW_LEN[algo]} bytes, got ${raw.length}`,
     );
   }
-  return { publicKeyB64, algo };
+  // Canonical form: the final quantum's unused low bits zeroed. See doc comment.
+  return { publicKeyB64: raw.toString('base64'), algo };
 }
 
 @Injectable()
@@ -73,29 +87,57 @@ export class SigningKeysService {
 
   async publish(userId: string, body: PublishBody) {
     const { publicKeyB64, algo } = validKey(body);
-    return this.prisma.$transaction(async (tx) => {
-      const active = await tx.signingKey.findFirst({ where: { userId, status: 'active' } });
-      if (active) {
-        if (active.publicKeyB64 === publicKeyB64) {
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        // Serialize this user's whole key lifecycle. Without it, two concurrent
+        // PUTs of DIFFERENT keys both read "no active" under READ COMMITTED and
+        // both create, leaving two active rows. The lock is transaction-scoped
+        // and auto-releases on commit/rollback; `${userId}` is a Prisma
+        // parameter bind, never string-concatenated into the SQL.
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${userId}))`;
+        const active = await tx.signingKey.findFirst({ where: { userId, status: 'active' } });
+        if (active) {
+          if (active.publicKeyB64 === publicKeyB64) {
+            return { ok: true, status: 'active', idempotent: true };
+          }
+          throw new ConflictException(
+            'a different signing key is active — replacement only exists as supersession',
+          );
+        }
+        const retired = await tx.signingKey.findUnique({
+          where: { userId_publicKeyB64: { userId, publicKeyB64 } },
+        });
+        if (retired) {
+          throw new ConflictException(
+            `that key was retired (${retired.status}) and may not return — a rollback is not undone by republishing`,
+          );
+        }
+        await tx.signingKey.create({
+          data: { userId, publicKeyB64, algo, status: 'active' },
+        });
+        return { ok: true, status: 'active' };
+      });
+    } catch (e) {
+      // A concurrent FIRST-publish of the same key can still lose the create
+      // race on the [userId, publicKeyB64] unique constraint (defence in depth
+      // behind the lock). PUT is idempotent, so a row for this exact key now
+      // existing is success, not a 500: re-read and answer as the idempotent
+      // path. A RETIRED sibling row still may not return.
+      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
+        const existing = await this.prisma.signingKey.findUnique({
+          where: { userId_publicKeyB64: { userId, publicKeyB64 } },
+        });
+        if (existing?.status === 'active') {
           return { ok: true, status: 'active', idempotent: true };
         }
-        throw new ConflictException(
-          'a different signing key is active — replacement only exists as supersession',
-        );
+        if (existing) {
+          throw new ConflictException(
+            `that key was retired (${existing.status}) and may not return — a rollback is not undone by republishing`,
+          );
+        }
       }
-      const retired = await tx.signingKey.findUnique({
-        where: { userId_publicKeyB64: { userId, publicKeyB64 } },
-      });
-      if (retired) {
-        throw new ConflictException(
-          `that key was retired (${retired.status}) and may not return — a rollback is not undone by republishing`,
-        );
-      }
-      await tx.signingKey.create({
-        data: { userId, publicKeyB64, algo, status: 'active' },
-      });
-      return { ok: true, status: 'active' };
-    });
+      throw e;
+    }
   }
 
   async supersede(userId: string, body: SupersedeBody) {
@@ -105,36 +147,44 @@ export class SigningKeysService {
       throw new BadRequestException('supersessionSigB64 must be base64');
     }
 
-    const active = await this.prisma.signingKey.findFirst({
-      where: { userId, status: 'active' },
-    });
-    if (!active) {
-      throw new NotFoundException('no active signing key to supersede');
-    }
-    if (active.publicKeyB64 === publicKeyB64) {
-      throw new BadRequestException('the replacement must be a different key');
-    }
-
-    /* The statement that authorises the swap: the OLD key signs
-     * (domain, userId, oldPublicKeyB64, newPublicKeyB64, newAlgo). The new
-     * key's ALGO is bound in because raw lengths collide across protocols
-     * (Ed25519 and X25519 are both 32 bytes) — the same two-defence rule the
-     * signing module applies to every transcript it signs. Verified BEFORE
-     * the chain is touched; a bad signature changes nothing. */
-    const bytes = transcript(SUPERSEDE_DOMAIN, [
-      userId,
-      active.publicKeyB64,
-      publicKeyB64,
-      algo,
-    ]);
-    const okSig = await verifySupersession(active.publicKeyB64, active.algo, bytes, sigB64);
-    if (!okSig) {
-      throw new BadRequestException(
-        'supersession signature does not verify against the active key — the chain is unchanged',
-      );
-    }
-
     return this.prisma.$transaction(async (tx) => {
+      // Serialize this user's lifecycle writes and read the active row INSIDE
+      // the write transaction. Reading it outside (as this method used to) let
+      // a withdraw commit in the read-to-write gap, whereupon the update below
+      // silently revived the withdrawn row as 'superseded' and published a
+      // fresh active key — reverting a committed rollback. The lock is
+      // transaction-scoped; `${userId}` is a Prisma parameter bind.
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${userId}))`;
+
+      const active = await tx.signingKey.findFirst({
+        where: { userId, status: 'active' },
+      });
+      if (!active) {
+        throw new NotFoundException('no active signing key to supersede');
+      }
+      if (active.publicKeyB64 === publicKeyB64) {
+        throw new BadRequestException('the replacement must be a different key');
+      }
+
+      /* The statement that authorises the swap: the OLD key signs
+       * (domain, userId, oldPublicKeyB64, newPublicKeyB64, newAlgo). The new
+       * key's ALGO is bound in because raw lengths collide across protocols
+       * (Ed25519 and X25519 are both 32 bytes) — the same two-defence rule the
+       * signing module applies to every transcript it signs. Verified BEFORE
+       * the chain is touched; a bad signature changes nothing. */
+      const bytes = transcript(SUPERSEDE_DOMAIN, [
+        userId,
+        active.publicKeyB64,
+        publicKeyB64,
+        algo,
+      ]);
+      const okSig = await verifySupersession(active.publicKeyB64, active.algo, bytes, sigB64);
+      if (!okSig) {
+        throw new BadRequestException(
+          'supersession signature does not verify against the active key — the chain is unchanged',
+        );
+      }
+
       const retired = await tx.signingKey.findUnique({
         where: { userId_publicKeyB64: { userId, publicKeyB64 } },
       });
@@ -164,6 +214,10 @@ export class SigningKeysService {
    */
   async withdraw(userId: string) {
     return this.prisma.$transaction(async (tx) => {
+      // Serialize this user's lifecycle writes so a withdraw cannot interleave
+      // with a racing publish/supersede on the same user. Transaction-scoped
+      // lock; `${userId}` is a Prisma parameter bind.
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${userId}))`;
       const active = await tx.signingKey.findFirst({ where: { userId, status: 'active' } });
       if (active) {
         await tx.signingKey.update({

@@ -64,7 +64,16 @@ function openDb () {
         reject(err)
       }
     }
-    req.onsuccess = () => resolve(req.result)
+    req.onsuccess = () => {
+      const db = req.result
+      // `deleteDatabase` (wipeDevice) fires `versionchange` at EVERY open
+      // connection and blocks until they close. This connection is cached in
+      // `dbPromise` for the module's lifetime, so without this the app blocks
+      // its OWN wipe — and db.js then reports the block as a wipe failure. Close
+      // on notice, and drop the cached promise so a later use reopens cleanly.
+      db.onversionchange = () => { db.close(); dbPromise = null }
+      resolve(db)
+    }
     req.onerror = () => reject(req.error)
     req.onblocked = () => reject(new Error('identity pin store is blocked by another connection'))
   })
