@@ -209,3 +209,22 @@ to end rather than describing it.
 **A second signature instead of a DH round trip.** Would require the agreement
 key to be a signing key, which X25519 is not, or a third key, which adds a
 lifetime to manage for no gain over agreeing with the key already in hand.
+
+## Rollback
+
+**Free and total, and this is the one point in the sequence where that is
+literally true.** Nothing under `src/` imports either module, no key has been
+generated, nothing has been published, and no bytes have been written to any
+store. Reverting the commit removes two files and three test suites and changes
+no runtime behaviour on any device, in any state.
+
+There is nothing to purge, because nothing was persisted. There is no
+compatibility window, because no peer has ever seen a binding. A device that ran
+this build and a device that did not are indistinguishable.
+
+That property is a consequence of the gating decision, not a coincidence: an
+unreachable module cannot leave anything behind. It stops being true the moment
+Step 2 is authorised, and the change that authorises it must carry its own
+rollback plan covering published keys — at which point rollback means deciding
+what happens to peers that have already pinned a signing identity, which is a
+materially harder question and must not be inherited from this section.
