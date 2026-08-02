@@ -85,6 +85,9 @@ export function createMemoryOutbox ({ ttlMs = 24 * 60 * 60_000 } = {}) {
     },
 
     has (id) { return items.has(id) },
+    /** O(1) lookup of one entry (additive, beyond IOUTBOX_METHODS — the drain
+     *  prefers it over scanning pending(); ADR-012b). */
+    get (id) { return items.get(id) || null },
     get size () { return items.size }
   }
 }

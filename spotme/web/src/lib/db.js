@@ -136,6 +136,15 @@ export function wipeDevice () {
     .then((m) => { m.forgetSigningIdentity?.(); return null })
     .catch(() => 'signing key cache')
 
+  /* `spotme-adaptive-outbox` (ADR-012b) is the adaptive network's durable
+   * send queue: sealed envelopes plus routing metadata — room ids, peer
+   * routing ids, timestamps — which is a record of who this device was
+   * talking to. TODAY it is always empty: every adaptive flag ships false
+   * and nothing constructs the store, so this line deletes a database that
+   * does not exist (a no-op success). It is registered NOW so that the day
+   * an activation PR first writes an envelope, "Clear all data" already
+   * covers it — a wipe gap discovered after activation would be exactly the
+   * class of invisible leak the blobstore lesson above documents. */
   return Promise.all([
     cleared,
     clearedTrust,
@@ -144,6 +153,7 @@ export function wipeDevice () {
     dropDatabase('spotme-e2e'),
     dropDatabase('spotme-identity-pins'),
     dropDatabase('spotme-signing'),
+    dropDatabase('spotme-adaptive-outbox'),
   ]).then((results) => {
     const failures = results.filter(Boolean)
     return { ok: failures.length === 0, failures }
