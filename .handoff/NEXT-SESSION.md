@@ -110,6 +110,16 @@ SSE, no polling; sends are a server action plus `revalidatePath()`, which
 refreshes only the *sender's* view. Plaintext content in MongoDB, Cloudinary,
 NextAuth beta — behind Spot Me on every axis.
 
+Fourth entry, `pingdotgg/uploadthing`: **do not adopt; read for design.** MIT,
+5.2k stars, genuinely excellent — but a **hosted service**: it requires
+`UPLOADTHING_TOKEN`, calls `api.uploadthing.com`, and has **no self-host or
+BYO-bucket path in source**. Its only crypto is HMAC signing; **no AES, no
+encrypt/decrypt anywhere** — so media would leave the device in the clear to a
+third party. Roadmap §7 already selects R2/S3 (MinIO in CI, `r2-smoke.yml`
+present). Worth borrowing under MIT: the type-safe file-router pattern and the
+presigned-URL upload flow, for our own R2 path where the client encrypts before
+the PUT.
+
 Three things that will otherwise be re-learned the hard way:
 
 - **Nothing is installed today.** The web SDK briefly went into `ysnap` (the

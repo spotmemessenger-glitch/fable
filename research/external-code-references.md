@@ -228,3 +228,78 @@ tree. Clean. MEASURED.
 **Rejected — do not spend time here.** A small single-sitting portfolio
 project, unlicensed, whose headline feature does not exist. It is behind Spot
 Me on every axis that matters. Logged so it is not re-examined.
+
+---
+
+## 4. `pingdotgg/uploadthing` — good library, wrong shape for Spot Me
+
+<https://github.com/pingdotgg/uploadthing> — <https://uploadthing.com>
+
+File uploads for TypeScript web apps. **MIT**, 5,183 stars, 428 forks,
+maintained by Ping Labs, last pushed 2026-07-07. A well-structured monorepo
+built on Effect-TS with first-party adapters for React, Vue, Svelte, Solid,
+Nuxt and **Expo**, published as `uploadthing@7.7.4` and
+`@uploadthing/react@7.3.3`. MEASURED.
+
+This is the highest-quality repository in this register. The problem is not
+quality.
+
+### It is a hosted service, not a library you point at your own bucket
+
+MEASURED, from the source rather than the marketing:
+
+- It requires `UPLOADTHING_TOKEN` — a base64 JSON object of
+  `{ apiKey, appId, regions }`. Without it the SDK refuses to start
+  (`packages/uploadthing/src/_internal/config.ts`).
+- The API base defaults to `https://api.uploadthing.com`, requests carry an
+  `x-uploadthing-api-key` header, and files are served from
+  `https://uploadthing.com/f/`.
+- **No self-host path, no bring-your-own-bucket, no custom storage endpoint**
+  appears anywhere in any package's source.
+
+So uploaded files transit and reside on UploadThing's infrastructure. The MIT
+licence covers the client SDK; the storage service behind it does not come with
+it.
+
+### It has no content encryption
+
+The only cryptography in the codebase is **HMAC-SHA-256 signing** —
+`signPayload`, `verifySignature`, `generateSignedURL`, `generateKey`,
+`verifyKey` in `packages/shared/src/crypto.ts`. There is **no AES, and no
+`encrypt`/`decrypt`, GCM or CBC call anywhere in any package**. MEASURED.
+
+That is entirely reasonable for its intended use, and disqualifying for ours:
+media would leave the device in the clear to a third party. For an E2EE
+messenger this is a harder conflict than Camera Kit's telemetry was, because
+the payload is the user's actual content rather than usage data.
+
+### The decision it would displace is already made and partly built
+
+Roadmap §7 lists **Cloudflare R2 / S3** as the media storage target, currently
+"partially validated", with MinIO already running in CI and an `r2-smoke.yml`
+workflow already in this repository. Adopting UploadThing would replace a
+chosen, partially-implemented, self-controlled path with a hosted one that
+cannot satisfy the encryption requirement.
+
+There is also no adapter for `spotme/web`, which is Vite + vanilla JS. The
+Expo adapter would fit `spotme/app`, but that does not rescue the two points
+above.
+
+### What is genuinely worth borrowing
+
+The **design**, not the service — and MIT permits it:
+
+- The type-safe "file router" pattern: declaring upload endpoints with their
+  permitted file types, size limits and middleware in one typed place.
+- The presigned-URL upload flow, and how progress, retries and completion
+  callbacks are modelled around it.
+
+Both are directly applicable to building Spot Me's own R2 upload path, where
+the client would encrypt before the PUT.
+
+### Verdict
+
+**Do not adopt; read for design.** Excellent engineering, and a sound choice
+for a project without an E2EE requirement — including anything in this monorepo
+that is not Spot Me. For Spot Me it is disqualified by hosted storage plus no
+content encryption, against a roadmap that already selected R2.
