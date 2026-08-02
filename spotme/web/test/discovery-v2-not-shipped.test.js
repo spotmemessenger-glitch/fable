@@ -68,7 +68,12 @@ check('the inert engine gives directions only as an honest straight line', await
 /* -------------------------------------------- 2. …and NOTHING wires it in - */
 
 {
-  const appFiles = srcFiles.filter((f) => !f.path.startsWith(V2_DIR))
+  // Sibling DARK foundations may reuse these contracts — they are themselves
+  // fence-proven not-shipped (each has its own *-not-shipped test), so an import
+  // from one is not "wired into the app". The rule this guards is that no
+  // SHIPPED app code reaches discovery-v2; a dark sibling doesn't ship either.
+  const DARK_DIRS = [V2_DIR, 'src/lib/live-events']
+  const appFiles = srcFiles.filter((f) => !DARK_DIRS.some((d) => f.path.startsWith(d)))
   const importers = appFiles.filter((f) =>
     /from\s+['"][^'"]*discovery-v2[^'"]*['"]/.test(f.body) ||
     /import\s*\(\s*['"][^'"]*discovery-v2[^'"]*['"]/.test(f.body))
