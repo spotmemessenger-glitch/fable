@@ -77,11 +77,19 @@ function walk (dir, out = []) {
 }
 const read = (f) => ({ path: relative(ROOT, f), body: readFileSync(f, 'utf8') })
 const isV2 = (p) => p.startsWith('src/lib/translation/')
+/* The live-voice platform (ADR-011b) is the DESIGNED consumer of the
+ * translation platform — its MT stage routes captions through the #51
+ * pipeline. It is not "the app" for this fence's purpose because it is
+ * fenced identically itself: test/live-voice-not-wired.test.js proves no
+ * app module imports live-voice and every live-voice flag defaults OFF, so
+ * the platform stays unreachable from the live app through it. Everything
+ * else in src/ + api/ is still held to zero imports. */
+const isFencedConsumer = (p) => p.startsWith('src/lib/live-voice/')
 
 const srcFiles = walk(SRC).map(read)
 const apiFiles = walk(API).map(read)
 const testFiles = walk(TEST).map(read)
-const appFiles = [...srcFiles, ...apiFiles].filter((f) => !isV2(f.path))
+const appFiles = [...srcFiles, ...apiFiles].filter((f) => !isV2(f.path) && !isFencedConsumer(f.path))
 
 const importsTranslation = (body) =>
   /from\s+['"][^'"]*\/translation\/[^'"]*['"]/.test(body) ||
