@@ -163,6 +163,15 @@ export function createLiveVoiceSession (opts = {}) {
 
     await ensureMtOpen()
 
+    // STRICT PRIVACY REFUSES THE WHOLE PIPELINE, not just MT: captions come
+    // from cloud STT, so "no live translation" must mean no audio leaves at
+    // all. The utterance is refused, nothing is transcribed, the original
+    // E2E call carries on untouched (mission: strict = on-device/none).
+    if (strictRefused) {
+      if (active.get(speakerId) === token) active.delete(speakerId)
+      return { utteranceId: null, mode: 'refused', legs: [], reason: STRICT_PRIVACY_REFUSAL }
+    }
+
     const sourceLang = input.sourceLang || speaker.speakLang
     if (!sourceLang || sourceLang === 'auto') throw new Error('live-session: sourceLang must be supplied or resolved upstream')
     const utteranceId = `${sessionId}:${speakerId}:u${++utteranceSeq}`

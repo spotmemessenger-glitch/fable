@@ -208,6 +208,29 @@ await checkAsync('no capability flags → the session refuses to exist', async (
   try { build({ flags: {} }); return false } catch (e) { return /nothing enabled/.test(e.message) }
 })
 
+/* -------- strict privacy refuses the WHOLE pipeline (no cloud STT either) -------- */
+await checkAsync('strict privacy: speech() is refused entirely — no STT, no MT, no frames', async () => {
+  const clock = makeManualClock(0)
+  const { createTranslationPlatformMt, STRICT_PRIVACY_REFUSAL } = await import('../src/lib/live-voice/mt-stage.js')
+  const { fakeTranslationPlatform } = await import('./helpers/fake-translation-provider.js')
+  let sttCalls = 0
+  const stt = createStubStreamingStt({ clock })
+  const realTranscribe = stt.transcribe.bind(stt)
+  stt.transcribe = (i, h) => { sttCalls += 1; return realTranscribe(i, h) }
+  const deliveries = []
+  const session = createLiveVoiceSession({
+    sessionId: 's', participants: [A, B],
+    adapters: { stt, mt: createTranslationPlatformMt({ platform: fakeTranslationPlatform().platform, privacyMode: 'strict' }), tts: createStubStreamingTts({ clock }) },
+    flags: { liveTranslation: true, voiceClone: true, liveCaptions: true },
+    clock: clock.now, deliver: (d) => deliveries.push(d)
+  })
+  const r = await session.speech('A', { script: 'this must never leave', sourceLang: 'en' })
+  const captionFrames = deliveries.filter((d) => d.frame.type === FRAME_TYPES.PARTIAL_CAPTION)
+  return r.mode === 'refused' && r.reason === STRICT_PRIVACY_REFUSAL &&
+    r.legs.length === 0 && sttCalls === 0 && captionFrames.length === 0 &&
+    session.strictRefused === true
+})
+
 /* --------------------------------------------------------------- report */
 const names = Object.keys(results)
 const passed = names.filter((n) => results[n]).length
