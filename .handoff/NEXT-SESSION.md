@@ -88,6 +88,16 @@ schema is a fair shape reference for Priority 7 and nothing else; **its
 advertised chat does not exist** (`chatRoutes.js` is 0 bytes, `socket` is never
 imported), and its `notification` model is in-app DB rows, not push.
 
+Second entry, `TowhidKashem/snapchat-clone`: **MIT** (the first one we may
+legally borrow from), genuine, 1.1k stars, but a 2020 stack (React 16, CRA,
+Enzyme, node-sass) and frontend-only — a UI reference, not a base. Its
+`postinstall` auto-clones a second repo **over SSH**, so `npm install` fails
+without keys. **The lead worth chasing is `jeeliz/jeelizFaceFilter`**
+(Apache-2.0, 2.9k stars, maintained): client-side WebGL face filters that may
+give the AR capability Camera Kit was wanted for, without a vendor backend —
+the exact objection that got Camera Kit reverted. UNVERIFIED whether it is
+truly offline-only, and whether the licence covers the model weights.
+
 Three things that will otherwise be re-learned the hard way:
 
 - The web SDK went into **`ysnap`** because it is the only React host. **It is
