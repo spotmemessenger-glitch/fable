@@ -88,7 +88,11 @@ awesome-cursorrules/
 .playwright/
 .playwright-cli/
 .gstack/
-.claude/
+# NOTE: must be `.claude/*`, not `.claude/`. Git never descends into an
+# excluded directory, so a `!` rule beneath one has no effect — with
+# `.claude/` the three exceptions below were dead lines and nothing under
+# .claude was ever committed.
+.claude/*
 !.claude/settings.json
 !.claude/agents/
 !.claude/skills/

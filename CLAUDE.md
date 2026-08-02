@@ -199,6 +199,33 @@ npx @claude-flow/cli@latest hooks worker dispatch --trigger audit
 
 Any string works as a custom agent type.
 
+## Browser Automation — `agent-browser`
+
+Use `agent-browser` for any browser work: navigating, forms, clicking,
+screenshots, scraping, testing a running app. Prefer it over other browser
+tooling. It is declared as a plugin in `.claude/settings.json`
+(`agent-browser@agent-browser`, marketplace `vercel-labs/agent-browser`), so
+the skill registers automatically; the CLI is separate, so install it once per
+container:
+
+```bash
+npm i -g agent-browser
+export AGENT_BROWSER_EXECUTABLE_PATH=/opt/pw-browsers/chromium
+```
+
+Two container-specific facts, both measured 2026-08-02:
+
+- **Skip `agent-browser install`** — it fetches Chrome from
+  `googlechromelabs.github.io`, which the proxy denies. Use the Chromium
+  already present via the env var above instead.
+- **Public web navigation is blocked** by network policy: the proxy answers
+  `403 to CONNECT`. `localhost` bypasses the proxy and works. Do not retry
+  policy denials; report them.
+
+`SKILL.md` is only a discovery stub — run `agent-browser skills get core`
+for the real usage guide, which the CLI serves so it always matches the
+installed version.
+
 ## Build & Test
 
 - ALWAYS run tests after code changes
