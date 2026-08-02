@@ -67,11 +67,14 @@ export function createTextRecognizerRegistry () {
         const out = await current.recognize(image, opts)
         // The engine may answer the vocabulary itself; pass a well-formed
         // refusal straight through, wrap a raw result, refuse anything else.
+        // `text` must be a real string — {text: undefined/null} is a
+        // malformed engine, not "the empty page read as the string
+        // 'undefined'". An honest empty read is a genuine '' and is allowed.
         if (out && out.available === false) return out
-        if (out && typeof out === 'object' && 'text' in out) {
-          return available({ text: String(out.text), boxes: Array.isArray(out.boxes) ? out.boxes : [], engine: current.name })
+        if (out && typeof out === 'object' && typeof out.text === 'string') {
+          return available({ text: out.text, boxes: Array.isArray(out.boxes) ? out.boxes : [], engine: current.name })
         }
-        return unavailable(VISION_UNAVAILABLE.FAILED, 'recognizer returned no text field')
+        return unavailable(VISION_UNAVAILABLE.FAILED, 'recognizer returned no string text field')
       } catch (e) {
         return unavailable(VISION_UNAVAILABLE.FAILED, `recognizer threw: ${e?.message || e}`)
       }
@@ -117,10 +120,10 @@ export function createTranslatorSlot () {
       try {
         const out = await current.translate(String(text), opts)
         if (out && out.available === false) return out
-        if (out && typeof out === 'object' && 'text' in out) {
-          return available({ text: String(out.text), from: out.from, to: out.to, translator: current.name })
+        if (out && typeof out === 'object' && typeof out.text === 'string') {
+          return available({ text: out.text, from: out.from, to: out.to, translator: current.name })
         }
-        return unavailable(VISION_UNAVAILABLE.FAILED, 'translator returned no text field')
+        return unavailable(VISION_UNAVAILABLE.FAILED, 'translator returned no string text field')
       } catch (e) {
         return unavailable(VISION_UNAVAILABLE.FAILED, `translator threw: ${e?.message || e}`)
       }

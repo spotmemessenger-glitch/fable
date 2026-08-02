@@ -52,8 +52,14 @@ export function createVisionCloudClient ({ flags, fetchImpl = null, getAuthHeade
       'VISION_CLOUD_ENABLED is off (owner D1 decision) — no image leaves this device'))
 
   async function call (op, body, { signal } = {}) {
-    const doFetch = fetchImpl || globalThis.fetch
-    if (typeof doFetch !== 'function') return unavailable(VISION_UNAVAILABLE.FAILED, 'no fetch available')
+    // The port egresses ONLY through an explicitly injected fetch — never an
+    // ambient global one. That keeps lib/vision free of any ambient network
+    // capability (the fence asserts it), so egress is a wiring-time decision,
+    // not a latent property of the module.
+    const doFetch = fetchImpl
+    if (typeof doFetch !== 'function') {
+      return unavailable(VISION_UNAVAILABLE.FAILED, 'no injected fetch — the cloud port is wired with an explicit fetch at activation')
+    }
     const headers = getAuthHeaders ? await getAuthHeaders() : { 'content-type': 'application/json' }
     let res
     try {

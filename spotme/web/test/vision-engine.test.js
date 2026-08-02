@@ -114,6 +114,17 @@ check('availability() map reports every capability with the right verdict', (() 
     m.recognize.reason === VISION_UNAVAILABLE.CLOUD_DISABLED
 })())
 
+// Review-board MED-2: the summary map must AGREE with the namespace methods.
+// With cloud on and no local OCR/translator, the methods report available
+// (via cloud); the map must not under-report them as unavailable.
+check('availability() map agrees with the methods for cloud-backed ocr/translate', (() => {
+  const v = createVision({ flags: { ...allOn, VISION_CLOUD_ENABLED: true }, env: barcodeEnv, fetchImpl: async () => ({}) })
+  const m = v.availability()
+  return m.ocr.available === v.ocr.availability().available &&
+    m.translate.available === v.translate.availability().available &&
+    m.ocr.available === true && m.translate.available === true
+})())
+
 console.log('\n========================================')
 console.log('  vision engine — inert dark, gated live, D1 held')
 console.log('========================================')

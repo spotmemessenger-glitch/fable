@@ -93,16 +93,18 @@ check('every flag defaults FALSE and assertShippedDark agrees',
 /* --------------------------------- 3. zero egress, zero persistence ------ */
 
 {
-  /* Call shapes, not bare words — vision-cloud.js's header SAYS "zero fetch"
-   * and that prose must not fail the fence; a real fetch CALL must. The dark
-   * client reaches the network only through an INJECTED fetch, so no
-   * lib/vision file contains a `fetch(` / `globalThis.fetch(` call shape. */
+  /* No lib/vision file may open OR name a network path. The cloud port
+   * egresses only through an INJECTED fetch (fetchImpl) — it neither calls
+   * `fetch(` nor references the ambient `globalThis.fetch`. Bare identifiers
+   * (WebSocket/XHR/RTC/EventSource) are banned as WORDS, not just `new X(`
+   * call shapes, so an aliased `const W = WebSocket; new W()` cannot slip
+   * past (review-board fence hardening). */
   const egress = visionFiles.filter((f) =>
-    /\bfetch\s*\(/.test(f.body) || /globalThis\.fetch\s*\(/.test(f.body) ||
-    /XMLHttpRequest/.test(f.body) || /new\s+WebSocket/.test(f.body) ||
-    /sendBeacon/.test(f.body) || /RTCPeerConnection/.test(f.body) ||
+    /\bfetch\s*\(/.test(f.body) || /globalThis\s*\.\s*fetch\b/.test(f.body) ||
+    /\bXMLHttpRequest\b/.test(f.body) || /\bWebSocket\b/.test(f.body) ||
+    /\bsendBeacon\b/.test(f.body) || /\bRTCPeerConnection\b/.test(f.body) ||
     /\bEventSource\b/.test(f.body) || /\bio\s*\(/.test(f.body) || /socket\.io/.test(f.body))
-  check('ZERO EGRESS: no lib/vision file can itself open a network path', egress.length === 0)
+  check('ZERO EGRESS: no lib/vision file opens or names a network path', egress.length === 0)
   if (egress.length) console.log('    egress in:', egress.map((f) => f.path).join(', '))
 
   const persistence = visionFiles.filter((f) =>
@@ -127,11 +129,16 @@ check('every flag defaults FALSE and assertShippedDark agrees',
   check('ZERO NEW DEPENDENCIES: dependencies are exactly the pre-mission seven',
     deps.join(',') === before.sort().join(','))
 
-  /* lib/vision may import: its own relative modules, the platform sibling
-   * ../camera/, and jsQR (the ONE pre-existing dep, imported lazily in
-   * scan.js). Anything else — an app module, a view, a new package — breaks
-   * the fence. */
-  const ALLOW = (s) => s.startsWith('./') || s.startsWith('../camera/') || s === 'jsqr'
+  /* lib/vision may import: its own flat relative modules, the platform
+   * sibling ../camera/, and jsQR (the ONE pre-existing dep, imported lazily
+   * in scan.js). The `..` guards close the `./../../lib/anything` traversal
+   * that a bare startsWith('./') would wave through (review-board fence
+   * hardening): an own-import is `./name.js` with no `..`, and a sibling
+   * import stays inside ../camera/. */
+  const ALLOW = (s) =>
+    (s.startsWith('./') && !s.includes('..')) ||
+    (s.startsWith('../camera/') && !s.slice('../camera/'.length).includes('..')) ||
+    s === 'jsqr'
   const stray = visionFiles.filter((f) => {
     const imports = [
       ...[...f.body.matchAll(/(?:^|\n)\s*(?:import|export)[^\n]*?from\s+['"]([^'"]+)['"]/g)].map((m) => m[1]),
@@ -177,12 +184,16 @@ check('every flag defaults FALSE and assertShippedDark agrees',
 /* ------------------------------------- 7. …but nothing is unexamined ----- */
 
 {
+  // A real IMPORT of the module, not a bare mention: a path in a comment or
+  // a log string must not count as coverage (review-board fence hardening).
+  const importsModule = (body, name) =>
+    new RegExp(`(?:from|import)\\s*\\(?\\s*['"][^'"]*vision/${name.replace('.', '\\.')}['"]`).test(body)
   const untested = visionFiles.filter((f) => {
     const name = f.path.split('/').pop()
     if (name === 'index.js') return false     // index is re-exports only
-    return !testFiles.some((t) => t.body.includes(`vision/${name}`))
+    return !testFiles.some((t) => importsModule(t.body, name))
   })
-  check('every lib/vision module (except index) is imported by at least one test',
+  check('every lib/vision module (except index) is IMPORTED by at least one test',
     untested.length === 0)
   if (untested.length) console.log('    untested:', untested.map((f) => f.path).join(', '))
 }

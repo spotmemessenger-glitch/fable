@@ -99,6 +99,21 @@ function liveVision (resolved, env, { clock, fetchImpl, getAuthHeaders, apiBase 
   const gatedSync = (feature, fn) => (...args) => gate(feature) || fn(...args)
   const gatedAsync = (feature, fn) => async (...args) => gate(feature) || fn(...args)
 
+  // ONE source of truth for the ocr/translate verdict, shared by the
+  // namespace method AND the availability() summary map — so the two can
+  // never disagree (a registered engine wins; else the cloud fallback where
+  // VISION_CLOUD is lit; else the honest local refusal).
+  const ocrAvail = () => {
+    const local = recognizers.availability()
+    if (local.available) return local
+    return cloudOn() ? available({ engine: 'cloud' }) : local
+  }
+  const translateAvail = () => {
+    if (cloudOn()) return available({ via: 'cloud' })
+    const rec = recognizers.availability()
+    return rec.available ? translators.availability() : rec
+  }
+
   const engine = {
     enabled: true,
     flags: resolved,
@@ -108,8 +123,8 @@ function liveVision (resolved, env, { clock, fetchImpl, getAuthHeaders, apiBase 
     availability () {
       const map = {}
       map.scan = resolved.VISION_SCAN_ENABLED ? available({}) : gate('scan')
-      map.ocr = resolved.VISION_OCR_ENABLED ? recognizers.availability() : gate('ocr')
-      map.translate = resolved.VISION_TRANSLATE_ENABLED ? translators.availability() : gate('translate')
+      map.ocr = resolved.VISION_OCR_ENABLED ? ocrAvail() : gate('ocr')
+      map.translate = resolved.VISION_TRANSLATE_ENABLED ? translateAvail() : gate('translate')
       for (const f of ['recognize', 'assistant', 'shopping']) {
         map[f] = !resolved[FEATURE_FLAG[f]]
           ? gate(f)
@@ -131,11 +146,7 @@ function liveVision (resolved, env, { clock, fetchImpl, getAuthHeaders, apiBase 
     }),
 
     ocr: Object.freeze({
-      availability: gatedSync('ocr', () => {
-        const local = recognizers.availability()
-        if (local.available) return local
-        return cloudOn() ? available({ engine: 'cloud' }) : local
-      }),
+      availability: gatedSync('ocr', ocrAvail),
       register: gatedSync('ocr', (engine) => recognizers.register(engine)),
       unregister: gatedSync('ocr', () => recognizers.unregister()),
       current: () => recognizers.current(),

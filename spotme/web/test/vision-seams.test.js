@@ -64,6 +64,30 @@ check('an engine returning no text field is FAILED, not silently empty', await (
   return out.available === false && out.reason === VISION_UNAVAILABLE.FAILED
 })())
 
+// Review-board MED-1: {text: undefined/null} must NOT become available with
+// the string "undefined"/"null" — a malformed engine is FAILED, not a
+// fabricated read. But a genuine empty read ('') is allowed.
+check('{text: undefined} is FAILED, never a fabricated "undefined" string', await (async () => {
+  const reg = createTextRecognizerRegistry()
+  reg.register({ name: 'nully', recognize: async () => ({ text: undefined, boxes: [] }) })
+  const out = await reg.recognize({ w: 2, h: 2 })
+  return out.available === false && out.reason === VISION_UNAVAILABLE.FAILED
+})())
+
+check('{text: null} is FAILED too', await (async () => {
+  const reg = createTextRecognizerRegistry()
+  reg.register({ name: 'nully', recognize: async () => ({ text: null }) })
+  const out = await reg.recognize({ w: 2, h: 2 })
+  return out.available === false && out.reason === VISION_UNAVAILABLE.FAILED
+})())
+
+check('a genuine empty read ({text: ""}) IS available — an empty page is honest', await (async () => {
+  const reg = createTextRecognizerRegistry()
+  reg.register({ name: 'blankpage', recognize: async () => ({ text: '', boxes: [] }) })
+  const out = await reg.recognize({ w: 2, h: 2 })
+  return out.available === true && out.text === ''
+})())
+
 check('unregister frees the slot and returns to the honest refusal', (() => {
   const reg = createTextRecognizerRegistry()
   reg.register({ name: 'ocr', recognize: () => {} })

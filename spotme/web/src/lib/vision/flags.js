@@ -13,12 +13,16 @@
  * `AI_VISION_ENABLED`, which parents every vision capability flag. Two
  * flags deserve their extra sentence:
  *
- *   VISION_CLOUD_ENABLED   parents EVERY provider leg. While it is false
- *                          no image, crop, or derived text can leave the
- *                          device from this module — the fence test proves
- *                          it with a throwing fetch. Flipping it is the D1
- *                          plaintext-boundary decision (images to cloud
- *                          providers) and belongs to the owner alone.
+ *   VISION_CLOUD_ENABLED   GATES every provider leg. In the flag tree it is
+ *                          a sibling of the cloud-only capability flags (all
+ *                          children of AI_VISION_ENABLED), not their parent;
+ *                          the "no cloud ⇒ no leg" rule is enforced at
+ *                          RUNTIME by the client port, which refuses
+ *                          (CLOUD_DISABLED) before any byte is serialized, so
+ *                          while it is false no image, crop, or derived text
+ *                          can leave the device from this module. Flipping it
+ *                          is the D1 plaintext-boundary decision (images to
+ *                          cloud providers) and belongs to the owner alone.
  *   VISION_MEDICAL_INFO_ENABLED
  *                          child of the ASSISTANT flag, not a sibling —
  *                          medical info must never light up without the
