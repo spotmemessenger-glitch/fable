@@ -1,0 +1,31 @@
+{
+  "name": "@spotme/media-core",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Spot Me migrated media foundation — shared contracts, types and on-device safety validators (Priority 4, PR 1). Pure TypeScript, zero runtime dependencies, environment-neutral (no DOM/Node globals in src).",
+  "license": "UNLICENSED",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "sideEffects": false,
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "jest"
+  },
+  "devDependencies": {
+    "@types/jest": "^29.5.14",
+    "@types/node": "^22.9.0",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.2.5",
+    "typescript": "^5.6.3"
+  }
+}
