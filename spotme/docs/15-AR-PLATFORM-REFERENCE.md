@@ -5,8 +5,9 @@
 branch `claude/snap-camera-kit-repos-65c88r` (PR #53).
 
 Covers the AR camera platforms evaluated for Spot Me. **Part A — Snap Camera
-Kit** (§1–§7): viable, gated on owner authorization. **Part B — Meta / Spark
-AR** (§8): a closed platform; do not pursue.
+Kit** (§1–§7): viable, gated on owner authorization; an install was made and
+then reverted (§3). **Part B — Meta / Spark AR** (§8): a closed platform; do
+not pursue.
 
 AR appears **nowhere** in the controlling roadmap
 (`MASTER-ENGINEERING-ROADMAP-V2.md`): not in §7's third-party integration
@@ -16,8 +17,9 @@ Nothing in this file is approved work. It exists so that if Spot Me ever wants
 AR camera capability, the evaluation does not start from zero — and so that
 the closed options are not re-investigated.
 
-**Bottom line:** if Spot Me ever does AR, Snap Camera Kit is the only live
-vendor path of those examined. The Meta/Spark AR route is closed permanently.
+**Bottom line: nothing is installed.** If Spot Me ever does AR, Snap Camera
+Kit is the only live vendor path of those examined. The Meta/Spark AR route is
+closed permanently.
 
 **Do not treat any line here as a live check.** Every claim below is tagged
 MEASURED (executed in this container, on the date above) or UNVERIFIED (read
@@ -66,9 +68,15 @@ The repo has three JS hosts and one Android project:
 
 ---
 
-## 3. Web — INSTALLED (in `ysnap` only)
+## 3. Web — INSTALLED, THEN BACKED OUT (nothing is installed today)
 
-MEASURED. Landed on branch `claude/snap-camera-kit-repos-65c88r` (PR #53):
+**Current state: no Camera Kit package exists anywhere in this repository.**
+The install below was made on branch `claude/snap-camera-kit-repos-65c88r`
+(PR #53) and then reverted on the owner's instruction before merge. `ysnap`'s
+`package.json` and `package-lock.json` are byte-identical to `origin/master`.
+Kept here because the measurements stay valid for whoever revisits this.
+
+What was installed, and worked:
 
 ```
 @snap/react-camera-kit  ^0.5.1
@@ -77,26 +85,28 @@ rxjs                    ^7.8.2
 ```
 
 `@snap/react-camera-kit@0.5.1` declares peers `@snap/camera-kit ^1.13.0`,
-`react >=16.8.0`, `react-dom >=16.8.0`, `rxjs >=7` — all four satisfied.
+`react >=16.8.0`, `react-dom >=16.8.0`, `rxjs >=7` — all four satisfied by
+`ysnap` (Next 15 / React 19.1.0), which is the only React host in the repo.
+`npm run build` completed clean, all routes rendered, no new warnings, and no
+existing dependency changed version. MEASURED.
 
-Verified: `npm run build` in `ysnap` completed clean, all routes rendered, no
-new warnings. No existing dependency changed version.
+**Why it was backed out.** It was inert — nothing imported it — so it carried
+supply-chain and vendor-telemetry surface (§7) for zero present benefit, in a
+repository whose product is an E2EE messenger. Reverting cost nothing. Treat
+that as the default posture: do not add Camera Kit until something concrete is
+being built with it and §7 has been answered.
 
-**That local build is the only verification this change will ever get, and it
-is not reproducible from the PR.** `ysnap` has no automated coverage of any
-kind: CI (`.github/workflows/ci.yml`) runs only against `spotme/backend`,
-`spotme/web` and `spotme/e2e`, and the sole Vercel project
-(`spotme-messenger`) has root directory `spotme/web` — the `-ysnap` in its
-preview URL is the Vercel **team** slug, not this directory. A green PR
-therefore says nothing about `ysnap`. Anyone changing `ysnap` must build it
-by hand. MEASURED.
+**A gap this surfaced, still true and worth fixing independently:** `ysnap`
+has no automated coverage of any kind. CI (`.github/workflows/ci.yml`) runs
+only against `spotme/backend`, `spotme/web` and `spotme/e2e`, and the sole
+Vercel project (`spotme-messenger`) has root directory `spotme/web` — the
+`-ysnap` in its preview URL is the Vercel **team** slug, not this directory.
+A green PR says nothing about `ysnap`; it must be built by hand. MEASURED.
 
-It is **inert** — nothing imports it. Rendering a lens additionally needs an
-API token and Lens Group ID (§6).
-
-Transitive deps added to the lockfile: `browser-fs-access`, `browser-headers`,
-`google-protobuf`, `uuid`, `wasm-feature-detect`, `rxjs`. See §7 — the
-protobuf/gRPC-web pair is there because the SDK talks to Snap's backend.
+For the record, the install pulled these transitive deps: `browser-fs-access`,
+`browser-headers`, `google-protobuf`, `uuid`, `wasm-feature-detect`, `rxjs`.
+See §7 — the protobuf/gRPC-web pair is there because the SDK talks to Snap's
+backend, which is precisely the concern that motivated the backout.
 
 ---
 
