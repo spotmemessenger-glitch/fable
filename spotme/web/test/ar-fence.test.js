@@ -91,12 +91,15 @@ check('every flag defaults FALSE and assertArShippedDark agrees',
 /* --------------------------------- 3. zero egress, zero persistence ------ */
 
 {
+  /* Bare identifiers, not just `new X(` call shapes, so an aliased
+   * `const W = WebSocket; new W()` cannot slip past (review-board fence
+   * hardening). lib/ar has no cloud leg at all — it names no network API. */
   const egress = arFiles.filter((f) =>
-    /\bfetch\s*\(/.test(f.body) || /globalThis\.fetch\s*\(/.test(f.body) ||
-    /XMLHttpRequest/.test(f.body) || /new\s+WebSocket/.test(f.body) ||
-    /sendBeacon/.test(f.body) || /RTCPeerConnection/.test(f.body) ||
+    /\bfetch\s*\(/.test(f.body) || /globalThis\s*\.\s*fetch\b/.test(f.body) ||
+    /\bXMLHttpRequest\b/.test(f.body) || /\bWebSocket\b/.test(f.body) ||
+    /\bsendBeacon\b/.test(f.body) || /\bRTCPeerConnection\b/.test(f.body) ||
     /\bEventSource\b/.test(f.body) || /\bio\s*\(/.test(f.body) || /socket\.io/.test(f.body))
-  check('ZERO EGRESS: no lib/ar file can open a network path', egress.length === 0)
+  check('ZERO EGRESS: no lib/ar file opens or names a network path', egress.length === 0)
   if (egress.length) console.log('    egress in:', egress.map((f) => f.path).join(', '))
 
   const persistence = arFiles.filter((f) =>
@@ -121,9 +124,13 @@ check('every flag defaults FALSE and assertArShippedDark agrees',
   check('ZERO NEW DEPENDENCIES: dependencies are exactly the pre-mission seven',
     deps.join(',') === before.sort().join(','))
 
-  /* lib/ar may import its own relative modules and the platform sibling
-   * ../camera/ (shared clock + image math). Anything else breaks the fence. */
-  const ALLOW = (s) => s.startsWith('./') || s.startsWith('../camera/')
+  /* lib/ar may import its own flat relative modules and the platform sibling
+   * ../camera/ (shared clock + image math). The `..` guards close the
+   * `./../../lib/anything` traversal that a bare startsWith('./') would wave
+   * through (review-board fence hardening). */
+  const ALLOW = (s) =>
+    (s.startsWith('./') && !s.includes('..')) ||
+    (s.startsWith('../camera/') && !s.slice('../camera/'.length).includes('..'))
   const stray = arFiles.filter((f) => {
     const imports = [
       ...[...f.body.matchAll(/(?:^|\n)\s*(?:import|export)[^\n]*?from\s+['"]([^'"]+)['"]/g)].map((m) => m[1]),
@@ -169,12 +176,16 @@ check('every flag defaults FALSE and assertArShippedDark agrees',
 /* ------------------------------------- 7. …but nothing is unexamined ----- */
 
 {
+  // A real IMPORT of the module, not a bare mention: a path in a comment or
+  // a log string must not count as coverage (review-board fence hardening).
+  const importsModule = (body, name) =>
+    new RegExp(`(?:from|import)\\s*\\(?\\s*['"][^'"]*ar/${name.replace('.', '\\.')}['"]`).test(body)
   const untested = arFiles.filter((f) => {
     const name = f.path.split('/').pop()
     if (name === 'index.js') return false     // index is re-exports only
-    return !testFiles.some((t) => t.body.includes(`ar/${name}`))
+    return !testFiles.some((t) => importsModule(t.body, name))
   })
-  check('every lib/ar module (except index) is imported by at least one test',
+  check('every lib/ar module (except index) is IMPORTED by at least one test',
     untested.length === 0)
   if (untested.length) console.log('    untested:', untested.map((f) => f.path).join(', '))
 }
