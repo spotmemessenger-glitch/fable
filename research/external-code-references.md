@@ -322,3 +322,58 @@ the client would encrypt before the PUT.
 for a project without an E2EE requirement — including anything in this monorepo
 that is not Spot Me. For Spot Me it is disqualified by hosted storage plus no
 content encryption, against a roadmap that already selected R2.
+
+---
+
+## 5. Three short-video / feed repositories — NONE OF THE URLS EXIST
+
+Checked 2026-08-02. All three paths below were supplied with confident
+descriptions. **Not one of them resolves to a real repository.** Recorded
+because the descriptions are plausible and someone will otherwise re-check
+them.
+
+| Supplied URL | Supplied description | Reality |
+|---|---|---|
+| `videodb/tiktok-clone-react` | "Full-Stack TikTok / Short-Video Clone" | **No such repo.** The org is `video-db` (hyphenated), an AI video-infrastructure company — `Director`, `StreamRAG`, `videodb-python`, `bloom`, `skills`. It publishes no TikTok clone. |
+| `lalithnarayan/tiktok-clone` | "Open-Source Short Video Feed & Creator Platform" | **No such repo.** The user exists and has exactly 7 public repos — `ossdocumentaion`, `yirla`, `microfrontend-finacPlus`, `r360`, `zoneManagerReactApp`, `shipper`, `shield_assignment`. None is a TikTok clone. |
+| `GetStream/Stream-Feeds-JS-React` | "Scalable Social Media Feed Engine" | **No such repo.** The org has 13 feeds repos; the real JS one is `GetStream/stream-feeds-js`. See below — and the description is wrong about it too. |
+
+### `GetStream/stream-feeds-js` — the real repo, and it is not what was described
+
+TypeScript monorepo (`feeds-client`, `react-sdk`, `react-native-sdk`), 22
+stars, last pushed 2026-07-16, published as `@stream-io/feeds-client@2.6.0`.
+Two facts contradict "Open-Source … Feed Engine". MEASURED:
+
+- **It is not open source.** `LICENSE` opens *"SOURCE CODE LICENSE AGREEMENT —
+  IMPORTANT, READ THIS CAREFULLY BEFORE DOWNLOADING, INSTALLING, USING OR
+  ELECTRONICALLY ACCESSING THIS PROPRIETARY PRODUCT."* npm reports the licence
+  as `See license in LICENSE`, not an SPDX identifier.
+- **It is not an engine you can run.** It is a client for Stream's hosted paid
+  API: it requires an `apiKey` and defaults to
+  `https://feeds.stream-io-api.com`. `base_url` is overridable, but that
+  selects a Stream endpoint — there is no server component in the repository
+  to self-host.
+
+So the relationship graph and comment nesting live on Stream's servers, not in
+anything you deploy. Same shape as UploadThing in §4: a good hosted product,
+sold as though it were infrastructure you own.
+
+Other real GetStream feeds repos, if that product is ever wanted:
+`stream-feeds-react-tutorial`, `stream-feeds-react-native-tutorial`,
+`stream-feeds-swift`, `stream-feeds-android`, `stream-feeds-flutter`.
+
+### Two method notes from this round
+
+1. **`git ls-remote` is not a valid existence test in this container.** It
+   fails with `could not read Password for 'http://local_proxy@127.0.0.1'`
+   for every URL, real or not, because the agent proxy prompts for
+   credentials non-interactively. Use the GitHub API.
+2. **A `repo:owner/name` search returning HTTP 422 is suggestive, not
+   conclusive** — it also fires when the *owner* name is wrong, as with
+   `videodb` vs `video-db`. Confirm by listing the owner's repositories or
+   searching the name globally.
+
+If short-video feed references are wanted, ~175 real `tiktok-clone*` React
+repos exist — e.g. `Marlon-Paulo-da-Silva/TikTok-Clone-ReactNative` (78★) and
+`christranv/react-native-tiktok-clone`. **None has been vetted here**; on this
+register's record, assume the advertised features need checking before trust.
