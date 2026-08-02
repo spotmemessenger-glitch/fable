@@ -176,9 +176,9 @@ export function inpaintTelea (img, mask, { radius = 4, refine = 6 } = {}) {
     }
     const pi = p * 4
     if (wr > 0) {
-      out.data[pi] = ar / wr + 0.5
-      out.data[pi + 1] = ag / wr + 0.5
-      out.data[pi + 2] = ab / wr + 0.5
+      out.data[pi] = ar / wr
+      out.data[pi + 1] = ag / wr
+      out.data[pi + 2] = ab / wr
     }
     out.data[pi + 3] = 255
   }
@@ -220,9 +220,9 @@ export function inpaintTelea (img, mask, { radius = 4, refine = 6 } = {}) {
         if (y < h - 1) { const i = (p + w) * 4; r += cur[i]; g += cur[i + 1]; b += cur[i + 2]; n++ }
         const pi = p * 4
         if (n > 0) {
-          next[pi] = r / n + 0.5
-          next[pi + 1] = g / n + 0.5
-          next[pi + 2] = b / n + 0.5
+          next[pi] = r / n
+          next[pi + 1] = g / n
+          next[pi + 2] = b / n
           next[pi + 3] = 255
         }
       }

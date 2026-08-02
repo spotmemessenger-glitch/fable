@@ -75,7 +75,7 @@ export function createCloudClient ({ flags, fetchImpl, getAuthHeaders, base = ''
     enabled: () => flags.STUDIO_CLOUD_AI_ENABLED === true,
 
     /** Large/semantic removal — the tier above the local Telea fill. */
-    inpaint ({ image, mask, prompt, w, h }, opts) {
+    async inpaint ({ image, mask, prompt, w, h }, opts) {
       assertEnabled()
       checkDims(w, h)
       return call('inpaint', {
@@ -88,7 +88,7 @@ export function createCloudClient ({ flags, fetchImpl, getAuthHeaders, base = ''
     },
 
     /** Neural style transfer — the thing local looks honestly are not. */
-    styleTransfer ({ image, styleId, w, h }, opts) {
+    async styleTransfer ({ image, styleId, w, h }, opts) {
       assertEnabled()
       checkDims(w, h)
       if (typeof styleId !== 'string' || !styleId) throw new TypeError('styleId required')
@@ -96,14 +96,14 @@ export function createCloudClient ({ flags, fetchImpl, getAuthHeaders, base = ''
     },
 
     /** Subject cutout → transparent die-cut sticker. */
-    stickerFromPhoto ({ image, w, h }, opts) {
+    async stickerFromPhoto ({ image, w, h }, opts) {
       assertEnabled()
       checkDims(w, h)
       return call('stickerFromPhoto', { image: checkDataURL(image, 'image', MAX_IMAGE_CHARS), w, h }, opts)
     },
 
     /** Caption ideas for a photo, in the user's language. */
-    captionSuggest ({ image, lang, w, h }, opts) {
+    async captionSuggest ({ image, lang, w, h }, opts) {
       assertEnabled()
       checkDims(w, h)
       const code = lang === undefined ? 'en' : String(lang)

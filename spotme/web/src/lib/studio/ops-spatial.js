@@ -121,9 +121,9 @@ registerOp({
       for (let x = 0; x < w; x++) {
         const f = kVignetteFactor((x + 0.5) / w, v, p)
         const i = (y * w + x) * 4
-        d[i] = s[i] * f + 0.5
-        d[i + 1] = s[i + 1] * f + 0.5
-        d[i + 2] = s[i + 2] * f + 0.5
+        d[i] = s[i] * f
+        d[i + 1] = s[i + 1] * f
+        d[i + 2] = s[i + 2] * f
         d[i + 3] = s[i + 3]
       }
     }
@@ -163,9 +163,9 @@ registerOp({
     const out = { width: w, height: h, data: new Uint8ClampedArray(s.length) }
     const d = out.data
     for (let i = 0, j = 0; i < s.length; i += 4, j += 3) {
-      d[i] = s[i] + p.amount * (s[i] - blur[j]) + 0.5
-      d[i + 1] = s[i + 1] + p.amount * (s[i + 1] - blur[j + 1]) + 0.5
-      d[i + 2] = s[i + 2] + p.amount * (s[i + 2] - blur[j + 2]) + 0.5
+      d[i] = s[i] + p.amount * (s[i] - blur[j])
+      d[i + 1] = s[i + 1] + p.amount * (s[i + 1] - blur[j + 1])
+      d[i + 2] = s[i + 2] + p.amount * (s[i + 2] - blur[j + 2])
       d[i + 3] = s[i + 3]
     }
     return out
@@ -202,9 +202,9 @@ registerOp({
       const mid = 4 * y * (1 - y)
       const boost = p.amount * mid * (y - blurred[j])
       const gain = y > 1e-5 ? (y + boost) / y : 1
-      d[i] = s[i] * gain + 0.5
-      d[i + 1] = s[i + 1] * gain + 0.5
-      d[i + 2] = s[i + 2] * gain + 0.5
+      d[i] = s[i] * gain
+      d[i + 1] = s[i + 1] * gain
+      d[i + 2] = s[i + 2] * gain
       d[i + 3] = s[i + 3]
     }
     return out
@@ -257,9 +257,9 @@ registerOp({
         const i = (y * w + x) * 4
         const yl = (LUMA_R * s[i] + LUMA_G * s[i + 1] + LUMA_B * s[i + 2]) / 255
         const g = n * strength * (0.25 + 0.75 * 4 * yl * (1 - yl))
-        d[i] = s[i] + g + 0.5
-        d[i + 1] = s[i + 1] + g + 0.5
-        d[i + 2] = s[i + 2] + g + 0.5
+        d[i] = s[i] + g
+        d[i + 1] = s[i + 1] + g
+        d[i + 2] = s[i + 2] + g
         d[i + 3] = s[i + 3]
       }
     }

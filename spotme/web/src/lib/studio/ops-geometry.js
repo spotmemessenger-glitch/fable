@@ -145,10 +145,10 @@ registerOp({
         const sy = cy + rx * sin + ry * cos - 0.5
         sampleBilinear(img, sx, sy, px)
         const i = (y * ow + x) * 4
-        out.data[i] = px[0] + 0.5
-        out.data[i + 1] = px[1] + 0.5
-        out.data[i + 2] = px[2] + 0.5
-        out.data[i + 3] = px[3] + 0.5
+        out.data[i] = px[0]
+        out.data[i + 1] = px[1]
+        out.data[i + 2] = px[2]
+        out.data[i + 3] = px[3]
       }
     }
     return out
@@ -192,7 +192,20 @@ export function solveHomography (quad) {
     for (let c = r + 1; c < n; c++) acc -= A[r][c] * hv[c]
     hv[r] = acc / A[r][r]
   }
-  return [hv[0], hv[1], hv[2], hv[3], hv[4], hv[5], hv[6], hv[7], 1]
+  const H = [hv[0], hv[1], hv[2], hv[3], hv[4], hv[5], hv[6], hv[7], 1]
+  // A projective map cannot send two distinct corners to the same point; a
+  // quad that asks for that yields a system whose "solution" fails to
+  // reproduce its own constraints. Verify, so degeneracy is caught HERE (at
+  // validate time) instead of surfacing as garbage sampling later.
+  for (let i = 0; i < 4; i++) {
+    const [u, v] = src[i]
+    const [x, y] = applyHomography(H, u, v)
+    if (!Number.isFinite(x) || !Number.isFinite(y) ||
+        Math.abs(x - quad[i][0]) > 1e-6 || Math.abs(y - quad[i][1]) > 1e-6) {
+      throw new RangeError('perspective: degenerate quad')
+    }
+  }
+  return H
 }
 
 /** Apply H to (u, v). */
@@ -239,10 +252,10 @@ registerOp({
           continue
         }
         sampleBilinear(img, su * img.width - 0.5, sv * img.height - 0.5, px)
-        out.data[i] = px[0] + 0.5
-        out.data[i + 1] = px[1] + 0.5
-        out.data[i + 2] = px[2] + 0.5
-        out.data[i + 3] = px[3] + 0.5
+        out.data[i] = px[0]
+        out.data[i + 1] = px[1]
+        out.data[i + 2] = px[2]
+        out.data[i + 3] = px[3]
       }
     }
     return out

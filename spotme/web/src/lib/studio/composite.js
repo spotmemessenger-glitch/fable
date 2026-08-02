@@ -47,7 +47,7 @@ export function resizeBilinear (img, w, h) {
       for (let c = 0; c < 4; c++) {
         out.data[o + c] =
           (img.data[i00 + c] * (1 - dx) + img.data[i00 + 4 + c] * dx) * (1 - dy) +
-          (img.data[i01 + c] * (1 - dx) + img.data[i01 + 4 + c] * dx) * dy + 0.5
+          (img.data[i01 + c] * (1 - dx) + img.data[i01 + 4 + c] * dx) * dy
       }
     }
   }
@@ -154,9 +154,9 @@ registerOp({
         // Spill lives on the mixed edge; interior foreground is left alone.
         ;[fr, fg, fb] = suppressSpill(fr, fg, fb, keyChannel, spillAmount)
       }
-      out.data[i] = (fr * a + (bg.data[i] / 255) * (1 - a)) * 255 + 0.5
-      out.data[i + 1] = (fg * a + (bg.data[i + 1] / 255) * (1 - a)) * 255 + 0.5
-      out.data[i + 2] = (fb * a + (bg.data[i + 2] / 255) * (1 - a)) * 255 + 0.5
+      out.data[i] = (fr * a + (bg.data[i] / 255) * (1 - a)) * 255
+      out.data[i + 1] = (fg * a + (bg.data[i + 1] / 255) * (1 - a)) * 255
+      out.data[i + 2] = (fb * a + (bg.data[i + 2] / 255) * (1 - a)) * 255
       out.data[i + 3] = 255
     }
     return out
@@ -204,9 +204,9 @@ export function generateSky (preset, w, h, { horizon = 1 } = {}) {
         gg += (def.sun.color[1] - gg) * glow
         bb += (def.sun.color[2] - bb) * glow
       }
-      out.data[i] = rr + 0.5
-      out.data[i + 1] = gg + 0.5
-      out.data[i + 2] = bb + 0.5
+      out.data[i] = rr
+      out.data[i + 1] = gg
+      out.data[i + 2] = bb
       out.data[i + 3] = 255
     }
   }
@@ -256,9 +256,9 @@ registerOp({
         g = clamp01(g + (ag - tintLuma) * t)
         b = clamp01(b + (ab - tintLuma) * t)
       }
-      out.data[i] = (r * (1 - a) + (sky.data[i] / 255) * a) * 255 + 0.5
-      out.data[i + 1] = (g * (1 - a) + (sky.data[i + 1] / 255) * a) * 255 + 0.5
-      out.data[i + 2] = (b * (1 - a) + (sky.data[i + 2] / 255) * a) * 255 + 0.5
+      out.data[i] = (r * (1 - a) + (sky.data[i] / 255) * a) * 255
+      out.data[i + 1] = (g * (1 - a) + (sky.data[i + 1] / 255) * a) * 255
+      out.data[i + 2] = (b * (1 - a) + (sky.data[i + 2] / 255) * a) * 255
       out.data[i + 3] = 255
     }
     return out
@@ -300,9 +300,9 @@ registerOp({
         const gain = p.intensity * fall * head
         const warmR = 1 + p.warmth * 0.25 * fall
         const warmB = 1 - p.warmth * 0.25 * fall
-        out.data[i] = clamp01(r * warmR + gain) * 255 + 0.5
-        out.data[i + 1] = clamp01(g + gain) * 255 + 0.5
-        out.data[i + 2] = clamp01(b * warmB + gain) * 255 + 0.5
+        out.data[i] = clamp01(r * warmR + gain) * 255
+        out.data[i + 1] = clamp01(g + gain) * 255
+        out.data[i + 2] = clamp01(b * warmB + gain) * 255
         out.data[i + 3] = s[i + 3]
       }
     }

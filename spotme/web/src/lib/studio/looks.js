@@ -194,7 +194,7 @@ export function applyLUT3D (img, lut, strength = 1) {
       const c0 = c00 * (1 - dg) + c10 * dg
       const c1 = c01 * (1 - dg) + c11 * dg
       const v = (c0 * (1 - db) + c1 * db) * 255
-      d[i + c] = s[i + c] * (1 - mix) + v * mix + 0.5
+      d[i + c] = s[i + c] * (1 - mix) + v * mix
     }
     d[i + 3] = s[i + 3]
   }

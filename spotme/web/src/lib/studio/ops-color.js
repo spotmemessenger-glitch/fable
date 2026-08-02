@@ -31,9 +31,9 @@ function mapKernel (img, params, kernel) {
   const d = out.data
   for (let i = 0; i < s.length; i += 4) {
     const [r, g, b] = kernel(s[i] / 255, s[i + 1] / 255, s[i + 2] / 255, params)
-    d[i] = r * 255 + 0.5
-    d[i + 1] = g * 255 + 0.5
-    d[i + 2] = b * 255 + 0.5
+    d[i] = r * 255
+    d[i + 1] = g * 255
+    d[i + 2] = b * 255
     d[i + 3] = s[i + 3]
   }
   return out
@@ -171,7 +171,7 @@ registerOp({
         let v = i / 255
         if (chan) v = chan[Math.round(v * 255)]
         if (master) v = master[Math.round(v * 255)]
-        lut[i] = v * 255 + 0.5
+        lut[i] = v * 255
       }
       return lut
     }

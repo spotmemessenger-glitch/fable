@@ -133,24 +133,24 @@ export function frameAt (timeline, tMs) {
   const starts = segmentStarts(timeline)
   const total = totalDurationMs(timeline)
   const t = Math.max(0, Math.min(total - 1e-6, tMs))
-  let i = segments.length - 1
-  for (let k = 0; k < segments.length; k++) {
-    if (t < starts[k] + segments[k].durMs - (k < segments.length - 1 ? segments[k].transition.durMs : 0) ||
-        k === segments.length - 1) { i = k; break }
-  }
-  const local = t - starts[i]
-  const tr = segments[i].transition
-  const trStart = segments[i].durMs - tr.durMs
-  if (i < segments.length - 1 && tr.type !== 'none' && local >= trStart) {
-    const p = (local - trStart) / tr.durMs
-    return {
-      a: { index: i, tMs: local },
-      b: { index: i + 1, tMs: local - trStart },
-      mix: Math.min(1, Math.max(0, p)),
-      transition: tr.type
+  // The last segment whose composed start is at or before t…
+  let idx = 0
+  for (let k = 0; k < segments.length; k++) if (starts[k] <= t) idx = k
+  // …which is still inside the PREVIOUS segment's tail exactly when a
+  // transition is running: segment k-1 owns [start, start+durMs), and its
+  // last transition.durMs of that overlaps segment k.
+  if (idx > 0) {
+    const prev = segments[idx - 1]
+    if (prev.transition.type !== 'none' && t < starts[idx - 1] + prev.durMs) {
+      return {
+        a: { index: idx - 1, tMs: t - starts[idx - 1] },
+        b: { index: idx, tMs: t - starts[idx] },
+        mix: Math.min(1, Math.max(0, (t - starts[idx]) / prev.transition.durMs)),
+        transition: prev.transition.type
+      }
     }
   }
-  return { a: { index: i, tMs: local }, mix: 0, transition: 'none' }
+  return { a: { index: idx, tMs: t - starts[idx] }, mix: 0, transition: 'none' }
 }
 
 /** Every output frame's timestamp for the whole timeline. */
@@ -215,7 +215,7 @@ export function blendTransition (type, a, b, mix) {
   if (type === 'crossfade' || type === 'zoom') {
     const src = type === 'zoom' ? resizeBilinear(zoomInto(b, 1.15 - 0.15 * mix), w, h) : b
     for (let i = 0; i < out.data.length; i += 4) {
-      for (let c = 0; c < 3; c++) out.data[i + c] = a.data[i + c] * (1 - mix) + src.data[i + c] * mix + 0.5
+      for (let c = 0; c < 3; c++) out.data[i + c] = a.data[i + c] * (1 - mix) + src.data[i + c] * mix
       out.data[i + 3] = 255
     }
     return out

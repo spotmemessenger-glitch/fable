@@ -131,10 +131,14 @@ export function strokeBrush (mask, points, radius, opts = {}) {
 /* -------------------------------------------------------------- chroma key */
 
 /**
- * Chroma-key assist: distance from a key color in the CbCr plane (luma
- * dropped, so shading on a green screen keys evenly), smoothstepped between
- * tolerance and tolerance+softness. Returns the BACKGROUND coverage — 255
- * where the pixel matches the key color.
+ * Chroma-key assist: distance from a key color in a LUMA-NORMALIZED CbCr
+ * plane. Shadows scale RGB roughly proportionally, which scales raw CbCr
+ * down with them — so a shaded patch of green screen drifts away from the
+ * key in plain CbCr and survives the key. Dividing chroma by luma cancels
+ * that scaling exactly for proportional shading, which is what makes a
+ * green screen key evenly under uneven light. Near-black pixels carry no
+ * reliable chroma; the luma floor keeps them stable (and un-keyed unless the
+ * key itself is dark). Result is BACKGROUND coverage — 255 = matches key.
  */
 export function chromaKeyMask (img, { color, tolerance = 0.12, softness = 0.08 } = {}) {
   if (!Array.isArray(color) || color.length !== 3) throw new TypeError('chromaKeyMask: color must be [r,g,b] 0..255')
@@ -142,21 +146,24 @@ export function chromaKeyMask (img, { color, tolerance = 0.12, softness = 0.08 }
     if (typeof c !== 'number' || c < 0 || c > 255) throw new RangeError('chromaKeyMask: color channel out of range')
     return c / 255
   })
-  const keyCb = -0.168736 * kr - 0.331264 * kg + 0.5 * kb
-  const keyCr = 0.5 * kr - 0.418688 * kg - 0.081312 * kb
+  const LUMA_FLOOR = 0.08
+  const chroma = (r, g, b) => {
+    const y = Math.max(LUMA_FLOOR, 0.299 * r + 0.587 * g + 0.114 * b)
+    return [
+      (-0.168736 * r - 0.331264 * g + 0.5 * b) / y,
+      (0.5 * r - 0.418688 * g - 0.081312 * b) / y
+    ]
+  }
+  const [keyCb, keyCr] = chroma(kr, kg, kb)
   const mask = makeMask(img.width, img.height)
   const s = img.data
   const lo = tolerance
   const hi = tolerance + Math.max(1e-4, softness)
   for (let i = 0, j = 0; j < mask.data.length; i += 4, j++) {
-    const r = s[i] / 255
-    const g = s[i + 1] / 255
-    const b = s[i + 2] / 255
-    const cb = -0.168736 * r - 0.331264 * g + 0.5 * b
-    const cr = 0.5 * r - 0.418688 * g - 0.081312 * b
+    const [cb, cr] = chroma(s[i] / 255, s[i + 1] / 255, s[i + 2] / 255)
     const d = Math.hypot(cb - keyCb, cr - keyCr)
     const t = d <= lo ? 1 : d >= hi ? 0 : 1 - (d - lo) / (hi - lo)
-    mask.data[j] = t * 255 + 0.5
+    mask.data[j] = t * 255
   }
   return mask
 }

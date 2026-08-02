@@ -121,9 +121,9 @@ export function renderCollage (layoutId, images, options = {}) {
         if (cov <= 0) continue
         const si = (y * cell.w + x) * 4
         const di = ((cell.y + y) * width + (cell.x + x)) * 4
-        out.data[di] = fitted.data[si] * cov + out.data[di] * (1 - cov) + 0.5
-        out.data[di + 1] = fitted.data[si + 1] * cov + out.data[di + 1] * (1 - cov) + 0.5
-        out.data[di + 2] = fitted.data[si + 2] * cov + out.data[di + 2] * (1 - cov) + 0.5
+        out.data[di] = fitted.data[si] * cov + out.data[di] * (1 - cov)
+        out.data[di + 1] = fitted.data[si + 1] * cov + out.data[di + 1] * (1 - cov)
+        out.data[di + 2] = fitted.data[si + 2] * cov + out.data[di + 2] * (1 - cov)
       }
     }
     placed++
