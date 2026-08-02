@@ -1,15 +1,23 @@
-# Snap Camera Kit — Reference Record
+# AR Platform Reference Record
 
 **Status: REFERENCE ONLY — NOT AN AUTHORIZED INTEGRATION.**
 **Written:** 2026-08-02. **Measured in:** the remote session container for
 branch `claude/snap-camera-kit-repos-65c88r` (PR #53).
 
-Camera Kit appears **nowhere** in the controlling roadmap
+Covers the AR camera platforms evaluated for Spot Me. **Part A — Snap Camera
+Kit** (§1–§7): viable, gated on owner authorization. **Part B — Meta / Spark
+AR** (§8): a closed platform; do not pursue.
+
+AR appears **nowhere** in the controlling roadmap
 (`MASTER-ENGINEERING-ROADMAP-V2.md`): not in §7's third-party integration
 table, and not in the owner's 2026-08-01 execution order (push → translation →
 live voice translation → adaptive transport → remaining Priority 1 crypto).
 Nothing in this file is approved work. It exists so that if Spot Me ever wants
-AR camera capability, the evaluation does not start from zero.
+AR camera capability, the evaluation does not start from zero — and so that
+the closed options are not re-investigated.
+
+**Bottom line:** if Spot Me ever does AR, Snap Camera Kit is the only live
+vendor path of those examined. The Meta/Spark AR route is closed permanently.
 
 **Do not treat any line here as a live check.** Every claim below is tagged
 MEASURED (executed in this container, on the date above) or UNVERIFIED (read
@@ -195,7 +203,64 @@ owner authorization and a §7 integration review. It is not scheduled.
 
 ---
 
-## 8. Reproducing the measurements
+## 8. PART B — Meta / Spark AR: CLOSED PLATFORM, DO NOT PURSUE
+
+Evaluated 2026-08-02 and rejected. Recorded so nobody spends time on it again.
+
+### 8.1 The platform is dead
+
+**Meta shut down Spark AR / Meta Spark on 14 January 2025.** On that date
+third-party AR effects were **removed from Facebook, Instagram and Messenger**,
+and Meta Spark Studio, Meta Spark Hub and Meta Spark Player stopped being
+accessible. Only Meta's own first-party effects remain. Meta stated it was
+shifting resources toward new form factors such as glasses. Sources in §8.4.
+
+There is no third-party Spark AR runtime to target and no authoring tool to
+download. Everything below follows from that.
+
+### 8.2 Repositories assessed
+
+| Repository | What it is | Verdict |
+|---|---|---|
+| [`juanmv94/Spark-AR`](https://github.com/juanmv94/Spark-AR) | One developer's personal Instagram/Facebook filter sources. **468 MB**, last pushed 2025-01-19 | **Do not vendor.** Dead platform, and see §8.3 |
+| [`pofulu/sparkar-pftween`](https://github.com/pofulu/sparkar-pftween) | Tween library for Meta Spark Studio. npm `sparkar-pftween@1.2.3`, MIT, last published **2022-05-22** | **Installs but cannot execute.** See §8.3 |
+| `https://github.com/facebook` | A GitHub **organization**, not a repository | **Not installable.** An org URL has no install semantics; individual repos under it (React, React Native, …) are installed by name |
+
+### 8.3 The two blocking facts, both MEASURED
+
+**`sparkar-pftween` cannot run anywhere in this stack.** It declares zero npm
+dependencies, and its code does bare-specifier imports of the Meta Spark
+sandbox runtime:
+
+```
+require("Animation")  require("Patches")  require("Reactive")  require("Time")
+from 'Diagnostics'    from 'Scene'        from 'TouchGestures'
+```
+
+Those are **not npm packages** — they are modules injected by the Meta Spark
+player. Nothing resolves them in Node, Vite, Next.js, or React Native, so the
+package throws on import outside a runtime that no longer exists. `npm install`
+would succeed and buy nothing. Spot Me and `ysnap` already have `gsap`,
+`framer-motion` and `lenis` for tweening, all maintained and all actually
+runnable.
+
+**`juanmv94/Spark-AR` has no licence — all rights reserved.** Verified by
+listing the full tree: there is no `LICENSE`/`COPYING` file anywhere (the sole
+match, `otrosTerminados/VOX/scripts/License.js`, is a source file inside one
+filter, not a repo licence), and GitHub's API reports no detected licence.
+Absent a licence grant, copying, modifying or redistributing it is not
+permitted. Vendoring another person's filter sources into this repository would
+be a copyright problem independent of the platform being dead.
+
+### 8.4 Sources
+
+- [A Meta Spark Update — Meta Spark blog](https://spark.meta.com/blog/meta-spark-announcement/)
+- [Important update for Meta Spark users](https://spark.meta.com/learn/quick-start/introduction-to-meta-spark-studio/)
+- [Meta Is Shutting Down Its Spark AR Studio — Social Media Today](https://www.socialmediatoday.com/news/metas-shutting-down-spark-ar-studio/725443/)
+
+---
+
+## 9. Reproducing the measurements
 
 ```bash
 # repos exist (curl 403s here are the proxy, not GitHub)

@@ -63,12 +63,21 @@ For A5: enforcement stays default-OFF, and **disabling the flag — not
 reverting — is the supported operational rollback** (ADR-007 §Rollback says
 why: reverting removes the review UI and strands a `Changed` peer).
 
-### Snap Camera Kit — reference only, NOT scheduled
+### AR platforms — reference only, NOT scheduled
 
-`spotme/docs/15-SNAP-CAMERA-KIT-REFERENCE.md` records the Snap AR SDKs
-(versions, Maven/SPM coordinates, credential requirements, measured sizes,
-environment traps). **Camera Kit is in no roadmap priority and no owner
-execution order** — the record exists so an evaluation would not start cold.
+`spotme/docs/15-AR-PLATFORM-REFERENCE.md` records every AR camera platform
+evaluated: Snap Camera Kit (versions, Maven/SPM coordinates, credentials,
+measured sizes, environment traps) and Meta/Spark AR. **AR is in no roadmap
+priority and no owner execution order** — the record exists so an evaluation
+would not start cold, and so the closed options are not re-investigated.
+
+**Meta / Spark AR is a dead end — do not spend time on it.** Meta shut the
+platform down on 2025-01-14; third-party effects were pulled from Facebook,
+Instagram and Messenger and the Studio/Hub/Player are gone. `sparkar-pftween`
+installs from npm but `require`s Spark sandbox modules (`Reactive`, `Scene`,
+`Time`…) that resolve nowhere, so it throws on import; `juanmv94/Spark-AR` is
+468 MB with **no licence at all** (all rights reserved — not ours to vendor).
+Snap Camera Kit is the only live vendor path of those examined.
 
 Three things that will otherwise be re-learned the hard way:
 
