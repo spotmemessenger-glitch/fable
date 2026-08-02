@@ -54,6 +54,9 @@ export const CAMERA_UNAVAILABLE = Object.freeze({
    *  RAW capture, gyro-assisted EIS, native depth. The adapter contract is
    *  documented; the web build reports it honestly instead of simulating. */
   DEFERRED_NATIVE: 'DEFERRED_NATIVE',
+  /** No frame-pump path: needs MediaStreamTrackProcessor or a DOM video
+   *  element to lift frames off the stream. */
+  NO_FRAME_PUMP: 'NO_FRAME_PUMP',
   /** A stated resource bound (memory, frame count, duration) was hit. */
   RESOURCE_LIMIT: 'RESOURCE_LIMIT',
   /** The operation was tried for real and failed; detail says how. */
