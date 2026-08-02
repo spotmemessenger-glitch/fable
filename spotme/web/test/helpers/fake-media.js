@@ -247,6 +247,7 @@ export function fakeTrackProcessorClass () {
 export function fakeMediaRecorderClass ({ supported = ['video/webm;codecs=vp9', 'video/webm'] } = {}) {
   class FakeMediaRecorder {
     static isTypeSupported (type) { return supported.includes(type) }
+    static instances = []                 // every construction, for test hands
     constructor (stream, options = {}) {
       this.stream = stream
       this.mimeType = options.mimeType || supported[0] || ''
@@ -256,6 +257,7 @@ export function fakeMediaRecorderClass ({ supported = ['video/webm;codecs=vp9', 
       this.onstop = null
       this.onerror = null
       this.starts = 0
+      FakeMediaRecorder.instances.push(this)
     }
 
     start (timeslice) {
@@ -356,8 +358,56 @@ export function fakeCanvas () {
       }
     },
     toBlob (cb, type = 'image/png', _q) { cb(new Blob([new Uint8Array(canvas.width * canvas.height ? 512 : 0)], { type })) },
+    captureStream (_fps) { return { getTracks: () => [] } },
   }
   return canvas
+}
+
+/* --------------------------------------------------------- WebCodecs ----- */
+
+/** A VideoEncoder that emits one deterministic chunk per encode() call —
+ *  enough to prove orchestration, timing math and muxing, which is all
+ *  Node CAN prove about an encoder. */
+export function fakeVideoEncoderClass ({ bytesPerChunk = 96 } = {}) {
+  class FakeVideoEncoder {
+    static instances = []
+    constructor ({ output, error }) {
+      this.output = output
+      this.errorCb = error
+      this.configured = null
+      this.encoded = 0
+      FakeVideoEncoder.instances.push(this)
+    }
+
+    configure (config) { this.configured = config }
+    encode (frame, opts = {}) {
+      this.encoded++
+      const timestamp = frame.timestamp
+      const payload = new Uint8Array(bytesPerChunk).fill(this.encoded & 0xFF)
+      this.output({
+        type: opts.keyFrame ? 'key' : 'delta',
+        timestamp,
+        byteLength: payload.length,
+        copyTo: (dst) => { new Uint8Array(dst.buffer || dst).set(payload) },
+      })
+    }
+
+    async flush () {}
+    close () {}
+  }
+  return FakeVideoEncoder
+}
+
+export class FakeVideoFrameCtor {
+  constructor (source, { timestamp = 0, duration = 0 } = {}) {
+    this.timestamp = timestamp
+    this.duration = duration
+    this.codedWidth = source?.width || source?.codedWidth || 0
+    this.codedHeight = source?.height || source?.codedHeight || 0
+    this.closed = false
+  }
+
+  close () { this.closed = true }
 }
 
 function makeEnv ({ devices, features }) {
