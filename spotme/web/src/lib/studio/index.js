@@ -73,9 +73,20 @@ export function createStudio (deps = {}) {
   }
 
   const clock = deps.clock || systemClock()
-  const gate = (flag, feature, value) => {
+  /**
+   * `run` MUST be a thunk, never an eagerly-evaluated argument. This flag is
+   * the per-feature rollback lever from the activation runbook — the one a
+   * staged rollout flips OFF first when a single capability misbehaves,
+   * while the rest of the studio stays on. If the call site had already
+   * evaluated its work before `gate` ran, "disabled" would be theater: the
+   * work happens regardless, `renderVideo(...)` starts a real (possibly
+   * async, promise-orphaning) render, and only the RETURN is suppressed.
+   * A thunk defers evaluation into the gate, so disabled truly means nothing
+   * ran and the caller's arguments were never touched.
+   */
+  const gate = (flag, feature, run) => {
     if (flags[flag] !== true) throw new StudioDisabledError(feature)
-    return value
+    return run()
   }
 
   // GL is preview acceleration: constructed only when the editor is on and a
@@ -98,14 +109,14 @@ export function createStudio (deps = {}) {
     flags,
 
     editor: Object.freeze({
-      createDoc: (init) => gate('STUDIO_EDITOR_ENABLED', 'editor', createEditDoc(init)),
-      parseDoc: (json) => gate('STUDIO_EDITOR_ENABLED', 'editor', parseEditDoc(json)),
-      render: (source, ops, opts) => gate('STUDIO_EDITOR_ENABLED', 'editor', evaluator.render(source, ops, opts))
+      createDoc: (init) => gate('STUDIO_EDITOR_ENABLED', 'editor', () => createEditDoc(init)),
+      parseDoc: (json) => gate('STUDIO_EDITOR_ENABLED', 'editor', () => parseEditDoc(json)),
+      render: (source, ops, opts) => gate('STUDIO_EDITOR_ENABLED', 'editor', () => evaluator.render(source, ops, opts))
     }),
 
     looks: Object.freeze({
-      ids: () => gate('STUDIO_LOOKS_ENABLED', 'looks', lookIds()),
-      byId: (id) => gate('STUDIO_LOOKS_ENABLED', 'looks', LOOKS[id] || null)
+      ids: () => gate('STUDIO_LOOKS_ENABLED', 'looks', () => lookIds()),
+      byId: (id) => gate('STUDIO_LOOKS_ENABLED', 'looks', () => LOOKS[id] || null)
     }),
 
     removal: Object.freeze({
@@ -114,30 +125,30 @@ export function createStudio (deps = {}) {
       segmenter: Object.freeze({
         available: () => flags.STUDIO_BG_REPLACE_ENABLED && segmenter.available(),
         kinds: () => segmenter.kinds(),
-        register: (engine) => gate('STUDIO_BG_REPLACE_ENABLED', 'segmenter', segmenter.register(engine)),
-        segment: (img, opts) => gate('STUDIO_BG_REPLACE_ENABLED', 'segmenter', segmenter.segment(img, opts))
+        register: (engine) => gate('STUDIO_BG_REPLACE_ENABLED', 'segmenter', () => segmenter.register(engine)),
+        segment: (img, opts) => gate('STUDIO_BG_REPLACE_ENABLED', 'segmenter', () => segmenter.segment(img, opts))
       })
     }),
 
     composer: Object.freeze({
-      validate: (t) => gate('STUDIO_COMPOSER_ENABLED', 'composer', validateTimeline(t)),
-      totalDurationMs: (t) => gate('STUDIO_COMPOSER_ENABLED', 'composer', totalDurationMs(t)),
-      renderFrame: (t, tMs, extra) => gate('STUDIO_COMPOSER_ENABLED', 'composer',
+      validate: (t) => gate('STUDIO_COMPOSER_ENABLED', 'composer', () => validateTimeline(t)),
+      totalDurationMs: (t) => gate('STUDIO_COMPOSER_ENABLED', 'composer', () => totalDurationMs(t)),
+      renderFrame: (t, tMs, extra) => gate('STUDIO_COMPOSER_ENABLED', 'composer', () =>
         renderFrame(t, tMs, { evaluator, ...extra })),
-      probeEncoders: (env) => gate('STUDIO_COMPOSER_ENABLED', 'composer', probeEncoders(env)),
-      renderVideo: (t, extra) => gate('STUDIO_COMPOSER_ENABLED', 'composer',
+      probeEncoders: (env) => gate('STUDIO_COMPOSER_ENABLED', 'composer', () => probeEncoders(env)),
+      renderVideo: (t, extra) => gate('STUDIO_COMPOSER_ENABLED', 'composer', () =>
         renderTimeline(t, { evaluator, makeCanvas: deps.makeCanvas, ...extra }))
     }),
 
     collage: Object.freeze({
-      layouts: () => gate('STUDIO_COLLAGE_ENABLED', 'collage', collageLayoutIds()),
-      render: (layoutId, images, options) => gate('STUDIO_COLLAGE_ENABLED', 'collage', renderCollage(layoutId, images, options))
+      layouts: () => gate('STUDIO_COLLAGE_ENABLED', 'collage', () => collageLayoutIds()),
+      render: (layoutId, images, options) => gate('STUDIO_COLLAGE_ENABLED', 'collage', () => renderCollage(layoutId, images, options))
     }),
 
     templates: Object.freeze({
-      ids: () => gate('STUDIO_TEMPLATES_ENABLED', 'templates', templateIds()),
-      byId: (id) => gate('STUDIO_TEMPLATES_ENABLED', 'templates', TEMPLATES[id] || null),
-      instantiate: (id, refs) => gate('STUDIO_TEMPLATES_ENABLED', 'templates', instantiateTemplate(id, refs))
+      ids: () => gate('STUDIO_TEMPLATES_ENABLED', 'templates', () => templateIds()),
+      byId: (id) => gate('STUDIO_TEMPLATES_ENABLED', 'templates', () => TEMPLATES[id] || null),
+      instantiate: (id, refs) => gate('STUDIO_TEMPLATES_ENABLED', 'templates', () => instantiateTemplate(id, refs))
     }),
 
     drafts,          // internally flag-gated (answers {ok:false, reason:'disabled'})

@@ -120,9 +120,16 @@ async function renderWithWebCodecs (timeline, deps, probe, env) {
     const frames = await frameInputs(timeline, tMs, deps)
     const img = renderFrame(timeline, tMs, { ...deps, frames })
     const pixels = new ImageData(new Uint8ClampedArray(img.data), width, height)
-    const frame = new env.VideoFrame(await createImageBitmap(pixels), { timestamp: Math.round(tMs * 1000) })
+    // VideoFrame wraps the bitmap; closing the FRAME does not close the
+    // SOURCE bitmap — that is a second GPU/CPU-backed resource with its own
+    // lifetime. Left open, a 30s/30fps 1080p story leaks ~900 bitmaps per
+    // export (review board F-7): real memory, not garbage the GC will find
+    // quickly, because VideoFrame keeps a live reference to it.
+    const bitmap = await createImageBitmap(pixels)
+    const frame = new env.VideoFrame(bitmap, { timestamp: Math.round(tMs * 1000) })
     encoder.encode(frame, { keyFrame: i % (fps * 2) === 0 })
     frame.close()
+    bitmap.close?.()
     if (error) throw error
     deps.onProgress?.(i / schedule.length)
     if (encoder.encodeQueueSize > 8) await new Promise((r) => setTimeout(r, 0))
@@ -203,6 +210,7 @@ async function renderWithMediaRecorder (timeline, deps, probe, env) {
     const wait = tMs - ((deps.now || (() => performance.now()))() - started)
     if (wait > 0) await new Promise((r) => setTimeout(r, wait))
   }
+  const finishedAt = (deps.now || (() => performance.now()))()
   recorder.stop()
   await stopped
   return {
@@ -214,6 +222,13 @@ async function renderWithMediaRecorder (timeline, deps, probe, env) {
       height,
       fps,
       durationMs,
+      // intended vs achieved: the pacing loop above is realtime and CANNOT
+      // recover once composition on a given device falls behind (review
+      // board F-18) — the fallback is already honestly labeled realtime,
+      // but a caller previously had no way to measure how far behind it
+      // fell without these two numbers.
+      intendedDurationMs: durationMs,
+      achievedDurationMs: Math.round(finishedAt - started),
       frames: schedule.length,
       audio: 'none',
       audioNote: timeline.audio

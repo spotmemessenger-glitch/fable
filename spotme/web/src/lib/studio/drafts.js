@@ -1,9 +1,12 @@
 /**
- * Spot Me — Creative Studio drafts: op-docs in IndexedDB, never pixels.
+ * Spot Me — Creative Studio drafts: op-docs in IndexedDB, not re-encoded
+ * pixels — with one bounded exception, the list preview thumbnail (see
+ * `thumb` below), which IS a small persisted image.
  *
  * A draft is the serialized edit DOCUMENT plus source references — that is
  * the whole point of the non-destructive core: reopening a draft re-renders
- * from the original media, so drafts stay a few KB and re-encode nothing.
+ * from the original media, so drafts stay a few KB and re-encode nothing
+ * beyond that one capped thumbnail.
  *
  * CONTENT RULES (these are user photos' edit history — content, not config):
  *   wipe     the database name 'spotme-studio-drafts' is on db.js's

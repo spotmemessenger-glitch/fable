@@ -2,11 +2,13 @@
  * Spot Me — Creative Studio WebGL2 runtime (preview acceleration).
  *
  * One fullscreen-triangle pipeline: upload the working image as a texture,
- * run an op's fragment shader into a framebuffer texture, read back. Chained
- * ops reuse the GPU-resident texture (ping-pong) and read back once at the
- * end of the GPU run — the evaluator calls `run()` per op, and this runtime
- * keeps the previous output resident keyed by identity so a chain of GL ops
- * costs one upload + one readback, not N of each.
+ * run an op's fragment shader into a framebuffer texture, read back. The
+ * evaluator calls `run()` once per op, and EACH call reads back its own
+ * result (`gl.readPixels`, below) — what chaining actually saves is the
+ * UPLOAD: the previous op's GPU-resident output is kept keyed by identity
+ * (`residentFor`/`residentIx`), so a chain of GL ops re-uploads the source
+ * texture once, not once per op. Readback stays N-per-chain; only the input
+ * side is ping-ponged.
  *
  * EVERY failure returns null. Context loss, compile error, oversize texture —
  * the evaluator falls back to the op's CPU twin and records the path taken.

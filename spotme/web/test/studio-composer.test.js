@@ -225,6 +225,103 @@ await checkAsync('probe: isConfigSupported REJECTING is believed (no wishful fal
   return probe.webcodecs.available === false
 })
 
+/**
+ * review board F-7: the WebCodecs path leaks one ImageBitmap per rendered
+ * frame. `VideoFrame` wraps the bitmap and closing the FRAME does not close
+ * the SOURCE — a second, separately-lived resource. A minimal fake encoder
+ * lets this run without a real browser; the interesting number is the bitmap
+ * close-count, not the encoded bytes.
+ */
+await checkAsync('WEBCODECS PATH: every source ImageBitmap is closed, not just the VideoFrame', async () => {
+  let opened = 0
+  let bitmapClosed = 0
+  let frameClosed = 0
+  const realCreateImageBitmap = globalThis.createImageBitmap
+  const realImageData = globalThis.ImageData
+  globalThis.createImageBitmap = async () => {
+    opened++
+    return { close: () => { bitmapClosed++ } }
+  }
+  // Node has no ImageData; renderWithWebCodecs constructs one per frame
+  // purely to hand its pixels to createImageBitmap, so a shape-only stand-in
+  // is enough here — the pixel math itself is proven elsewhere (renderFrame,
+  // the CPU/GL twin tests), this test is only about resource lifetimes.
+  if (!realImageData) {
+    globalThis.ImageData = class { constructor (data, width, height) { this.data = data; this.width = width; this.height = height } }
+  }
+  try {
+    const env = {
+      VideoEncoder: Object.assign(function (opts) {
+        this.encodeQueueSize = 0
+        this.configure = () => {}
+        this.encode = () => { opts.output({ byteLength: 1, timestamp: 0, type: 'key', copyTo: () => {} }) }
+        this.flush = async () => {}
+        this.close = () => {}
+      }, { isConfigSupported: async () => ({ supported: true }) }),
+      VideoFrame: function (bitmap) { this.close = () => { frameClosed++ } }
+    }
+    const timeline = baseTimeline({ fps: 5, segments: [{ type: 'image', ref: 'a', durMs: 400 }] })
+    const assets = new Map([['a', solid(64, 96, 10, 20, 30)]])
+    await renderTimeline(timeline, { env, assets })
+    // Every opened bitmap must be closed, AND every encoded frame must be
+    // closed — a fix that closes the bitmap but stops closing the frame
+    // would "pass" a bitmap-only assertion while regressing the frame side.
+    return opened > 0 && bitmapClosed === opened && frameClosed === opened
+  } finally {
+    globalThis.createImageBitmap = realCreateImageBitmap
+    if (!realImageData) delete globalThis.ImageData
+    else globalThis.ImageData = realImageData
+  }
+})
+
+/**
+ * review board F-18: the MediaRecorder fallback is realtime by construction
+ * and CANNOT recover once composition falls behind on a slow device — but
+ * nothing recorded that drift, so a caller had no way to tell "kept pace"
+ * from "fell behind by 40%" beyond the already-honest `realtime: true` flag.
+ * A fake clock that runs slower than wall-clock proves achievedDurationMs
+ * captures the drift the pacing loop cannot avoid.
+ */
+await checkAsync('MEDIARECORDER PATH: achieved duration is measured, not assumed equal to intended', async () => {
+  const realImageData = globalThis.ImageData
+  if (!realImageData) {
+    // Node has no ImageData; ctx.putImageData below only needs the shape.
+    globalThis.ImageData = class { constructor (data, width, height) { this.data = data; this.width = width; this.height = height } }
+  }
+  try {
+    const fakeCtx = { putImageData () {} }
+    const fakeCanvas = {
+      getContext: () => fakeCtx,
+      captureStream: () => ({})
+    }
+    let recorderInstance = null
+    const env = {
+      MediaRecorder: Object.assign(function (stream, opts) {
+        recorderInstance = this
+        this.start = () => {}
+        this.stop = () => { queueMicrotask(() => this.onstop?.()) }
+      }, { isTypeSupported: (m) => m.includes('vp8') })
+    }
+    // Each `now()` read jumps the clock by a fixed 1000ms — far more than any
+    // real intended frame interval here, so the achieved total must land well
+    // past intendedDurationMs regardless of how many frames the schedule has.
+    // The point under test is "the drift is MEASURED", not a specific ratio.
+    let fakeNow = 0
+    const timeline = baseTimeline({ fps: 5, segments: [{ type: 'image', ref: 'a', durMs: 500 }] })
+    const assets = new Map([['a', solid(64, 96, 5, 5, 5)]])
+    const result = await renderTimeline(timeline, {
+      env, assets, makeCanvas: () => fakeCanvas,
+      now: () => { fakeNow += 1000; return fakeNow }
+    })
+    const { intendedDurationMs, achievedDurationMs, realtime } = result.metadata
+    return realtime === true && intendedDurationMs === totalDurationMs(timeline) &&
+      achievedDurationMs > intendedDurationMs && recorderInstance !== null
+  } finally {
+    if (!realImageData) delete globalThis.ImageData
+    else globalThis.ImageData = realImageData
+  }
+})
+
 /* ---------------------------------------------------------------- collage */
 
 check('layoutCells: cells stay in frame, gutters separate shared edges', () => {

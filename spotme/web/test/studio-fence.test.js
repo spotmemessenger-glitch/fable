@@ -166,6 +166,34 @@ check('(d) a lit master with dark children still gates each capability', () => {
   }
 })
 
+check('(d) a dark capability under a lit master never runs its work — review board F-5', () => {
+  // Master lit, EVERY child dark: exactly the shape of a staged rollback,
+  // where one misbehaving feature is flipped off while the rest stay on.
+  const studio = createStudio({ flags: { CREATIVE_STUDIO_ENABLED: true } })
+  // A Proxy whose getter THROWS the moment anything reads a property off it —
+  // this is what "the caller's arguments were never touched" actually means:
+  // not just "the op-doc didn't render", but the gate never even inspected
+  // what was handed to it before refusing.
+  const untouchable = (label) => new Proxy({}, {
+    get () { throw new Error(`${label}: argument was read while the feature is dark`) }
+  })
+  const calls = [
+    // Sync capability: if gate evaluated eagerly, createEditDoc would already
+    // have run (and thrown on the untouchable arg) before the gate's own
+    // check — proving eager-vs-thunk is which error surfaces, if either does.
+    () => studio.editor.createDoc(untouchable('editor.createDoc')),
+    () => studio.editor.render(untouchable('editor.render'), untouchable('ops'), {}),
+    // Async capability: this is the case with real teeth — an eagerly
+    // evaluated renderVideo call starts a real (possibly long) render whose
+    // promise nobody awaits, and it does so BEFORE the throw reaches the
+    // caller. A thunk means the render function body never runs at all.
+    () => studio.composer.renderVideo(untouchable('composer.renderVideo'), {})
+  ]
+  return calls.every((call) => {
+    try { call(); return false } catch (e) { return e instanceof StudioDisabledError }
+  })
+})
+
 check('(d) resolveFlags cannot be coaxed into lighting an unknown flag', () => {
   try {
     resolveFlags({ CREATIVE_STUDIO_ENABLED: true, EXTRA: true })
@@ -177,28 +205,34 @@ check('(d) resolveFlags cannot be coaxed into lighting an unknown flag', () => {
 
 /* --------------------------------------------------------- (e) dist audit */
 
-check('(e) dist/ contains no studio strings except the wipe-list DB name', () => {
-  const dist = join(ROOT, 'dist')
-  if (!existsSync(dist)) {
-    console.log('    SKIP: dist/ absent — run `npm run build` first for the full fence (pre-merge gate does)')
-    return true
-  }
-  const markers = [
-    'spotme-studio-opdoc', 'CREATIVE_STUDIO_ENABLED', 'StudioDisabledError',
-    'studio-cloud', 'STUDIO_CLOUD_AI_ENABLED', 'inpaintTelea', 'spotme-studio-timeline'
-  ]
-  const files = walk(dist).filter((f) => /\.(js|css|html|map)$/.test(f))
-  for (const f of files) {
-    const text = readFileSync(f, 'utf8')
-    for (const marker of markers) {
-      if (text.includes(marker)) {
-        console.log(`    breach: ${marker} in ${f}`)
-        return false
+// (e) is deliberately NOT registered via check() when dist/ is absent. A
+// recorded PASS for an assertion that never ran is a false shape: it reads,
+// in the summary line, exactly like "verified dark" when nothing was
+// verified at all. The pre-merge gate always has a dist/ (CI runs Build
+// before Test), so this only skips locally — loudly, and without inflating
+// the pass count (review board F-12).
+const dist = join(ROOT, 'dist')
+if (!existsSync(dist)) {
+  console.log('  SKIP  (e) dist/ contains no studio strings — dist/ absent, run `npm run build` first for the full fence (pre-merge gate always does)')
+} else {
+  check('(e) dist/ contains no studio strings except the wipe-list DB name', () => {
+    const markers = [
+      'spotme-studio-opdoc', 'CREATIVE_STUDIO_ENABLED', 'StudioDisabledError',
+      'studio-cloud', 'STUDIO_CLOUD_AI_ENABLED', 'inpaintTelea', 'spotme-studio-timeline'
+    ]
+    const files = walk(dist).filter((f) => /\.(js|css|html|map)$/.test(f))
+    for (const f of files) {
+      const text = readFileSync(f, 'utf8')
+      for (const marker of markers) {
+        if (text.includes(marker)) {
+          console.log(`    breach: ${marker} in ${f}`)
+          return false
+        }
       }
     }
-  }
-  return true
-})
+    return true
+  })
+}
 
 const names = Object.keys(results)
 const passed = names.filter((n) => results[n]).length

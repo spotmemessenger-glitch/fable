@@ -34,7 +34,13 @@ import globals from 'globals'
 
 export default [
   {
-    files: ['src/**/*.js', 'test/**/*.js', '*.js', '*.mjs', 'test/**/*.mjs'],
+    // `api/**` is NOT in this glob and stays a pre-existing blind spot for
+    // every file already there (translate.js, voice.js, push.js, …) — widening
+    // it repo-wide is a separate change with its own review, not part of this
+    // one. `api/studio-ai.js` is named explicitly because IT is new in this
+    // PR: a security-reviewed serverless endpoint has no business being the
+    // one file `eslint .` silently skips (review board F-9).
+    files: ['src/**/*.js', 'test/**/*.js', '*.js', '*.mjs', 'test/**/*.mjs', 'api/studio-ai.js'],
     languageOptions: {
       ecmaVersion: 2023,
       sourceType: 'module',

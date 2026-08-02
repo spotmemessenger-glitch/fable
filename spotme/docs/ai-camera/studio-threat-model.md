@@ -24,8 +24,11 @@ photo → cloud adapter → /api/studio-ai → provider       (D1 boundary — D
 ## Findings and dispositions
 
 ### T1 — Drafts at rest
-Op-docs persist in IndexedDB: masks, text, source refs. **Mitigations:**
-never pixels (a doc without its source media renders nothing); the DB joins
+Op-docs persist in IndexedDB: masks, text, source refs, plus one bounded
+preview thumbnail (≤40k chars) for the drafts list — the op-doc itself
+carries no re-encoded pixels; a doc without its source media renders nothing,
+the thumbnail is the sole persisted image and it is capped, wiped, and
+TTL'd the same as the rest of the draft. **Mitigations:** the DB joins
 `wipeDevice()` (tested — a blocked delete is REPORTED, per db.js's existing
 honesty rules); TTL — a draft created from a disappearing-message chat must
 be saved with that chat's `msgTtl`, so the edit history dies no later than

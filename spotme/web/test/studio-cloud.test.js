@@ -255,6 +255,52 @@ check('buildProviderRequest: a missing key throws rather than sending', () => {
   }
 })
 
+/* -------------------- review board F-6: azure-openai per-op legs -------- */
+
+check('buildProviderRequest: azure-openai style/sticker carry THEIR instruction, not a dropped prompt', () => {
+  const stylePayload = validateStudioBody('style', { image: IMG, styleId: 'painterly', w: 64, h: 64 })
+  const styleReq = buildProviderRequest('style', 'azure-openai', stylePayload,
+    { AZURE_OPENAI_KEY: 'k', AZURE_OPENAI_ENDPOINT: 'https://x.openai.azure.com' })
+  const stickerPayload = validateStudioBody('sticker', { image: IMG, w: 64, h: 64 })
+  const stickerReq = buildProviderRequest('sticker', 'azure-openai', stickerPayload,
+    { AZURE_OPENAI_KEY: 'k', AZURE_OPENAI_ENDPOINT: 'https://x.openai.azure.com' })
+  return /painterly/.test(styleReq.fields.prompt) &&
+    /die-cut sticker/.test(stickerReq.fields.prompt) &&
+    styleReq.fields.prompt.length > 0 && stickerReq.fields.prompt.length > 0
+})
+
+check('buildProviderRequest: azure-openai REFUSES caption — it has no text-out shape', () => {
+  const payload = validateStudioBody('caption', { image: IMG, lang: 'en', w: 64, h: 64 })
+  try {
+    buildProviderRequest('caption', 'azure-openai', payload,
+      { AZURE_OPENAI_KEY: 'k', AZURE_OPENAI_ENDPOINT: 'https://x.openai.azure.com' })
+    return false
+  } catch (e) {
+    return /cannot serve caption/.test(e.message)
+  }
+})
+
+/* -------------------- review board F-10: debit AFTER validation --------- */
+
+await checkAsync('an invalid (400) request never debits the daily budget', async () => {
+  process.env.STUDIO_AI_ENABLED = '1'
+  resetDailyBudgets()
+  process.env.STUDIO_AI_DAILY_OPS = '1'
+  // Missing styleId — validateStudioBody throws badInput, a 400, BEFORE the
+  // handler would reach hitDailyBudget. Two of these must both still be
+  // billable if debiting only happens on requests that could actually bill.
+  const bad = fakeRes()
+  await handler(post('style', { image: IMG, w: 64, h: 64 }), bad)   // no styleId → 400
+  const first = fakeRes()
+  await handler(post('style', { image: IMG, styleId: 'painterly', w: 64, h: 64 }), first)
+  delete process.env.STUDIO_AI_DAILY_OPS
+  delete process.env.STUDIO_AI_ENABLED
+  // The valid request must still succeed (or at worst fail at the provider
+  // leg with no key configured, never a 429) — the bad request must not
+  // have consumed the one-per-day allowance.
+  return bad.code === 400 && first.code !== 429
+})
+
 check('normalize: gemini caption JSON, openai b64_json, and no-image → 502 error', () => {
   const cap = normalizeProviderResponse('caption', 'gemini', {
     candidates: [{ content: { parts: [{ text: '{"captions":["a","b","c"]}' }] } }]

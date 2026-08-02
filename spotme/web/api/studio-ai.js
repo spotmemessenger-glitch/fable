@@ -167,12 +167,36 @@ export function buildProviderRequest (op, provider, payload, env = process.env) 
     }
   }
   if (provider === 'azure-openai') {
+    // The azure-openai deployment behind AZURE_OPENAI_IMAGE_DEPLOYMENT is an
+    // images/edits model: it can inpaint and restyle-via-edit, but it cannot
+    // answer a caption request — there is no image in, text out shape here,
+    // and routing `caption` at it would silently burn a real API call for a
+    // reply that can never be a caption. Refuse it as a routing error, the
+    // same class of thing checkStudioBody already refuses for malformed
+    // input, so a misconfigured STUDIO_AI_PROVIDER_CAPTION=azure-openai
+    // fails loud instead of shipping an images/edits request for `caption`.
+    if (op === 'caption') {
+      throw badInput('azure-openai cannot serve caption (images/edits only) — route caption to gemini or openai')
+    }
     if (!env.AZURE_OPENAI_KEY || !env.AZURE_OPENAI_ENDPOINT) throw new Error('no azure openai config')
     return {
       url: `${String(env.AZURE_OPENAI_ENDPOINT).replace(/\/$/, '')}/openai/deployments/${env.AZURE_OPENAI_IMAGE_DEPLOYMENT || 'gpt-image-1'}/images/edits?api-version=2025-04-01-preview`,
       headers: { 'api-key': env.AZURE_OPENAI_KEY },
       multipart: true,
-      fields: { prompt: payload.prompt || '', image: payload.image, ...(payload.mask ? { mask: payload.mask } : {}) }
+      // Mirror the openai per-op prompt construction exactly: style and
+      // sticker each need THEIR instruction in the prompt field, not the
+      // caller's raw (often absent) payload.prompt — an empty prompt for
+      // `style` silently produces a same-image no-op restyle, and for
+      // `sticker` drops the die-cut/transparent-background instruction.
+      fields: {
+        prompt: op === 'inpaint'
+          ? (payload.prompt || 'remove the masked object and fill the background naturally')
+          : op === 'sticker'
+            ? 'isolate the main subject as a die-cut sticker with transparent background'
+            : `restyle in ${payload.styleId} style`,
+        image: payload.image,
+        ...(payload.mask ? { mask: payload.mask } : {})
+      }
     }
   }
   throw new Error(`unknown provider ${provider}`)
@@ -265,19 +289,26 @@ export default async function handler (req, res) {
     return
   }
 
-  /* D5: the daily ceiling, counted only on requests that could actually bill. */
-  const budget = hitDailyBudget(userId)
-  if (!budget.allowed) {
-    res.setHeader('Retry-After', '86400')
-    res.status(429).json({ error: `daily creative AI budget reached (${budget.limit}/day)` })
-    return
-  }
-
   let body = req.body
   if (typeof body === 'string') { try { body = JSON.parse(body) } catch { body = null } }
 
   try {
+    // Validate BEFORE debiting. A 400 (bad dims, unknown styleId, malformed
+    // image) was never going to reach a provider and bill anything, so it
+    // must not count against the daily ceiling — debiting first would let a
+    // client (or a bug) exhaust a user's budget with requests that could
+    // never have spent a cent.
     const payload = validateStudioBody(op, body)
+
+    /* D5: the daily ceiling, counted only on requests that could actually
+     * bill — i.e. AFTER validation, immediately before the provider call. */
+    const budget = hitDailyBudget(userId)
+    if (!budget.allowed) {
+      res.setHeader('Retry-After', '86400')
+      res.status(429).json({ error: `daily creative AI budget reached (${budget.limit}/day)` })
+      return
+    }
+
     res.status(200).json(await callProvider(op, payload))
   } catch (e) {
     const status = Number(e?.status) || 502
