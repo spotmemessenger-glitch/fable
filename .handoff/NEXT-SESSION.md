@@ -79,6 +79,15 @@ installs from npm but `require`s Spark sandbox modules (`Reactive`, `Scene`,
 468 MB with **no licence at all** (all rights reserved — not ours to vendor).
 Snap Camera Kit is the only live vendor path of those examined.
 
+`spotme/docs/16-EXTERNAL-CODE-REFERENCES.md` is the register of third-party
+codebases examined for reference (not dependencies, none vendored). Standing
+rule recorded there: **no licence file = all rights reserved = read it, then
+write our own** — never paste or vendor. First entry,
+`kumarharsh13/instagram-clone-fullstack`: no licence; its follow/like/comment
+schema is a fair shape reference for Priority 7 and nothing else; **its
+advertised chat does not exist** (`chatRoutes.js` is 0 bytes, `socket` is never
+imported), and its `notification` model is in-app DB rows, not push.
+
 Three things that will otherwise be re-learned the hard way:
 
 - The web SDK went into **`ysnap`** because it is the only React host. **It is
