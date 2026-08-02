@@ -4,6 +4,11 @@ A register of third-party codebases examined for Spot Me: what each is
 genuinely useful for, and what its licence permits. None of these is a
 dependency. Nothing here is vendored into this repository.
 
+> **Standing owner instruction (2026-08-02): do not touch Spot Me.** These
+> checks are reference only. Nothing in `spotme/` may be modified as a result
+> of anything in this register — no dependency, no config, no code. That is why
+> this file lives in `research/`. Evaluate, measure, record; change nothing.
+
 **Written:** 2026-08-02. Claims are tagged MEASURED (checked in the session
 container on that date) or UNVERIFIED.
 
@@ -151,7 +156,7 @@ CSS3D.
 This matters because it is a **client-side** face-filter path with a permissive
 licence — potentially the AR capability Camera Kit was wanted for, without a
 vendor SDK phoning home to Snap's backend, which is the objection that got
-Camera Kit backed out (see `15-AR-PLATFORM-REFERENCE.md` §3 and §7). `ysnap`
+Camera Kit backed out (see `ar-platform-reference.md` §3 and §7). `ysnap`
 already carries `three`, `@react-three/fiber` and `drei`, so its Three.js
 integration path would drop in naturally.
 

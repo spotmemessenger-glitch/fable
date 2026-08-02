@@ -63,9 +63,14 @@ For A5: enforcement stays default-OFF, and **disabling the flag — not
 reverting — is the supported operational rollback** (ADR-007 §Rollback says
 why: reverting removes the review UI and strands a `Changed` peer).
 
-### AR platforms — reference only, NOT scheduled
+### AR platforms and external code — REFERENCE ONLY, do not touch Spot Me
 
-`spotme/docs/15-AR-PLATFORM-REFERENCE.md` records every AR camera platform
+**Standing owner instruction (2026-08-02): do not touch Spot Me.** AR and
+third-party repo evaluation is reference only — nothing in `spotme/` may be
+modified for it. Both records therefore live in `research/`, not
+`spotme/docs/`. Evaluate, measure, write it down; change nothing.
+
+`research/ar-platform-reference.md` records every AR camera platform
 evaluated: Snap Camera Kit (versions, Maven/SPM coordinates, credentials,
 measured sizes, environment traps) and Meta/Spark AR. **AR is in no roadmap
 priority and no owner execution order** — the record exists so an evaluation
@@ -79,7 +84,7 @@ installs from npm but `require`s Spark sandbox modules (`Reactive`, `Scene`,
 468 MB with **no licence at all** (all rights reserved — not ours to vendor).
 Snap Camera Kit is the only live vendor path of those examined.
 
-`spotme/docs/16-EXTERNAL-CODE-REFERENCES.md` is the register of third-party
+`research/external-code-references.md` is the register of third-party
 codebases examined for reference (not dependencies, none vendored). Standing
 rule recorded there: **no licence file = all rights reserved = read it, then
 write our own** — never paste or vendor. First entry,

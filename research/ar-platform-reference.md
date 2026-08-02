@@ -4,6 +4,12 @@
 **Written:** 2026-08-02. **Measured in:** the remote session container for
 branch `claude/snap-camera-kit-repos-65c88r` (PR #53).
 
+> **Standing owner instruction (2026-08-02): do not touch Spot Me.** All AR and
+> third-party evaluation is reference only. Nothing in `spotme/` may be
+> modified for it — no dependency, no config, no code. That is why this file
+> lives in `research/` and not in `spotme/docs/`. Evaluate, measure, write it
+> down here; change nothing.
+
 Covers the AR camera platforms evaluated for Spot Me. **Part A — Snap Camera
 Kit** (§1–§7): viable, gated on owner authorization; an install was made and
 then reverted (§3). **Part B — Meta / Spark AR** (§8): a closed platform; do
