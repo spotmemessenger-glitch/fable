@@ -56,11 +56,30 @@ union — every test suite kept, `wipeDevice` keeps `clearedTrust` +
 | PR | Branch | State |
 |---|---|---|
 | **#34** product audit (draft) | `docs/product-audit-2026-08-01` | voice-cloning + translation-provider corrections pushed; awaiting owner review |
+| **#53** Snap Camera Kit (draft) | `claude/snap-camera-kit-repos-65c88r` | web SDK installed in **`ysnap` only**; reference record for Spot Me. See below |
 | governance amendment | `docs/execution-order-2026-08-01` | the PR carrying this very edit + the roadmap "Owner Amendment" + CLAUDE.md pointer |
 
 For A5: enforcement stays default-OFF, and **disabling the flag — not
 reverting — is the supported operational rollback** (ADR-007 §Rollback says
 why: reverting removes the review UI and strands a `Changed` peer).
+
+### Snap Camera Kit — reference only, NOT scheduled
+
+`spotme/docs/15-SNAP-CAMERA-KIT-REFERENCE.md` records the Snap AR SDKs
+(versions, Maven/SPM coordinates, credential requirements, measured sizes,
+environment traps). **Camera Kit is in no roadmap priority and no owner
+execution order** — the record exists so an evaluation would not start cold.
+
+Three things that will otherwise be re-learned the hard way:
+
+- The web SDK went into **`ysnap`** because it is the only React host. **It is
+  not in Spot Me and must not be added to `spotme/` without owner sign-off** —
+  a camera SDK that speaks gRPC-web to Snap's backend inside an E2EE messenger
+  is a §7 integration review, not a dependency bump.
+- `dl.google.com` is **proxy-blocked** here, so an Android Camera Kit resolve
+  can only be verified with `transitive = false`. The Snap AARs themselves are
+  on Maven Central and fetch fine (main AAR **47.4 MB**).
+- `camera-kit-reference` is a **1.3 GB** clone at `--depth 1`. Never vendor it.
 
 ### Untouched / blocked (standing)
 
