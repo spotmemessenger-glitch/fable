@@ -6,11 +6,15 @@
  * longer travel here: see reach.js, which addresses a request directly to one
  * person's own inbox room instead of broadcasting it through this shared one.
  *
- * LOCATION HONESTY: positions are rounded to ~110 m and offset with a stable
- * per-person jitter before they ever leave the device. Distance readouts are
- * therefore approximate by construction — the UI shows "~24 m", never an exact
- * figure, and ghost mode (settings.showOnMap=false) withholds position while
- * still allowing chat requests by name.
+ * LOCATION HONESTY (privacy fix 2026-08-03, owner decision): the PUBLIC
+ * position broadcast to the lobby is APPROXIMATE and computed on-device
+ * (geo-approx.js) — precise GPS is NEVER broadcast. The approximation snaps to
+ * a coarse privacy cell and rotates within it across a privacy window, so it
+ * resists both exact-location disclosure and long-term correlation. Precise
+ * GPS stays DEVICE-LOCAL, used only for distance/centring/radius. Distance
+ * readouts are approximate by construction — the UI shows "~24 m", never an
+ * exact figure — and ghost mode (settings.showOnMap=false) withholds position
+ * entirely while still allowing chat requests by name.
  */
 // Server-backed transport, same as chat and knocks. Discovery gains the most
 // from the move: tracker-based peer discovery took ~25s and failed outright
@@ -21,6 +25,7 @@ import { joinRoom } from './transport/room.js'
 import { RTC_CONFIG, readyRTC } from '../net.js'
 import { db } from './db.js'
 import { pushNote } from './notify.js'
+import { publicPositionFor } from './geo-approx.js'
 
 const APP_ID = 'io.ysnapai.spotme'
 const LOBBY_ID = 'spotme-lobby-v1'
@@ -66,8 +71,10 @@ function createLobby () {
        * Cooperative, and the row says so: it asks peers not to record, the way
        * a standard client honours it, and cannot compel one. */
       seen: db.settings().lastSeen || 'everyone',
-      lat: show && position ? position.lat : null,
-      lon: show && position ? position.lon : null,
+      // PUBLIC position is APPROXIMATE, computed on-device — precise GPS is
+      // never broadcast. `position` (precise) stays device-local for
+      // distance/centring; ghost/hidden withholds entirely (nulls).
+      ...publicPositionFor(position, show, p.id),
       ts: Date.now()
     }
   }
@@ -76,10 +83,11 @@ function createLobby () {
   let relayReady = false
 
   /**
-   * PRECISE positions (owner decision 2026-07-25): the 5–500 m radar needs
-   * real GPS, so coords go out exactly as the device reports them, refreshed
-   * continuously. Ghost mode (settings.showOnMap=false) remains the privacy
-   * switch — it withholds position entirely.
+   * Acquire the PRECISE fix and keep it DEVICE-LOCAL (owner decision
+   * 2026-08-03, superseding 2026-07-25). High accuracy is used only for local
+   * distance/centring; what gets broadcast is the on-device APPROXIMATION
+   * (myAnnouncement → publicPositionFor). Ghost mode
+   * (settings.showOnMap=false) still withholds any position entirely.
    */
   function acquirePosition () {
     if (!('geolocation' in navigator)) return
