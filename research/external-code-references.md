@@ -374,6 +374,78 @@ Other real GetStream feeds repos, if that product is ever wanted:
    searching the name globally.
 
 If short-video feed references are wanted, ~175 real `tiktok-clone*` React
-repos exist — e.g. `Marlon-Paulo-da-Silva/TikTok-Clone-ReactNative` (78★) and
-`christranv/react-native-tiktok-clone`. **None has been vetted here**; on this
-register's record, assume the advertised features need checking before trust.
+repos exist. The most-starred, `Marlon-Paulo-da-Silva/TikTok-Clone-ReactNative`
+(78★), was checked — see §6.
+
+---
+
+## 6. `Marlon-Paulo-da-Silva/TikTok-Clone-ReactNative`
+
+<https://github.com/Marlon-Paulo-da-Silva/TikTok-Clone-ReactNative>
+
+The most-starred result from the `tiktok-clone*` search. Expo / React Native,
+JavaScript, Portuguese-language README. 78 stars, 45 forks, **22 open issues**,
+44 MB checked out. **484 lines of source** across 7 files. **No licence file**
+— all rights reserved. MEASURED.
+
+**Its real age is 2020, not 2025.** GitHub shows `updated_at` 2025-09-08, but
+that is metadata churn — stars and similar. The last actual code push
+(`pushed_at`) was **2023-02-03**, and the dependencies are from early 2020.
+
+### One real idea, and it is the reason to look
+
+The vertical full-screen autoplay feed — the actual TikTok mechanic — is
+`react-native-vertical-view-pager` wrapping `expo-av`'s `<Video shouldPlay>`,
+one page per item. That is a ~30-minute read in
+`src/screens/Feed/index.js` (322 of the 484 total lines) and it is the only
+thing here worth the trip.
+
+### What the description promised and the code does not deliver
+
+Advertised as replicating "core video feed, scrolling, and **likes
+architecture**". Feed and scrolling are real. There is **no likes
+architecture**:
+
+```js
+const [liked, setLiked] = useState(false);
+function handleLike() { setLiked(!liked); }
+```
+
+It swaps a white heart image for a red one in local component state. No API
+call, no persistence, nothing server-side. The like counts shown are static
+integers in a fixture file. MEASURED.
+
+### It will not run for anyone as checked out
+
+Two hard blockers, both MEASURED:
+
+- **`src/services/api.js` hardcodes the author's LAN address**,
+  `http://192.168.0.105:8000`. Every request targets a machine on their home
+  network. This alone plausibly accounts for a good share of the 22 open
+  issues.
+- **There is no backend.** `json-server` serves a static `server.json`
+  fixture, and the videos are hardcoded remote URLs — a Rocketseat S3 bucket
+  and CloudFront's `big_buck_bunny.mp4`. The feed request is
+  `/feed?_expand=author&_limit=5`, json-server's query syntax against a flat
+  JSON file.
+
+### Stack age
+
+Expo SDK **36** (late 2019), with React Native pinned to a tarball URL
+`https://github.com/expo/react-native/archive/sdk-36.0.0.tar.gz`; React 16.9;
+axios 0.19.2; `react-navigation` 4. For scale, `spotme/app` is on Expo 57 —
+roughly twenty SDK generations ahead. None of this is upgradeable in place;
+it would be a rewrite.
+
+### Hygiene note
+
+No secrets committed. A stray `yarn-error.log` is checked in, which is untidy
+but harmless.
+
+### Verdict
+
+**Read one file, take the idea, write your own.** `src/screens/Feed/index.js`
+is a clear worked example of a swipeable full-screen autoplay video feed, and
+that pattern is worth understanding. Everything else — no licence, no backend,
+a hardcoded LAN IP, fixture data, and a 2019 SDK — means it is a demo, not a
+foundation. Do not clone it as a starting point.
