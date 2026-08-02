@@ -1,5 +1,44 @@
 # START HERE — pickup brief
 
+> ## ⏱ UPDATE — 2026-08-02 (later): AI Camera Wave 2 subset done, review ACCEPTED
+>
+> **Status recorded per owner review:** *Wave 2 report accepted pending
+> owner/read-only code review; no merge, wiring, activation, dependency
+> selection, or further implementation authorized.* Implementation-complete,
+> activation-incomplete. **Do not merge, wire, activate, pick dependencies, or
+> start new implementation** without a fresh explicit owner go-ahead.
+>
+> What changed since the 13:00 brief below (§3 "Wave 2 — foundation only" is
+> now superseded for AI Vision + AR/Beauty):
+> - **AI Camera Wave 2 finishable subset built, reviewed, and PR'd** — the
+>   subset that needs no owner-reserved decision (owner directive this session).
+>   - **#58** `feat/ai-vision` (head `44da9ff`) — `createVision` factory,
+>     barcode/QR scan, honest dark OCR/translate seams + dark cloud port.
+>     Draft, stacked on #56, CI green.
+>   - **#59** `feat/ar-beauty` (head `97aebee`) — `createArBeauty` factory,
+>     tier-0 beauty + face-tracking box adapter/smoother, dark landmark/hand/
+>     world legs. Draft, stacked on #56, CI green.
+>   - Both: additive, flag-gated OFF, byte-identical-when-off (fence + dist
+>     scan), full `npm test` green, eslint clean. An internal two-lens
+>     adversarial review found no HIGH; findings fixed with regression tests.
+> - **docscan de-scoped**: the ai-vision document scanner was unreviewed wip
+>   failing 11/36 golden tests (clean pages → `NO_QUAD_FOUND`); preserved on
+>   branch **`wip/ai-vision-docscan-unreviewed`**, NOT shipped. ADR-014b §4.
+> - **Still frozen** (§4 below unchanged): nothing merged/wired. Review #56
+>   first — both Wave 2 PRs depend on it.
+> - **Wave 2 legs still blocked on owner decisions** (activation gates):
+>   ADR-014b §3 (tesseract OCR dep; D1 cloud boundary + D5 cost; medical
+>   policy) and ADR-014c §3 (MediaPipe face/hand landmarker dep + self-hosted
+>   model assets; WebXR/native for world AR).
+> - **UNPROVEN** (owner review emphasised): real camera/browser behavior,
+>   mobile GPU output/visual equivalence, performance, thermal, battery — none
+>   validated. Tests are deterministic-fake only.
+>
+> Everything below is the original 13:00 brief, still accurate except where
+> this banner supersedes §3 for the two Wave 2 missions.
+
+---
+
 **Written:** 2026-08-02, ~13:00 UTC, mid Priority 2 build phase.
 **Supersedes** the 2026-08-01 brief entirely (the identity-sequence/E2E-foundation
 era, PRs up to #36). That text is in git history
