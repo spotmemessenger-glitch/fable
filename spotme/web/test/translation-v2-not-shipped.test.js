@@ -19,7 +19,11 @@
  */
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join, relative } from 'node:path'
-import { buildTranslationPlatform, isTranslationV2Enabled } from '../src/lib/translation/index.js'
+import {
+  buildTranslationPlatform, isTranslationV2Enabled, isPlatformV2Enabled,
+  isDynamicRoutingEnabled, isCrossVerifyEnabled, isAdjudicationEnabled,
+  isCacheEnabled, isCostGovernanceEnabled
+} from '../src/lib/translation/index.js'
 
 const results = {}
 const names = []
@@ -49,7 +53,18 @@ const V2 = [
   'src/lib/translation/index.js',
   'src/lib/translation/adapters/engine-port.js',
   'src/lib/translation/adapters/providers.js',
-  'src/lib/translation/adapters/index.js'
+  'src/lib/translation/adapters/index.js',
+  // The completed-platform modules (all additive, all gated, all unreachable
+  // from the app until the integration seam is deliberately adopted).
+  'src/lib/translation/retry.js',
+  'src/lib/translation/privacy.js',
+  'src/lib/translation/cost.js',
+  'src/lib/translation/cache.js',
+  'src/lib/translation/context.js',
+  'src/lib/translation/verify.js',
+  'src/lib/translation/metrics.js',
+  'src/lib/translation/pipeline.js',
+  'src/lib/translation/integration.js'
 ]
 
 function walk (dir, out = []) {
@@ -124,6 +139,32 @@ const flagOnWorks = isTranslationV2Enabled() === true && buildTranslationPlatfor
 delete globalThis.__SPOTME_TRANSLATION_V2__
 check('the flag CAN be turned on — the switch works, it is just off by default', flagOnWorks)
 
+/* ----------------------------------- 2b. the layered sub-flags default OFF - */
+
+// Every layered capability is OFF by default, and — the layering property — a
+// sub-flag cannot turn on unless the MASTER is on. A stray env var alone is inert.
+check('ALL SIX flags default OFF: platform + the five layered sub-capabilities',
+  isPlatformV2Enabled() === false && isDynamicRoutingEnabled() === false &&
+  isCrossVerifyEnabled() === false && isAdjudicationEnabled() === false &&
+  isCacheEnabled() === false && isCostGovernanceEnabled() === false)
+
+globalThis.__SPOTME_TRANSLATION_CROSS_VERIFY__ = true
+globalThis.__SPOTME_TRANSLATION_ADJUDICATION__ = true
+check('LAYERED: a sub-flag does NOT enable without the master (master OFF ⇒ sub OFF)',
+  isCrossVerifyEnabled() === false && isAdjudicationEnabled() === false)
+
+globalThis.__SPOTME_TRANSLATION_PLATFORM_V2__ = true
+check('LAYERED: with the master ON, an enabled sub-flag reads ON',
+  isPlatformV2Enabled() === true && isCrossVerifyEnabled() === true && isAdjudicationEnabled() === true &&
+  // a sub-flag NOT set stays off even with the master on
+  isCacheEnabled() === false)
+delete globalThis.__SPOTME_TRANSLATION_PLATFORM_V2__
+delete globalThis.__SPOTME_TRANSLATION_CROSS_VERIFY__
+delete globalThis.__SPOTME_TRANSLATION_ADJUDICATION__
+
+check('after cleanup every flag is OFF again — no leaked global state',
+  isPlatformV2Enabled() === false && isCrossVerifyEnabled() === false && isAdjudicationEnabled() === false)
+
 /* ------------------------------------------ 3. …but it is not unexamined -- */
 
 const exercised = (needle) => testFiles.some((f) => f.body.includes(needle))
@@ -132,6 +173,16 @@ check('…and the router', exercised('createRouter'))
 check('…and the circuit breaker', exercised('createCircuitBreaker'))
 check('…and the quality EWMA', exercised('updateQuality'))
 check('…and the detection pipeline', exercised('runDetectionPipeline'))
+// …and every completed-platform capability.
+check('…and retry/classification', exercised('classifyError'))
+check('…and cost governance', exercised('createCostGovernor'))
+check('…and the cache (with the isolation test)', exercised('createTranslationCache'))
+check('…and privacy/redaction', exercised('classifyText'))
+check('…and context assembly', exercised('buildContext'))
+check('…and cross-provider consensus', exercised('consensus'))
+check('…and observability', exercised('createMetrics'))
+check('…and the execution pipeline', exercised('createPipeline'))
+check('…and the integration entry (the compatibility proof)', exercised('createTranslationEntry'))
 
 for (const p of V2) {
   const base = '/' + p.split('/').pop()

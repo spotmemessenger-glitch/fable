@@ -81,6 +81,10 @@ export function createRouter (deps = {}) {
   const qualityFn = asQualityFn(deps.quality)
   const policy = deps.policy || {}
   const policyVersion = policy.policyVersion || 'rt-off'
+  // Optional per-call wrapper (retry.js makeAttempt) so the pipeline can add a
+  // bounded, transient-only retry to the primary route. Default is identity —
+  // one call, exactly the behaviour every existing caller and test relies on.
+  const attempt = typeof deps.attempt === 'function' ? deps.attempt : (fn) => fn()
 
   function circuitOf (id) {
     return breakers ? breakers.get(id) : null
@@ -186,7 +190,7 @@ export function createRouter (deps = {}) {
 
       const before = breaker ? breaker.state() : 'closed'
       try {
-        const out = await provider[method](request)
+        const out = await attempt(() => provider[method](request), { id })
         const text = out && typeof out === 'object' ? out.text : out
         if (SCRIPT_CHECKED.has(decision.requiredCapability) &&
             text != null && !scriptOk(text, request.targetLang)) {

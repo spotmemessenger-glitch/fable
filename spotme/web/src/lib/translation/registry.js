@@ -11,7 +11,7 @@
  * malformed adapter is refused at the door rather than discovered mid-request.
  * Duplicate ids are refused too: two "sarvam"s is a bug, not a fallback.
  */
-import { assertImplementsProvider } from './ITranslationProvider.js'
+import { assertImplementsProvider, providerSupports } from './ITranslationProvider.js'
 import { capabilityMatrixData } from './capabilities.js'
 
 /** Create an empty registry. Pure, in-memory; nothing here touches a network. */
@@ -36,6 +36,28 @@ export function createProviderRegistry () {
     list () { return [...providers.values()] },
     ids () { return [...providers.keys()] },
     get size () { return providers.size },
+
+    /**
+     * "Which registered providers can do task X" — the question the abstraction
+     * exists to answer. `capability` is one of the CAPABILITIES vocabulary
+     * (translate/detect/transliterate/comprehend/adjudicate/detectScript/…). A
+     * provider qualifies only if it DECLARES the capability AND actually exposes
+     * the backing method (providerSupports), so a mis-declared adapter never
+     * shows up as capable. Registry order is preserved; pure, no network.
+     */
+    providersFor (capability) {
+      return [...providers.values()].filter((p) => providerSupports(p, capability))
+    },
+
+    /** The ids of the providers capable of `capability` (the thin view). */
+    capableOf (capability) {
+      return this.providersFor(capability).map((p) => p.id)
+    },
+
+    /** Is ANY registered provider capable of `capability`? (readiness check). */
+    canDo (capability) {
+      return this.providersFor(capability).length > 0
+    },
 
     /** Remove a provider (ops/test seam). */
     remove (id) { return providers.delete(id) },

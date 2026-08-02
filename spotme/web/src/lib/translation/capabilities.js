@@ -180,14 +180,73 @@ export const PROVIDER_MATRIX = Object.freeze({
 })
 
 /**
+ * The economic + operational half of each provider row (design §4, extended for
+ * the completed platform): a cost model, a data-retention posture, regional
+ * availability, whether the provider accepts romanized (Latin-script) input of a
+ * non-Latin language, whether it batches, and a max input size. Kept BESIDE the
+ * matrix rather than inside each frozen row so the capability table above stays
+ * readable; `providerCapabilities()` merges the two into one object.
+ *
+ * COSTS ARE ESTIMATES FOR GOVERNANCE, NOT BILLING. `microUsdPerUnit` is a public,
+ * order-of-magnitude figure used to estimate a request's spend BEFORE it is made
+ * and to enforce ceilings (cost.js). It carries no account, key or invoice, is
+ * deliberately conservative, and every free provider is 0. RETENTION is the
+ * honest posture, not a promise: `contract` = a data-processing agreement is
+ * in place; `contract-no-trace` = contract plus a documented no-trace option;
+ * `none` = nothing leaves the device; `unknown-no-contract` = a keyless endpoint
+ * with no agreement, denied to enterprise tenants by default (privacy.js).
+ */
+export const PROVIDER_ECONOMICS = Object.freeze({
+  device: { costModel: { unit: 'none', microUsdPerUnit: 0 }, retention: 'none', regions: ['on-device'], romanized: false, batch: false, maxInputChars: 5000 },
+  google: { costModel: { unit: 'char', microUsdPerUnit: 0.02 }, retention: 'contract', regions: ['global'], romanized: true, batch: true, maxInputChars: 5000 },
+  azure: { costModel: { unit: 'char', microUsdPerUnit: 0.01 }, retention: 'contract-no-trace', regions: ['global', 'eastus', 'westeurope', 'southeastasia'], romanized: true, batch: true, maxInputChars: 10000 },
+  sarvam: { costModel: { unit: 'char', microUsdPerUnit: 0.03 }, retention: 'contract', regions: ['in'], romanized: true, batch: false, maxInputChars: 1000 },
+  gemini: { costModel: { unit: 'token', microUsdPerUnit: 0.3 }, retention: 'contract', regions: ['global'], romanized: true, batch: false, maxInputChars: 8000 },
+  openai: { costModel: { unit: 'token', microUsdPerUnit: 2.5 }, retention: 'contract', regions: ['global'], romanized: true, batch: false, maxInputChars: 8000 },
+  anthropic: { costModel: { unit: 'token', microUsdPerUnit: 3.0 }, retention: 'contract', regions: ['global'], romanized: true, batch: false, maxInputChars: 8000 },
+  'google-inputtools': { costModel: { unit: 'call', microUsdPerUnit: 0 }, retention: 'unknown-no-contract', regions: ['global'], romanized: true, batch: false, maxInputChars: 200 },
+  elevenlabs: { costModel: { unit: 'call', microUsdPerUnit: 100 }, retention: 'contract', regions: ['global'], romanized: false, batch: false, maxInputChars: 5000 },
+  gtx: { costModel: { unit: 'char', microUsdPerUnit: 0 }, retention: 'unknown-no-contract', regions: ['global'], romanized: true, batch: false, maxInputChars: 480 },
+  mymemory: { costModel: { unit: 'char', microUsdPerUnit: 0 }, retention: 'unknown-no-contract', regions: ['global'], romanized: false, batch: false, maxInputChars: 480 }
+})
+
+/** The conservative default for a provider with no economics row of its own. */
+export const DEFAULT_ECONOMICS = Object.freeze({
+  costModel: { unit: 'none', microUsdPerUnit: 0 }, retention: 'unknown-no-contract',
+  regions: ['global'], romanized: false, batch: false, maxInputChars: 1000
+})
+
+/** A fresh copy of a provider's economics (never the shared frozen object). */
+export function providerEconomics (id) {
+  const e = PROVIDER_ECONOMICS[id] || DEFAULT_ECONOMICS
+  return {
+    costModel: { ...e.costModel },
+    retention: e.retention,
+    regions: [...e.regions],
+    romanized: e.romanized,
+    batch: e.batch,
+    maxInputChars: e.maxInputChars
+  }
+}
+
+/** The per-unit cost model {unit, microUsdPerUnit} for a provider. */
+export const costModelOf = (id) => providerEconomics(id).costModel
+/** The data-retention posture string for a provider. */
+export const retentionOf = (id) => providerEconomics(id).retention
+/** The regions a provider is available in (for regional failover). */
+export const regionsOf = (id) => providerEconomics(id).regions
+
+/**
  * Normalised capabilities for a provider id — the shape the interface promises,
- * with a real `languagePairs(src,tgt)` function derived from the row's data.
- * Returns null for an unknown id so a caller cannot silently register a ghost.
+ * with a real `languagePairs(src,tgt)` function derived from the row's data, and
+ * the economic/operational fields merged in. Returns null for an unknown id so a
+ * caller cannot silently register a ghost.
  */
 export function providerCapabilities (id) {
   const row = PROVIDER_MATRIX[id]
   if (!row) return null
   const pairs = row.pairs
+  const econ = providerEconomics(id)
   return {
     supports: [...row.supports],
     scripts: [...row.scripts],
@@ -197,22 +256,41 @@ export function providerCapabilities (id) {
     costClass: row.costClass,
     privacy: row.privacy,
     rateLimit: { ...row.rateLimit },
+    // Extended, operational half — merged from PROVIDER_ECONOMICS.
+    costModel: econ.costModel,
+    retention: econ.retention,
+    regions: econ.regions,
+    romanized: econ.romanized,
+    batch: econ.batch,
+    maxInputChars: econ.maxInputChars,
     languagePairs: (src, tgt) => pairFitness(pairs, src, tgt)
   }
 }
 
-/** The matrix as a plain array of rows (the admin `?op=admin.providers` view). */
+/**
+ * The matrix as a plain array of rows (the admin `?op=admin.providers` view).
+ * Carries the extended columns too, but NEVER the `languagePairs` function or any
+ * message content — this is a public description, safe to return to an admin.
+ */
 export function capabilityMatrixData () {
   return Object.keys(PROVIDER_MATRIX).map((id) => {
     const row = PROVIDER_MATRIX[id]
+    const econ = providerEconomics(id)
     return {
       id,
       supports: [...row.supports],
       scripts: [...row.scripts],
+      streaming: row.streaming,
       qualityTier: row.qualityTier,
       latencyClass: row.latencyClass,
       costClass: row.costClass,
-      privacy: row.privacy
+      privacy: row.privacy,
+      retention: econ.retention,
+      regions: econ.regions,
+      romanized: econ.romanized,
+      batch: econ.batch,
+      maxInputChars: econ.maxInputChars,
+      costModel: econ.costModel
     }
   })
 }
