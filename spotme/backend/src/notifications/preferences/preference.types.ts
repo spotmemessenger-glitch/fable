@@ -10,6 +10,15 @@ export interface AccountPreference {
   readonly dndTz?: string | null;
   readonly allowCallsInDnd: boolean;
   readonly defaultLevel: PreferenceLevel;
+  /**
+   * FOCUS MODE — a manual allowlist mode (design §9.3). When on, ONLY classes in
+   * `focusAllow` (plus always-critical security + a permitted call) deliver;
+   * everything else is suppressed with reason `focus`. Distinct from DND (a time
+   * window): focus is an explicit "let nothing through but X" toggle.
+   */
+  readonly focusMode: boolean;
+  /** Classes allowed to deliver during focus mode. Empty ⇒ only critical/calls. */
+  readonly focusAllow: readonly NotificationClass[];
 }
 
 export const DEFAULT_ACCOUNT_PREFERENCE: AccountPreference = {
@@ -19,6 +28,8 @@ export const DEFAULT_ACCOUNT_PREFERENCE: AccountPreference = {
   dndTz: null,
   allowCallsInDnd: true,
   defaultLevel: 'all',
+  focusMode: false,
+  focusAllow: [],
 };
 
 /** Per-conversation preference. `level:'default'` defers to the account level. */
@@ -43,7 +54,7 @@ export interface ClassTraits {
 export interface PreferenceDecision {
   readonly deliver: boolean;
   /** Why it was suppressed (only when deliver=false). */
-  readonly reason?: 'level' | 'mute' | 'dnd';
+  readonly reason?: 'level' | 'mute' | 'dnd' | 'focus';
   /** Deliver, but quietly (normal priority, no sound) — DND downgrade. */
   readonly downgrade?: boolean;
   /** Hold until the DND window ends, then release as a digest. */

@@ -28,6 +28,7 @@ export class NotificationMetrics {
   private readonly sent: Counter<string>;
   private readonly delivered: Counter<string>;
   private readonly opened: Counter<string>;
+  private readonly actioned: Counter<string>;
   private readonly failed: Counter<string>;
   private readonly retried: Counter<string>;
   private readonly abandoned: Counter<string>;
@@ -68,6 +69,12 @@ export class NotificationMetrics {
       name: 'notif_opened_total',
       help: 'Device open (tap) receipts',
       labelNames: ['class', 'transport'],
+      registers: [this.registry],
+    });
+    this.actioned = new Counter({
+      name: 'notif_actioned_total',
+      help: 'User actions on a delivered notification (reply/read/accept/…)',
+      labelNames: ['class', 'transport', 'action'],
       registers: [this.registry],
     });
     this.failed = new Counter({
@@ -128,6 +135,9 @@ export class NotificationMetrics {
   }
   onOpened(cls: NotificationClass, transport: TransportName): void {
     this.opened.inc({ class: cls, transport });
+  }
+  onActioned(cls: NotificationClass, transport: TransportName, action: string): void {
+    this.actioned.inc({ class: cls, transport, action });
   }
   onFailed(cls: NotificationClass, transport: TransportName, code: string): void {
     this.failed.inc({ class: cls, transport, code });

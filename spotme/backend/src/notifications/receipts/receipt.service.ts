@@ -7,6 +7,11 @@ import { NotificationCatalog } from '../catalog/notification-catalog';
 import { canTransition, NotificationState } from '../state/notification-state';
 import { NotificationClass } from '../catalog/notification-class';
 import { TransportName } from '../transport/notification-transport';
+import {
+  actionEffect,
+  isNotificationAction,
+  NotificationAction,
+} from '../actions/notification-actions';
 
 /** One device receipt (design §5.4). Contains NO content — `notifId` is opaque. */
 export interface ReceiptItem {
@@ -106,6 +111,65 @@ export class ReceiptService {
       if (item.event === 'delivered') this.metrics.onDelivered(cls, transport);
       else if (item.event === 'opened') this.metrics.onOpened(cls, transport);
     }
+    return true;
+  }
+
+  /**
+   * Record a user ACTION on a delivered notification (reply/read/mute/archive/
+   * accept/decline/…). The action's opaque RESULT is stored as a receipt (never
+   * its content) and, where the action represents engagement or refusal, the
+   * outbox row advances through the same state machine (a call `accept` ⇒
+   * opened, `decline` ⇒ dismissed). Idempotent on (outboxId, deviceId, event);
+   * an action unknown to the class is rejected, counted, never detailed.
+   */
+  async recordAction(
+    deviceId: string,
+    transport: TransportName,
+    notifId: string,
+    action: string,
+  ): Promise<{ accepted: number; rejected: number }> {
+    if (!this.flags.enabled) return { accepted: 0, rejected: 1 };
+    if (!deviceId || !notifId || !isNotificationAction(action)) {
+      return { accepted: 0, rejected: 1 };
+    }
+    const ok = await this.applyAction(deviceId, transport, notifId, action);
+    return ok ? { accepted: 1, rejected: 0 } : { accepted: 0, rejected: 1 };
+  }
+
+  private async applyAction(
+    deviceId: string,
+    transport: TransportName,
+    notifId: string,
+    action: NotificationAction,
+  ): Promise<boolean> {
+    const row = await this.prisma.notificationOutbox.findUnique({ where: { id: notifId } });
+    if (!row) return false; // unknown/expired handle — counted, not detailed
+
+    const effect = actionEffect(action);
+    try {
+      await this.prisma.notificationReceipt.create({
+        data: { outboxId: row.id, deviceId, transport, event: effect.event, ts: new Date() },
+      });
+    } catch (err) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+        return true; // already recorded — idempotent success
+      }
+      throw err;
+    }
+
+    // Advance the delivery state only if the action maps to a legal transition.
+    if (effect.state) {
+      const from = row.status as NotificationState;
+      if (canTransition(from, effect.state)) {
+        await this.prisma.notificationOutbox.updateMany({
+          where: { id: row.id, status: from },
+          data: { status: effect.state, updatedAt: new Date() },
+        });
+      }
+    }
+
+    const cls = row.eventClass as NotificationClass;
+    if (this.catalog.isKnown(cls)) this.metrics.onActioned(cls, transport, action);
     return true;
   }
 }

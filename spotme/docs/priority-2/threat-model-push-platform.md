@@ -1,10 +1,14 @@
 # Threat model — Push Notification Platform foundation (Priority 2, PR A)
 
-Scope: the additive `backend/src/notifications/` foundation as built (content-less
-floor; encrypted envelope is a seam only). Frame: **the server is the adversary
-for content; the push providers (Apple/Google/Mozilla) are the adversary for
-everything in the payload; the notification log is an adversary for anything
-persisted** (design §4, `17-CRYPTO-IMPLEMENTATION-GUIDE.md` §0).
+Scope: the additive `backend/src/notifications/` platform as built — the
+**content-less floor is the shipped default**; the **encrypted rich envelope is a
+REAL but GATED** upgrade (`EncryptedEnvelopeBuilder` + `notif-crypto`, off unless
+`NOTIFICATIONS_V2_ENABLED` + `NOTIF_ENCRYPTED_PAYLOAD_ENABLED`, the latter gated
+on the owner's ADR-008 §12 sign-off — see `security-review-encrypted-payload.md`).
+Frame: **the server is the adversary for content; the push providers
+(Apple/Google/Mozilla) are the adversary for everything in the payload; the
+notification log is an adversary for anything persisted** (design §4,
+`17-CRYPTO-IMPLEMENTATION-GUIDE.md` §0).
 
 ## Adversaries and what they can see
 
@@ -19,11 +23,15 @@ persisted** (design §4, `17-CRYPTO-IMPLEMENTATION-GUIDE.md` §0).
 
 - **No message content in any payload or table, ever** — enforced by type (no
   content field) and by the `no-content` assertions in `isolation.spec`.
-- **No notification key generated or persisted** — `EncryptedEnvelopeBuilder`
-  throws; the key-generation fence (`isolation.spec`) scans the whole module for
-  `generateKeyPair`/`subtle.generateKey`/`createPrivateKey`/`notifPriv` and
-  asserts none. ADR-008 §12 hard stop is **not engaged**: no signing key,
-  prekey, X3DH, or ratchet is created, published, or read.
+- **No device notification PRIVATE key on the server, ever** — the device holds
+  its own (non-extractable) private key; the server registers only the PUBLIC
+  half; the gated seal generates an EPHEMERAL key discarded per call. The fence
+  (`isolation.spec`) confines all key/seal primitives to `notif-crypto.ts`,
+  asserts no persisted `notif(ication)PrivateKey`, and asserts the gated builder
+  throws before any crypto while the sub-flag is off. ADR-008 §12 hard stop is
+  **not engaged**: no signing key, prekey, X3DH, or ratchet is created,
+  published, or read; the notification wrapping key is separate and its
+  activation is itself gated on the §12 review.
 - **No coupling to Priority-1 crypto** — the module imports nothing from
   signing/ratchet/x3dh/prekey/e2e/`web/src` (build-breaking fence).
 - **Deep links carry routing, never authorisation** — a route only opens a
@@ -46,9 +54,16 @@ persisted** (design §4, `17-CRYPTO-IMPLEMENTATION-GUIDE.md` §0).
 - **Mentions still need a cleartext "mentions @X" routing signal** — the
   envelope hides it from the provider but the server needs it to route a mention
   as a mention; unresolved owner decision, so `mention` stays OFF (design §18.1).
-- **Rich native content requires an on-device decrypt key** — deferred to the
-  gated encrypted seam + P10 native services; until then the content-less floor
-  is the guaranteed (never-worse-than-today) behaviour.
+- **Rich native content** — the server-side SEAL is now built
+  (`notif-crypto`/`EncryptedEnvelopeBuilder`) but GATED off; the on-device
+  registration + unseal (Android FCM service / iOS NSE) and the §12 sign-off are
+  the remaining preconditions (`security-review-encrypted-payload.md`). Until all
+  hold, the content-less floor is the guaranteed (never-worse-than-today)
+  behaviour and the seal path is unreachable.
+- **New device-key registration surface** — activating the encrypted path adds a
+  public-key registration endpoint; it needs rotation + revocation + rate-limit
+  before GA (enumerated in the security review). No private key or content is
+  exposed by it.
 
 ## Abuse surfaces
 

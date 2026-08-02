@@ -12,7 +12,13 @@ import { ProviderFailure } from '../outbox/backoff';
  * content field; the fence test asserts none is ever added.
  */
 
-export type TransportName = 'fcm' | 'apns' | 'webpush' | 'onesignal' | 'novu';
+export type TransportName =
+  | 'fcm'
+  | 'apns'
+  | 'webpush'
+  | 'desktop'
+  | 'onesignal'
+  | 'novu';
 
 /** A single addressable device registration. */
 export interface TransportTarget {
@@ -25,7 +31,21 @@ export interface TransportTarget {
     readonly endpoint: string;
     readonly keys: { readonly p256dh: string; readonly auth: string };
   };
-  readonly platform?: 'android' | 'ios' | 'web';
+  readonly platform?: 'android' | 'ios' | 'web' | 'desktop';
+  /**
+   * Marks a token minted by Apple's APNs directly (PushKit/CallKit VoIP), to be
+   * carried by the direct `ApnsTransport` rather than the FCM→APNs relay. Absent
+   * on the default path (iOS rides the relay via `fcm`), so the direct adapter
+   * never claims a relay token.
+   */
+  readonly apnsDirect?: boolean;
+  /**
+   * The device's REGISTERED public notification key (X25519, SPKI DER base64).
+   * The PUBLIC half only — the server never holds the private half. Present only
+   * when the device has enrolled for the gated encrypted-payload upgrade; the
+   * content-less floor ignores it.
+   */
+  readonly notifPublicKey?: string;
 }
 
 /**

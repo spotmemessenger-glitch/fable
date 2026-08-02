@@ -42,8 +42,10 @@ export class FcmTransport implements INotificationTransport {
   }
 
   supports(target: TransportTarget): boolean {
-    // Native tokens only (Android directly, iOS via the APNs relay).
-    return Boolean(target.token) && !target.subscription;
+    // Native tokens (Android directly, iOS via the APNs relay), EXCEPT a token
+    // explicitly minted for direct APNs (PushKit/VoIP) — that one is the direct
+    // `apns` adapter's, so the relay never grabs it.
+    return Boolean(target.token) && !target.subscription && target.apnsDirect !== true;
   }
 
   async send(messages: readonly TransportMessage[]): Promise<TransportSendResult[]> {

@@ -16,7 +16,7 @@ export type EnqueueOutcome =
 
 export interface EnqueueResult {
   readonly outcome: EnqueueOutcome;
-  readonly reason?: 'flag' | 'level' | 'mute' | 'dnd';
+  readonly reason?: 'flag' | 'level' | 'mute' | 'dnd' | 'focus';
   /** The computed routing, always present when the master flag is on. */
   readonly routed?: RoutedNotification;
   readonly decision?: PreferenceDecision;

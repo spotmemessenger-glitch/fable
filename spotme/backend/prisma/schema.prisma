@@ -624,7 +624,7 @@ model NotificationReceipt {
   @@index([outboxId])
 }
 
-// Per-account notification preferences (DND window + default level).
+// Per-account notification preferences (DND window + default level + focus mode).
 model NotificationPreference {
   userId          String   @id
   dndEnabled      Boolean  @default(false)
@@ -633,6 +633,8 @@ model NotificationPreference {
   dndTz           String?                       // IANA tz; null → DND disabled
   allowCallsInDnd Boolean  @default(true)
   defaultLevel    String   @default("all")      // all|mentions|none
+  focusMode       Boolean  @default(false)      // manual allowlist mode
+  focusAllow      String?                       // CSV of classes allowed in focus
   updatedAt       DateTime @updatedAt
 }
 

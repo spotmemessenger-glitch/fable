@@ -56,7 +56,18 @@ export class PreferenceService {
       dndTz: row.dndTz,
       allowCallsInDnd: row.allowCallsInDnd,
       defaultLevel: coerceLevel(row.defaultLevel, 'all'),
+      focusMode: row.focusMode ?? false,
+      focusAllow: this.parseClasses(row.focusAllow),
     };
+  }
+
+  /** Parse a CSV of class names into known classes only (ignores junk). */
+  private parseClasses(csv: string | null | undefined): NotificationClass[] {
+    if (!csv) return [];
+    return csv
+      .split(',')
+      .map((s) => s.trim())
+      .filter((s): s is NotificationClass => this.catalog.isKnown(s));
   }
 
   async conversationPref(
@@ -106,6 +117,9 @@ export class PreferenceService {
       dndTz: pref.dndTz ?? null,
       allowCallsInDnd: pref.allowCallsInDnd,
       defaultLevel: pref.defaultLevel,
+      focusMode: pref.focusMode,
+      // Store known classes only, as a stable CSV.
+      focusAllow: pref.focusAllow.filter((c) => this.catalog.isKnown(c)).join(','),
     };
     await this.prisma.notificationPreference.upsert({
       where: { userId },

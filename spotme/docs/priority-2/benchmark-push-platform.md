@@ -21,6 +21,8 @@ B1–B9 plan (`01-push-notifications.md` §14).
 | `envelope.build` (content-less) | ~1.5 | ~650k | the shipped wire payload builder |
 | `preference.evaluate` (DND, tz-aware) | ~2.1 | ~480k | **after** formatter cache (see finding) |
 | `backoff.nextBackoffMs` | ~0.28 | ~3.6M | exponential + full jitter |
+| `sealRichPayload` (GATED) | ~157 | ~6.4k | X25519 keygen+ECDH+HKDF+AES-256-GCM |
+| `unsealRichPayload` (GATED) | ~73 | ~13.7k | device side; ECDH+HKDF+AES-GCM open |
 
 **Full-jitter distribution** (attempt=4, 32 s ceiling, 100k draws, eight 4 s
 buckets): ~12.2k–12.7k per bucket — uniform, confirming no synchronised retry
@@ -43,10 +45,15 @@ critical path (one eval per notification).
   is the real B1 figure and is CI-gated (needs Postgres).
 - **B5 (retry storm safety):** the jitter spread above is the evidence — bounded,
   uniform, per-replica independent.
-- **Server crypto cost (B9, seal side):** N/A in this branch — the content-less
-  floor performs no per-message encryption; the SHA-256 collapse id is ~1 µs.
-  The encrypted-envelope seal is unshipped (gated seam), so its cost is not
-  measured here.
+- **Server crypto cost (B9, seal side):** the content-less floor performs no
+  per-message encryption (SHA-256 collapse id ~1 µs). The GATED encrypted seal
+  measures **~157 µs/op (~6.4k seals/sec/replica)**, dominated by the fresh
+  ephemeral X25519 keygen + ECDH per message (the price of per-message forward
+  secrecy). Unseal (device side) is ~73 µs. At ~6.4k/sec/replica this comfortably
+  covers a notification workload and, being gated, adds ZERO cost to the shipped
+  floor. Measured on the same host with 50k-op runs against `dist/`. When the
+  §12 review authorises activation, a per-batch ephemeral-key reuse (one ECDH per
+  multicast batch rather than per token) is the obvious optimisation, deferred.
 
 ## CI-gated (need a real Postgres) — not run here
 

@@ -11,6 +11,8 @@ import {
 } from '../../src/notifications/transport/web-push.transport';
 import { OneSignalTransport } from '../../src/notifications/transport/onesignal.transport';
 import { NovuTransport } from '../../src/notifications/transport/novu.transport';
+import { ApnsTransport } from '../../src/notifications/transport/apns.transport';
+import { DesktopTransport } from '../../src/notifications/transport/desktop.transport';
 import { TransportRegistry } from '../../src/notifications/transport/transport-registry';
 import {
   TransportMessage,
@@ -205,7 +207,9 @@ describe('TransportRegistry routing', () => {
     const web = fakeWebPush(() => (webOk ? 'ok' : { statusCode: 500 }));
     const reg = new TransportRegistry(
       new FcmTransport(fcm.messaging),
+      new ApnsTransport(undefined),
       new WebPushTransport(web.sender),
+      new DesktopTransport(),
       new OneSignalTransport(),
       new NovuTransport(),
     );
@@ -230,7 +234,9 @@ describe('TransportRegistry routing', () => {
   it('returns a normalised skip when no configured transport owns a target', () => {
     const reg = new TransportRegistry(
       new FcmTransport(undefined), // no messaging seam, no env → unavailable
+      new ApnsTransport(undefined),
       new WebPushTransport(undefined),
+      new DesktopTransport(),
       new OneSignalTransport(),
       new NovuTransport(),
     );

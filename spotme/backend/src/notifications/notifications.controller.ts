@@ -17,7 +17,11 @@ import {
 import { PreferenceService } from './preferences/preference.service';
 import { ReceiptService, ReceiptItem } from './receipts/receipt.service';
 import { AccountPreference, ConversationPreference } from './preferences/preference.types';
-import { PreferenceLevel } from './catalog/notification-class';
+import {
+  NOTIFICATION_CLASSES,
+  NotificationClass,
+  PreferenceLevel,
+} from './catalog/notification-class';
 import { TransportName } from './transport/notification-transport';
 
 /**
@@ -52,6 +56,25 @@ export class NotificationsController {
     return this.receipts.record(body.deviceId, transport, body.items);
   }
 
+  /**
+   * A user ACTION on a delivered notification (reply/read/mute/archive/accept/
+   * decline/…). Content-free: the body is an opaque notif handle + an action
+   * name; the server records the RESULT, never the content. Rate-limit per
+   * device before mounting (noted in the threat model).
+   */
+  @Post('actions')
+  @HttpCode(200)
+  async postAction(
+    @Body()
+    body: { deviceId?: string; transport?: TransportName; notifId?: string; action?: string },
+  ): Promise<{ accepted: number; rejected: number }> {
+    if (!body.deviceId || !body.notifId || !body.action) {
+      throw new BadRequestException('deviceId, notifId and action required');
+    }
+    const transport: TransportName = body.transport ?? 'fcm';
+    return this.receipts.recordAction(body.deviceId, transport, body.notifId, body.action);
+  }
+
   @Get('preferences')
   async getPreferences(
     @CurrentUser() principal: AuthenticatedPrincipal,
@@ -74,6 +97,8 @@ export class NotificationsController {
       dndTz: typeof body.dndTz === 'string' ? body.dndTz : null,
       allowCallsInDnd: body.allowCallsInDnd !== false, // default true
       defaultLevel: level,
+      focusMode: Boolean(body.focusMode),
+      focusAllow: coerceClasses(body.focusAllow),
     });
     return { ok: true };
   }
@@ -99,6 +124,12 @@ export class NotificationsController {
 
 function coerceLevel(v: unknown): PreferenceLevel {
   return v === 'mentions' || v === 'none' ? v : 'all';
+}
+
+const KNOWN_CLASSES = new Set<string>(NOTIFICATION_CLASSES);
+function coerceClasses(v: unknown): NotificationClass[] {
+  if (!Array.isArray(v)) return [];
+  return v.filter((x): x is NotificationClass => typeof x === 'string' && KNOWN_CLASSES.has(x));
 }
 
 function coerceConvLevel(v: unknown): PreferenceLevel | 'default' {

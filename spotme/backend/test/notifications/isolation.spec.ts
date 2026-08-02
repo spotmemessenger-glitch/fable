@@ -1,8 +1,9 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import { ContentlessEnvelopeBuilder } from '../../src/notifications/envelope/contentless-envelope.builder';
-import { EncryptedEnvelopeBuilder } from '../../src/notifications/envelope/encrypted-envelope.seam';
+import { EncryptedEnvelopeBuilder } from '../../src/notifications/envelope/encrypted-envelope.builder';
 import { NotificationFlags } from '../../src/notifications/notifications.config';
+import * as notifCrypto from '../../src/notifications/envelope/notif-crypto';
 
 /**
  * FENCES (design §4.4, §17.3). These are build-breaking guards that keep the
@@ -44,51 +45,105 @@ describe('notification platform isolation fences', () => {
     expect(offenders).toEqual([]);
   });
 
-  it('generates NO notification key anywhere in the module', () => {
-    // Guards against key GENERATION primitives and the notifPriv symbol. Reading
-    // the pre-existing VAPID credential from env (shipped web-push behaviour) is
-    // NOT generation and is deliberately not matched here.
-    const FORBIDDEN =
-      /(generateKeyPair|generateKeySync|createPrivateKey|subtle\.generateKey|notifPriv)/;
+  it('CONFINES every key/seal primitive to the allowlisted notif-crypto module', () => {
+    // The gated encrypted path needs real crypto (X25519/ECDH/AES-GCM). Rather
+    // than ban it everywhere (it must exist to be shippable later), we CONFINE
+    // it: the key-generation + sealing primitives may appear ONLY in the one
+    // reviewable file, `notif-crypto.ts`. Anywhere else is a fence breach —
+    // scattered crypto is exactly what makes a module unauditable.
+    const PRIMITIVE =
+      /(generateKeyPair|generateKeySync|createPrivateKey|createCipheriv|createDecipheriv|diffieHellman|subtle\.generateKey|notifPriv)/;
+    const ALLOWLIST = new Set(['notif-crypto.ts']);
     const offenders: string[] = [];
     for (const f of files) {
-      if (FORBIDDEN.test(readFileSync(f, 'utf8'))) offenders.push(f);
+      if (PRIMITIVE.test(readFileSync(f, 'utf8')) && !ALLOWLIST.has(basename(f))) {
+        offenders.push(f);
+      }
     }
     expect(offenders).toEqual([]);
   });
 
-  it('the encrypted envelope is a documented SEAM only — it throws, ships no crypto', () => {
-    const builder = new EncryptedEnvelopeBuilder();
-    expect(builder.kind).toBe('encrypted');
-    expect(() =>
-      builder.build({
-        routed: {} as never,
-        target: { deviceId: 'd' },
-        notifId: 'n',
-        count: 1,
-      }),
-    ).toThrow(/documented seam|security review/i);
+  it('NEVER persists a device notification private key (public half only)', () => {
+    // The server registers only the PUBLIC notification key. No Prisma write in
+    // the module may store a private key, and no code outside the device-side
+    // helpers may reference a persisted `notifPriv`/`devicePrivateKey` field.
+    const PERSIST_PRIVATE = /notif(ication)?Priv(ate)?Key\s*:/i;
+    const offenders: string[] = [];
+    for (const f of files) {
+      if (PERSIST_PRIVATE.test(readFileSync(f, 'utf8'))) offenders.push(f);
+    }
+    expect(offenders).toEqual([]);
   });
 
-  it('is NOT imported by AppModule (not wired into the running app)', () => {
+  it('the encrypted builder is GATED: with the sub-flag off it throws before any crypto', () => {
+    const seal = jest.spyOn(notifCrypto, 'sealRichPayload');
+    try {
+      // Master flag on, sub-flag OFF (the default). Must throw and NOT seal.
+      const prevMaster = process.env.NOTIFICATIONS_V2_ENABLED;
+      const prevSub = process.env.NOTIF_ENCRYPTED_PAYLOAD_ENABLED;
+      process.env.NOTIFICATIONS_V2_ENABLED = 'true';
+      delete process.env.NOTIF_ENCRYPTED_PAYLOAD_ENABLED;
+      try {
+        const builder = new EncryptedEnvelopeBuilder(new NotificationFlags());
+        expect(builder.kind).toBe('encrypted');
+        expect(() =>
+          builder.build({
+            routed: { class: 'message' } as never,
+            target: { deviceId: 'd', notifPublicKey: 'x' },
+            notifId: 'n',
+            count: 1,
+          }),
+        ).toThrow(/gated|security review|ADR-008/i);
+        expect(seal).not.toHaveBeenCalled();
+      } finally {
+        if (prevMaster === undefined) delete process.env.NOTIFICATIONS_V2_ENABLED;
+        else process.env.NOTIFICATIONS_V2_ENABLED = prevMaster;
+        if (prevSub === undefined) delete process.env.NOTIF_ENCRYPTED_PAYLOAD_ENABLED;
+        else process.env.NOTIF_ENCRYPTED_PAYLOAD_ENABLED = prevSub;
+      }
+    } finally {
+      seal.mockRestore();
+    }
+  });
+
+  it('is imported by AppModule ONLY via the inert DynamicModule (register)', () => {
+    // Deliverable 3: the module may be imported, but ONLY through
+    // `NotificationsModule.register()`, which registers NOTHING while the master
+    // flag is off — so the import is inert. A bare `imports: [NotificationsModule]`
+    // (eager wiring) would defeat that and is forbidden.
     const app = readFileSync(APP_MODULE, 'utf8');
-    expect(app).not.toMatch(/NotificationsModule/);
-    expect(app).not.toMatch(/notifications\//);
+    if (/NotificationsModule/.test(app)) {
+      expect(app).toMatch(/NotificationsModule\.register\(\)/);
+    }
+    // register() with the master flag OFF yields no controllers and no providers.
+    const prev = process.env.NOTIFICATIONS_V2_ENABLED;
+    delete process.env.NOTIFICATIONS_V2_ENABLED;
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const { NotificationsModule } = require('../../src/notifications/notifications.module');
+      const dyn = NotificationsModule.register();
+      expect(dyn.controllers ?? []).toEqual([]);
+      expect(dyn.providers ?? []).toEqual([]);
+    } finally {
+      if (prev === undefined) delete process.env.NOTIFICATIONS_V2_ENABLED;
+      else process.env.NOTIFICATIONS_V2_ENABLED = prev;
+    }
   });
 
-  it('defaults the master flag OFF when the env is unset', () => {
+  it('defaults the master + encrypted flags OFF when the env is unset', () => {
     const prev = process.env.NOTIFICATIONS_V2_ENABLED;
     delete process.env.NOTIFICATIONS_V2_ENABLED;
     try {
       expect(new NotificationFlags().enabled).toBe(false);
       expect(new NotificationFlags().outboxEnabled).toBe(false);
-      // The encrypted-native path is hard-off regardless of env.
-      process.env.NOTIF_ENCRYPTED_NATIVE = 'true';
-      expect(new NotificationFlags().encryptedNativeEnabled).toBe(false);
+      // The encrypted-payload sub-flag cannot activate while the master is off,
+      // even if its own env is set.
+      process.env.NOTIF_ENCRYPTED_PAYLOAD_ENABLED = 'true';
+      expect(new NotificationFlags().encryptedPayloadEnabled).toBe(false);
     } finally {
       if (prev === undefined) delete process.env.NOTIFICATIONS_V2_ENABLED;
       else process.env.NOTIFICATIONS_V2_ENABLED = prev;
-      delete process.env.NOTIF_ENCRYPTED_NATIVE;
+      delete process.env.NOTIF_ENCRYPTED_PAYLOAD_ENABLED;
     }
   });
 });

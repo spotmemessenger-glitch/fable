@@ -14,6 +14,8 @@ export const NOTIFICATION_CLASSES = [
   'knock', // chat request
   'call',
   'mention',
+  'reply', // a direct reply to your message
+  'reaction', // an emoji reaction to your message
   'group', // join / leave / role
   'story',
   'security', // login / new-device / security alerts

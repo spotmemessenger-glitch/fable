@@ -51,6 +51,14 @@ export class PreferenceEvaluator {
     }
 
     const callException = traits.canPierceDnd && account.allowCallsInDnd;
+
+    // Focus mode: an explicit allowlist that overrides everything below it. Only
+    // an allowed class (or a permitted call) gets past; the rest are suppressed.
+    if (account.focusMode) {
+      const allowed = account.focusAllow.includes(traits.class);
+      if (!allowed && !callException) return { deliver: false, reason: 'focus' };
+    }
+
     const level = this.effectiveLevel(account, conversation);
 
     // 1. Level gate. A class fires only if the user's level is at least the

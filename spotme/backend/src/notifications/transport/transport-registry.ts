@@ -7,7 +7,9 @@ import {
   TransportTarget,
 } from './notification-transport';
 import { FcmTransport } from './fcm.transport';
+import { ApnsTransport } from './apns.transport';
 import { WebPushTransport } from './web-push.transport';
+import { DesktopTransport } from './desktop.transport';
 import { OneSignalTransport } from './onesignal.transport';
 import { NovuTransport } from './novu.transport';
 
@@ -26,11 +28,17 @@ export class TransportRegistry {
 
   constructor(
     fcm: FcmTransport,
+    apns: ApnsTransport,
     webpush: WebPushTransport,
+    desktop: DesktopTransport,
     onesignal: OneSignalTransport,
     novu: NovuTransport,
   ) {
-    this.transports = [fcm, webpush, onesignal, novu];
+    // ORDER IS POLICY. `fcm` precedes `apns` so an ordinary iOS token takes the
+    // relay; the direct `apns` adapter only claims `apnsDirect` (VoIP) tokens.
+    // `webpush` owns browser subscriptions (incl. desktop browsers); `desktop`
+    // is the native-shell seam. Aggregator stubs sit last, never chosen by default.
+    this.transports = [fcm, apns, webpush, desktop, onesignal, novu];
   }
 
   /** All registered transports (for metrics label sets / admin views). */

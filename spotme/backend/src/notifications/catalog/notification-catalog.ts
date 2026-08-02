@@ -78,6 +78,32 @@ const POLICIES: Readonly<Record<NotificationClass, NotificationPolicy>> = {
     canPierceDnd: false,
     defaultEnabled: false, // owner metadata decision gates this (ADR-009 §5)
   },
+  reply: {
+    class: 'reply',
+    priority: 'high',
+    collapse: 'per-room',
+    channel: 'messages',
+    ttlSeconds: TTL_LONG,
+    titleTemplate: '{actor}',
+    fallbackBody: 'Replied to your message',
+    route: 'thread/:room',
+    minLevel: 'all',
+    canPierceDnd: false,
+    defaultEnabled: false, // needs its producer + owner sign-off
+  },
+  reaction: {
+    class: 'reaction',
+    priority: 'low',
+    collapse: 'per-room',
+    channel: 'social',
+    ttlSeconds: TTL_MEDIUM,
+    titleTemplate: '{actor}',
+    fallbackBody: 'Reacted to your message',
+    route: 'thread/:room',
+    minLevel: 'all',
+    canPierceDnd: false,
+    defaultEnabled: false,
+  },
   group: {
     class: 'group',
     priority: 'normal',

@@ -44,14 +44,27 @@ export class NotificationFlags {
   }
 
   /**
-   * Native encrypted-envelope path. Hard-OFF and unimplemented: it is gated on a
-   * separate owner security-review decision (ADR-008 §12) and no notification
-   * key is generated or persisted in any shipped path. Kept here only so the
-   * seam is visible and testable.
+   * Encrypted rich-payload path (the sealed-envelope upgrade over the
+   * content-less floor). Reachable ONLY when the master flag AND this sub-flag
+   * are both set. DEFAULT OFF.
+   *
+   * ⚠️  ACTIVATING THIS REQUIRES THE OWNER'S ADR-008 §12 SECURITY-REVIEW
+   * SIGN-OFF. The seal path (`EncryptedEnvelopeBuilder` → `notif-crypto`) uses a
+   * per-device notification key whose PUBLIC half is registered server-side; the
+   * review must rule that such a public wrapping-key registration is NOT "key
+   * publication" in the §12 sense. Until that sign-off, leave this OFF. With it
+   * off, NO key is generated and NO sealing runs — the builder throws before any
+   * crypto (asserted by the isolation fence).
+   */
+  get encryptedPayloadEnabled(): boolean {
+    return this.enabled && envBool('NOTIF_ENCRYPTED_PAYLOAD_ENABLED', false);
+  }
+
+  /**
+   * Legacy alias for the native encrypted path. Retained (hard-OFF) so older
+   * references/tests keep compiling; `encryptedPayloadEnabled` is the live gate.
    */
   get encryptedNativeEnabled(): boolean {
-    // Intentionally always false in this branch regardless of env — the
-    // encrypted builder is a documented seam, not a shipped code path.
     return false;
   }
 

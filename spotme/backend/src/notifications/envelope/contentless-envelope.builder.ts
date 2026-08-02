@@ -15,7 +15,8 @@ import { BuildEnvelopeInput, IEnvelopeBuilder } from './envelope.types';
  *
  * This is exactly today's shipped privacy posture (a push says *something
  * arrived, from whom*, never what) made typed and testable. The rich, decrypted
- * upgrade is the gated `EncryptedEnvelopeBuilder` seam — not implemented here.
+ * upgrade is the gated `EncryptedEnvelopeBuilder` (default OFF) — this floor is
+ * the shipped default and never worse than production.
  */
 @Injectable()
 export class ContentlessEnvelopeBuilder implements IEnvelopeBuilder {

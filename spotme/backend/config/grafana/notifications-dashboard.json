@@ -1,0 +1,130 @@
+{
+  "__comment": "Spot Me — Notifications V2 platform dashboard. Import into Grafana (Dashboards → Import → paste JSON) against the Prometheus datasource that scrapes the /metrics route the NotificationMetricsController exposes when the platform is wired ON. Every series is content-free: labels are class/transport/reason/action/code only — no user, no payload. Committed as ops config per Priority-2 deliverable 6.",
+  "title": "Spot Me — Notifications V2",
+  "uid": "spotme-notif-v2",
+  "schemaVersion": 39,
+  "version": 1,
+  "editable": true,
+  "tags": ["spotme", "notifications", "priority-2"],
+  "time": { "from": "now-6h", "to": "now" },
+  "refresh": "30s",
+  "templating": {
+    "list": [
+      {
+        "name": "DS_PROM",
+        "label": "Prometheus",
+        "type": "datasource",
+        "query": "prometheus",
+        "current": {}
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "Enqueue vs Sent vs Suppressed (rate/s)",
+      "datasource": { "type": "prometheus", "uid": "${DS_PROM}" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "fieldConfig": { "defaults": { "unit": "reqps" }, "overrides": [] },
+      "targets": [
+        { "refId": "A", "expr": "sum(rate(notif_enqueued_total[5m]))", "legendFormat": "enqueued" },
+        { "refId": "B", "expr": "sum(rate(notif_sent_total[5m]))", "legendFormat": "sent" },
+        { "refId": "C", "expr": "sum(rate(notif_suppressed_total[5m]))", "legendFormat": "suppressed" }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "Delivered / Opened / Actioned (rate/s)",
+      "datasource": { "type": "prometheus", "uid": "${DS_PROM}" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "fieldConfig": { "defaults": { "unit": "reqps" }, "overrides": [] },
+      "targets": [
+        { "refId": "A", "expr": "sum(rate(notif_delivered_total[5m]))", "legendFormat": "delivered" },
+        { "refId": "B", "expr": "sum(rate(notif_opened_total[5m]))", "legendFormat": "opened" },
+        { "refId": "C", "expr": "sum(rate(notif_actioned_total[5m]))", "legendFormat": "actioned" }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "Fan-out latency (enqueue → provider-accept)",
+      "datasource": { "type": "prometheus", "uid": "${DS_PROM}" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
+      "targets": [
+        { "refId": "A", "expr": "histogram_quantile(0.50, sum(rate(notif_fanout_latency_seconds_bucket[5m])) by (le))", "legendFormat": "p50" },
+        { "refId": "B", "expr": "histogram_quantile(0.95, sum(rate(notif_fanout_latency_seconds_bucket[5m])) by (le))", "legendFormat": "p95" },
+        { "refId": "C", "expr": "histogram_quantile(0.99, sum(rate(notif_fanout_latency_seconds_bucket[5m])) by (le))", "legendFormat": "p99" }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "Failures / Retries / Abandoned (rate/s)",
+      "datasource": { "type": "prometheus", "uid": "${DS_PROM}" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "fieldConfig": { "defaults": { "unit": "reqps" }, "overrides": [] },
+      "targets": [
+        { "refId": "A", "expr": "sum(rate(notif_failed_total[5m])) by (code)", "legendFormat": "failed {{code}}" },
+        { "refId": "B", "expr": "sum(rate(notif_retried_total[5m]))", "legendFormat": "retried" },
+        { "refId": "C", "expr": "sum(rate(notif_abandoned_total[5m]))", "legendFormat": "abandoned" }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "Outbox depth by status",
+      "datasource": { "type": "prometheus", "uid": "${DS_PROM}" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
+      "targets": [
+        { "refId": "A", "expr": "notif_outbox_depth", "legendFormat": "{{status}}" }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "stat",
+      "title": "Oldest queued row (age) — stuck-queue alarm",
+      "datasource": { "type": "prometheus", "uid": "${DS_PROM}" },
+      "gridPos": { "h": 8, "w": 6, "x": 12, "y": 16 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "thresholds": { "mode": "absolute", "steps": [
+            { "color": "green", "value": null },
+            { "color": "yellow", "value": 60 },
+            { "color": "red", "value": 300 }
+          ] }
+        },
+        "overrides": []
+      },
+      "targets": [
+        { "refId": "A", "expr": "max(notif_outbox_oldest_seconds)", "legendFormat": "oldest" }
+      ]
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "Dead tokens pruned (rate/s)",
+      "datasource": { "type": "prometheus", "uid": "${DS_PROM}" },
+      "gridPos": { "h": 8, "w": 6, "x": 18, "y": 16 },
+      "fieldConfig": { "defaults": { "unit": "reqps" }, "overrides": [] },
+      "targets": [
+        { "refId": "A", "expr": "sum(rate(notif_tokens_pruned_total[5m])) by (transport)", "legendFormat": "{{transport}}" }
+      ]
+    },
+    {
+      "id": 8,
+      "type": "timeseries",
+      "title": "Sent by transport (rate/s)",
+      "datasource": { "type": "prometheus", "uid": "${DS_PROM}" },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 24 },
+      "fieldConfig": { "defaults": { "unit": "reqps" }, "overrides": [] },
+      "targets": [
+        { "refId": "A", "expr": "sum(rate(notif_sent_total[5m])) by (transport)", "legendFormat": "{{transport}}" }
+      ]
+    }
+  ]
+}

@@ -15,6 +15,7 @@ import { RealtimeModule } from './realtime/realtime.module';
 import { StorageModule } from './storage/storage.module';
 import { ScheduleModule } from '@nestjs/schedule';
 import { PushModule } from './push/push.module';
+import { NotificationsModule } from './notifications/notifications.module';
 
 @Module({
   imports: [
@@ -38,6 +39,11 @@ import { PushModule } from './push/push.module';
     PushModule,
     RoomsModule,
     RealtimeModule,
+    // Priority-2 push platform. INERT while NOTIFICATIONS_V2_ENABLED is off (the
+    // default): register() returns an EMPTY module — no providers, no @Cron, no
+    // routes — so this import changes nothing in the running app until the flag
+    // is set. See src/notifications/notifications.module.ts.
+    NotificationsModule.register(),
   ],
 })
 export class AppModule {}

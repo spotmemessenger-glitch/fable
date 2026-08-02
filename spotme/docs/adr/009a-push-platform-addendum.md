@@ -1,9 +1,12 @@
 # ADR-009a — Push Notification Platform: implementation addendum (Priority 2, PR A)
 
-**Status:** Proposed — implemented as an **additive, inert foundation** (behind
-`NOTIFICATIONS_V2_ENABLED`, default OFF; `NotificationsModule` not imported by
-`AppModule`). This addendum records the concrete engineering decisions taken
-while building the foundation. It **does not rewrite ADR-009** (the parent ADR,
+**Status:** Proposed — implemented as an **additive, flag-gated platform** (behind
+`NOTIFICATIONS_V2_ENABLED`, default OFF). PR A built the inert foundation
+(`NotificationsModule` not imported); **PR B (this branch)** hardens it toward
+production — real (gated) encrypted payload, APNs/Desktop transports, a
+DynamicModule + producers wired inertly into `AppModule`, actions, focus mode,
+and health — see the **PR B** section below. This addendum records the concrete
+engineering decisions. It **does not rewrite ADR-009** (the parent ADR,
 `009-push-notification-platform.md`, which — with the detailed brief
 `docs/priority-2/01-push-notifications.md` — lives on the planning branch). Where
 this addendum and ADR-009 differ, ADR-009 remains the controlling design; the
@@ -104,9 +107,72 @@ gate. The additive migration ships a written drop script. Full detail:
 `docs/priority-2/rollback-push-platform.md`. Nothing here alters message/knock
 behaviour until switched on.
 
+## PR B — production hardening (this branch, additive over PR A)
+
+Everything below is additive, flag-gated (default OFF), and leaves the
+content-less floor as the shipped default. No Priority-1 file or test was
+modified; the ADR-008 §12 hard stop is respected (see D10).
+
+### D10 — Encrypted rich envelope: REAL implementation, still gated
+`EncryptedEnvelopeBuilder` no longer throws-as-a-seam; it is a real builder that
+seals a rich `{class, room, route, actor, preview, count, seq, actions}` payload
+via `envelope/notif-crypto.ts`: **X25519 ECDH-ES → HKDF-SHA256 → AES-256-GCM**
+(Node `crypto` only; the e2e_v2 construction family, independently implemented).
+Custody: the **device** generates its keypair (non-extractable private via
+WebCrypto in prod); only the **public** half is registered server-side; the seal
+generates an **ephemeral** key discarded per call, so the server persists **no**
+device private key. It is reachable ONLY behind `NOTIFICATIONS_V2_ENABLED` AND
+`NOTIF_ENCRYPTED_PAYLOAD_ENABLED` — with either off it throws before any crypto
+(no key generated, no seal). **The sub-flag stays OFF until the owner's ADR-008
+§12 security review** rules a public wrapping-key registration is not "key
+publication" (`docs/priority-2/security-review-encrypted-payload.md`). Key/seal
+primitives are **confined to `notif-crypto.ts`** (isolation-fence allowlist).
+
+### D11 — Transports completed: APNs (direct) + Desktop
+FCM + Web Push stay the real default (iOS via the FCM→APNs relay). Added a
+**direct APNs** adapter (`@parse/node-apn` behind the `APNS_PROVIDER` seam) for
+VoIP/PushKit CallKit ring — `available()` only with `NOTIF_APNS_ENABLED` + the
+four `APNS_*` creds, `supports()` only `apnsDirect` tokens, so it never competes
+with the relay. Added a **Desktop** adapter as a documented stub (desktop
+browsers already ride Web Push; a native Electron/Tauri channel is the seam).
+Both conform to `INotificationTransport`; per-class priority via the shared map.
+
+### D12 — DynamicModule + producers + gateway hook
+`NotificationsModule.register()` returns an EMPTY module while the master flag is
+off, so importing it in `AppModule` is inert (no providers/cron/routes). ON, it
+is `@Global()` and exports `NotificationProducer`. `rooms.gateway` holds the
+producer as an `@Optional()` dependency and calls it only when
+`producer?.enabled` — so **flag-off behaviour is byte-identical** (mechanised in
+`module-wiring.spec`). `producers/` adds typed per-event producers
+(message/knock/mention/reply/reaction/call/security/login/verification) and a
+`PresencePort` to unify the socket + HTTP publish absent-user calculation.
+
+### D13 — Rich actions
+`actions/notification-actions.ts` declares the typed action set per class (call →
+accept/decline; message → reply/read/mute/archive; media kinds add
+openMedia/playVoice). `ReceiptService.recordAction` records the opaque RESULT and
+advances the delivery state (accept ⇒ opened, decline ⇒ dismissed); pref/UI ops
+(mute/archive) record without moving state. Actions travel only inside the gated
+encrypted payload — the content-less floor carries no action buttons.
+
+### D14 — Preferences: focus mode
+`NotificationPreference` gains `focusMode` + `focusAllow` (additive migration
+`20260802130000_notif_focus_mode`). Focus is an allowlist that overrides
+level/mute: only an allowed class (or a permitted call, or an always-critical
+class) delivers; the rest suppress with reason `focus`. Per-chat/per-group are
+already covered by `ConversationNotifPref` (a group is a room).
+
+### D15 — Observability: /health + dashboard
+`NotificationHealthService` + `/notif-health/{live,ready}` — liveness is
+dependency-free, readiness probes DB reachability + transport availability +
+outbox depth (never throws, content-free). A Grafana dashboard is committed at
+`backend/config/grafana/notifications-dashboard.json`. `/metrics` gains a
+`notif_actioned_total` counter.
+
 ## What is deferred (not built here)
-Rich decrypted native content (needs the encrypted key + Android
-`FirebaseMessagingService`/iOS NSE — P10-coupled, design §4.8/§18.3); the calls
-producer (P5); the `PresencePort`/Centrifugo publish-gap unification (design
-§3.4, §11.3); the mention cleartext-routing owner decision (design §18.1); the
-`/metrics` admin guard + wiring; on-device battery/latency benchmarks (P10-gated).
+Rich decrypted native content **rendering** on-device (needs the Android
+`FirebaseMessagingService`/iOS NSE — P10-coupled, design §4.8/§18.3; the server
+SEAL side is built but gated); the calls producer's signaling integration (P5);
+the mention cleartext-routing owner decision (design §18.1); the `/metrics` +
+`/notif-health` admin guard at mount time; on-device battery/latency benchmarks
+(P10-gated); real FCM/APNs/VAPID credentials and a Grafana instance (infra).
