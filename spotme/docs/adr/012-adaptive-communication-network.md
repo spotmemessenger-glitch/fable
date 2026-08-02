@@ -5,6 +5,12 @@ under `web/src/lib/transport-supervisor/` is real, tested, and additive; it is
 **flag-gated OFF (`ADAPTIVE_TRANSPORT_ENABLED = false`) and wired into nothing.**
 The **seal-lift is DEFINED as an interface boundary only and is NOT implemented**
 (see §7). No cryptographic behaviour changes in this PR.
+
+> **2026-08-02 — PRODUCTION LAYER LANDED on this scaffolding: see
+> [ADR-012b](012b-adaptive-network-production.md)** and
+> `docs/adaptive-network/`. Still dark (every flag false, still not wired),
+> and the seal-lift deferral below is unchanged and re-asserted by the new
+> fence suite. This ADR remains correct as the scaffolding record.
 **Date:** 2026-08-02 · **Priority:** 2 · **Follows:** ADR-002 (transport
 abstraction), ADR-001 (V-19 key-provider fix), ADR-008 (signing-key storage /
 §12 hard stop). **Companion:** `012a-bluetooth-mesh-threat-model.md`.
