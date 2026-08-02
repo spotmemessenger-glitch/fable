@@ -74,3 +74,85 @@ export function setLiveVoiceOverride (value) {
   override = value === null ? null : value === true
   return isLiveVoiceEnabled()
 }
+
+/* ------------------------------------------------------------------ layered */
+
+/**
+ * The platform sub-flags, LAYERED under the master exactly as the translation
+ * platform layers its sub-capabilities under `TRANSLATION_PLATFORM_V2_ENABLED`
+ * (translation/flag.js): a sub-flag reads true only when the MASTER is on AND
+ * the sub-flag itself is affirmatively on. A single stray env var can never
+ * light up captions, cloud translation, voice cloning, group fan-out, or a
+ * real provider transport on its own — the platform must first, deliberately,
+ * be enabled. ALL DEFAULT FALSE.
+ *
+ *   LIVE_TRANSLATION_ENABLED    the MT stage may translate captions live
+ *   VOICE_CLONE_ENABLED         TTS may use the consented clone voiceId
+ *                               (off → neutral, labelled voice or captions)
+ *   LIVE_CAPTIONS_ENABLED       captions without synthesized speech
+ *   GROUP_TRANSLATION_ENABLED   N-way fan-out sessions (media is P5-blocked)
+ *   STREAMING_PROVIDER_ENABLED  real provider transports may be opened at all
+ *                               (off → adapters REFUSE to open; no network)
+ */
+export const LIVE_VOICE_SUBFLAGS = Object.freeze({
+  liveTranslation: 'LIVE_TRANSLATION_ENABLED',
+  voiceClone: 'VOICE_CLONE_ENABLED',
+  liveCaptions: 'LIVE_CAPTIONS_ENABLED',
+  groupTranslation: 'GROUP_TRANSLATION_ENABLED',
+  streamingProvider: 'STREAMING_PROVIDER_ENABLED'
+})
+
+/* Per-sub-flag in-process overrides, same seam as the master's: null → env
+ * decides; true/false → the test/wire-in decided. Never a production path. */
+const subOverrides = new Map()
+
+function readFlag (name) {
+  const o = subOverrides.get(name)
+  if (o === true || o === false) return o
+  const raw = readEnv(name)
+  return raw != null && AFFIRMATIVE.has(raw.trim().toLowerCase())
+}
+
+/** A sub-capability is on ONLY if the master is on AND its own flag is on. */
+function subEnabled (key) {
+  if (!isLiveVoiceEnabled()) return false
+  const name = LIVE_VOICE_SUBFLAGS[key]
+  return name ? readFlag(name) : false
+}
+
+/** Live translation of captions (the MT stage). Layered under the master. */
+export const isLiveTranslationEnabled = () => subEnabled('liveTranslation')
+/** Clone-voice TTS (vs neutral labelled voice). Layered under the master. */
+export const isVoiceCloneEnabled = () => subEnabled('voiceClone')
+/** Captions without speech. Layered under the master. */
+export const isLiveCaptionsEnabled = () => subEnabled('liveCaptions')
+/** N-way/group translation sessions. Layered under the master. */
+export const isGroupTranslationEnabled = () => subEnabled('groupTranslation')
+/** May a REAL provider transport be opened at all? Layered under the master. */
+export const isStreamingProviderEnabled = () => subEnabled('streamingProvider')
+
+/**
+ * Force a sub-flag on/off in-process (tests + the wire-in seam ONLY), or null
+ * to fall back to env. `name` is the env-var name from LIVE_VOICE_SUBFLAGS.
+ * Returns the resolved LAYERED value — which stays false while the master is
+ * off, so a test reads back the truth, not its own input.
+ */
+export function setLiveVoiceSubOverride (name, value) {
+  const key = Object.keys(LIVE_VOICE_SUBFLAGS).find((k) => LIVE_VOICE_SUBFLAGS[k] === name)
+  if (!key) throw new Error(`unknown live-voice sub-flag "${name}"`)
+  if (value === null) subOverrides.delete(name)
+  else subOverrides.set(name, value === true)
+  return subEnabled(key)
+}
+
+/** The whole live-voice flag state as booleans — for readiness surfaces only. */
+export function liveVoiceFlagSnapshot () {
+  return {
+    liveVoice: isLiveVoiceEnabled(),
+    liveTranslation: isLiveTranslationEnabled(),
+    voiceClone: isVoiceCloneEnabled(),
+    liveCaptions: isLiveCaptionsEnabled(),
+    groupTranslation: isGroupTranslationEnabled(),
+    streamingProvider: isStreamingProviderEnabled()
+  }
+}

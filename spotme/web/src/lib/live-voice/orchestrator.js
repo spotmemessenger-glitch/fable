@@ -164,10 +164,17 @@ export function createLiveVoiceOrchestrator (deps = {}) {
       // ---- streaming MT (§6.2.5) -----------------------------------------
       machine.to(U.TRANSLATING)
       let translation = ''
+      let mtConfidence = null   // carried when the MT stage reports one (the
+      let mtProvider = null     // #51-platform stage does; stubs need not)
       {
         const ctrl = mt.translate({ text: transcript, sourceLang: detectedLang, targetLang }, {
           onPartial: ({ text }) => emitCaption({ text: transcript, translatedText: text, partial: true }),
-          onFinal: ({ text }) => { translation = text; budget.mark('mt') }
+          onFinal: ({ text, confidence, provider }) => {
+            translation = text
+            if (typeof confidence === 'number') mtConfidence = confidence
+            if (provider != null) mtProvider = provider
+            budget.mark('mt')
+          }
         })
         assertStreamController(ctrl, 'mt.translate')
         activeController = ctrl
@@ -219,7 +226,7 @@ export function createLiveVoiceOrchestrator (deps = {}) {
       emitControl(CONTROL_SIGNALS.VOICE_ACTIVE_OFF)
 
       machine.to(U.COMPLETED)
-      return result({ completed: true, transcript, detectedLang, translation, audioChunks, budget: budget.report() })
+      return result({ completed: true, transcript, detectedLang, translation, mtConfidence, mtProvider, audioChunks, budget: budget.report() })
     })().catch((err) => {
       // Any unexpected throw becomes a drop + caption fallback, never a rejected
       // promise — the call must outlive a translation failure (§6.3).

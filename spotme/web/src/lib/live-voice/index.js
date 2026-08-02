@@ -20,7 +20,12 @@
  * measured.
  */
 
-export { LIVE_VOICE_FLAG, isLiveVoiceEnabled, setLiveVoiceOverride } from './flags.js'
+export {
+  LIVE_VOICE_FLAG, isLiveVoiceEnabled, setLiveVoiceOverride,
+  LIVE_VOICE_SUBFLAGS, isLiveTranslationEnabled, isVoiceCloneEnabled,
+  isLiveCaptionsEnabled, isGroupTranslationEnabled, isStreamingProviderEnabled,
+  setLiveVoiceSubOverride, liveVoiceFlagSnapshot
+} from './flags.js'
 
 export {
   FRAME_TYPES, CONTROL_SIGNALS, FRAME_SCHEMA_VERSION,
@@ -55,7 +60,33 @@ export {
 
 export { createLiveVoiceOrchestrator, createFrameCollector } from './orchestrator.js'
 
-import { isLiveVoiceEnabled } from './flags.js'
+/* --------------------------- the platform build (Priority 2C, ADR-011b) --- */
+
+export {
+  createElevenLabsStreamingStt, ELEVENLABS_STT_URL, ELEVENLABS_STT_MODEL
+} from './providers/elevenlabs-stt.js'
+export {
+  createElevenLabsStreamingTts, buildTtsStreamUrl, chunkTextForStreaming,
+  ELEVENLABS_TTS_WS_BASE, ELEVENLABS_TTS_STREAM_MODELS, DEFAULT_OUTPUT_FORMAT
+} from './providers/elevenlabs-tts.js'
+export {
+  mapProsodyToVoiceSettings, isLegalVoiceSettings, NEUTRAL_PROSODY, SPEED_RANGE
+} from './providers/prosody.js'
+export { createFailoverChain } from './providers/failover.js'
+export { createTranslationPlatformMt, STRICT_PRIVACY_REFUSAL } from './mt-stage.js'
+export { beginSharedSttUtterance } from './shared-stt.js'
+export { fanoutForUtterance, whoHearsWhatMatrix, planCall, normalizeParticipant } from './fanout.js'
+export { createLiveVoiceSession, NEUTRAL_VOICE_ID, SESSION_MODES } from './live-session.js'
+export { createCallIntegration, UI_EVENTS } from './call-integration.js'
+export { createLatencyAggregator, percentile, DEFAULT_RING_CAPACITY } from './metrics.js'
+export { createVad, VAD_DEFAULTS } from './quality/vad.js'
+export { createJitterBuffer, JITTER_DEFAULTS } from './quality/jitter-buffer.js'
+export { createDegradationLadder, DEGRADATION_TIERS, TIER_ORDER, LADDER_DEFAULTS } from './quality/degradation-ladder.js'
+export { createDiarizer, DIARIZER_DEFAULTS } from './quality/diarization.js'
+export { LIVE_VOICE_AUDIO_CONSTRAINTS, applyLiveVoiceConstraints } from './quality/constraints.js'
+
+import { isLiveVoiceEnabled, isLiveTranslationEnabled } from './flags.js'
+import { createCallIntegration } from './call-integration.js'
 
 /**
  * The future integration door. Returns `{ started: false, reason }` while the
@@ -71,7 +102,16 @@ export function bootLiveVoice (opts = {}) {
   if (!isLiveVoiceEnabled()) {
     return { started: false, reason: 'LIVE_VOICE_ENABLED is off (scaffolding only)' }
   }
-  // DEFERRED: real provider selection + orchestrator construction + transport
-  // wiring live here behind the flag. Not implemented this cycle.
-  return { started: false, reason: 'live-voice runtime not implemented (scaffolding only)', opts }
+  if (!isLiveTranslationEnabled()) {
+    return { started: false, reason: 'LIVE_TRANSLATION_ENABLED is off — the layered flag must also be raised' }
+  }
+  // The runtime now exists (ADR-011b): with both flags up and the deps
+  // supplied, the door hands back a NOT-YET-ATTACHED integration — the caller
+  // still has to call attach(), which re-checks the flags. Nothing in the app
+  // calls this; adopting it is the separate, reviewed wire-in change.
+  const { call, participants, selfId, adapters } = opts
+  if (!call || !participants || !selfId || !adapters) {
+    return { started: false, reason: 'missing deps: { call, participants, selfId, adapters } required' }
+  }
+  return { started: true, integration: createCallIntegration(opts) }
 }
