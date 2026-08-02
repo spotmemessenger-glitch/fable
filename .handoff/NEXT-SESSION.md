@@ -56,87 +56,11 @@ union — every test suite kept, `wipeDevice` keeps `clearedTrust` +
 | PR | Branch | State |
 |---|---|---|
 | **#34** product audit (draft) | `docs/product-audit-2026-08-01` | voice-cloning + translation-provider corrections pushed; awaiting owner review |
-| **#53** AR/reference docs (draft) | `claude/snap-camera-kit-repos-65c88r` | Camera Kit was installed in `ysnap`, then **reverted on owner instruction**. Now **docs-only**. See below |
 | governance amendment | `docs/execution-order-2026-08-01` | the PR carrying this very edit + the roadmap "Owner Amendment" + CLAUDE.md pointer |
 
 For A5: enforcement stays default-OFF, and **disabling the flag — not
 reverting — is the supported operational rollback** (ADR-007 §Rollback says
 why: reverting removes the review UI and strands a `Changed` peer).
-
-### AR platforms and external code — REFERENCE ONLY, do not touch Spot Me
-
-**Standing owner instruction (2026-08-02): do not touch Spot Me.** AR and
-third-party repo evaluation is reference only — nothing in `spotme/` may be
-modified for it. Both records therefore live in `research/`, not
-`spotme/docs/`. Evaluate, measure, write it down; change nothing.
-
-`research/ar-platform-reference.md` records every AR camera platform
-evaluated: Snap Camera Kit (versions, Maven/SPM coordinates, credentials,
-measured sizes, environment traps) and Meta/Spark AR. **AR is in no roadmap
-priority and no owner execution order** — the record exists so an evaluation
-would not start cold, and so the closed options are not re-investigated.
-
-**Meta / Spark AR is a dead end — do not spend time on it.** Meta shut the
-platform down on 2025-01-14; third-party effects were pulled from Facebook,
-Instagram and Messenger and the Studio/Hub/Player are gone. `sparkar-pftween`
-installs from npm but `require`s Spark sandbox modules (`Reactive`, `Scene`,
-`Time`…) that resolve nowhere, so it throws on import; `juanmv94/Spark-AR` is
-468 MB with **no licence at all** (all rights reserved — not ours to vendor).
-Snap Camera Kit is the only live vendor path of those examined.
-
-`research/external-code-references.md` is the register of third-party
-codebases examined for reference (not dependencies, none vendored). Standing
-rule recorded there: **no licence file = all rights reserved = read it, then
-write our own** — never paste or vendor. First entry,
-`kumarharsh13/instagram-clone-fullstack`: no licence; its follow/like/comment
-schema is a fair shape reference for Priority 7 and nothing else; **its
-advertised chat does not exist** (`chatRoutes.js` is 0 bytes, `socket` is never
-imported), and its `notification` model is in-app DB rows, not push.
-
-Second entry, `TowhidKashem/snapchat-clone`: **MIT** (the first one we may
-legally borrow from), genuine, 1.1k stars, but a 2020 stack (React 16, CRA,
-Enzyme, node-sass) and frontend-only — a UI reference, not a base. Its
-`postinstall` auto-clones a second repo **over SSH**, so `npm install` fails
-without keys. **The lead worth chasing is `jeeliz/jeelizFaceFilter`**
-(Apache-2.0, 2.9k stars, maintained): client-side WebGL face filters that may
-give the AR capability Camera Kit was wanted for, without a vendor backend —
-the exact objection that got Camera Kit reverted. UNVERIFIED whether it is
-truly offline-only, and whether the licence covers the model weights.
-
-Third entry, `Sai-Kumar-Kanuri/Snapchat-Clone`: **rejected, do not re-examine.**
-No licence, 2k LOC, built in one ~85-minute sitting, and its advertised
-"real-time messaging" **does not exist** — no realtime library, no WebSocket or
-SSE, no polling; sends are a server action plus `revalidatePath()`, which
-refreshes only the *sender's* view. Plaintext content in MongoDB, Cloudinary,
-NextAuth beta — behind Spot Me on every axis.
-
-Fourth entry, `pingdotgg/uploadthing`: **do not adopt; read for design.** MIT,
-5.2k stars, genuinely excellent — but a **hosted service**: it requires
-`UPLOADTHING_TOKEN`, calls `api.uploadthing.com`, and has **no self-host or
-BYO-bucket path in source**. Its only crypto is HMAC signing; **no AES, no
-encrypt/decrypt anywhere** — so media would leave the device in the clear to a
-third party. Roadmap §7 already selects R2/S3 (MinIO in CI, `r2-smoke.yml`
-present). Worth borrowing under MIT: the type-safe file-router pattern and the
-presigned-URL upload flow, for our own R2 path where the client encrypts before
-the PUT.
-
-Three things that will otherwise be re-learned the hard way:
-
-- **Nothing is installed today.** The web SDK briefly went into `ysnap` (the
-  only React host) and was reverted; `ysnap`'s manifests are byte-identical to
-  `origin/master`. **It must not be added to `spotme/` without owner sign-off** —
-  a camera SDK that speaks gRPC-web to Snap's backend inside an E2EE messenger
-  is a §7 integration review, not a dependency bump.
-- `dl.google.com` is **proxy-blocked** here, so an Android Camera Kit resolve
-  can only be verified with `transitive = false`. The Snap AARs themselves are
-  on Maven Central and fetch fine (main AAR **47.4 MB**).
-- `camera-kit-reference` is a **1.3 GB** clone at `--depth 1`. Never vendor it.
-
-Discovered while checking that PR: **`ysnap` has no automated coverage at
-all.** CI runs only `spotme/backend`, `spotme/web`, `spotme/e2e`, and the one
-Vercel project (`spotme-messenger`) has root directory `spotme/web` — the
-`-ysnap` in its preview URL is the Vercel *team* slug, not the directory. A
-green PR proves nothing about `ysnap`; build it by hand or it is unverified.
 
 ### Untouched / blocked (standing)
 

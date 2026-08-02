@@ -1,16 +1,35 @@
 # External Code References
 
-A register of third-party codebases examined for Spot Me: what each is
-genuinely useful for, and what its licence permits. None of these is a
-dependency. Nothing here is vendored into this repository.
+**Reference material for future app building. Not connected to any current
+work.** None of these is a dependency, none is vendored, and no product code
+was changed to produce this register.
 
-> **Standing owner instruction (2026-08-02): do not touch Spot Me.** These
-> checks are reference only. Nothing in `spotme/` may be modified as a result
-> of anything in this register — no dependency, no config, no code. That is why
-> this file lives in `research/`. Evaluate, measure, record; change nothing.
+A survey of third-party codebases: what each actually is once you look inside,
+what its licence permits, and whether it is worth anyone's time. Useful when
+picking a starting point or a library for a new app.
 
-**Written:** 2026-08-02. Claims are tagged MEASURED (checked in the session
-container on that date) or UNVERIFIED.
+**Written:** 2026-08-02, in a remote session container. Claims are tagged
+MEASURED (executed on that date) or UNVERIFIED.
+
+### The two lessons worth carrying forward
+
+1. **No licence file means all rights reserved.** Public visibility on GitHub
+   grants the right to view and fork in place — never the right to copy code
+   into your own project. Three of the four entries below have no licence at
+   all. For those, the permitted use is reading to understand an approach and
+   then writing your own.
+2. **Verify the advertised feature exists before trusting the description.**
+   Two of the four advertise real-time messaging and neither implements it —
+   one ships a 0-byte route file and never imports `socket`, the other calls a
+   cache-revalidation helper and calls it realtime. Check the dependency list,
+   not just a grep: `isSelected` and `isSendingMessage` contain the substrings
+   `sse` and `socket`, which is enough to fake a positive.
+
+Some entries compare a candidate against an end-to-end-encrypted messenger,
+because that was the context these were reviewed in. Read those passages as a
+worked example of the right questions — what leaves the device, to whom, and
+whether it is user content — rather than as a statement about any current
+project.
 
 ## The rule that governs this file
 

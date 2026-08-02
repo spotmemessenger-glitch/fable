@@ -1,31 +1,32 @@
 # AR Platform Reference Record
 
-**Status: REFERENCE ONLY — NOT AN AUTHORIZED INTEGRATION.**
-**Written:** 2026-08-02. **Measured in:** the remote session container for
-branch `claude/snap-camera-kit-repos-65c88r` (PR #53).
+**Reference material for future app building. Not connected to any current
+work.** Nothing here was installed, adopted, or scheduled. No product code
+was changed to produce it.
 
-> **Standing owner instruction (2026-08-02): do not touch Spot Me.** All AR and
-> third-party evaluation is reference only. Nothing in `spotme/` may be
-> modified for it — no dependency, no config, no code. That is why this file
-> lives in `research/` and not in `spotme/docs/`. Evaluate, measure, write it
-> down here; change nothing.
+**Written:** 2026-08-02, in a remote session container. Read it as a survey of
+what the AR camera vendors actually require, so a future project does not
+start the evaluation from zero and does not waste time on the closed options.
 
-Covers the AR camera platforms evaluated for Spot Me. **Part A — Snap Camera
-Kit** (§1–§7): viable, gated on owner authorization; an install was made and
-then reverted (§3). **Part B — Meta / Spark AR** (§8): a closed platform; do
-not pursue.
+**Bottom line: of the platforms surveyed, Snap Camera Kit is the only live
+vendor path. The Meta / Spark AR route is closed permanently.**
 
-AR appears **nowhere** in the controlling roadmap
-(`MASTER-ENGINEERING-ROADMAP-V2.md`): not in §7's third-party integration
-table, and not in the owner's 2026-08-01 execution order (push → translation →
-live voice translation → adaptive transport → remaining Priority 1 crypto).
-Nothing in this file is approved work. It exists so that if Spot Me ever wants
-AR camera capability, the evaluation does not start from zero — and so that
-the closed options are not re-investigated.
+- **Part A — Snap Camera Kit** (§1–§7): alive and usable. Coordinates,
+  versions, credentials, measured artifact sizes, and the traps.
+- **Part B — Meta / Spark AR** (§8): shut down by Meta on 2025-01-14. Nothing
+  to build on.
 
-**Bottom line: nothing is installed.** If Spot Me ever does AR, Snap Camera
-Kit is the only live vendor path of those examined. The Meta/Spark AR route is
-closed permanently.
+§3 describes a web-SDK install that was made and then reverted. The
+measurements in it are kept because they remain valid for anyone revisiting
+Camera Kit; the install itself no longer exists anywhere.
+
+### Note on the E2EE commentary in §3 and §7
+
+Parts of this file weigh Camera Kit against an end-to-end-encrypted messenger,
+because that was the context it was evaluated in. Those passages are retained
+as a worked example of the questions worth asking about any camera or media
+SDK — what it sends, to whom, and whether the payload is user content. Read
+them as a checklist, not as a statement about any current project.
 
 **Do not treat any line here as a live check.** Every claim below is tagged
 MEASURED (executed in this container, on the date above) or UNVERIFIED (read
