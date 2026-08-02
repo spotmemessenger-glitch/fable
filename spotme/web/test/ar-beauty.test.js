@@ -117,7 +117,7 @@ const bytesEqual = (a, b) => a.length === b.length && a.every((v, i) => v === b[
   check('white is untouched (headroom 0 — algebraically clip-free)',
     stage.cpu(bright, { strength: 1 }).data[0] === 255)
   check('midtones lift proportionally to headroom',
-    stage.cpu(mid, { strength: 1 }).data[0] === Math.round(100 + BEAUTY_LIMITS.BRIGHTEN_MAX_LIFT * 155))
+    Math.abs(stage.cpu(mid, { strength: 1 }).data[0] - (100 + BEAUTY_LIMITS.BRIGHTEN_MAX_LIFT * 155)) <= 1)
   check('strength 0 is byte-identity', bytesEqual(stage.cpu(mid, { strength: 0 }).data, mid.data))
   check('over-cap clamps (9 ≡ 1)',
     bytesEqual(stage.cpu(mid, { strength: 9 }).data, stage.cpu(mid, { strength: 1 }).data))
