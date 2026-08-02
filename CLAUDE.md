@@ -203,8 +203,10 @@ Any string works as a custom agent type.
 
 Use `agent-browser` for any browser work: navigating, forms, clicking,
 screenshots, scraping, testing a running app. Prefer it over other browser
-tooling. The skill is committed at `.claude/skills/agent-browser/`, so it
-registers automatically; the CLI is not, so install it once per container:
+tooling. It is declared as a plugin in `.claude/settings.json`
+(`agent-browser@agent-browser`, marketplace `vercel-labs/agent-browser`), so
+the skill registers automatically; the CLI is separate, so install it once per
+container:
 
 ```bash
 npm i -g agent-browser
