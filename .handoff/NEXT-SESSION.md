@@ -56,7 +56,7 @@ union — every test suite kept, `wipeDevice` keeps `clearedTrust` +
 | PR | Branch | State |
 |---|---|---|
 | **#34** product audit (draft) | `docs/product-audit-2026-08-01` | voice-cloning + translation-provider corrections pushed; awaiting owner review |
-| **#53** Snap Camera Kit (draft) | `claude/snap-camera-kit-repos-65c88r` | web SDK installed in **`ysnap` only**; reference record for Spot Me. See below |
+| **#53** AR/reference docs (draft) | `claude/snap-camera-kit-repos-65c88r` | Camera Kit was installed in `ysnap`, then **reverted on owner instruction**. Now **docs-only**. See below |
 | governance amendment | `docs/execution-order-2026-08-01` | the PR carrying this very edit + the roadmap "Owner Amendment" + CLAUDE.md pointer |
 
 For A5: enforcement stays default-OFF, and **disabling the flag — not
@@ -100,8 +100,9 @@ truly offline-only, and whether the licence covers the model weights.
 
 Three things that will otherwise be re-learned the hard way:
 
-- The web SDK went into **`ysnap`** because it is the only React host. **It is
-  not in Spot Me and must not be added to `spotme/` without owner sign-off** —
+- **Nothing is installed today.** The web SDK briefly went into `ysnap` (the
+  only React host) and was reverted; `ysnap`'s manifests are byte-identical to
+  `origin/master`. **It must not be added to `spotme/` without owner sign-off** —
   a camera SDK that speaks gRPC-web to Snap's backend inside an E2EE messenger
   is a §7 integration review, not a dependency bump.
 - `dl.google.com` is **proxy-blocked** here, so an Android Camera Kit resolve
