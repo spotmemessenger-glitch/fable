@@ -57,6 +57,52 @@ against it.** The owner's instruction: refer to it each time you code.
   rollback-after-publication is executable or separately authorized) is
   unchanged by V2.
 
+## ⭐ Third-party evaluation — REFERENCE ONLY, do not touch Spot Me
+
+**Standing owner instruction (2026-08-02):** when asked to check or "install"
+a third-party repo/SDK, the work is **reference only**. **Nothing in `spotme/`
+may be modified for it** — no dependency, no config, no code. Evaluate,
+measure, write it down, change nothing.
+
+Records live in `research/` (deliberately **not** `spotme/docs/`):
+
+- `research/ar-platform-reference.md` — AR camera platforms. **Nothing is
+  installed.** Snap Camera Kit is the only live vendor path; it was installed
+  in `ysnap` once and **reverted**. Meta/Spark AR is **dead** (shut down
+  2025-01-14) — do not re-investigate.
+- `research/external-code-references.md` — register of external codebases
+  examined, with licence status and verdicts.
+
+### Rules these evaluations must follow
+
+1. **No licence file = all rights reserved.** Read it to understand an
+   approach, then write our own. Never paste, adapt line-by-line, or vendor.
+   Three of the repos checked so far have no licence at all.
+2. **Verify the advertised feature actually exists.** Two of four "real-time
+   chat" repos had none — one shipped a 0-byte `chatRoutes.js` and never
+   imported `socket`; another called `revalidatePath()` and called it realtime.
+   Check the dependency list, not just a grep — `isSelected` and
+   `isSendingMessage` contain the substrings `sse` and `socket`.
+3. **A hosted SDK that reads user content is disqualified for Spot Me**
+   regardless of quality, and it is a roadmap §7 integration review, never a
+   dependency bump. Spot Me is P2P and E2E encrypted; the server must not be
+   able to read content.
+4. **Tag every claim MEASURED or UNVERIFIED**, with where and when. A record
+   is not a live check.
+
+### Environment traps that keep costing time
+
+- **A failed request from this container is not evidence a service is down.**
+  The agent proxy returns `403` (and curl `000`) for hosts it blocks —
+  including `github.com` over plain curl. Use the GitHub API, not `curl`.
+- **`dl.google.com` is proxy-blocked**, so any Android/Gradle resolve can only
+  be verified with `transitive = false`.
+- **Local `master` can be stale** against `origin/master` in a fresh container.
+  Restore and diff against `origin/master`, never bare `master`.
+- **`ysnap` has no automated coverage** — no CI job, and the sole Vercel
+  project's root is `spotme/web` (the `-ysnap` in its preview URL is the Vercel
+  *team* slug). A green PR proves nothing about `ysnap`; build it by hand.
+
 ## Rules
 
 - Do what has been asked; nothing more, nothing less
