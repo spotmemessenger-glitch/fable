@@ -11,11 +11,15 @@
  * The LIVE engine exists only when a reviewed wiring PR passes the lit flag
  * chain (docs/ai-camera/ar-activation.md). What lights up splits sharply:
  *
- *   beauty (tier-0)   ON-DEVICE, pure math with bit-exact CPU+GLSL twins and
- *                     hard naturalness caps. Finished, real, tested.
+ *   beauty (tier-0)   ON-DEVICE, pure math with CPU+GLSL twins built to
+ *                     matched formulas (deterministic CPU-side tests;
+ *                     real-GPU equivalence unproven) and hard naturalness
+ *                     caps. Implemented + tested inside the gated module —
+ *                     not wired, not user-accessible.
  *   faceTracking      The IFaceTracker seam + the platform Shape-Detection
- *                     box adapter + temporal smoothing. Real where the
+ *                     box adapter + temporal smoothing. Functional where the
  *                     platform ships FaceDetector; honest refusal elsewhere.
+ *                     Untested on real hardware.
  *   advancedBeauty,   LANDMARK-gated. Need a registered face-landmark engine
  *   masks             (MediaPipe — an owner dependency, ADR-014c §4). Absent
  *                     ⇒ NO_LANDMARK_ENGINE, never approximated from boxes.

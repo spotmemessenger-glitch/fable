@@ -16,20 +16,24 @@ machine-readable reason — never a degraded imitation.** A "face tracker" that
 draws a centred oval, or a "smile detector" guessing from a bounding box,
 would demo well and be a lie; the closed AR vocabulary exists to refuse them.
 
-Shipped in this subset:
+Shipped in this subset — every capability is **implemented and testable
+inside the gated module, but NOT wired into the app and NOT user-accessible**
+(all flags ship false):
 
-- **`beauty` (tier-0) — live and proven.** Skin-masked separable bilateral
-  smoothing (YCbCr Chai&Ngan skin classifier + shadow gate), tone+warmth
-  (S-curve/flatten + R/B shift), and headroom brighten — three pipeline
-  stages each with a **bit-exact CPU + GLSL twin** and hard `BEAUTY_LIMITS`
-  naturalness caps. Needs no landmarks; works for every skin tone in the
-  photographed gamut. (35 assertions.)
-- **`faceTracking` — the seam + one real adapter.** An `IFaceTracker`
-  registry with a validated contract, the platform Shape-Detection **box
-  adapter** (real where Chromium/Android ships `FaceDetector`, honest
-  `NO_PLATFORM_FACE_DETECTOR` elsewhere), and EMA box/landmark temporal
-  smoothing with greedy-IoU identity and hysteresis/coast. Boxes only — the
-  adapter promises no landmarks it cannot guarantee. (40 + 22 assertions.)
+- **`beauty` (tier-0) — implemented behind disabled flags.** Skin-masked
+  separable bilateral smoothing (YCbCr Chai&Ngan skin classifier + shadow
+  gate), tone+warmth (S-curve/flatten + R/B shift), and headroom brighten —
+  three pipeline stages, each with a **CPU and GLSL implementation built to
+  matched formulas and covered by deterministic CPU-side tests** (real-GPU
+  visual/numerical equivalence remains UNPROVEN — no headless GPU here), and
+  hard `BEAUTY_LIMITS` naturalness caps. Needs no landmarks. (35 assertions.)
+- **`faceTracking` — the seam + one real adapter, behind disabled flags.** An
+  `IFaceTracker` registry with a validated contract, the platform
+  Shape-Detection **box adapter** (functional where Chromium/Android ships
+  `FaceDetector`, honest `NO_PLATFORM_FACE_DETECTOR` elsewhere — untested on
+  real hardware), and EMA box/landmark temporal smoothing with greedy-IoU
+  identity and hysteresis/coast. Boxes only — the adapter promises no
+  landmarks it cannot guarantee. (40 + 22 assertions.)
 - **`createArBeauty` factory** — the single front door, camera-engine idiom:
   default flags return an INERT stub that constructs nothing; shape parity
   with the live engine is fence-asserted.

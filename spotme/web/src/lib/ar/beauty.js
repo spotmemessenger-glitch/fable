@@ -1,9 +1,11 @@
 /**
  * Spot Me AR/beauty — beauty TIER 0: real image math that needs NO
- * landmarks. Three ../camera/pipeline.js stages, each with a bit-exact CPU
- * reference (golden-tested in Node) and a GLSL twin for the WebGL2
- * executor (same math as a single fragment pass; CPU is the tested
- * reference semantics, per the portrait precedent).
+ * landmarks. Three ../camera/pipeline.js stages, each with a CPU reference
+ * (golden-tested in Node) and a GLSL twin for the WebGL2 executor written to
+ * the SAME formulas as a single fragment pass. CPU is the tested reference
+ * semantics (per the portrait precedent); the GLSL twin's real-GPU visual
+ * and numerical equivalence is UNPROVEN — there is no headless GPU here, so
+ * "twin" means matched-formula, not hardware-verified-identical.
  *
  * NATURAL-ONLY, BY CONSTRUCTION. Every stage clamps its parameters into
  * the hard-coded BEAUTY_LIMITS caps INSIDE cpu() and uniforms() — a caller
