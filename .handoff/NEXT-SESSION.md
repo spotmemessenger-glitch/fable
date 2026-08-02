@@ -98,6 +98,13 @@ give the AR capability Camera Kit was wanted for, without a vendor backend —
 the exact objection that got Camera Kit reverted. UNVERIFIED whether it is
 truly offline-only, and whether the licence covers the model weights.
 
+Third entry, `Sai-Kumar-Kanuri/Snapchat-Clone`: **rejected, do not re-examine.**
+No licence, 2k LOC, built in one ~85-minute sitting, and its advertised
+"real-time messaging" **does not exist** — no realtime library, no WebSocket or
+SSE, no polling; sends are a server action plus `revalidatePath()`, which
+refreshes only the *sender's* view. Plaintext content in MongoDB, Cloudinary,
+NextAuth beta — behind Spot Me on every axis.
+
 Three things that will otherwise be re-learned the hard way:
 
 - **Nothing is installed today.** The web SDK briefly went into `ysnap` (the

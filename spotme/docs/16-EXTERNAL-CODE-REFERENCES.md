@@ -168,3 +168,58 @@ Take from it: Snapchat-style UI and interaction patterns, and the pointer to
 jeelizFaceFilter. Do not take: the dependency stack, the build tooling, or any
 architectural cue for Spot Me, which is P2P and end-to-end encrypted where this
 is a stateless UI shell over public demo APIs.
+
+---
+
+## 3. `Sai-Kumar-Kanuri/Snapchat-Clone` — REJECTED
+
+<https://github.com/Sai-Kumar-Kanuri/Snapchat-Clone>
+
+Next.js 14 App Router, TypeScript, MongoDB/Mongoose, Tailwind + Radix
+(shadcn/ui), NextAuth v5 beta, Cloudinary. **2,010 lines** of TS/TSX total.
+Created and last pushed on the same day, 2024-01-29, about 85 minutes apart.
+1 star. **No licence file** — all rights reserved. MEASURED.
+
+### Its headline claim is not accurate
+
+The repository describes itself as a *"Real-time messaging app."* **There is no
+real-time mechanism in it.** MEASURED, three ways:
+
+- No realtime library is declared in `package.json` — no Socket.IO, Pusher,
+  Ably, Supabase, Firebase, PartyKit or `ws`.
+- No `WebSocket`, `EventSource`/SSE, or polling (`setInterval`,
+  `refetchInterval`) anywhere in `app/`, `lib/` or `components/`.
+- The actual send path in `lib/action.ts` is a server action that writes the
+  message to MongoDB and then calls `revalidatePath()`.
+
+`revalidatePath` invalidates the Next.js cache, which refreshes **the sender's
+own** view on their next render. The receiver sees nothing until they reload
+the page. That is request-response CRUD, not realtime — and it is worth
+knowing that an earlier grep appeared to find realtime code only because
+`isSelected` and `isSendingMessage` contain the substrings `sse` and `socket`.
+
+### Nothing here transfers to Spot Me
+
+| This repo | Spot Me |
+|---|---|
+| `content: String` stored plaintext in MongoDB, server-readable | P2P, end-to-end encrypted; the server must not be able to read content |
+| MongoDB + Mongoose | PostgreSQL + Prisma (roadmap §7) |
+| Cloudinary | Cloudflare R2 / S3 (roadmap §7) |
+| No realtime at all | A real Socket.IO integration already shipped |
+| NextAuth v5 **beta** | not a production auth reference |
+
+Its one genuinely Snapchat-ish idea, a `opened: boolean` on the message model
+for view-once semantics, is a concept Spot Me already implements and tests
+(`spotme/web/test/viewonce.test.js`).
+
+### Hygiene note
+
+No secrets are committed. Credentials are read from `process.env`
+(`MONGODB_URI`, `AUTH_SECRET`, `CLOUDINARY_*`) and no `.env` file is in the
+tree. Clean. MEASURED.
+
+### Verdict
+
+**Rejected — do not spend time here.** A small single-sitting portfolio
+project, unlicensed, whose headline feature does not exist. It is behind Spot
+Me on every axis that matters. Logged so it is not re-examined.
