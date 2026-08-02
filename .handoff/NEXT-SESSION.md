@@ -81,6 +81,12 @@ Three things that will otherwise be re-learned the hard way:
   on Maven Central and fetch fine (main AAR **47.4 MB**).
 - `camera-kit-reference` is a **1.3 GB** clone at `--depth 1`. Never vendor it.
 
+Discovered while checking that PR: **`ysnap` has no automated coverage at
+all.** CI runs only `spotme/backend`, `spotme/web`, `spotme/e2e`, and the one
+Vercel project (`spotme-messenger`) has root directory `spotme/web` — the
+`-ysnap` in its preview URL is the Vercel *team* slug, not the directory. A
+green PR proves nothing about `ysnap`; build it by hand or it is unverified.
+
 ### Untouched / blocked (standing)
 
 - **#8 (ybot)** untouched. **Railway deployment blocked.** **Priorities 2 and 3

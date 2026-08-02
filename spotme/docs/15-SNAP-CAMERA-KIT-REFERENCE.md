@@ -72,8 +72,16 @@ rxjs                    ^7.8.2
 `react >=16.8.0`, `react-dom >=16.8.0`, `rxjs >=7` — all four satisfied.
 
 Verified: `npm run build` in `ysnap` completed clean, all routes rendered, no
-new warnings; the Vercel preview deployment reported **Ready**. No existing
-dependency changed version.
+new warnings. No existing dependency changed version.
+
+**That local build is the only verification this change will ever get, and it
+is not reproducible from the PR.** `ysnap` has no automated coverage of any
+kind: CI (`.github/workflows/ci.yml`) runs only against `spotme/backend`,
+`spotme/web` and `spotme/e2e`, and the sole Vercel project
+(`spotme-messenger`) has root directory `spotme/web` — the `-ysnap` in its
+preview URL is the Vercel **team** slug, not this directory. A green PR
+therefore says nothing about `ysnap`. Anyone changing `ysnap` must build it
+by hand. MEASURED.
 
 It is **inert** — nothing imports it. Rendering a lens additionally needs an
 API token and Lens Group ID (§6).
