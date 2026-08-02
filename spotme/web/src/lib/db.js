@@ -144,6 +144,12 @@ export function wipeDevice () {
     dropDatabase('spotme-e2e'),
     dropDatabase('spotme-identity-pins'),
     dropDatabase('spotme-signing'),
+    /* Creative-studio drafts (lib/studio/drafts.js) are CONTENT: an op-doc is
+     * the edit history of a user's photo — which regions they masked out,
+     * what they wrote, which photos they touched — so it dies with the rest.
+     * While the studio ships dark the database is never created, and deleting
+     * a database that does not exist succeeds as a no-op. */
+    dropDatabase('spotme-studio-drafts'),
   ]).then((results) => {
     const failures = results.filter(Boolean)
     return { ok: failures.length === 0, failures }
