@@ -16,13 +16,16 @@ UNAVAILABLE with a machine-readable reason — never a degraded fake.** An OCR
 that "reads" a blank string or a "translator" that echoes the source would
 demo well and lie to the first user who trusts it; an empty seam refuses.
 
-Shipped in this subset:
+Shipped in this subset — every capability is **implemented and testable
+inside the gated module, but NOT wired into the app and NOT user-accessible**
+(all flags ship false):
 
-- **`scan` — barcode/QR, live and proven.** Dual-decoder engine: native
-  `BarcodeDetector` (13 formats) preferred, lazy `jsQR` fallback (qr only),
-  honest `NO_DETECTOR`/`NO_PIXEL_ACCESS`; continuous `scanFrames` over the
-  camera FrameSource with dedup + backpressure. The one on-device leg that
-  carries no owner dependency. (30 assertions.)
+- **`scan` — barcode/QR, implemented behind disabled flags, proven by tests.**
+  Dual-decoder engine: native `BarcodeDetector` (13 formats) preferred, lazy
+  `jsQR` fallback (qr only), honest `NO_DETECTOR`/`NO_PIXEL_ACCESS`;
+  continuous `scanFrames` over the camera FrameSource with dedup +
+  backpressure. The one on-device leg that carries no owner dependency.
+  (30 assertions; real-camera/real-browser behavior remains unproven.)
 - **`createVision` factory** — the single front door, camera-engine idiom:
   default flags return an INERT stub that constructs nothing (no probe, no
   registry, no cloud client, no `env` read); shape parity with the live

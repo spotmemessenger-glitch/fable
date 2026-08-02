@@ -13,8 +13,10 @@
  * The LIVE engine exists only when a reviewed wiring PR passes the lit flag
  * chain (docs/ai-camera/vision-activation.md). What lights up splits sharply:
  *
- *   scan            ON-DEVICE, pure math + platform APIs. Finished, real,
- *                   tested — the one leg that carries no owner dependency.
+ *   scan            ON-DEVICE, pure math + platform APIs. Implemented +
+ *                   tested inside the gated module (not wired, not
+ *                   user-accessible; real-hardware behavior unproven) — the
+ *                   one leg that carries no owner dependency.
  *   ocr, translate  SEAMS. A registry a wiring PR fills with an owner-
  *                   approved engine/port; empty ⇒ the honest refusal.
  *   recognize,      CLOUD legs, every one behind VISION_CLOUD_ENABLED — the
