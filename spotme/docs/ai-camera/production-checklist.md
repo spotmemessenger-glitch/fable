@@ -7,7 +7,8 @@ flip until both halves are green for that feature.
 ## CI-proven (green as of 2026-08-02, run on every `npm test`)
 
 - [x] 59 suites green including all 37 pre-existing (untouched-green), exit 0
-- [x] 11 camera suites, 222 assertions, deterministic (seeded fixtures,
+- [x] 11 camera suites, 202 assertions (203 with the post-build bundle
+      check), deterministic (seeded fixtures,
       fake hardware, manual clocks — zero timing sleeps, zero network)
 - [x] `npx eslint .` clean
 - [x] `npm run build` green; post-build fence: dist/ contains NO camera

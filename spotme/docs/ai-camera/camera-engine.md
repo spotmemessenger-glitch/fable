@@ -51,7 +51,8 @@ Precise contracts: `developer-guide.md`.
 
 ## Test and bench surface
 
-11 deterministic suites (`test/camera-*.test.js`, 222 assertions) on the
+11 deterministic suites (`test/camera-*.test.js`, 202 assertions; 203
+with the post-build bundle check) on the
 fake harness (`test/helpers/fake-media.js`) — no camera, no DOM, no
 network in CI. `test/bench/camera.bench.mjs` records per-MP algorithm
 costs (numbers: `benchmark-report.md`). What CI cannot prove is listed

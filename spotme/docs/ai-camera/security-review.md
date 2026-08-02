@@ -46,7 +46,8 @@ ops-guide.md: tags must never carry frame-derived data.
 
 `npm test` — 59 suites green (37 pre-existing + 11 camera + existing e2e
 chain unchanged), exit 0. `npx eslint .` clean. `npm run build` green;
-post-build fence 14/14. Camera assertions: 222 across
+post-build fence 14/14. Camera assertions: 202 (203 with the post-build
+bundle check) across
 flags/capabilities/session/frames/pipeline/algorithms/portrait/video/
 stabilize/engine/fence.
 
