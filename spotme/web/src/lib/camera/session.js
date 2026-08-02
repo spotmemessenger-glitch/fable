@@ -58,9 +58,12 @@ export async function openSession (selection = {}, { env = globalThis, clock = n
   const t0 = clk.now()
   let stream
   try {
+    // stopStream as the late-disposer: a permission prompt answered AFTER the
+    // timeout still resolves, and that stream has no owner. Without this the
+    // camera light comes on with nothing holding a reference to turn it off.
     stream = await withTimeout(
       md.getUserMedia(constraintsFor(selection)),
-      selection.openTimeoutMs ?? OPEN_TIMEOUT_MS, 'camera open', clk)
+      selection.openTimeoutMs ?? OPEN_TIMEOUT_MS, 'camera open', clk, stopStream)
   } catch (err) {
     return unavailable(reasonFromMediaError(err), String(err?.message || err))
   }
@@ -156,10 +159,27 @@ function makeSession ({ stream, selection, env, clock, metrics }) {
       const t0 = clock.now()
       let nextStream = null
       let strategy = 'warm'
+      /**
+       * `release()` can land while we are awaiting hardware — a switch takes
+       * hundreds of ms and the user can close the camera inside that window.
+       * If it did, the answer is NOT "finish the switch": assigning the new
+       * stream would turn the camera back ON after the user turned it off,
+       * in a session whose released-listeners have already fired and cleared,
+       * so nothing is left to unwind it. Released is a terminal state; a
+       * switch that loses the race disposes its stream and stays released.
+       */
+      const abandonIfReleased = (stream) => {
+        if (state !== SESSION_STATE.RELEASED) return null
+        stopStream(stream)
+        return unavailable(CAMERA_UNAVAILABLE.NO_ACTIVE_SESSION, 'released during switch')
+      }
       try {
         nextStream = await withTimeout(
-          md.getUserMedia(constraintsFor(nextSelection)), SWITCH_TIMEOUT_MS, 'camera switch (warm)', clock)
+          md.getUserMedia(constraintsFor(nextSelection)), SWITCH_TIMEOUT_MS, 'camera switch (warm)', clock,
+          stopStream)
       } catch {
+        const abandoned = abandonIfReleased(null)
+        if (abandoned) return abandoned
         // Single-pipeline device (or anything else): go cold. Release FIRST,
         // then retry once. If that fails too, the session is over — honest
         // RELEASED state, not a zombie claiming to be live.
@@ -167,17 +187,22 @@ function makeSession ({ stream, selection, env, clock, metrics }) {
         stopStream(currentStream)
         try {
           nextStream = await withTimeout(
-            md.getUserMedia(constraintsFor(nextSelection)), SWITCH_TIMEOUT_MS, 'camera switch (cold)', clock)
+            md.getUserMedia(constraintsFor(nextSelection)), SWITCH_TIMEOUT_MS, 'camera switch (cold)', clock,
+            stopStream)
         } catch (err) {
           state = SESSION_STATE.RELEASED
           notifyReleased()
           return unavailable(reasonFromMediaError(err), `switch failed cold: ${err?.message || err}`)
         }
       }
+      const abandoned = abandonIfReleased(nextStream)
+      if (abandoned) return abandoned
       const previous = currentStream
       currentStream = nextStream
       if (strategy === 'warm') stopStream(previous)
       state = SESSION_STATE.LIVE
+      // The track changed; the OS-ended watch must follow it (see bindEnded).
+      bindEnded()
       const switchedInMs = clock.now() - t0
       metrics?.record('session.switch', switchedInMs, { strategy })
       return available({ switchedInMs, strategy, deviceId: session.deviceId(), facing: session.facing() })
@@ -187,11 +212,27 @@ function makeSession ({ stream, selection, env, clock, metrics }) {
     release () {
       if (state === SESSION_STATE.RELEASED) return available({ alreadyReleased: true })
       state = SESSION_STATE.RELEASED
+      unbindEnded()
       stopStream(currentStream)
       notifyReleased()
       return available({})
     },
     onReleased (fn) { releasedListeners.add(fn); return () => releasedListeners.delete(fn) },
+  }
+
+  let detachEnded = null
+  function unbindEnded () {
+    if (!detachEnded) return
+    try { detachEnded() } catch { /* the track is gone; so is its listener */ }
+    detachEnded = null
+  }
+  function bindEnded () {
+    unbindEnded()
+    const t = track()
+    if (!t?.addEventListener) return
+    const onEnded = () => { if (state === SESSION_STATE.LIVE) session.release() }
+    t.addEventListener('ended', onEnded)
+    detachEnded = () => t.removeEventListener?.('ended', onEnded)
   }
 
   function notifyReleased () {
@@ -200,12 +241,16 @@ function makeSession ({ stream, selection, env, clock, metrics }) {
     for (const fn of listeners) { try { fn() } catch { /* listener's problem */ } }
   }
 
-  // The OS can end the track underneath us (camera unplugged, permission
-  // revoked mid-session). Surface it as a release so consumers unwind.
-  const initial = track()
-  if (initial?.addEventListener) {
-    initial.addEventListener('ended', () => { if (state === SESSION_STATE.LIVE) session.release() })
-  }
+  /**
+   * The OS can end the track underneath us (camera unplugged, permission
+   * revoked mid-session). Surface it as a release so consumers unwind.
+   *
+   * REBOUND ON EVERY SWITCH. The listener belongs to a TRACK, and `switchTo`
+   * replaces the track. Bound once at construction it would silently stop
+   * covering the live camera the moment the user flipped front-to-back —
+   * revocation would then leave a session claiming LIVE over a dead track.
+   */
+  bindEnded()
 
   return session
 }

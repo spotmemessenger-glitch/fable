@@ -203,6 +203,77 @@ await checkAsync('controls on a RELEASED session answer NO_ACTIVE_SESSION, never
   return r.available === false && r.reason === CAMERA_UNAVAILABLE.NO_ACTIVE_SESSION
 })
 
+/* ------------------- 9. lifecycle races — review board F-1, F-2, F-3 ------ */
+
+/**
+ * A mediaDevices whose getUserMedia resolves only when the test says so.
+ *
+ * WHY THIS AND NOT THE EXISTING WEDGED-DRIVER STUB. The suite already covers
+ * a getUserMedia that NEVER resolves, and a promise that never settles cannot
+ * express the case that actually leaks a camera: the hardware answering AFTER
+ * the wait gave up — a permission prompt accepted late, which is ordinary
+ * user behaviour, not an edge case. Timing out rejects; it cannot cancel.
+ */
+function deferredMediaDevices (env) {
+  const real = env.navigator.mediaDevices
+  const queue = []
+  env.navigator.mediaDevices = {
+    ...real,
+    enumerateDevices: (...a) => real.enumerateDevices(...a),
+    getUserMedia: (constraints) => new Promise((resolve, reject) => {
+      queue.push(() => real.getUserMedia(constraints).then(resolve, reject))
+    }),
+  }
+  return {
+    /** Let the hardware answer, then let every continuation drain. */
+    async answer () {
+      for (const fire of queue.splice(0)) fire()
+      for (let i = 0; i < 4; i++) await new Promise((r) => setTimeout(r, 0))
+    },
+    liveTracks: () => real.openStreams
+      .flatMap((s) => s.getTracks()).filter((t) => t.readyState === 'live').length,
+  }
+}
+
+await checkAsync('a camera granted AFTER the open timeout is STOPPED, never orphaned', async () => {
+  const env = androidChromeLike()
+  const hw = deferredMediaDevices(env)
+  const clock = manualClock()
+  const opening = openSession({ openTimeoutMs: 50 }, { env, clock })
+  await clock.advance(51)                    // the bounded wait gives up
+  const result = await opening
+  await hw.answer()                          // …and the user accepts, late
+  return result.available === false && hw.liveTracks() === 0
+})
+
+await checkAsync('release() during an in-flight switch stays released and stops the arriving stream', async () => {
+  const env = androidChromeLike()
+  const clock = manualClock()
+  const opened = await openSession({ facing: FACING.BACK }, { env, clock })
+  if (!opened.available) return false
+  const { session } = opened
+  const hw = deferredMediaDevices(env)       // only the SWITCH is deferred
+  const switching = session.switchTo({ facing: FACING.FRONT })
+  session.release()                          // user closes the camera mid-switch
+  await hw.answer()
+  const outcome = await switching
+  return session.state() === SESSION_STATE.RELEASED &&
+    outcome.available === false &&
+    outcome.reason === CAMERA_UNAVAILABLE.NO_ACTIVE_SESSION &&
+    hw.liveTracks() === 0
+})
+
+await checkAsync('after a switch, an OS-ended NEW track still releases the session', async () => {
+  const env = androidChromeLike()
+  const opened = await openSession({ facing: FACING.BACK }, { env, clock: manualClock() })
+  if (!opened.available) return false
+  const { session } = opened
+  const switched = await session.switchTo({ facing: FACING.FRONT })
+  if (!switched.available) return false
+  session.track().endFromDevice()            // camera unplugged / permission revoked
+  return session.state() === SESSION_STATE.RELEASED
+})
+
 console.log('\n========================================')
 console.log('  camera session — open, switch warm/cold, release always')
 console.log('========================================')

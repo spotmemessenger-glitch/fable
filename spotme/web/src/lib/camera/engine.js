@@ -47,6 +47,32 @@ const FEATURE_FLAG = Object.freeze({
   proControls: 'CAMERA_PRO_CONTROLS_ENABLED',
 })
 
+/**
+ * The live method surface, per namespace, AS DATA — `true` where the live
+ * method is async.
+ *
+ * The stub's whole promise is that a dark call site cannot crash into
+ * `undefined`. That is only true if the stub carries every name the live
+ * engine carries, and a hand-copied list stops being true the first time a
+ * namespace grows a method. So the names live here once, the stub is built
+ * FROM them, and `camera-engine.test.js` asserts the live engine's namespace
+ * keys match — a namespace that gains a method without updating this table
+ * fails the suite instead of failing a user in the dark.
+ */
+export const FEATURE_METHODS = Object.freeze({
+  hdr: Object.freeze({ availability: false, captureBracket: true, fuse: false }),
+  night: Object.freeze({ availability: false, stack: false }),
+  portrait: Object.freeze({ availability: false, render: true, applyMask: false }),
+  video: Object.freeze({ availability: false, createRecorder: false }),
+  timelapse: Object.freeze({ availability: false, create: false }),
+  slowmo: Object.freeze({ availability: false, prepare: true, capture: false, assemble: true }),
+  burst: Object.freeze({ availability: false, capture: true, release: false }),
+  stabilization: Object.freeze({
+    availability: false, create: false, stage: false, applyFrame: false,
+  }),
+  proControls: Object.freeze({ availability: false, of: false }),
+})
+
 export function createCameraEngine ({ flags = {}, env = null, clock = null } = {}) {
   const resolved = resolveFlags(flags)
   if (!isMasterEnabled(resolved)) return inertEngine(resolved)
@@ -59,11 +85,15 @@ function inertEngine (resolved) {
   const dark = (detail) => unavailable(CAMERA_UNAVAILABLE.FLAG_DISABLED, detail)
   const darkAsync = (detail) => async () => dark(detail)
   const darkSync = (detail) => () => dark(detail)
-  const feature = (name) => Object.freeze({
-    availability: darkSync(name),
-    // Every live entry point exists here with the same name and arity
-    // discipline, so dark-mode call sites cannot crash into undefined.
-  })
+  /** Every live entry point of the namespace exists here under the same
+   *  name, async where the live one is async — see FEATURE_METHODS. */
+  const feature = (name, methods) => {
+    const stub = {}
+    for (const [method, isAsync] of Object.entries(methods)) {
+      stub[method] = isAsync ? darkAsync(name) : darkSync(name)
+    }
+    return Object.freeze(stub)
+  }
   return Object.freeze({
     enabled: false,
     flags: resolved,
@@ -79,15 +109,15 @@ function inertEngine (resolved) {
       availability: darkSync('CAMERA_PORTRAIT_ENABLED'),
       current: () => null,
     }),
-    hdr: feature('CAMERA_HDR_ENABLED'),
-    night: feature('CAMERA_NIGHT_ENABLED'),
-    portrait: feature('CAMERA_PORTRAIT_ENABLED'),
-    video: feature('CAMERA_VIDEO_ENABLED'),
-    timelapse: feature('CAMERA_TIMELAPSE_ENABLED'),
-    slowmo: feature('CAMERA_SLOWMO_ENABLED'),
-    burst: feature('CAMERA_BURST_ENABLED'),
-    stabilization: feature('CAMERA_STABILIZATION_ENABLED'),
-    proControls: feature('CAMERA_PRO_CONTROLS_ENABLED'),
+    hdr: feature('CAMERA_HDR_ENABLED', FEATURE_METHODS.hdr),
+    night: feature('CAMERA_NIGHT_ENABLED', FEATURE_METHODS.night),
+    portrait: feature('CAMERA_PORTRAIT_ENABLED', FEATURE_METHODS.portrait),
+    video: feature('CAMERA_VIDEO_ENABLED', FEATURE_METHODS.video),
+    timelapse: feature('CAMERA_TIMELAPSE_ENABLED', FEATURE_METHODS.timelapse),
+    slowmo: feature('CAMERA_SLOWMO_ENABLED', FEATURE_METHODS.slowmo),
+    burst: feature('CAMERA_BURST_ENABLED', FEATURE_METHODS.burst),
+    stabilization: feature('CAMERA_STABILIZATION_ENABLED', FEATURE_METHODS.stabilization),
+    proControls: feature('CAMERA_PRO_CONTROLS_ENABLED', FEATURE_METHODS.proControls),
   })
 }
 

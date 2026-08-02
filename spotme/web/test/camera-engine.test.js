@@ -6,7 +6,7 @@
  *
  *   node test/camera-engine.test.js
  */
-import { createCameraEngine } from '../src/lib/camera/engine.js'
+import { createCameraEngine, FEATURE_METHODS } from '../src/lib/camera/engine.js'
 import { CAMERA_UNAVAILABLE } from '../src/lib/camera/availability.js'
 import { manualClock, throwingClock } from '../src/lib/camera/clock.js'
 import { createMetrics, percentile } from '../src/lib/camera/metrics.js'
@@ -166,6 +166,31 @@ check('metrics: counters count and reset clears', (() => {
 
 check('percentile helper: empty → null, single sample → itself', (() =>
   percentile([], 50) === null && percentile([7], 99) === 7)())
+
+/* ------------ dark/live shape parity — review board F-4 ------------------ */
+
+/**
+ * The stub claims a dark call site "cannot crash into undefined". Before this
+ * test the stub carried ONLY `availability` per namespace, so `hdr.fuse(...)`
+ * on a dark engine threw TypeError — the opposite of the claim, and exactly
+ * what a staged activation would hit first. Parity is now derived from
+ * FEATURE_METHODS and asserted BOTH ways, so neither side can drift alone.
+ */
+await checkAsync('the dark stub carries every live method, and every one refuses instead of throwing', async () => {
+  const dark = createCameraEngine({ flags: {}, env: throwingMediaDevices(), clock: throwingClock() })
+  const live = createCameraEngine({ flags: ALL_ON, env: androidChromeLike(), clock: manualClock() })
+  for (const [ns, methods] of Object.entries(FEATURE_METHODS)) {
+    const liveKeys = Object.keys(live[ns]).sort()
+    const tableKeys = Object.keys(methods).sort()
+    if (liveKeys.join() !== tableKeys.join()) return false      // table drifted from live
+    for (const method of tableKeys) {
+      if (typeof dark[ns]?.[method] !== 'function') return false
+      const answer = await dark[ns][method]()                   // must REFUSE, not throw
+      if (answer?.available !== false || answer.reason !== CAMERA_UNAVAILABLE.FLAG_DISABLED) return false
+    }
+  }
+  return true
+})
 
 console.log('\n========================================')
 console.log('  camera engine — dark stub, per-feature gates, measured surface')

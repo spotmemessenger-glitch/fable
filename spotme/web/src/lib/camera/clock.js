@@ -91,8 +91,16 @@ export class TimeoutError extends Error {
  * hardware wait in the engine goes through here and fails with a NAME.
  * The timer is always cleared; a bounded wait that leaks its own timer would
  * fail the inertness test it exists to support.
+ *
+ * `onLate` IS NOT OPTIONAL POLISH. Timing out REJECTS, but it cannot cancel:
+ * the underlying promise keeps running and may still resolve. For most
+ * promises that is harmless. For `getUserMedia` it is a camera left ON with
+ * no handle to stop it — the exact failure the release-is-absolute invariant
+ * exists to prevent, and the one a user reads as "this app is still watching
+ * me". Every hardware wait that RESOLVES TO A RESOURCE must pass a disposer
+ * here, so a late arrival is stopped instead of orphaned.
  */
-export function withTimeout (promise, ms, label = 'operation', clock = realClock()) {
+export function withTimeout (promise, ms, label = 'operation', clock = realClock(), onLate = null) {
   return new Promise((resolve, reject) => {
     let done = false
     const id = clock.setTimeout(() => {
@@ -101,7 +109,10 @@ export function withTimeout (promise, ms, label = 'operation', clock = realClock
       reject(new TimeoutError(label, ms))
     }, ms)
     promise.then(
-      (value) => { if (done) return; done = true; clock.clearTimeout(id); resolve(value) },
+      (value) => {
+        if (done) { try { onLate?.(value) } catch { /* disposer's problem */ } return }
+        done = true; clock.clearTimeout(id); resolve(value)
+      },
       (err) => { if (done) return; done = true; clock.clearTimeout(id); reject(err) },
     )
   })
