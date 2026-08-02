@@ -54,6 +54,15 @@ function refine (left, peak, right) {
 export function estimateShift (reference, moved, { size = 64, window = true } = {}) {
   const a = downscalePlane(reference, size, size)
   const b = downscalePlane(moved, size, size)
+  // TEXTURE GATE. A near-flat tile has no spectral energy outside DC, so
+  // the normalized cross-power is ~0/ε — numerical dust that can land a
+  // CONFIDENT garbage peak (measured: structured-vs-flat scored 0.29 with
+  // a −23px hallucination). No texture ⇒ no alignment claim. Floor is
+  // measured: textured tiles ~1.8e-2, dim σ=4 sensor noise ~2.5e-4,
+  // true flat 0 — 1e-5 sits well under anything real.
+  if (tileVariance(a) < MIN_TILE_VARIANCE || tileVariance(b) < MIN_TILE_VARIANCE) {
+    return { dx: 0, dy: 0, confidence: 0, flat: true }
+  }
   if (window) { hannWindow(a); hannWindow(b) }
 
   const aRe = new Float32Array(a.data)
@@ -116,3 +125,16 @@ export function estimateShift (reference, moved, { size = 64, window = true } = 
  *  noise-field pairs peak at 0.131; genuine shifts score 0.62 at σ=6 noise
  *  and 0.28 even at σ=15. 0.2 sits mid-corridor with margin both ways. */
 export const MIN_SHIFT_CONFIDENCE = 0.2
+
+/** Texture floor for the gate above (variance of the 0..1 luma tile). */
+export const MIN_TILE_VARIANCE = 1e-5
+
+function tileVariance (plane) {
+  const n = plane.data.length
+  let mean = 0
+  for (let i = 0; i < n; i++) mean += plane.data[i]
+  mean /= n
+  let variance = 0
+  for (let i = 0; i < n; i++) { const d = plane.data[i] - mean; variance += d * d }
+  return variance / n
+}

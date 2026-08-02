@@ -129,6 +129,15 @@ check('shift recovery survives seeded sensor noise (σ=6)', (() => {
   return Math.abs(est.dx - 3) <= 1 && Math.abs(est.dy + 2) <= 1
 })())
 
+check('a FLAT (textureless) frame gets confidence 0 and zero shift — the texture gate', (() => {
+  const structured = lumaPlane(scene64())
+  const flat = lumaPlane(grey(128, 64, 64))
+  const est = estimateShift(structured, flat)
+  const estBoth = estimateShift(flat, flat)
+  return est.confidence === 0 && est.dx === 0 && est.dy === 0 && est.flat === true &&
+    estBoth.confidence === 0 && estBoth.flat === true
+})())
+
 check('two UNRELATED noise fields score BELOW the trust floor — no hallucinated shift', (() => {
   const randA = mulberry32(1)
   const randB = mulberry32(99)
