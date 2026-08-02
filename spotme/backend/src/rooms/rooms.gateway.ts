@@ -7,10 +7,16 @@ import {
   OnGatewayConnection,
   OnGatewayDisconnect,
 } from '@nestjs/websockets';
-import { Logger } from '@nestjs/common';
+import { Inject, Logger, Optional } from '@nestjs/common';
 import { Server, Socket } from 'socket.io';
 import { JwtService } from '@nestjs/jwt';
 import { PushService } from '../push/push.service';
+// Priority-2 push platform. Held as an OPTIONAL dependency: the DynamicModule
+// provides it ONLY when NOTIFICATIONS_V2_ENABLED is on, so with the flag off it
+// is undefined here and the notification hook below is skipped entirely (the
+// existing inline push path is byte-identical). Importing the symbol is a
+// source dependency only — it wires nothing until the module registers ON.
+import { NotificationProducer } from '../notifications/producers/notification-producer';
 // The DM gate stays here: it is a property of joining, not of group policy, and
 // RoomsAuthService has no business knowing about DM pairing. GroupPolicy and
 // GroupsService are gone from this file because policy() moved wholesale.
@@ -95,6 +101,9 @@ export class RoomsGateway implements OnGatewayConnection, OnGatewayDisconnect {
     // publish proxy. They were private methods on this class until ADR-002 §3
     // needed a second caller and a second copy would have drifted.
     private auth: RoomsAuthService,
+    // Optional + undefined while NOTIFICATIONS_V2_ENABLED is off (the default).
+    @Optional() @Inject(NotificationProducer)
+    private readonly producer?: NotificationProducer,
   ) {}
 
   /** Users with at least one live socket anywhere — they need no push. */
@@ -130,6 +139,19 @@ export class RoomsGateway implements OnGatewayConnection, OnGatewayDisconnect {
           body: type === 'knock' ? 'Someone wants to chat' : 'Open Spot Me to read it',
           tag: roomId,
         });
+        // Priority-2 platform (flag-gated). `producer` is undefined unless the
+        // module is wired ON, so with the flag off this is a no-op and the line
+        // above remains the ONLY notification path — byte-identical to today.
+        // When on, the same event ALSO enqueues into the durable outbox (shadow
+        // until NOTIF_OUTBOX_ENABLED, then the platform path). Never awaited into
+        // the send path in a way that can break delivery.
+        if (this.producer?.enabled) {
+          const done =
+            type === 'knock'
+              ? this.producer.onKnock(roomId, senderId, undefined, absent)
+              : this.producer.onMessage(roomId, senderId, undefined, undefined, absent);
+          await done.catch(() => undefined);
+        }
       } catch {
         /* push is a courtesy; never let it break delivery */
       }

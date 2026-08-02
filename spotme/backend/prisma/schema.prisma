@@ -562,3 +562,90 @@ model CrashReport {
 
   @@index([signature, ts])
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// NOTIFICATIONS V2 PLATFORM (Priority 2 · additive, flag-gated, inert)
+//
+// These four tables are ADDITIVE and touch no existing model. Nothing reads or
+// writes them until NOTIFICATIONS_V2_ENABLED=true AND the NotificationModule is
+// wired into AppModule (it is deliberately NOT wired in this branch — see
+// src/notifications/README.md and docs/priority-2/rollback-push-platform.md).
+//
+// Design source: docs/priority-2/01-push-notifications.md §12; decisions in
+// docs/adr/009a-push-platform-addendum.md.
+//
+// ID convention: String @default(cuid()) to match every other model in this
+// schema (PushSubscription/DeviceToken/CrashReport), rather than the design's
+// BigInt proposal — a deliberate, documented deviation for codebase consistency.
+//
+// CONTENT-LESS BY CONSTRUCTION: no table has a message-content column. A push
+// says *something arrived, from whom* — never what (ADR-001 / ADR-009 §Non-goals).
+// ─────────────────────────────────────────────────────────────────────────────
+
+// The offline queue + fan-out ledger. Reuses the storage-cleanup cron shape:
+// the OutboxWorker claims due rows with FOR UPDATE SKIP LOCKED so N replicas
+// share one outbox without double-sending.
+model NotificationOutbox {
+  id            String   @id @default(cuid())
+  recipientId   String                        // user to notify
+  roomId        String?                       // routing (server-visible; opaque)
+  eventSeq      Int?                          // RoomEvent.id — dedupe + client ordering
+  eventClass    String                        // message|knock|call|mention|group|story|silent
+  actorId       String?                       // display identity (server-known)
+  dedupeKey     String   @unique              // `${recipient}:${class}:${room}#${seq}`
+  collapseKey   String                        // server-side coalescing group
+  priority      String                        // max|high|normal|low|silent
+  ttlSeconds    Int
+  status        String   @default("queued")   // see NotificationState
+  count         Int      @default(1)          // coalesced event count
+  attempts      Int      @default(0)
+  nextAttemptAt DateTime @default(now())
+  lastError     String?                       // provider code only — NEVER content
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  // NO content column exists. By construction, never by policy.
+
+  @@index([status, nextAttemptAt])            // worker claim scan (hot path)
+  @@index([recipientId, collapseKey, status]) // coalescing window
+  @@index([createdAt])                        // retention sweep
+}
+
+// Delivery/open receipts. Idempotent on (outboxId, deviceId, event).
+model NotificationReceipt {
+  id         String   @id @default(cuid())
+  outboxId   String
+  deviceId   String                           // DeviceToken.id or PushSubscription.id
+  transport  String                           // fcm|apns|webpush
+  event      String                           // accepted|delivered|opened|dismissed
+  providerId String?                          // provider message id (accepted)
+  ts         DateTime @default(now())
+
+  @@unique([outboxId, deviceId, event])
+  @@index([outboxId])
+}
+
+// Per-account notification preferences (DND window + default level + focus mode).
+model NotificationPreference {
+  userId          String   @id
+  dndEnabled      Boolean  @default(false)
+  dndStart        Int?                          // minutes since local midnight
+  dndEnd          Int?
+  dndTz           String?                       // IANA tz; null → DND disabled
+  allowCallsInDnd Boolean  @default(true)
+  defaultLevel    String   @default("all")      // all|mentions|none
+  focusMode       Boolean  @default(false)      // manual allowlist mode
+  focusAllow      String?                       // CSV of classes allowed in focus
+  updatedAt       DateTime @updatedAt
+}
+
+// Per-(user,conversation) notification level + temporary mute.
+model ConversationNotifPref {
+  userId    String
+  roomId    String
+  level     String    @default("default")       // all|mentions|none|default
+  muteUntil DateTime?                            // null = per level (none=forever)
+  updatedAt DateTime  @updatedAt
+
+  @@id([userId, roomId])
+  @@index([userId])
+}
