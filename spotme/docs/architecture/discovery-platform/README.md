@@ -59,6 +59,7 @@ Accepted ADR disagree, the ADR wins until superseded (Governance G6).
 | 11 | [Feature Flags, Configuration & Observability](11-FLAGS-CONFIG-OBSERVABILITY.md) | Compile-time flags vs runtime config, config classes, audit, telemetry |
 | 12 | [Scalability](12-SCALABILITY.md) | Load model, budgets, capacity direction within v1 datastore limits |
 | 13 | [Implementation Map](13-IMPLEMENTATION-MAP.md) | Reuse of dark code, migration to the target architecture, sequencing, gates |
+| 14 | [Privacy & Abuse Threat Model](14-PRIVACY-ABUSE-THREAT-MODEL.md) | Formal Phase 2 threat model — assets, 18 threats, fence/type-enforced controls, residual risks |
 
 ## Conventions
 
