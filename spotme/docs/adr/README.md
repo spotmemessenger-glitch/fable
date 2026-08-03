@@ -25,8 +25,9 @@ are in draft PR **#40**; `013` device layer is in draft PR **#43**. These number
 are reserved to avoid collision; see
 [handbook/10-CONTRADICTIONS-AND-GAPS](../handbook/10-CONTRADICTIONS-AND-GAPS.md).
 
-### Backfilled by Engineering Handbook v1.0 (014–020)
-Decisions already evidenced in the repository, recorded now for durability:
+### Handbook-era (014–021)
+Decisions evidenced in the repository (014–020 backfilled by Engineering
+Handbook v1.0; 021 added with the Product Authority):
 
 | ADR | Title | Status |
 |---|---|---|
@@ -38,6 +39,14 @@ Decisions already evidenced in the repository, recorded now for durability:
 | [019](019-discovery-v2-privacy-model.md) | Discovery V2 privacy model (precise GPS device-local) | Accepted |
 | [020](020-stacked-pr-strategy.md) | Stacked draft-PR strategy | Accepted |
 | [021](021-spotme-unified-product-ecosystem.md) | SpotMe Unified Product Ecosystem (3 pillars, the loop, fixed Discovery order) | Accepted |
+
+### Proposed — awaiting owner ratification (022–023)
+Drafted for the owner to ratify; **not** in force until Accepted:
+
+| ADR | Title | Status |
+|---|---|---|
+| [022](022-discovery-execution-sequence.md) | Discovery execution sequence — five steps (supersedes ADR-021's sequence when Accepted) | Proposed |
+| [023](023-exchange-platform-service-intent-graph.md) | Exchange as a platform service — the universal Intent Graph | Proposed |
 
 ## Format
 

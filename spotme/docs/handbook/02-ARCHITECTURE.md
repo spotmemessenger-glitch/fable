@@ -100,3 +100,14 @@ The cross-cutting decisions that shape all of the above are recorded as ADRs in
 provider-neutral adapters, the deterministic location grid, the Discovery V2
 privacy model, repository-over-memory, and the stacked-PR strategy. Accepted
 ADRs are immutable; a new architectural direction needs a new ADR.
+
+## Platform specifications
+
+Engineering blueprints for major platforms live under
+`spotme/docs/architecture/`. The **Discovery Platform Architecture
+Specification** ([../architecture/discovery-platform/](../architecture/discovery-platform/README.md))
+defines the common services (location & privacy engine, Intent Graph & search
+orchestration, ranking, provider abstraction, AI interfaces, notifications,
+data & caching, offline sync, contracts, flags/config/observability,
+scalability) that Smart Nearby Discovery Map, SpotMe Exchange, Live Nearby
+Events and Nearby Moments all build on.
