@@ -22,6 +22,7 @@ resolve them**; it surfaces them for owner decision.
 | A1 | **Media-core contracts** branch `feat/media-core-contracts` is pushed but has **no open PR** (all-state PR query for that head returns empty), although a "draft PR for media-core" was recorded as done. | PR list query 2026-08-03 | Owner: open a PR for the branch, or fold/close it. Tracked in [09-OWNER-DECISIONS](09-OWNER-DECISIONS.md). |
 | A2 | Accidental/garbage tracked files exist: **`spotme/'`**, **`spotme/created`**, **`spotme/openBundle(original.vaultKey`** (shell-mangled filenames committed by mistake). | `git ls-tree master spotme/` | Remove in a dedicated cleanup change (not this docs PR). |
 | A3 | ADR numbers **009–013 are reserved by in-flight draft PRs** (#40 → 009–012; #43 → 013) that are **not on master**. Backfilled ADRs therefore start at **014** to avoid collision. | PRs #40, #43; `spotme/docs/adr/` has 001–008 on master | If #40/#43 merge, keep 009–013 as-is; this handbook's ADRs are 014+. |
+| A4 | Two owner product-authority sources are referenced but **not committed verbatim**: **Spot_Me_Product_Scope_and_Execution_Roadmap** and the canonical architecture doc **SPOTME_CANONICAL_MIGRATED_BUILD_MEMORY**. `SPOTME_NEW_PRODUCT_SCOPE_2026-08-02` **is** committed verbatim. | `handbook/product/` | Owner: provide the two docs to commit beside the scope doc; their execution decisions are already reflected in `product/DISCOVERY-PROGRAMME.md`. |
 
 ## Honest gaps (genuinely undocumented / not built)
 

@@ -39,6 +39,23 @@ and **fence-tested** so that "not shipped" cannot quietly become "shipped", and
 status is recorded with evidence, not assertion (see
 [05-GOVERNANCE](05-GOVERNANCE.md)).
 
+## The three flagship pillars & the product loop
+
+Alongside the PRD's *design* pillars above, Spot Me's *product structure* is
+three flagship pillars, formalised in
+**[ADR-021](../adr/021-spotme-unified-product-ecosystem.md)** and detailed in the
+**[product authority](product/README.md)**:
+
+1. **Communication** — the core (messaging, calls, translation, identity).
+2. **Discovery** — the intelligence layer (privacy-first local discovery).
+3. **Creation** — the content engine (camera, studio, vision, photos/videos,
+   stories/reels), whose output feeds Discovery via Nearby Moments.
+
+The lifecycle is a loop: **`Create → Discover → Communicate → Create`**. These
+three flagship pillars (product structure) and the PRD's proximity/language/
+honesty pillars (design law) are complementary — every flagship surface is held
+to the design law.
+
 ## Where the product is going
 
 Spot Me is evolving from a secure proximity messenger into a broader

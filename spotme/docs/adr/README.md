@@ -37,6 +37,7 @@ Decisions already evidenced in the repository, recorded now for durability:
 | [018](018-deterministic-location-grid.md) | Deterministic approximate-location grid | Accepted |
 | [019](019-discovery-v2-privacy-model.md) | Discovery V2 privacy model (precise GPS device-local) | Accepted |
 | [020](020-stacked-pr-strategy.md) | Stacked draft-PR strategy | Accepted |
+| [021](021-spotme-unified-product-ecosystem.md) | SpotMe Unified Product Ecosystem (3 pillars, the loop, fixed Discovery order) | Accepted |
 
 ## Format
 

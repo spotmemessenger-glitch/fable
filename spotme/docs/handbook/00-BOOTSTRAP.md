@@ -8,6 +8,10 @@ where things stand.
 
 1. **Read `CLAUDE.md`** (repo root) — the standing rules and the pointer here.
 2. **Read this handbook's entry point** — [README](README.md).
+2a. **Read the product authority** — [product/README](product/README.md) (the
+   three pillars, the loop, and the fixed Discovery execution order) and
+   **[ADR-021](../adr/021-spotme-unified-product-ecosystem.md)**. This is what
+   keeps sessions from drifting back to older roadmap priorities.
 3. **Read the current milestone** — [04-ROADMAP §Current milestone](04-ROADMAP.md).
 4. **Read the next approved mission** — [04-ROADMAP §Next approved mission](04-ROADMAP.md).
 5. **Read the ADRs that govern the area you will touch** — [../adr/](../adr/README.md).

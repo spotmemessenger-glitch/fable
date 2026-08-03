@@ -11,15 +11,21 @@ writing any code**:
 1. Read this file (`CLAUDE.md`).
 2. Read the handbook entry point: `spotme/docs/handbook/README.md`.
 3. Read the bootstrap protocol: `spotme/docs/handbook/00-BOOTSTRAP.md`.
-4. Read the current milestone and next approved mission:
+4. Read the product authority (three pillars, the Create→Discover→Communicate
+   loop, and the FIXED Discovery execution order — Smart Nearby Discovery Map →
+   Live Nearby Events → Nearby Moments → AI Assistant & Personalization):
+   `spotme/docs/handbook/product/README.md` and ADR-021
+   (`spotme/docs/adr/021-spotme-unified-product-ecosystem.md`). Do not drift back
+   to older roadmap priorities.
+5. Read the current milestone and next approved mission:
    `spotme/docs/handbook/04-ROADMAP.md`.
-5. Read the ADRs that govern the area you'll touch: `spotme/docs/adr/`.
-6. **Verify repository state** (`git log origin/master`, open PRs, and
+6. Read the ADRs that govern the area you'll touch: `spotme/docs/adr/`.
+7. **Verify repository state** (`git log origin/master`, open PRs, and
    `npm test && npm run lint && npm run build` in `spotme/web`) against
    `spotme/docs/handbook/03-IMPLEMENTATION-STATUS.md`.
-7. **Report any mismatch before coding** — the handbook is a record; the
+8. **Report any mismatch before coding** — the handbook is a record; the
    repository is the truth. Never claim something works because a doc says so.
-8. Then implement the approved milestone only, following
+9. Then implement the approved milestone only, following
    `spotme/docs/handbook/05-GOVERNANCE.md` (G1–G9).
 
 **Why this lives in the repo:** cloud/remote sessions run in a fresh clone.

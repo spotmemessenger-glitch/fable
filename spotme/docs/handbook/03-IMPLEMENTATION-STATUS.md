@@ -11,6 +11,13 @@ than trusting the label.
 > unmerged PR — usually **dark** (flag-gated, fenced, tree-shaken) — and is
 > **not** in the product.
 
+> **Product framing** for these surfaces (the three flagship pillars, the loop,
+> the fixed Discovery execution order, and the Creation-pillar status vocabulary
+> Built / Draft PRs / Built-off / Not active) is in the
+> [product authority](product/README.md) and
+> [ADR-021](../adr/021-spotme-unified-product-ecosystem.md). This page remains
+> authoritative for *what is actually built*.
+
 ## The six states
 
 | State | Meaning |
