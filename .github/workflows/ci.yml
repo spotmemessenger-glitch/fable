@@ -42,8 +42,24 @@ jobs:
           --health-timeout 5s
           --health-retries 5
 
+      # Valkey — the Redis-protocol runtime the BullMQ integration test exercises
+      # (the same protocol as production's Dragonfly Cloud). Only the queue spec
+      # reads TEST_REDIS_URL; nothing sets REDIS_URL, so the app's QueueService
+      # stays disabled and no runtime path activates.
+      valkey:
+        image: valkey/valkey:8-alpine
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd "valkey-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     env:
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/spotme_test?schema=public
+      # Points the BullMQ integration spec at the Valkey service above. This is
+      # NOT the production Dragonfly URL and is not a secret.
+      TEST_REDIS_URL: redis://localhost:6379
       # Not a secret and not read from the repository's real ones. No test
       # references this variable or the 'dev-only-secret' default, so setting it
       # changes no assertion — it is here so CI never exercises the hardcoded
