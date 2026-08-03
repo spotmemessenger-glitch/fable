@@ -309,3 +309,21 @@ part of the procedure, not a nicety.
 | **#9** | `fix/push-payload-handlers` | push subscription keys, listener race, foreground + tap handlers |
 | **#10** | `fix/dm-room-authorisation` | the DM join gate |
 | #8 | `claude/next-session-yol4aj` | ybot only — on hold, unrelated to the messenger |
+
+## 13. Local development stack (dev/CI only — not deployed)
+
+`spotme/docker-compose.dev.yml` brings up the services the platform-migration
+work builds against, **for local development and CI only** — nothing here is a
+production dependency or carries a real credential:
+
+| Service | Image | Port | Role |
+|---|---|---|---|
+| Postgres + PostGIS | `postgis/postgis:16-3.4` | 5432 | dev database; PostGIS for the additive geo extension |
+| Valkey | `valkey/valkey:8-alpine` | 6379 | Redis-protocol stand-in for **Dragonfly Cloud** (BullMQ + cache + later Centrifugo broker), reached only via `REDIS_URL` (env) |
+| Meilisearch | `getmeili/meilisearch:v1.10` | 7700 | search benchmark candidate A (owner picks the engine) |
+| Typesense | `typesense/typesense:27.1` | 8108 | search benchmark candidate B |
+
+Production cache/queue/broker is **Dragonfly Cloud** via `REDIS_URL` (env);
+production Postgres is the managed instance; a search engine is wired only after
+the owner chooses one from the item-6 benchmark. Progress ledger:
+[PLATFORM-PHASE-1-LEDGER](handbook/PLATFORM-PHASE-1-LEDGER.md).

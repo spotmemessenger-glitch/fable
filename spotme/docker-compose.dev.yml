@@ -1,0 +1,90 @@
+# Spot Me — LOCAL DEVELOPMENT & CI ONLY.
+#
+# This stack is never deployed. Production Postgres is managed (Neon/Railway),
+# the cache/queue/broker runtime is Dragonfly Cloud reached only through
+# REDIS_URL (env), and search (once chosen) runs as a managed service. Nothing
+# here carries a production hostname, credential, or deploy reference — the
+# passwords below are throwaway values scoped to a developer's laptop or an
+# ephemeral CI job.
+#
+# Usage:
+#   docker compose -f spotme/docker-compose.dev.yml up -d
+#   # Postgres+PostGIS :5432 · Valkey :6379 · Meilisearch :7700 · Typesense :8108
+#
+# Valkey is the local stand-in for the Dragonfly Cloud Redis-protocol runtime
+# (BullMQ + cache + later the Centrifugo broker). Meilisearch AND Typesense are
+# both present so the item-6 search benchmark can measure them side by side; the
+# owner picks one afterwards and only then is an engine wired into the app.
+
+name: spotme-dev
+
+services:
+  postgres:
+    # PostGIS bundled so the additive CREATE EXTENSION migration applies locally
+    # exactly as it will in the managed database.
+    image: postgis/postgis:16-3.4
+    environment:
+      POSTGRES_USER: spotme
+      POSTGRES_PASSWORD: spotme-dev-only
+      POSTGRES_DB: spotme
+    ports:
+      - '5432:5432'
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U spotme']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  valkey:
+    # Redis-protocol; ioredis talks to this in dev/CI and to Dragonfly Cloud in
+    # production. Same client, different REDIS_URL (env) — never hardcoded.
+    image: valkey/valkey:8-alpine
+    command: ['valkey-server', '--save', '', '--appendonly', 'no']
+    ports:
+      - '6379:6379'
+    healthcheck:
+      test: ['CMD', 'valkey-cli', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  meilisearch:
+    # Search candidate A (item 6 benchmark). Dev/CI only.
+    image: getmeili/meilisearch:v1.10
+    environment:
+      MEILI_MASTER_KEY: spotme-dev-only-meili
+      MEILI_NO_ANALYTICS: 'true'
+      MEILI_ENV: development
+    ports:
+      - '7700:7700'
+    volumes:
+      - meilidata:/meili_data
+    healthcheck:
+      test: ['CMD', 'curl', '-fsS', 'http://localhost:7700/health']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  typesense:
+    # Search candidate B (item 6 benchmark). Dev/CI only.
+    image: typesense/typesense:27.1
+    command:
+      - '--data-dir=/data'
+      - '--api-key=spotme-dev-only-typesense'
+      - '--enable-cors'
+    ports:
+      - '8108:8108'
+    volumes:
+      - typesensedata:/data
+    healthcheck:
+      test: ['CMD-SHELL', "curl -fsS http://localhost:8108/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pgdata:
+  meilidata:
+  typesensedata:
