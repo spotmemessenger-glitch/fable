@@ -299,9 +299,8 @@ reorder or skip it:
 > (Map → Events → Moments → Assistant). This v2.0 inserts **SpotMe Exchange** as
 > step 2 by owner decision, making it **five steps**. ADR-021 is **immutable**
 > (G6) and is **not** edited; this owner decision **supersedes its sequence** and
-> should be ratified by a **new superseding ADR (proposed ADR-022)** in a
-> follow-up. Both are preserved; this document is authoritative for the sequence
-> going forward. (Tracked in §26.)
+> is ratified by **ADR-022 (Accepted 2026-08-03)**. Both are preserved; this
+> document and ADR-022 are authoritative for the sequence going forward.
 
 Every step inherits the core design principles (§6). Steps 1–3 have dark
 foundations built (§10); steps 2, 4, 5 are Planned. Sections §13–§17 detail each.
@@ -596,18 +595,17 @@ contracts approved.
 
 **Decided in this document:** the Discovery sequence is **five** steps with
 **SpotMe Exchange inserted at step 2** (owner-controlled; supersedes ADR-021's
-four-step sequence — ratify via proposed ADR-022).
+four-step sequence — ratified as ADR-022, Accepted 2026-08-03).
 
 **Open decisions / required inputs:**
 | # | Decision | Needed for |
 |---|---|---|
 | 1 | Provide the **approved SpotMe Exchange specification** (verbatim) | Ratify §14; replace the reconstruction |
 | 2 | Provide **`Spot_Me_Product_Scope_and_Execution_Roadmap`** and **`SPOTME_CANONICAL_MIGRATED_BUILD_MEMORY`** as committed repo files | Close handbook gap A4 |
-| 3 | Ratify **ADR-022** superseding ADR-021's Discovery sequence | Sequence authority |
-| 4 | Merge Engineering Handbook (PR #62), then approve **Nearby Moments** | Unblock step 4 |
-| 5 | Provider selection (map/events/exchange authorized sources) | Activate Discovery surfaces |
-| 6 | Crypto ratchet stack ratification vs ADR-008 §12 | Priority-1 messaging completion |
-| 7 | `feat/media-core-contracts` — open a PR or fold the branch | Resolve anomaly |
+| 3 | Merge the documentation PRs in order (#62 → #63 → #64 → #65), then approve **Nearby Moments** when its turn comes | Unblock implementation |
+| 4 | Provider selection (map/events/exchange authorized sources) | Activate Discovery surfaces |
+| 5 | Crypto ratchet stack ratification vs ADR-008 §12 | Priority-1 messaging completion |
+| 6 | `feat/media-core-contracts` — open a PR or fold the branch | Resolve anomaly |
 
 ---
 

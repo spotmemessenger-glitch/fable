@@ -27,8 +27,12 @@ Steps run in this order. Do **not** reorder or skip ahead. **Owner-controlled.**
 > **Sequence updated (owner decision, 2026-08-03):** **SpotMe Exchange** is
 > inserted as **step 2**, making the sequence five steps. This **supersedes** the
 > four-step sequence in **ADR-021**, which remains **immutable** (G6) and is not
-> edited — ratify via a new superseding ADR (proposed **ADR-022**). Full detail:
-> [SPOT-ME-PRODUCT-ROADMAP-V2 §12/§14](SPOT-ME-PRODUCT-ROADMAP-V2.md).
+> edited — **ADR-022 is Accepted (owner-ratified 2026-08-03)**
+> ([../../adr/022-discovery-execution-sequence.md](../../adr/022-discovery-execution-sequence.md)).
+> Full detail: [SPOT-ME-PRODUCT-ROADMAP-V2 §12/§14](SPOT-ME-PRODUCT-ROADMAP-V2.md).
+> The engineering blueprint for the shared Discovery services is the
+> **Discovery Platform Architecture Specification**
+> ([../../architecture/discovery-platform/README.md](../../architecture/discovery-platform/README.md)).
 
 Steps 1 and 3 are **built dark** (flag-gated, fenced, not on master). Step 4
 (**Nearby Moments**) is the next approved mission once this handbook is merged —

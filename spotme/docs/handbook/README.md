@@ -45,7 +45,13 @@ alongside the engineering pages: product authority says *what we build toward*;
 
 Architectural decisions live in **[../adr/](../adr/README.md)** (immutable once
 Accepted) — including **[ADR-021](../adr/021-spotme-unified-product-ecosystem.md)**,
-the unified product-ecosystem reference.
+the unified product-ecosystem reference (ADR-022/023 **ratified 2026-08-03**:
+the five-step Discovery sequence and the Exchange Intent-Graph boundary).
+
+**Platform specifications** (engineering blueprints) live under
+**[../architecture/](../architecture/discovery-platform/README.md)** — currently
+the **Discovery Platform Architecture Specification**, the shared-services
+blueprint for Map, Exchange, Events and Moments.
 
 ## Relationship to existing docs
 

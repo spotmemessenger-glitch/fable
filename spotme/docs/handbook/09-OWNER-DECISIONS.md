@@ -28,16 +28,35 @@ Roadmap V2 Owner Amendment, and the mission briefs.
    **layered compile-time flags + hard master gate**, and the **provider-neutral
    Discovery V2 contracts**.
 
+## Ratified 2026-08-03 (documentation-phase close-out)
+
+8. **ADR-022 Accepted** — the five-step Discovery sequence (Map → Exchange →
+   Events → Moments → Assistant) is formal; closes gap C4.
+9. **ADR-023 Accepted** — Exchange is a platform service (the universal Intent
+   Graph), scoped to architectural boundary and responsibilities only.
+10. **Privacy-critical values are never ordinary runtime configuration.**
+    Anything affecting a privacy guarantee (location precision, consent
+    semantics, wire exposure) changes only via a **code-reviewed change with
+    explicit owner approval** — the runtime config service tunes `product`/`ops`
+    keys only (DPAS ch 02 §2.6 / ch 11 §11.5).
+11. **The documentation phase is closed.** No further broad planning documents;
+    the next documentation is implementation-specific (ADRs arising during
+    development, generated API references). The owner's sequence: merge the
+    documentation PRs in order → close ratification items (A5, proposed
+    defaults) → implement **Smart Nearby Discovery Map** against the approved
+    architecture → then **SpotMe Exchange** on that foundation.
+
 ## Open decisions (waiting on the owner)
 
 | Decision | Blocking | Where |
 |---|---|---|
-| Merge Engineering Handbook v1.0 | Phase 1 completion; unlocks Phase 2 | this PR |
+| **Merge the documentation PRs in order**: #62 → #63 → #64 → #65 (re-targeting each stacked PR as its base merges) | Implementation start | the four draft PRs |
+| **Close A5**: ratify the Exchange PRD (checklist `product/exchange/13 §13.1`) incl. the `[PROPOSED]` defaults | Exchange implementation | #64 |
+| Ratify/adjust the **coarse-origin provider-port tightening** | DPAS ch 02 §2.4 | #65 |
 | Re-target PR #61 to `master` after #60 merges | Live Events stacked base is temporary | #61 |
-| Ranking weights & time constants for Live Nearby Events | Events tuning | #61 description |
-| Event/place **provider selection** (authorized sources) | Discovery V2 / Events go live | #60/#61 |
+| Event/place/exchange **provider selection** (authorized sources) | Discovery surfaces go live | #60/#61/#64 |
 | Ratify the crypto ratchet stack (#41/#42/#43) + cross ADR-008 §12 | Priority-1 messaging completion | #43 |
-| Nearby Moments data/privacy model (needs a new ADR) | Phase 2 Social Platform | Planned |
+| Nearby Moments data/privacy model (needs a new ADR) | Discovery step 4 | Planned |
 | Media-core: open a PR or fold the branch | anomaly: branch without a PR | [10-CONTRADICTIONS-AND-GAPS](10-CONTRADICTIONS-AND-GAPS.md) |
 
 ## How decisions are recorded

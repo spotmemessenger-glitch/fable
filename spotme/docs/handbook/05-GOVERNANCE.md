@@ -55,9 +55,11 @@ The layout is stable so links do not rot:
 
 ```
 spotme/docs/
-  handbook/   00-BOOTSTRAP … 10-CONTRADICTIONS-AND-GAPS (this set)
-  adr/        NNN-title.md (immutable decisions) + README index
-  *.md        detailed subsystem docs + audits (numbered 01–14, roadmap V2)
+  handbook/       00-BOOTSTRAP … 10-CONTRADICTIONS-AND-GAPS (this set)
+    product/      product authority (roadmap v2.0, programmes, PRDs e.g. exchange/)
+  adr/            NNN-title.md (immutable once Accepted) + README index
+  architecture/   engineering platform specifications (e.g. discovery-platform/)
+  *.md            detailed subsystem docs + audits (numbered 01–14, roadmap V2)
 ```
 
 New handbook pages get the next index number; new ADRs get the next ADR number.
