@@ -128,6 +128,7 @@ describe('C12 — dark integration fences', () => {
       'src/discovery/places/place.adapters.ts': 'test/discovery-places.spec.ts',
       'src/discovery/discovery.ranking.engine.ts': 'test/discovery-intent-ranking.spec.ts',
       'src/discovery/realtime/realtime.port.ts': 'test/discovery-realtime.spec.ts',
+      'src/discovery/discovery.observability.ts': 'test/discovery-observability.spec.ts',
     };
     for (const [srcFile, testFile] of Object.entries(clusters)) {
       expect(existsSync(join(BACKEND, srcFile))).toBe(true);
