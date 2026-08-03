@@ -70,6 +70,13 @@ matchScore =
 - **Tie-break:** by stable id → total, reproducible order.
 - **Constraint invariant (tested):** `proximity`'s weighted contribution ≥ any
   popularity/density contribution — proximity outranks popularity.
+- **Configurable, not hardcoded (owner directive, 2026-08-03):** the weights and
+  decays are **runtime configuration** (`exchange.ranking.weights.*`,
+  `exchange.ranking.falloff.*`) with the values above as `[PROPOSED]` defaults.
+  The *behaviour* — weighted sum, full `scoreBreakdown`, deterministic
+  tie-break, and the proximity-outranks-popularity invariant (validated on every
+  configuration change) — is fixed by this PRD; the *numbers* are tunable
+  without architectural change.
 
 ### Signal decays `[PROPOSED]`
 - `proximity = clamp01(1 − distanceM / 50000)`.

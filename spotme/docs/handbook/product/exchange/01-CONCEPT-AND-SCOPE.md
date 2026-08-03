@@ -81,7 +81,40 @@ inference):
 
 Engagement is optimised for **usefulness**, not compulsive use (constitution).
 
-## 1.8 Scope of this PRD
+## 1.8 Exchange is a platform service — the universal Intent Graph
+
+> Owner directive (2026-08-03), incorporated from the PR #64 review.
+
+Exchange must **not** become a module. It is a **platform service**: over time,
+every Spot Me surface publishes into Exchange, making it a universal **Intent
+Graph** — the common registry of local needs and offers, whatever surface they
+originate from.
+
+| Publisher | Example | Flows into Exchange as |
+|---|---|---|
+| Discovery Map | Nearby business | Business Offer |
+| Nearby Events | Tickets | Offer (time-bound) |
+| Nearby Moments | "I have camping gear" | Offer |
+| Business Platform | Inventory | Offers at scale |
+| Communities | "Volunteer needed" | Need |
+| Messaging | Friend needs a charger | Need (consented share) |
+
+Consequences for architecture:
+
+- Exchange exposes **publish/consume intent contracts** (a service boundary),
+  not just its own compose UI. New sources integrate via the contract — the core
+  architecture does not change as sources grow.
+- **Unified search organizes by intent, not by type.** "I need a turbocharger"
+  searches businesses, individuals, mechanics, marketplace items, nearby
+  requests, groups, friends' consented shares, inventory, events and AI
+  recommendations — and returns *the nearest solution*, not a type-siloed list.
+- Every published intent inherits the privacy invariants (§07) regardless of its
+  source surface: approximate location, consent gates, no sensitive inference.
+
+The intent-routing service that realises this is specified in the Discovery
+Platform Architecture Specification (ch. 03 — separate stacked PR).
+
+## 1.9 Scope of this PRD
 
 Covers: UX/screens (§02), lifecycle state machines (§03), matching/AI-search/
 ranking (§04), notifications (§05), moderation/fraud (§06), privacy (§07), API

@@ -5,6 +5,12 @@
 differentiator. This PRD is the engineering blueprint for Exchange: build from
 it, not from chat history.
 
+**Architecturally, Exchange is a platform service, not a module** (owner
+directive, 2026-08-03): a universal **Intent Graph** that every Spot Me surface
+publishes into — see §1.8 of the concept chapter. Its engineering foundation is
+specified in the Discovery Platform Architecture Specification (separate stacked
+PR).
+
 > ## ⚠ SOURCING & RATIFICATION (gap A5 — read first)
 >
 > **No owner-approved SpotMe Exchange specification existed in any available
@@ -62,5 +68,12 @@ it, not from chat history.
 
 - `[PROPOSED]` — a value/decision chosen for this draft; owner to ratify.
 - `[REUSE]` — reuses an existing, approved Spot Me primitive.
+- **Configuration principle (owner directive, 2026-08-03):** this PRD fixes
+  *behaviour*; numeric values (radii, ranking weights, TTLs, notification
+  thresholds, rate limits) are **runtime configuration with safe defaults**,
+  tunable without architectural change. Every `[PROPOSED]` number is the
+  proposed *default* for a configuration key — never a constant to hardcode.
+  Privacy-critical values stay owner-governed (Discovery Platform Architecture
+  Specification, ch. 11 — separate stacked PR).
 - **Proximity outranks popularity**, **honesty over fabricated convenience**, and
   **privacy is non-negotiable** — the constitution binds every chapter.

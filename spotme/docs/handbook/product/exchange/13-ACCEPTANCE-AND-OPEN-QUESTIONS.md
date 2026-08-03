@@ -78,7 +78,27 @@ benchmarks, owner review — no merge/activation without authorisation.
 | 7 | Reputation model specifics | §10 `[PROPOSED]` |
 | 8 | Provider selections (intent/safety/geo) | Provider-neutral; choose later |
 
-## 13.5 Dependencies
+## 13.5 Owner review feedback incorporated (2026-08-03)
+
+From the owner's review of PR #64 — recorded so ratification starts from the
+reviewed position:
+
+1. **Exchange is a platform service, not a module** — the universal **Intent
+   Graph**; every surface publishes into it. Incorporated at §1.8; the
+   intent-routing service is specified in the Discovery Platform Architecture
+   Specification (separate stacked PR). Proposed for formal ratification as a
+   new ADR (Exchange-as-platform-service).
+2. **Numeric constants stay configurable** — the PRD fixes behaviour; values
+   (radii, weights, TTLs, thresholds, limits) live in runtime configuration with
+   safe defaults. Incorporated in README Conventions and §4.4.
+3. **A5 approach endorsed** — converting "no specification" into "a reviewable
+   specification" accepted; ratification checklist (§13.1) remains the closing
+   mechanism.
+4. **Payments/escrow excluded from v1** — endorsed (§1.5).
+5. **AI is assistive** — AI understands intent; the transparent ranking engine
+   decides; explainability preserved (§04). Endorsed.
+
+## 13.6 Dependencies
 
 - Discovery V2 (PR #60) foundation `[REUSE]`; push platform (#48/#52) `[REUSE]`;
   knock/chat (`reach.js`) `[REUSE]`; the target architecture's realtime/outbox
