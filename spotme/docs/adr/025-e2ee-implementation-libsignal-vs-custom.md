@@ -1,6 +1,6 @@
 # ADR-025 — E2EE implementation: libsignal vs custom e2e_v3
 
-**Status: PROPOSED — owner decision required.**
+**Status: ACCEPTED — owner decision recorded 2026-08-03 (merged as PR #68 under owner authorization).**
 **Date:** 2026-08-03 · **Owner:** Spot Me owner · **Follows:** ADR-004 (+004a–d),
 ADR-008 · **Governs:** the implementation choice behind PRs #39, #41, #42, #43.
 
