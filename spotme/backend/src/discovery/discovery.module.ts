@@ -24,6 +24,8 @@ import {
   PrismaDiscoveryPeopleRepository,
   PrismaDiscoveryVisibilityRepository,
 } from './discovery.prisma.repository';
+import { SEARCH_PORT } from './search/search.port';
+import { TypesenseSearchAdapter } from './search/typesense-search.adapter';
 
 @Module({
   imports: [JwtModule.register({})],
@@ -32,6 +34,9 @@ import {
     DiscoveryService,
     { provide: DISCOVERY_PEOPLE_REPOSITORY, useClass: PrismaDiscoveryPeopleRepository },
     { provide: DISCOVERY_VISIBILITY_REPOSITORY, useClass: PrismaDiscoveryVisibilityRepository },
+    // SearchPort: Typesense behind the port (P9); DISABLED without env config,
+    // and this whole module is dark regardless.
+    { provide: SEARCH_PORT, useClass: TypesenseSearchAdapter },
   ],
   exports: [DiscoveryService],
 })
