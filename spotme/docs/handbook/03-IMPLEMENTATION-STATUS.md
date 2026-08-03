@@ -6,9 +6,9 @@ path or an open PR + branch — **verified against the repository, never against
 another document**. Full audit evidence:
 [SPOTME-REPO-AUDIT-2026-08-03](../SPOTME-REPO-AUDIT-2026-08-03.md).
 
-> Verified 2026-08-03 against `master` `288b8ca`
-> (`Merge pull request #42` — the G8 crypto train #39 → #41 → #42 landed DARK)
-> and the live open-PR list.
+> Verified 2026-08-03 against `master` `9147485`
+> (`Merge pull request #78` — G8 crypto train AND Platform Phase 1 (#72–#78)
+> landed DARK) and the live open-PR list.
 > *Implemented (Merged)* is on master and runs. *Implemented (Draft PR)* is
 > built but lives only on a branch behind an open, unmerged PR — usually dark —
 > and is **not** in the product.
@@ -53,7 +53,25 @@ another document**. Full audit evidence:
 | Adaptive transport + Bluetooth mesh | Implemented (Draft PR **#50**, `feat/adaptive-transport-scaffold`) | scaffolding; not on master |
 | Centrifugo transport | Deferred | seam on master (`web/src/lib/transport/centrifugo-adapter.js`; backend `realtime.controller.ts:71` returns 503 unless configured); **no client dependency in any package.json**; `feature/centrifugo-transport` abandoned (49 behind). ADR-002 keeps the interface |
 | Media platform (media-core contracts) | In Progress | branch `feat/media-core-contracts` pushed with **no open PR** (audit anomaly A1) — see `spotme/docs/handbook/DECISIONS.md` item 7 (owner decision sheet, on the PR #62 branch) |
+| **Platform Phase 1A** — dev/CI compose (PG+PostGIS, Valkey; opt-in `search-benchmark` profile) + additive PostGIS migration | Implemented (Merged — DARK) | **PR #72**, merge `7df509a`; `spotme/docker-compose.dev.yml`, migration `20260803120000_enable_postgis` |
+| **Platform Phase 1B** — `@spotme/contracts` shared TS domain types (boundary-fenced, declaration output) | Implemented (Merged — DARK) | **PR #73**, merge `aa97fce`; `spotme/packages/contracts` |
+| **Platform Phase 1C** — BullMQ `{maintenance}` queue on ioredis (disabled without `REDIS_URL`; sanitized DLQ; manual smoke only) | Implemented (Merged — DARK) | **PR #74**, merge `7a8c124`; `backend/src/queue/` — `QueueModule` NOT imported by `AppModule` |
+| **Platform Phase 1D** — search benchmark harness (reproducible manifest; recorded run) | Implemented (Merged — DARK) | **PR #75**, merge `69cbedd`; `spotme/packages/search-bench` |
+| **Platform Phase 1E** — AI Gateway ports + deterministic baselines (fenced); ADR-026/027 | Implemented (Merged — DARK) | **PR #76**, merge `983712f`; `web/src/lib/ai/` — fence `ai-gateway-not-shipped` |
+| **Platform Phase 1F** — `web-next` React strangler beachhead (inert; outside the Vercel root; isolation-fenced) | Implemented (Merged — DARK) | **PR #77**, merge `f59d0ec`; `spotme/web-next` |
+| **Platform Phase 1G** — storage characterization tests + observability baseline (all legs no-op without env; redaction-fenced) | Implemented (Merged — DARK) | **PR #78**, merge `9147485`; `backend/src/observability/`, `test/storage-characterization.spec.ts` — `ObservabilityModule` NOT imported |
 | Engineering Handbook (this document set) | Implemented (Draft PR **#62**, stack #63/#64/#65) | `docs/engineering-handbook-v1` → `docs/discovery-platform-architecture` |
+
+## Platform Phase 1 — landed decisions (2026-08-03, delegated approval)
+
+- **ADR-026 Accepted** (realtime split-plane) and **ADR-027 Accepted**
+  (mobile-native boundary) — statuses flipped in the ADRs and index (PR #76).
+- **Search: Typesense selected** as the Phase 2 target from the committed
+  benchmark (~12× faster warm p50/p95; Meilisearch documented fallback).
+  **Not yet wired. Not yet active.** Mandatory production-hardware re-benchmark
+  before wiring (tech-stack §14; `handbook/DECISIONS.md`).
+- Everything in Phase 1 landed **DARK**: both crypto flags false throughout,
+  no feature activation, no flag changes, no user-visible behaviour change.
 
 ## Retired
 
