@@ -135,6 +135,34 @@ jobs:
         if: always()
         run: node scripts/s3-verify-clean.mjs
 
+  compose:
+    name: compose — dev stack config is valid (both profiles)
+    runs-on: ubuntu-latest
+    # Phase 1A: the dev/CI stack (docker-compose.dev.yml) is never deployed, but
+    # a broken compose file breaks every developer at once. This validates that
+    # the standard stack (Postgres+PostGIS, Valkey) and the opt-in
+    # search-benchmark profile (Meilisearch, Typesense) both parse, and that the
+    # heavy search services are gated OUT of the default stack.
+    steps:
+      - uses: actions/checkout@v4
+      - name: Standard stack parses and excludes the benchmark services
+        run: |
+          set -euo pipefail
+          out=$(docker compose -f spotme/docker-compose.dev.yml config --services | sort)
+          echo "default services: $out"
+          echo "$out" | grep -qx postgres
+          echo "$out" | grep -qx valkey
+          if echo "$out" | grep -qxE 'meilisearch|typesense'; then
+            echo "::error::search services must be behind the search-benchmark profile, not in the default stack"; exit 1
+          fi
+      - name: Search-benchmark profile parses and adds the engines
+        run: |
+          set -euo pipefail
+          out=$(docker compose -f spotme/docker-compose.dev.yml --profile search-benchmark config --services | sort)
+          echo "benchmark services: $out"
+          echo "$out" | grep -qx meilisearch
+          echo "$out" | grep -qx typesense
+
   web:
     name: web — tests and build
     runs-on: ubuntu-latest

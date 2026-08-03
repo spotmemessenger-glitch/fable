@@ -309,3 +309,29 @@ part of the procedure, not a nicety.
 | **#9** | `fix/push-payload-handlers` | push subscription keys, listener race, foreground + tap handlers |
 | **#10** | `fix/dm-room-authorisation` | the DM join gate |
 | #8 | `claude/next-session-yol4aj` | ybot only — on hold, unrelated to the messenger |
+
+## 13. Local development stack (dev/CI only — not deployed)
+
+`spotme/docker-compose.dev.yml` brings up the local dev/CI services, **for
+development and CI only** — nothing here is a production dependency or carries a
+real credential. Introduced in Platform Phase **1A**
+([programme playbook](handbook/PLATFORM-PHASE-1-PROGRAMME.md)).
+
+**Standard stack** (`docker compose -f spotme/docker-compose.dev.yml up -d`):
+
+| Service | Image | Port | Role |
+|---|---|---|---|
+| Postgres + PostGIS | `postgis/postgis:16-3.4` | 5432 | dev database; PostGIS for the additive geo extension |
+| Valkey | `valkey/valkey:8-alpine` | 6379 | Redis-protocol stand-in for **Dragonfly Cloud** (prod cache/queue/broker), reached only via `REDIS_URL` (env) |
+
+**Opt-in `search-benchmark` profile** (`--profile search-benchmark`; heavy, only
+when benchmarking search): adds Meilisearch (`:7700`) and Typesense (`:8108`) so
+the two can be measured side by side. The default stack does **not** run them, so
+ordinary dev/CI pays no search-engine RAM/startup cost. An engine is wired into
+the app only after the owner picks one from the benchmark numbers.
+
+Production cache/queue/broker is **Dragonfly Cloud** via `REDIS_URL` (env);
+production Postgres is the managed instance. The additive PostGIS migration
+(`backend/prisma/migrations/20260803120000_enable_postgis`) enables the extension
+only — see its header for the production-permission gate and the leave-installed
+rollback.

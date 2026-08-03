@@ -1,0 +1,29 @@
+-- Enable PostGIS for geospatial work (Discovery Smart Nearby map, Exchange
+-- coarse geo-cell indexing). ADR-018 keeps public location coarsened on-device;
+-- PostGIS is for server-side coarse-cell indexing and radius queries only.
+--
+-- ADDITIVE. This migration enables an extension and does NOTHING else: no table
+-- is created, altered, or dropped, and no column changes type. No existing
+-- query depends on it, so it is inert until a later, separately reviewed
+-- migration introduces geometry/geography columns.
+--
+-- PRODUCTION-PERMISSION GATE (verify BEFORE relying on this in production):
+--   `CREATE EXTENSION postgis` requires privileges the app's normal DB role may
+--   not have on a managed database. Some providers pre-install PostGIS and allow
+--   `CREATE EXTENSION` from a normal role; others require a superuser, a
+--   dashboard toggle, or a support request. A locally-green run here does NOT
+--   prove the production role can do this. Confirm the production role/provider
+--   can install PostGIS; if it cannot, STOP and request the owner/provider
+--   action rather than assuming this migration will apply on deploy.
+--
+-- ROLLBACK: the safe rollback is to LEAVE THE EXTENSION INSTALLED. This
+--   migration adds no dependent object, so nothing breaks by leaving it. Do NOT
+--   auto-drop PostGIS: once any later migration adds geometry columns or spatial
+--   indexes, `DROP EXTENSION` becomes destructive (it would cascade those
+--   objects). "Enabled but unused" is inert and cheap; a forced drop is not.
+--
+-- Managed-DB note: the dev/CI stack uses the `postgis/postgis:16-3.4` image
+-- (spotme/docker-compose.dev.yml). CI applies the schema via `prisma db push`,
+-- which does not execute SQL migration files, so this enable is not exercised in
+-- CI — it runs against the postgis dev image and the managed DB.
+CREATE EXTENSION IF NOT EXISTS postgis;
