@@ -24,15 +24,20 @@ replace it. Avoid inventing new numbered/lettered labels; use these names.
 ## Current active programme
 
 **SpotMe AI Discovery & Social Platform** (see
-[product/DISCOVERY-PROGRAMME](product/DISCOVERY-PROGRAMME.md)). Fixed execution
-order — do not reorder or skip:
+[product/DISCOVERY-PROGRAMME](product/DISCOVERY-PROGRAMME.md) and the canonical
+[product roadmap v2.0](product/SPOT-ME-PRODUCT-ROADMAP-V2.md)). Fixed,
+owner-controlled execution order — do not reorder or skip:
 
 | # | Step | State |
 |---|---|---|
 | 1 | Smart Nearby Discovery Map | Implemented (Draft PR), dark — PR #60 |
-| 2 | Live Nearby Events | Implemented (Draft PR), dark — PR #61 |
-| 3 | **Nearby Moments** | **Next approved mission** (after handbook merge) |
-| 4 | AI Assistant & Personalization | Planned, consent-based, interface-first |
+| 2 | **SpotMe Exchange** (AI-matched Needs & Offers) | Planned — flagship |
+| 3 | Live Nearby Events | Implemented (Draft PR), dark — PR #61 |
+| 4 | **Nearby Moments** | **Next approved mission** (after handbook merge) |
+| 5 | AI Assistant & Personalization | Planned, consent-based, interface-first |
+
+> SpotMe Exchange was inserted as step 2 by owner decision (2026-08-03),
+> superseding ADR-021's four-step sequence (immutable; ratify via ADR-022).
 
 ## Current milestone
 

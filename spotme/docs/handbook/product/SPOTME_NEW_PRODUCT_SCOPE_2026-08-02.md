@@ -1,5 +1,10 @@
 <!--
-CANONICAL PRODUCT AUTHORITY — verbatim owner scope.
+SUPERSEDED AS AUTHORITY (2026-08-03) BY: SPOT-ME-PRODUCT-ROADMAP-V2.md.
+This document is PRESERVED as a historical SOURCE, not as the governing product
+authority. Read SPOT-ME-PRODUCT-ROADMAP-V2.md first. Kept verbatim so no owner
+decision is silently discarded.
+
+VERBATIM OWNER SCOPE.
 Source: SPOTME_NEW_PRODUCT_SCOPE (owner upload, 2026-08-02).
 This is the owner's PRODUCT SCOPE, not an implementation claim. Per the doc's own
 memory instruction, separate: requested scope / planned architecture / implemented

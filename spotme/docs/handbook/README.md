@@ -33,12 +33,15 @@ understand Spot Me by reading the repository alone.
 9. **[10-CONTRADICTIONS-AND-GAPS](10-CONTRADICTIONS-AND-GAPS.md)** — where the
    repository disagrees with itself, and what is genuinely undocumented.
 
-**Product authority** lives in **[product/](product/README.md)** — the three
-flagship pillars (Communication · Discovery · Creation), the
+**Product authority** lives in **[product/](product/README.md)**; its canonical
+top-level document is
+**[Product Scope & Execution Roadmap v2.0](product/SPOT-ME-PRODUCT-ROADMAP-V2.md)**
+— the three flagship pillars (Communication · Discovery · Creation), the
 `Create → Discover → Communicate` loop, the current active programme and its
-fixed Discovery execution order, and the verbatim owner scope. Read it alongside
-the engineering pages: product authority says *what we build toward*; §03 says
-*what is actually built*.
+fixed five-step Discovery execution order (incl. **SpotMe Exchange**), the
+product constitution, privacy/AI architecture, and revenue direction. Read it
+alongside the engineering pages: product authority says *what we build toward*;
+§03 says *what is actually built*.
 
 Architectural decisions live in **[../adr/](../adr/README.md)** (immutable once
 Accepted) — including **[ADR-021](../adr/021-spotme-unified-product-ecosystem.md)**,
