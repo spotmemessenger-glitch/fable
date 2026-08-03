@@ -1,0 +1,17 @@
+-- Enable PostGIS for geospatial work (Discovery Smart Nearby map, Exchange
+-- coarse geo-cell indexing). ADR-018 keeps public location coarsened on-device;
+-- PostGIS is for server-side coarse-cell indexing and radius queries only.
+--
+-- ADDITIVE AND REVERSIBLE. This migration enables an extension and does NOTHING
+-- else: no table is created, altered, or dropped, and no column changes type.
+-- No existing query depends on it yet, so it is inert until a later, separately
+-- reviewed migration introduces geometry/geography columns.
+--
+-- Reversibility: `DROP EXTENSION IF EXISTS postgis;` fully reverses this. Because
+-- no object in the schema references PostGIS types, the drop cannot orphan or
+-- break any table — the down path is a single statement with no data migration.
+--
+-- Managed-DB note: Neon/Railway Postgres ship PostGIS; `CREATE EXTENSION` is the
+-- supported enable path. The dev/CI stack uses the `postgis/postgis:16-3.4`
+-- image (see spotme/docker-compose.dev.yml).
+CREATE EXTENSION IF NOT EXISTS postgis;
