@@ -1,28 +1,35 @@
 # Ruflo — Claude Code Configuration
 
-## ⭐ Resuming a previous session — READ FIRST
+## ⭐ Starting a session — READ FIRST (bootstrap protocol)
 
-When the user says **"recall previous session"**, "pick up from where you left
-off", "continue from last session", or `/pickup`:
+**The repository is the single source of truth.** Canonical project memory is
+the **Engineering Handbook** at `spotme/docs/handbook/`. When the user says
+**"recall previous session"**, "pick up from where you left off", "continue",
+or `/pickup` — or on any new session — **run the bootstrap protocol before
+writing any code**:
 
-**Read `.handoff/NEXT-SESSION.md` before doing anything else.** It is the
-authoritative pickup brief — current state, the agreed next task, known traps,
-measured numbers, what is unproven, and what is blocked on the user.
-
-Also in `.handoff/`:
-- `SESSION-<date>.md` — full chronological log with evidence
-- `ai-os-stack-2026-07-29.md` — technical facts (venvs, versions, gotchas)
-- `pickup-SKILL.md` — the skill definition; copy to `~/.claude/skills/pickup/`
-  to get the `/pickup` command locally (`.claude/` is gitignored, so it cannot
-  travel with the repo)
+1. Read this file (`CLAUDE.md`).
+2. Read the handbook entry point: `spotme/docs/handbook/README.md`.
+3. Read the bootstrap protocol: `spotme/docs/handbook/00-BOOTSTRAP.md`.
+4. Read the current milestone and next approved mission:
+   `spotme/docs/handbook/04-ROADMAP.md`.
+5. Read the ADRs that govern the area you'll touch: `spotme/docs/adr/`.
+6. **Verify repository state** (`git log origin/master`, open PRs, and
+   `npm test && npm run lint && npm run build` in `spotme/web`) against
+   `spotme/docs/handbook/03-IMPLEMENTATION-STATUS.md`.
+7. **Report any mismatch before coding** — the handbook is a record; the
+   repository is the truth. Never claim something works because a doc says so.
+8. Then implement the approved milestone only, following
+   `spotme/docs/handbook/05-GOVERNANCE.md` (G1–G9).
 
 **Why this lives in the repo:** cloud/remote sessions run in a fresh clone.
-Anything under `~/.claude/` (skills, memory notes) does NOT travel. Only
-committed files do. Keep `.handoff/` updated in place and commit it at the end
-of any substantial session, or the next remote session starts blind.
+Anything under `~/.claude/` (skills, memory notes) does NOT travel — only
+committed files do. Keep the handbook current **in place** (Governance G9).
 
-**Never claim something works because the brief says so** — the brief is a
-record, not a live check. Anything marked UNPROVEN stays unproven until re-run.
+> **`.handoff/NEXT-SESSION.md` and `.handoff/SESSION-*.md` are RETIRED**
+> (superseded by the handbook — see
+> `spotme/docs/handbook/03-IMPLEMENTATION-STATUS.md` → Retired). They remain only
+> as history; do not treat them as current.
 
 ## ⭐ Controlling engineering document — consult before ANY coding
 
