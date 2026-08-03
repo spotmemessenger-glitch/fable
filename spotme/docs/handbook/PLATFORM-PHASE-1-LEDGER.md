@@ -30,7 +30,7 @@ it degrades to **disabled** when `REDIS_URL` is absent.
 | 6 | Search benchmark harness — Meilisearch vs Typesense; numbers only | ✅ done | `packages/search-bench`; ran live (20k docs): Meili 28.3k docs/s idx, p50 44ms, 58MB · Typesense 11.6k docs/s, p50 4.6ms, 167MB; both 100% typo. Owner picks engine |
 | 7 | ADR (Proposed) — realtime split-plane ownership | ✅ done | `spotme/docs/adr/026-realtime-split-plane.md` (Status: Proposed); indexed |
 | 8 | React strangler beachhead `spotme/web-next` (inert, not deployed) | ✅ done | `spotme/web-next`; renders one inert screen from `@spotme/contracts` types; `tsc --noEmit` + `vite build` green; outside the Vercel root, unreferenced by spotme/web |
-| 9 | `StorageProvider` port — S3 behind a swappable interface | ⏳ | |
+| 9 | `StorageProvider` port — S3 behind a swappable interface | ✅ done | port already exists (`backend/src/storage/IStorageAdapter`, S3/local adapters, MinIO-tested in CI); formalized in `docs/architecture/storage-provider-port.md`, `.env.example` S3/R2/B2/MinIO block, future FFmpeg/libvips-via-`{media}`-BullMQ seam documented |
 | 10 | Observability baseline — Sentry/JSON logs/OTel, all no-op without env | ⏳ | |
 | 11 | ADR (Proposed) — mobile-native boundary | ⏳ | |
 
