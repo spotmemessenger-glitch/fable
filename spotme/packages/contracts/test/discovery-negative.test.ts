@@ -64,6 +64,13 @@ const bad8: DiscoveryFilters = { minAge: 18 };
 // @ts-expect-error — cursor is branded-opaque
 const bad9: SearchCursor = 'page-2';
 
+/* 9. A8: no availability/open-now signal of any kind attaches to people. */
+// @ts-expect-error — people carry no openNow field
+const bad10: boolean = p2.openNow;
+declare const anyPerson: NearbyPersonPublic;
+// @ts-expect-error — people carry no availability field
+const bad11: unknown = anyPerson.availability;
+
 /* Positive control — the file itself must be seen by tsc (non-vacuous). */
 declare const coarse: CoarsePublicLocation;
 const good: DiscoveryQuery = {

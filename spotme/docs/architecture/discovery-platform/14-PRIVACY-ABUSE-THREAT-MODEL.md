@@ -56,6 +56,14 @@ index content · A8 service availability.
   content.
 - **Rate limits / ceilings** are configuration values with documented defaults
   (C2), not hardcoded magic; defaults are deliberately conservative.
+- **A8 — availability signals:** open-now applies only to PLACES and only with
+  authorized provider evidence; no availability/open-now signal of any kind
+  attaches to people (type-enforced by negative tests) — presence freshness is
+  the only person-related temporal signal, and it is coarse.
+- **A9 — handle authority:** the discovery projection references the canonical
+  public handle but never owns handle uniqueness/lifecycle; it is derived,
+  rebuildable, and deleted with the user (bounds T-HARVEST and deletion
+  correctness).
 
 ## 14.4 Explicit exclusions this phase (A3)
 

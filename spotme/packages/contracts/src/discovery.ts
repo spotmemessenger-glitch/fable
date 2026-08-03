@@ -86,10 +86,17 @@ export type DiscoveryScope = 'people' | 'places' | 'usernames' | 'mixed';
  * Filters — EXACTLY these three (mission amendment A3). There is deliberately
  * no age or gender filter and none may be added in this phase; D6/D7 are
  * owner-retained decisions.
+ *
+ * A8: `openNow` applies ONLY to place results, and only where authorized
+ * provider evidence of opening hours exists — engines expose it as
+ * unavailable/unsupported when that evidence is absent, and it NEVER affects
+ * nearby-person or username results. No availability signal of any kind
+ * attaches to people (see the negative tests).
  */
 export interface DiscoveryFilters {
   readonly distanceBand?: DistanceBand;
   readonly category?: string;
+  /** Places only (A8); ignored/unsupported for people and username scopes. */
   readonly openNow?: boolean;
 }
 
