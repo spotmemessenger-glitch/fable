@@ -1,0 +1,40 @@
+# @spotme/contracts — boundary fence, strict typecheck, declaration build.
+#
+# A separate workflow file (not a job in ci.yml) so the staged Platform Phase 1
+# PRs never contend for the same hunks of ci.yml. Scoped by path filter: the
+# package is types-only and self-contained, so nothing outside it can break it.
+name: platform-contracts
+
+on:
+  pull_request:
+    paths:
+      - 'spotme/packages/contracts/**'
+      - '.github/workflows/platform-contracts.yml'
+  push:
+    branches: [master]
+    paths:
+      - 'spotme/packages/contracts/**'
+
+concurrency:
+  group: platform-contracts-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  contracts:
+    name: contracts — boundaries, typecheck, declarations
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: spotme/packages/contracts
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: spotme/packages/contracts/package-lock.json
+      - run: npm ci
+      # One command, three gates: import-boundary fence, strict tsc, and the
+      # declaration-only build (proves .d.ts output stays emittable).
+      - name: Boundaries + typecheck + declaration build
+        run: npm test
