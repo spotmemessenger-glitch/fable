@@ -335,3 +335,21 @@ production Postgres is the managed instance. The additive PostGIS migration
 (`backend/prisma/migrations/20260803120000_enable_postgis`) enables the extension
 only — see its header for the production-permission gate and the leave-installed
 rollback.
+
+## 14. Phase 2 search target — DECIDED 2026-08-03 (delegated approval)
+
+**Typesense is the selected Phase 2 search target.** Chosen from the committed
+reproducible benchmark (`spotme/packages/search-bench`, recorded run
+2026-08-03, manifest in its README): approximately **12× faster warm p50/p95**
+(3.60/5.05 ms vs 44.02/44.59 ms on the 20k-doc corpus) at an **acceptable
+memory trade-off** (223 MB vs 66 MB RSS). **Meilisearch remains the documented
+fallback** — the benchmark harness keeps both measurable at any time.
+
+**NOT wired into the application. NOT active.** No search engine is a
+dependency of the running product; the dev compose stack keeps both engines
+behind the opt-in `search-benchmark` profile.
+
+**Mandatory revisit before wiring:** rerun the committed benchmark on
+production hardware with a production-scale corpus before search is wired into
+the application. If the numbers are materially different, reopen the decision
+(recorded in `handbook/DECISIONS.md`, "Owner delegation — 2026-08-03").
