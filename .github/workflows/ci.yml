@@ -135,6 +135,26 @@ jobs:
         if: always()
         run: node scripts/s3-verify-clean.mjs
 
+  contracts:
+    name: contracts — TypeScript typecheck
+    runs-on: ubuntu-latest
+    # The shared domain-type package (@spotme/contracts). Types only, no
+    # runtime; this job proves the contracts and their usage examples still
+    # typecheck under strict mode. New TS surfaces depend on these shapes.
+    defaults:
+      run:
+        working-directory: spotme/packages/contracts
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: spotme/packages/contracts/package-lock.json
+      - run: npm ci
+      - name: Typecheck
+        run: npm run typecheck
+
   web:
     name: web — tests and build
     runs-on: ubuntu-latest

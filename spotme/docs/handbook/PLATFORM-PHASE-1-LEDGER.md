@@ -24,7 +24,7 @@ it degrades to **disabled** when `REDIS_URL` is absent.
 |---|---|---|---|
 | 1 | `docker-compose.dev.yml` — Postgres+PostGIS, Valkey, Meilisearch, Typesense (dev/CI only) | ✅ done | `spotme/docker-compose.dev.yml`; `docker compose config` valid |
 | 2 | PostGIS via additive Prisma migration (CREATE EXTENSION only) | ✅ done | `prisma/migrations/20260803120000_enable_postgis/`; verified applied (postgis 3.4.2) + reversible (`DROP EXTENSION`) on a real PG16 |
-| 3 | `packages/contracts` — shared TS domain types; tsc in CI | ⏳ | |
+| 3 | `packages/contracts` — shared TS domain types; tsc in CI | ✅ done | `spotme/packages/contracts` (location + Exchange types); `tsc --noEmit` exit 0; CI job `contracts` added |
 | 4 | BullMQ on ioredis; `{maintenance}` queue; retries+DLQ; heartbeat; Valkey integration test | ⏳ | |
 | 5 | AI Gateway skeleton — Intent/Summary/Voice ports + deterministic baselines; fence test | ⏳ | |
 | 6 | Search benchmark harness — Meilisearch vs Typesense; numbers only | ⏳ | |

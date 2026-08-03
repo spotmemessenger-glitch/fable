@@ -1,0 +1,20 @@
+{
+  "name": "@spotme/contracts",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Shared TypeScript domain types for Spot Me. Source of truth for cross-surface contracts (location/privacy, Exchange intent). Types only — no runtime, no dependencies.",
+  "type": "module",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./location": "./src/location.ts",
+    "./exchange": "./src/exchange.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3"
+  }
+}
