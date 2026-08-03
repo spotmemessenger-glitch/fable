@@ -34,7 +34,7 @@ function createLobby () {
   let room = null
   let hello = null
   let heartbeat = null
-  let position = null              // my coarse {lat, lon} or null
+  let position = null              // my PRECISE {lat, lon} (device-local only) or null
   let lastTick = 0                 // last heartbeat time — a stale value means the tab was suspended
 
   function notify () { for (const fn of subscribers) fn() }
@@ -44,6 +44,9 @@ function createLobby () {
   function myAnnouncement () {
     const p = db.profile()
     const show = db.settings().showOnMap
+    // P0 privacy fix: only COARSE coordinates ever enter the public payload.
+    // The precise fix stays in `position`, device-local (distance/centring).
+    const pub = show && position ? coarse(position.lat, position.lon, p.id) : null
     return {
       id: p.id,
       name: p.name,
@@ -66,8 +69,8 @@ function createLobby () {
        * Cooperative, and the row says so: it asks peers not to record, the way
        * a standard client honours it, and cannot compel one. */
       seen: db.settings().lastSeen || 'everyone',
-      lat: show && position ? position.lat : null,
-      lon: show && position ? position.lon : null,
+      lat: pub ? pub.lat : null,
+      lon: pub ? pub.lon : null,
       ts: Date.now()
     }
   }
@@ -76,10 +79,13 @@ function createLobby () {
   let relayReady = false
 
   /**
-   * PRECISE positions (owner decision 2026-07-25): the 5–500 m radar needs
-   * real GPS, so coords go out exactly as the device reports them, refreshed
-   * continuously. Ghost mode (settings.showOnMap=false) remains the privacy
-   * switch — it withholds position entirely.
+   * The PRECISE fix stays DEVICE-LOCAL. High accuracy is acquired for local
+   * distance/centring (`myPosition()`), but what the lobby broadcasts is the
+   * coarse() output — ~110 m rounding plus a stable per-identity jitter —
+   * applied in myAnnouncement() before anything leaves the device (P0 privacy
+   * fix; supersedes the 2026-07-25 precise-broadcast decision). Ghost mode
+   * (settings.showOnMap=false) remains the privacy switch — it withholds
+   * position entirely.
    */
   function acquirePosition () {
     if (!('geolocation' in navigator)) return

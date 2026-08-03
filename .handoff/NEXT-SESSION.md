@@ -1,4 +1,18 @@
-# START HERE — pickup brief
+> # ⛔ RETIRED (2026-08-03)
+>
+> **This handoff mechanism is superseded by the Engineering Handbook.** The
+> repository is now the single source of truth. Do **not** use this file to
+> bootstrap a session or as a current status record — it is kept only as
+> history and will drift.
+>
+> **Start here instead:** `spotme/docs/handbook/00-BOOTSTRAP.md`
+> (entry point: `spotme/docs/handbook/README.md`). Current status with evidence
+> is in `spotme/docs/handbook/03-IMPLEMENTATION-STATUS.md`. See ADR-014
+> (`spotme/docs/adr/014-repository-over-memory.md`) for why.
+>
+> ---
+
+# START HERE — pickup brief (RETIRED — see banner above)
 
 **Written:** 2026-08-01, end of the identity-sequence + E2E-foundation session.
 **Supersedes** the 2026-07-31 brief entirely (PRs #2–#7 era). That text is in
