@@ -1,0 +1,26 @@
+{
+  "name": "@spotme/web-next",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "React + TypeScript strangler beachhead. Inert, NOT deployed, NOT referenced by spotme/web, excluded from the Vercel build. Proves the shared @spotme/contracts types render in a React surface.",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "typecheck": "tsc --noEmit",
+    "check:boundaries": "node scripts/check-boundaries.mjs",
+    "test": "npm run check:boundaries && npm run typecheck && npm run build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.11",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.2",
+    "typescript": "^5.6.3",
+    "vite": "^5.4.9"
+  }
+}
