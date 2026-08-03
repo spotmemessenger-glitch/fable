@@ -50,6 +50,13 @@ Drafted with the DPAS and ratified by the owner:
 | [024](024-discovery-coarse-broadcast-hotfix.md) | Discovery broadcasts coarse coordinates only — P0 hotfix (Accepted by the owner's merge of PR #66, `069905e`; supersedes the 2026-07-25 precise-broadcast decision) | Accepted |
 | [025](025-e2ee-implementation-libsignal-vs-custom.md) | E2EE implementation: libsignal vs custom e2e_v3 — governs PRs #39/#41/#42/#43 (Accepted by the owner's merge of PR #68) | Accepted |
 
+### Platform migration Phase 1 (026– — PROPOSED, owner decision pending)
+Drafted in `feat/platform-phase-1`; not yet accepted, nothing wired in.
+
+| ADR | Title | Status |
+|---|---|---|
+| [026](026-realtime-split-plane.md) | Realtime ownership — split control (Socket.IO) / data (Centrifugo) plane; calls stay on Trystero/WebRTC; broker = Valkey/Dragonfly; pgvector deferred | Proposed |
+
 ## Format
 
 Each ADR: **Status**, **Context**, **Decision**, **Consequences**, **Evidence**.
