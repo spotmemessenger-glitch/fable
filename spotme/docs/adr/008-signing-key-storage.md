@@ -204,3 +204,98 @@ explicit-only — never on a timer, never on an error path. Pre-publication it i
 a local affair; post-publication every rotation must carry the signed
 supersession statement the publication PR introduces, and the returned
 `previousPublicKeyB64` is what that statement names.
+
+## Phase 2B design — publication + rollback-after-publication (resolves §12)
+
+**Owner directive 2026-08-01 (Amendment 2):** publication ships together with
+its complete rollback path in one PR, or not at all. This section is that
+design; §12's stop dissolves only when all of it is implemented in the same
+change.
+
+### The server lifecycle (why a table, not a `User` column)
+
+The agreement key lives in a single `User.publicKey` column, which is exactly
+why its lifecycle is unauditable — an overwrite leaves no trace that a
+previous key ever existed, and "no key" and "never had a key" are the same
+NULL. A signing key is a trust anchor; its history IS the product. So:
+
+```prisma
+model SigningKey {
+  id                 String    @id @default(cuid())
+  userId             String
+  publicKeyB64       String
+  algo               String                 // 'Ed25519' | 'ECDSA-P256'
+  status             String                 // 'active' | 'superseded' | 'withdrawn'
+  createdAt          DateTime  @default(now())
+  withdrawnAt        DateTime?
+  supersededById     String?                // -> the SigningKey that replaced it
+  supersessionSigB64 String?                // old key's signature naming the new
+  user               User      @relation(fields: [userId], references: [id])
+  @@unique([userId, publicKeyB64])
+  @@index([userId, status])
+}
+```
+
+At most one `active` row per user, enforced in the service transactionally.
+Nothing is ever deleted: a withdrawn key is a **served tombstone**, because a
+key that silently disappears is indistinguishable from a key that never
+existed — which is precisely the posture a substituting server would want.
+
+### Endpoints (all keyed off the JWT principal — never a body id)
+
+| Endpoint | Rule |
+|---|---|
+| `PUT /v2/auth/signing-key` | First publish → `active`. Same key again → idempotent `ok`. A DIFFERENT key while one is active → **409**: silent replacement server-side is the substitution attack, so replacement only exists as supersession. |
+| `POST /v2/auth/signing-key/supersede` | Body: new key + `supersessionSigB64` — the OLD key's signature over the length-prefixed transcript `('spotme-signing-supersede-v1', userId, oldPublicKeyB64, newPublicKeyB64, newAlgo)`, built with the exact `transcript()` framing from `signing-identity.js` (uint32be field count + per-field length prefixes; JSON and delimiter-joins are forbidden for signed structures, per the #29 review). The NEW key's algo is bound in because raw lengths collide across protocols — Ed25519 and X25519 are both 32 bytes — the same two-defence rule the signing module applies everywhere. The server verifies against the STORED old public key before touching the chain; a bad signature is a 400 and the chain is untouched. Old row → `superseded` + pointer + sig; new row → `active`. The framing is pinned by a byte-identical vector asserted in BOTH suites. |
+| `DELETE /v2/auth/signing-key` | **Withdraw — the executable rollback §12 demanded.** Active → `withdrawn` tombstone, served forever. |
+| `GET /v2/auth/signing-key/:userId` | `{status:'none'}` or `{publicKeyB64, algo, status, createdAt, chain}` — chain bounded (newest-first, cap 10) so a hostile account cannot grow an unbounded response. |
+
+Server-side signature verification is a **coherence check, not a trust
+claim** — the server stays the adversary in the threat model; clients verify
+supersession chains themselves when they consume them (X3DH phase). The
+server checking too merely keeps the ledger from accepting garbage.
+
+### Withdrawal semantics — the §12 "withdraw vs leave inert" answer
+
+- **Withdrawal is not revocation.** Revocation (ADR-006/A6) is a compromise
+  claim with trust-machine consequences (`Revoked` blocks sends). Withdrawal
+  is the owner saying "roll this deployment back": peers that fetch a
+  `withdrawn` status **drop the signing anchor and return to the pre-A7
+  posture** — agreement-key TOFU plus the A1–A5 trust machine, which never
+  depended on the signing key. No `Revoked` state, no blocked sends, no
+  alarm. Existing signed bindings become HISTORICAL evidence, which
+  `requireLiveAuthentication` already refuses for live decisions — that
+  boundary was built in #29 for exactly this moment.
+- **Leave-inert is also documented and safe:** reverting client code WITHOUT
+  withdrawing leaves the published key standing while nothing consumes it —
+  acceptable short-term because publication is flag-gated OFF client-side,
+  and the fence proves no runtime path reads it.
+
+### Rollback table (the plan §12 said must be executable)
+
+| Situation | Action | Result |
+|---|---|---|
+| Published, no peer has bound to it | `DELETE` (withdraw) | complete rollback; tombstone remains as history |
+| Published, peers hold signed bindings | withdraw → peers drop the anchor on next fetch | bindings decay to HISTORICAL; live verification refuses them by construction |
+| Client code reverted, key left standing | nothing (leave inert) | safe while the flag is OFF; withdraw remains available at any later time |
+| Pre-publication (today) | revert + `forgetSigningIdentity` | free, as §12 always said |
+
+### Client side (this PR)
+
+One new module inside the A7 fence: the publication path. Its gate refuses
+unless `signingKeyStatus() === 'ok'` — publishing an `ephemeral` key would
+hand peers a trust anchor that evaporates on the next launch (the exact
+failure write-then-read-back exists to detect), and `unreadable`/
+`unavailable` must never trigger generation-and-publish over a record this
+build cannot vouch for. `SIGNING_PUBLICATION_ENABLED` defaults to **false**;
+no runtime call site flips it in this PR; the suite exercises the full path
+(the A5/A7 dark-capability pattern). `signing-not-shipped.test.js` is
+extended, not weakened: the publication module joins the fence, the app
+still reaches exactly `forgetSigningIdentity`, and the flag's default is
+asserted.
+
+### What Phase 2B does NOT contain
+
+No automatic publication, no UI, no revocation transport, no prekeys, no
+X3DH, no ratchet, no multi-device. The §BLOCKING safety-number question
+stays open and stays blocking for multi-device. Enforcement stays OFF.

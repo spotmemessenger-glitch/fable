@@ -129,6 +129,7 @@ model User {
   deviceTokens     DeviceToken[]
   stories          Story[]
   storyViews       StoryView[]
+  signingKeys      SigningKey[]
 
   @@index([city])
   @@index([createdAt])
@@ -561,4 +562,31 @@ model CrashReport {
   ts           DateTime @default(now())
 
   @@index([signature, ts])
+}
+
+// The published SIGNING-key lifecycle (ADR-008 Phase 2B). A table, not a User
+// column, because a trust anchor's history IS the product: the agreement key's
+// single-column precedent is exactly what made its lifecycle unauditable — an
+// overwrite leaves no trace, and "no key" and "never had a key" are the same
+// NULL. Rows are NEVER deleted: a withdrawn key is a served tombstone, since a
+// key that silently disappears is indistinguishable from one that never
+// existed — the substituting server's preferred posture. At most one 'active'
+// row per user, enforced transactionally in the service.
+model SigningKey {
+  id                 String    @id @default(cuid())
+  userId             String
+  user               User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  publicKeyB64       String
+  algo               String // 'Ed25519' | 'ECDSA-P-256'
+  status             String // 'active' | 'superseded' | 'withdrawn'
+  createdAt          DateTime  @default(now())
+  withdrawnAt        DateTime?
+  // Supersession: the OLD key signs a length-prefixed transcript naming its
+  // replacement; the signature is stored on the RETIRED row so the chain is
+  // checkable by any client that fetches it.
+  supersededById     String?
+  supersessionSigB64 String?
+
+  @@unique([userId, publicKeyB64])
+  @@index([userId, status])
 }
