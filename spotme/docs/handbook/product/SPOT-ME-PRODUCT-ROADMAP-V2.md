@@ -687,3 +687,57 @@ Every session runs the handbook bootstrap before any work:
 - **Definition of Done** — production-ready criteria (§25); dark modules alone are
   never "done".
 - **ADR** — Architecture Decision Record; Accepted ADRs are immutable (G6).
+
+---
+
+## 31. Execution-Order Conflict — OWNER RATIFICATION REQUIRED
+
+Three sources give **conflicting execution orders**. This section records all
+three verbatim-where-available and deliberately **does not pick a winner** —
+the owner must ratify one (or scope them to different layers).
+
+**Source A — master's Owner Amendment (2026-08-01)**
+(`spotme/docs/MASTER-ENGINEERING-ROADMAP-V2.md`, "Owner Amendment" section,
+on `master`):
+
+> "1. **Push notifications** — complete Android AND iOS push; … 2.
+> **Translation platform** — … 3. **Live voice translation** — the flagship
+> … 4. [adaptive communication layer] … 5. [remaining Priority 1 crypto
+> (X3DH → Double Ratchet → multi-device → completion evidence)]" — with
+> Priority 1's "remaining cryptography stays mandatory before Priority 1 is
+> declared complete."
+
+**Source B — this document (roadmap v2.0, §12, PR #63)**:
+
+> "Smart Nearby Discovery Map → SpotMe Exchange → Live Nearby Events →
+> Nearby Moments → AI Assistant & Personalization" — fixed, owner-controlled
+> (ratified as ADR-022), with crypto gated behind the ADR-008 §12 hard stop
+> (§11 standing gates) rather than sequenced among the Discovery steps.
+
+**Source C — Scope Lock & Migration Blueprint v1.0**:
+
+> **Not available in this session; owner to attach.** Per the owner's mission
+> text (relayed instruction, not a document quote), the Blueprint orders
+> "Map → Exchange → Events → Moments → AI" with **crypto at Phase 8**. It has
+> not been reconstructed from memory here; ratification requires the actual
+> document.
+
+The three orders cannot all be followed: A sequences platform pillars
+(push → translation → voice → transport → crypto) with no Discovery steps;
+B sequences Discovery with crypto held behind a gate; C (as relayed)
+sequences Discovery with crypto explicitly late (Phase 8). **OWNER
+RATIFICATION REQUIRED** — until then, sessions must treat A as the standing
+order for platform pillars (it is the only one on `master`) and B for
+Discovery-internal ordering, and must not begin crypto work under any
+reading (ADR-008 §12).
+
+### Status-vocabulary note — OWNER DECISION REQUIRED
+
+Two six-state vocabularies now exist: the **handbook's repo-level six**
+(Implemented (Merged) / Implemented (Draft PR) / In Progress / Planned /
+Deferred / Retired — evidence-cited against the repository) and the
+**Blueprint's product-level six** (document not available in this session —
+owner to attach). The owner must either pick a single vocabulary or scope
+them explicitly (Blueprint states = product-level lifecycle; handbook states
+= repository-level truth). Until then, the handbook vocabulary is the only
+one used inside `spotme/docs/handbook/`.
