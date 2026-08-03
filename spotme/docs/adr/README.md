@@ -48,6 +48,7 @@ Drafted with the DPAS and ratified by the owner:
 | [022](022-discovery-execution-sequence.md) | Discovery execution sequence — five steps (supersedes ADR-021's sequence) | Accepted |
 | [023](023-exchange-platform-service-intent-graph.md) | Exchange as a platform service — the universal Intent Graph (boundary & responsibilities only) | Accepted |
 | [024](024-discovery-coarse-broadcast-hotfix.md) | Discovery broadcasts coarse coordinates only — P0 hotfix (Accepted by the owner's merge of PR #66, `069905e`; supersedes the 2026-07-25 precise-broadcast decision) | Accepted |
+| [025](025-e2ee-implementation-libsignal-vs-custom.md) | E2EE implementation: libsignal vs custom e2e_v3 — governs PRs #39/#41/#42/#43 (Accepted by the owner's merge of PR #68) | Accepted |
 
 ## Format
 

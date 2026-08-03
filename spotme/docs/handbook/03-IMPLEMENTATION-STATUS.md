@@ -6,8 +6,9 @@ path or an open PR + branch — **verified against the repository, never against
 another document**. Full audit evidence:
 [SPOTME-REPO-AUDIT-2026-08-03](../SPOTME-REPO-AUDIT-2026-08-03.md).
 
-> Verified 2026-08-03 against `master` `069905e`
-> (`Merge pull request #66`) and the live open-PR list.
+> Verified 2026-08-03 against `master` `288b8ca`
+> (`Merge pull request #42` — the G8 crypto train #39 → #41 → #42 landed DARK)
+> and the live open-PR list.
 > *Implemented (Merged)* is on master and runs. *Implemented (Draft PR)* is
 > built but lives only on a branch behind an open, unmerged PR — usually dark —
 > and is **not** in the product.
@@ -39,9 +40,10 @@ another document**. Full audit evidence:
 | Safety numbers + identity pinning | Implemented (Merged) | PRs #12/#14/#24–#28; `web/src/lib/crypto/{safety-number,identity-pin,identity-pin-store}.js`; QR via `qr-scan.js` |
 | Send enforcement (A5) | Implemented (Merged — flag default OFF) | PR #31; `web/src/lib/crypto/identity-enforcement.js:77` (`enforcing = false`) |
 | **Discovery coarse-location hotfix** | **Implemented (Merged)** | **PR #66**, merge `069905e`; `web/src/lib/discovery.js:49`; guard `web/test/discovery-coarse-broadcast.test.js`; [ADR-024](../adr/024-discovery-coarse-broadcast-hotfix.md) |
-| X3DH + prekeys | Implemented (Draft PR **#41**, `feat/x3dh-prekeys`) | gated by ADR-008 §12 |
-| Double Ratchet | Implemented (Draft PR **#42**, `feat/double-ratchet`) | gated by ADR-008 §12 |
-| Multi-device | Implemented (Draft PR **#43**, `feat/multi-device`) | gated by ADR-008 §12 + safety-number question (ADR-008 §BLOCKING) |
+| Signing-key foundation + publication (executable rollback) | Implemented (Merged — DARK) | **PR #39**, merge `67bc221`; `web/src/lib/crypto/{signing-key-store,signing-key-publication}.js`, `backend/src/auth/signing-keys.*`. **merged DARK — activation pending a separate owner-authorised change** (`SIGNING_PUBLICATION_ENABLED = false`) |
+| X3DH + prekeys | Implemented (Merged — DARK) | **PR #41**, merge `f9fe579`; `web/src/lib/crypto/x3dh.js`, `backend/src/auth/prekeys.*`, migration `20260801180000_x3dh_prekeys`. **merged DARK — activation pending a separate owner-authorised change** (behind `spotme.e2e3`) |
+| Double Ratchet | Implemented (Merged — DARK) | **PR #42**, merge `288b8ca`; `web/src/lib/crypto/ratchet.js` (004b-oracle conformant, byte-for-byte). **merged DARK — activation pending a separate owner-authorised change** (behind `spotme.e2e3`) |
+| Multi-device | Deferred | **#43 SKIPPED** pending the ADR-008 §BLOCKING multi-device safety-number decision (owner **NOT DECIDED**, 2026-08-03); branch `feat/multi-device` not merged |
 | Camera suite CAM-1…4 | Implemented (Draft PR **#56/#58/#59/#55**, `feat/camera-engine` + stacked) | branches **frozen** by owner directive; dark flags |
 | Discovery V2 map | Implemented (Draft PR **#60**, `feat/discovery-v2-map-foundation`) | dark, fence-tested; **rebase pending** after #66 (ADR-024) |
 | Live Nearby Events | Implemented (Draft PR **#61**, `feat/live-nearby-events`, stacked on #60) | dark, fence-tested |
