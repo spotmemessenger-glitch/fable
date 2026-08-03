@@ -31,7 +31,7 @@ it degrades to **disabled** when `REDIS_URL` is absent.
 | 7 | ADR (Proposed) — realtime split-plane ownership | ✅ done | `spotme/docs/adr/026-realtime-split-plane.md` (Status: Proposed); indexed |
 | 8 | React strangler beachhead `spotme/web-next` (inert, not deployed) | ✅ done | `spotme/web-next`; renders one inert screen from `@spotme/contracts` types; `tsc --noEmit` + `vite build` green; outside the Vercel root, unreferenced by spotme/web |
 | 9 | `StorageProvider` port — S3 behind a swappable interface | ✅ done | port already exists (`backend/src/storage/IStorageAdapter`, S3/local adapters, MinIO-tested in CI); formalized in `docs/architecture/storage-provider-port.md`, `.env.example` S3/R2/B2/MinIO block, future FFmpeg/libvips-via-`{media}`-BullMQ seam documented |
-| 10 | Observability baseline — Sentry/JSON logs/OTel, all no-op without env | ⏳ | |
+| 10 | Observability baseline — Sentry/JSON logs/OTel, all no-op without env | ✅ done | `backend/src/observability/`; JSON logs (LOG_FORMAT), prom-client metrics (METRICS_ENABLED), Sentry (SENTRY_DSN), OTel (OTEL endpoint) — all lazy/no-op without env; 6/6 tests; module prepared not imported; backend suite 137 passed |
 | 11 | ADR (Proposed) — mobile-native boundary | ⏳ | |
 
 ## Owner decisions gated behind this phase
