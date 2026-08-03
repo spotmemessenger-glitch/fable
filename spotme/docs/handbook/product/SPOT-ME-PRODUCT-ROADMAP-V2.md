@@ -330,15 +330,15 @@ ADR-018/019.) Provider-neutral; authorized data only; no scraping.
 
 > **⚠ SOURCING NOTE (honesty).** The owner directs integrating "the complete
 > approved SpotMe Exchange specification" verbatim. **That specification was not
-> present** in any available canonical source (Engineering Handbook, Product
-> Authority, `SPOTME_NEW_PRODUCT_SCOPE_2026-08-02`,
-> `SPOTME_CANONICAL_MIGRATED_BUILD_MEMORY`, or the repository). Per the
-> constitution ("do not invent scope"; "insufficient evidence over invention"),
-> the section below is a **faithful structural reconstruction** from (a) the
-> component list the owner named and (b) Spot Me's established, already-approved
-> design principles that Exchange must inherit. It is **pending ratification
-> against the approved spec** — attach that document and reconcile (§26, gap).
-> Nothing here should be treated as final approved detail.
+> present** in any available canonical source. Per the constitution ("do not
+> invent scope"), the summary below and the **full dedicated PRD** at
+> **[exchange/](exchange/README.md)** are a **faithful reconstruction** from (a)
+> the components the owner named and (b) Spot Me's established design principles.
+> It is **pending ratification** against the approved spec (§26, gap A5;
+> ratification checklist in [exchange §13](exchange/13-ACCEPTANCE-AND-OPEN-QUESTIONS.md)).
+> Nothing here is final approved detail. **The dedicated PRD
+> [exchange/README](exchange/README.md) is the engineering blueprint for
+> Exchange** — this section is its summary.
 
 **Concept.** SpotMe Exchange is the real-world problem-solving layer: people post
 a **Need** or an **Offer**, and AI matches them by **intent**, surfaced through
