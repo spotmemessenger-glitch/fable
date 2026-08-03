@@ -26,7 +26,7 @@ it degrades to **disabled** when `REDIS_URL` is absent.
 | 2 | PostGIS via additive Prisma migration (CREATE EXTENSION only) | ✅ done | `prisma/migrations/20260803120000_enable_postgis/`; verified applied (postgis 3.4.2) + reversible (`DROP EXTENSION`) on a real PG16 |
 | 3 | `packages/contracts` — shared TS domain types; tsc in CI | ✅ done | `spotme/packages/contracts` (location + Exchange types); `tsc --noEmit` exit 0; CI job `contracts` added |
 | 4 | BullMQ on ioredis; `{maintenance}` queue; retries+DLQ; heartbeat; Valkey integration test | ✅ done | `backend/src/queue/`; `queue.e2e-spec.ts` 4/4 (disabled path, heartbeat loop, DLQ routing, hash-tag); Valkey service added to backend CI |
-| 5 | AI Gateway skeleton — Intent/Summary/Voice ports + deterministic baselines; fence test | ⏳ | |
+| 5 | AI Gateway skeleton — Intent/Summary/Voice ports + deterministic baselines; fence test | ✅ done | `web/src/lib/ai/`; baselines 15/15, fence `ai-gateway-not-shipped` 11/11 (nothing imports it, no keys/network); web suite 1017/1017 |
 | 6 | Search benchmark harness — Meilisearch vs Typesense; numbers only | ⏳ | |
 | 7 | ADR (Proposed) — realtime split-plane ownership | ⏳ | |
 | 8 | React strangler beachhead `spotme/web-next` (inert, not deployed) | ⏳ | |
