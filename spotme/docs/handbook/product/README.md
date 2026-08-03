@@ -71,6 +71,9 @@ language-first, and honesty.
   implementation status.
 - **[SPOTME_NEW_PRODUCT_SCOPE_2026-08-02](SPOTME_NEW_PRODUCT_SCOPE_2026-08-02.md)**
   — verbatim owner scope.
+- **[exchange/](exchange/README.md)** — the **SpotMe Exchange PRD** (the dedicated
+  engineering blueprint for Discovery step 2; a reconstruction pending A5
+  ratification).
 
 The architectural decision that formalises this ecosystem is
 **[ADR-021](../../adr/021-spotme-unified-product-ecosystem.md)**.

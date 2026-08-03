@@ -19,7 +19,7 @@ Steps run in this order. Do **not** reorder or skip ahead. **Owner-controlled.**
 | # | Step | Build state | Evidence |
 |---|---|---|---|
 | 1 | **Smart Nearby Discovery Map** | Implemented (Draft PR), dark | PR #60 (`discovery-v2/`, `geo-approx.js`) |
-| 2 | **SpotMe Exchange** | Planned — flagship (AI-matched Needs & Offers) | none yet; see roadmap v2.0 §14 |
+| 2 | **SpotMe Exchange** | Planned — flagship (AI-matched Needs & Offers) | **PRD:** [exchange/](exchange/README.md) (pending A5 ratification); roadmap v2.0 §14 |
 | 3 | **Live Nearby Events** | Implemented (Draft PR), dark | PR #61 (`live-events/`) |
 | 4 | **Nearby Moments** | Planned — **next approved mission** (after the handbook merges) | none yet; needs a data/privacy-model ADR before code |
 | 5 | **AI Assistant & Personalization** | Planned (consent-based) | none yet |
