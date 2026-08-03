@@ -1,64 +1,74 @@
-import type { ExchangeItemPublic } from '@spotme/contracts';
+import { useCallback, useMemo, useState, useSyncExternalStore } from 'react';
+import type { DiscoveryFilters } from '@spotme/contracts';
+import { DiscoveryShell, markersFor } from './discovery/DiscoveryShell';
+import { DiscoveryController, MemoryCache } from './discovery/controller';
+import { FixtureDiscoveryApi } from './discovery/fixtures';
+import { DisabledRealtime } from './discovery/ports';
+import type { GeolocationPort } from './discovery/ports';
 
 /**
- * The single inert screen. It renders a read-only Exchange listing built from
- * the SHARED @spotme/contracts type — proving the React surface consumes the
- * same domain contracts the rest of the platform will. Deliberately inert: no
- * state, no handlers, no network, no routing. This is a beachhead, not a
- * feature.
+ * The inert Discovery beachhead (checkpoints 10/11). Everything is behind
+ * deterministic ports — fixture API, fixed fake geolocation, disabled
+ * realtime, in-memory cache. NOT deployed; not referenced by spotme/web; no
+ * backend, no routing, no auth. The fixture fix below is a public landmark
+ * coordinate, not a user location.
  */
 
-const SAMPLE: ExchangeItemPublic = {
-  id: 'sample-1',
-  type: 'need',
-  status: 'active',
-  category: 'services/plumbing',
-  title: 'Leaking kitchen tap',
-  text: 'Leaking kitchen tap, need it fixed tonight.',
-  tags: ['services', 'plumbing'],
-  budgetBand: 'low',
-  timeframe: { from: '2026-08-03T18:00:00Z', to: '2026-08-03T23:00:00Z' },
-  location: {
-    precision: 'approximate',
-    // Already coarsened on-device — the type carries no precise-fix field.
-    approx: { lat: 12.97, lon: 77.59, coarsened: true },
+const fixtureGeo: GeolocationPort = {
+  async getFix() {
+    return { state: 'ok', fix: { lat: 12.9716, lon: 77.5946 } };
   },
-  createdAt: '2026-08-03T17:45:00Z',
-  expiresAt: '2026-08-04T17:45:00Z',
 };
 
 export function App() {
+  const controller = useMemo(
+    () =>
+      new DiscoveryController({
+        api: new FixtureDiscoveryApi(),
+        geo: fixtureGeo,
+        realtime: new DisabledRealtime(),
+        clock: { now: () => Date.now() },
+        cache: new MemoryCache(),
+        selfId: 'fixture-self',
+      }),
+    [],
+  );
+
+  const state = useSyncExternalStore(controller.subscribe, controller.getState);
+  const [, bump] = useState(0);
+  const rerender = useCallback(() => bump((n) => n + 1), []);
+
+  const results =
+    state.kind === 'ready' ? state.page.results
+    : state.kind === 'partial' ? state.page.results
+    : [];
+
   return (
-    <main
-      style={{
-        fontFamily: 'system-ui, sans-serif',
-        maxWidth: 480,
-        margin: '2rem auto',
-        padding: '1rem',
-      }}
-    >
-      <p style={{ color: '#888', fontSize: 12, textTransform: 'uppercase', letterSpacing: 1 }}>
-        web-next · inert beachhead · not deployed
-      </p>
-      <article style={{ border: '1px solid #ddd', borderRadius: 12, padding: 16 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-          <strong>{SAMPLE.title}</strong>
-          <span style={{ fontSize: 12, color: '#0a7' }}>{SAMPLE.type.toUpperCase()}</span>
-        </div>
-        <p style={{ margin: '8px 0' }}>{SAMPLE.text}</p>
-        <p style={{ fontSize: 13, color: '#555' }}>
-          {SAMPLE.category} · budget {SAMPLE.budgetBand} · ~
-          {SAMPLE.location.approx.lat.toFixed(2)}, {SAMPLE.location.approx.lon.toFixed(2)} (
-          {SAMPLE.location.precision})
-        </p>
-        <ul style={{ display: 'flex', gap: 8, listStyle: 'none', padding: 0, fontSize: 12 }}>
-          {SAMPLE.tags.map((t) => (
-            <li key={t} style={{ background: '#eee', borderRadius: 6, padding: '2px 8px' }}>
-              {t}
-            </li>
-          ))}
-        </ul>
-      </article>
-    </main>
+    <DiscoveryShell
+      state={state}
+      searchText={controller.searchText}
+      mode={controller.mode}
+      filters={controller.filters}
+      categories={['cafe', 'restaurant', 'hospital', 'gym', 'park']}
+      openNowSupported={results.some((r) => r.type === 'place' && r.place.openNow !== null && r.place.openNow !== undefined)}
+      visibilityEnabled={controller.visibilityEnabled}
+      selectedId={controller.selectedId}
+      markers={markersFor(results, controller.selectedId)}
+      center={null}
+      onSearchText={(v) => { controller.searchText = v; rerender(); }}
+      onSubmit={() => void controller.search()}
+      onMode={(m) => { controller.mode = m; rerender(); }}
+      onFilters={(f: DiscoveryFilters) => { controller.filters = f; rerender(); }}
+      onVisibility={(next) => void controller.setVisibility(next).then(rerender)}
+      onSelect={(id) => { controller.select(id); rerender(); }}
+      onFriendRequest={() => { /* D9 dark: no transport exists this phase */ }}
+      onBlock={() => { /* dark: block projection wiring is activation work */ }}
+      onReport={() => { /* dark */ }}
+      onHide={(id) => { controller.hide(id); rerender(); }}
+      onDirections={() => { /* dark: external handoff at activation */ }}
+      onSave={() => { /* dark */ }}
+      onRetry={() => void controller.search()}
+      onEnableLocation={() => void controller.search()}
+    />
   );
 }
