@@ -7,6 +7,13 @@ When the two describe the same surface, the engineering
 [03-IMPLEMENTATION-STATUS](../03-IMPLEMENTATION-STATUS.md) is authoritative for
 *what is actually built* — product scope is not an implementation claim.
 
+> **The highest-level product authority is
+> [SPOT-ME-PRODUCT-ROADMAP-V2](SPOT-ME-PRODUCT-ROADMAP-V2.md)** (Product Scope &
+> Execution Roadmap v2.0). It is the canonical, complete product document and
+> **replaces** `SPOTME_NEW_PRODUCT_SCOPE_2026-08-02` as *authority* — the scope
+> doc is preserved beside it as a historical **source**, not authority. Read v2.0
+> first; the pages below are its supporting detail.
+
 > Canonical product sources (owner):
 > - **[SPOTME_NEW_PRODUCT_SCOPE_2026-08-02](SPOTME_NEW_PRODUCT_SCOPE_2026-08-02.md)**
 >   — verbatim owner scope (committed here).

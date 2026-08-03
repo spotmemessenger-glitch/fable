@@ -14,23 +14,32 @@ and the social surfaces on top of Communication.
 
 ## Fixed execution order
 
-Steps run in this order. Do **not** reorder or skip ahead.
+Steps run in this order. Do **not** reorder or skip ahead. **Owner-controlled.**
 
 | # | Step | Build state | Evidence |
 |---|---|---|---|
 | 1 | **Smart Nearby Discovery Map** | Implemented (Draft PR), dark | PR #60 (`discovery-v2/`, `geo-approx.js`) |
-| 2 | **Live Nearby Events** | Implemented (Draft PR), dark | PR #61 (`live-events/`) |
-| 3 | **Nearby Moments** | Planned — **next approved mission** (after the handbook merges) | none yet; needs a data/privacy-model ADR before code |
-| 4 | **AI Assistant & Personalization** | Planned (consent-based) | none yet |
+| 2 | **SpotMe Exchange** | Planned — flagship (AI-matched Needs & Offers) | none yet; see roadmap v2.0 §14 |
+| 3 | **Live Nearby Events** | Implemented (Draft PR), dark | PR #61 (`live-events/`) |
+| 4 | **Nearby Moments** | Planned — **next approved mission** (after the handbook merges) | none yet; needs a data/privacy-model ADR before code |
+| 5 | **AI Assistant & Personalization** | Planned (consent-based) | none yet |
 
-Steps 1 and 2 are **built dark** (flag-gated, fenced, not on master). Step 3
+> **Sequence updated (owner decision, 2026-08-03):** **SpotMe Exchange** is
+> inserted as **step 2**, making the sequence five steps. This **supersedes** the
+> four-step sequence in **ADR-021**, which remains **immutable** (G6) and is not
+> edited — ratify via a new superseding ADR (proposed **ADR-022**). Full detail:
+> [SPOT-ME-PRODUCT-ROADMAP-V2 §12/§14](SPOT-ME-PRODUCT-ROADMAP-V2.md).
+
+Steps 1 and 3 are **built dark** (flag-gated, fenced, not on master). Step 4
 (**Nearby Moments**) is the next approved mission once this handbook is merged —
-it is the "nearby social feed" of the scope doc (§8): nearby photos/videos,
-stories/short-videos, location-tagged posts with **approximate/coarse location
-by default**, connecting content to the map **without exposing a poster's
-precise live location**. Step 4 adds explainable, **opt-in** personalization and
-an assistant — **interface-first, no LLM/assistant activation** without owner
-authorisation.
+the "nearby social feed" (scope §8): nearby photos/videos, stories/short-videos,
+location-tagged posts with **approximate/coarse location by default**, connecting
+content to the map **without exposing a poster's precise live location**. Step 5
+adds explainable, **opt-in** personalization and an assistant — **interface-first,
+no LLM/assistant activation** without owner authorisation. **SpotMe Exchange**
+(step 2) is a flagship capability; its verbatim approved specification was not in
+the available sources, so roadmap v2.0 §14 reconstructs it from the owner's named
+components pending ratification.
 
 ## Discovery principles (non-negotiable)
 
