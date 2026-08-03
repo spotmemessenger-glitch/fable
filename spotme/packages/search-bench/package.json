@@ -1,0 +1,14 @@
+{
+  "name": "@spotme/search-bench",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Search-engine benchmark harness: Meilisearch vs Typesense on a synthetic Spot Me corpus. Reports numbers only — the owner picks the engine; nothing here is wired into the app.",
+  "type": "module",
+  "scripts": {
+    "bench": "node bench.mjs"
+  },
+  "dependencies": {
+    "meilisearch": "^0.44.1",
+    "typesense": "^1.8.2"
+  }
+}

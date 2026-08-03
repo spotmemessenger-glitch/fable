@@ -27,7 +27,7 @@ it degrades to **disabled** when `REDIS_URL` is absent.
 | 3 | `packages/contracts` — shared TS domain types; tsc in CI | ✅ done | `spotme/packages/contracts` (location + Exchange types); `tsc --noEmit` exit 0; CI job `contracts` added |
 | 4 | BullMQ on ioredis; `{maintenance}` queue; retries+DLQ; heartbeat; Valkey integration test | ✅ done | `backend/src/queue/`; `queue.e2e-spec.ts` 4/4 (disabled path, heartbeat loop, DLQ routing, hash-tag); Valkey service added to backend CI |
 | 5 | AI Gateway skeleton — Intent/Summary/Voice ports + deterministic baselines; fence test | ✅ done | `web/src/lib/ai/`; baselines 15/15, fence `ai-gateway-not-shipped` 11/11 (nothing imports it, no keys/network); web suite 1017/1017 |
-| 6 | Search benchmark harness — Meilisearch vs Typesense; numbers only | ⏳ | |
+| 6 | Search benchmark harness — Meilisearch vs Typesense; numbers only | ✅ done | `packages/search-bench`; ran live (20k docs): Meili 28.3k docs/s idx, p50 44ms, 58MB · Typesense 11.6k docs/s, p50 4.6ms, 167MB; both 100% typo. Owner picks engine |
 | 7 | ADR (Proposed) — realtime split-plane ownership | ⏳ | |
 | 8 | React strangler beachhead `spotme/web-next` (inert, not deployed) | ⏳ | |
 | 9 | `StorageProvider` port — S3 behind a swappable interface | ⏳ | |
