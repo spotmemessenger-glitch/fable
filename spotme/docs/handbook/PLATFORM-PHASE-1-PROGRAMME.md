@@ -42,3 +42,24 @@ The original single-PR draft (`feat/platform-phase-1`, PR #71) proved the
 architecture end-to-end but was too large to review or roll back safely. It is
 superseded by this staged programme (owner decision, 2026-08-03) and split into
 1A–1G above.
+
+## History — landed 2026-08-03 (delegated approval)
+
+All seven PRs merged to `master` with merge commits, in train order, each
+verified green and DARK before the next:
+
+| Step | PR | Group | master after merge |
+|---|---|---|---|
+| 1 | #72 | 1A runtime + spatial | `7df509a` |
+| 2 | #73 | 1B contracts | `aa97fce` |
+| 3 | #74 | 1C redis/queues | `7a8c124` |
+| 4 | #75 | 1D search benchmark | `69cbedd` |
+| 5 | #76 | 1E AI gateway + ADR-026/027 (Accepted) + decisions | `983712f` |
+| 6 | #77 | 1F react beachhead | `f59d0ec` |
+| 7 | #78 | 1G storage + observability | `9147485` |
+
+One conflict in the whole train — `spotme/docs/09-TECH-STACK.md` at step 5
+(1A's §13 vs 1E's §14, adjacent end-of-file additions) — resolved as the
+additive union. Nothing was activated; both crypto flags stayed false at every
+step. Phase 2 (Discovery Platform migration) begins only on explicit owner
+authorization.

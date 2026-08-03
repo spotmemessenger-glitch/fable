@@ -87,3 +87,12 @@ first-ever import (raft initialization) being measured as if steady-state.
 The multi-run methodology exists precisely to kill that class of error; with
 3 runs Typesense indexes faster, not slower. Single-run numbers should not be
 trusted for the engine decision.
+
+## Decision — 2026-08-03 (delegated approval)
+
+**Typesense is the selected Phase 2 search target**, chosen from the recorded
+run above (~12× faster warm p50/p95 at an acceptable memory trade-off).
+**Meilisearch remains the documented fallback.** Not wired into the
+application; not active. **Mandatory revisit:** rerun this benchmark on
+production hardware with a production-scale corpus before search is wired in;
+if materially different, reopen the decision (`handbook/DECISIONS.md`).
