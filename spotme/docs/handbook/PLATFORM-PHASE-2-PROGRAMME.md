@@ -1,0 +1,43 @@
+# Platform Phase 2 — Smart Nearby Discovery Map (staged, dark, additive)
+
+**This document is the Platform Phase 2 programme playbook.** Fifteen
+checkpoints land as **six draft PRs** (one item group per branch), per the
+Phase 1 pattern. Each PR: own scope, own tests green before push, stops as
+draft for owner review. Stacked bases are temporary — retarget to `master`
+when the base merges. Everything is **DARK**: no activation, no flag flips,
+no deployment, no user-visible change; precise GPS never leaves the client
+boundary (ADR-018/019, P2).
+
+## Group / branch / checkpoint map
+
+| Group | Branch | Base | Checkpoints |
+|---|---|---|---|
+| **2A** | `feat/platform-phase-2a-contracts-threatmodel` | master | 1 (shared discovery contracts) + 4 (privacy/abuse threat model) |
+| 2B | `feat/platform-phase-2b-discovery-backend` | 2A | 2 (backend module) + 3 (PostGIS model) + 5 (people engine) |
+| 2C | `feat/platform-phase-2c-search-and-providers` | 2A | 6 (Typesense SearchPort) + 7 (place/directions ports) |
+| 2D | `feat/platform-phase-2d-intent-ranking-realtime` | 2B | 8 (intent + ranking) + 9 (realtime contract) |
+| 2E | `feat/platform-phase-2e-webnext-discovery` | 2A | 10 (web-next UI) + 11 (client application layer) |
+| 2F | `feat/platform-phase-2f-fences-perf-ops-docs` | 2D | 12 (dark fences) + 13 (performance) + 14 (ops/observability) + 15 (docs/governance) + final validation |
+
+## Standing constraints
+
+- **P1–P10 product principles** of the Phase 2 mission bind every checkpoint;
+  P2 (privacy by architecture) and P7 (communication only after consent) are
+  fence-enforced, not promised.
+- **A3 exclusion:** no gender or age filters anywhere — no such field in any
+  schema, index, contract, or UI. The filter sheet is distance band, category,
+  open-now only (D6/D7 owner-retained).
+- **D9/D10** are approved for DARK BUILD only (see DECISIONS.md); activation
+  is owner-retained.
+- Typesense is the selected target (tech-stack §14); the **production-hardware
+  re-benchmark before wiring stands** — no harness rerun in this phase (A4).
+- PR #60/#61, #43 and the camera branches remain byte-identical; reusable #60
+  concepts are re-cut, never modified in place (classification in the Phase 0
+  report of the executing session).
+- One commit per checkpoint; push after each; complete validation after
+  checkpoints 4, 8, 12 and before each draft PR.
+
+## Resume line
+
+"Continue Platform Phase 2 from the last pushed PR; verify all prior PRs
+before continuing."

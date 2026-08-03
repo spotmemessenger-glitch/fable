@@ -213,3 +213,20 @@ into the application and NOT active**. **Mandatory revisit:** rerun the
 committed benchmark on production hardware with a production-scale corpus
 before wiring search into the application; if the numbers differ materially,
 reopen the decision.
+
+### Phase 2 delegated dark-build decisions — 2026-08-03 (appended under the same delegation)
+
+- **D9 (friend-request accept gate): APPROVED FOR DARK BUILD** under the
+  delegated engineering authority; **activation retained by the owner.**
+  Definition (verbatim): the nearby-people flow becomes tap → profile →
+  friend request → ACCEPT → chat; the current no-accept-gate knock remains
+  the live behavior until activation.
+- **D10 (username search): APPROVED FOR DARK BUILD** under the delegated
+  engineering authority; **activation retained by the owner.** Definition
+  (verbatim): optional, user-chosen public handles on the existing identity
+  model, searchable Telegram-style (search → request → accept → chat);
+  handles are opt-in, unique, and carry no other profile data into the index.
+- **D6/D7 (age policy; gender/age filters) remain OPEN and owner-retained.**
+  Phase 2 ships NO gender or age filter anywhere; no age or gender field is
+  added to any schema, index, contract, or UI (mission amendment A3). The
+  Phase 2 filter sheet is distance band, category, and open-now only.
