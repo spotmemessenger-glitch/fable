@@ -132,6 +132,8 @@ model User {
   signingKeys      SigningKey[]
   signedPreKeys    SignedPreKey[]
   oneTimePreKeys   OneTimePreKey[]
+  discoveryVisibility DiscoveryVisibility?
+  discoveryProfile    DiscoveryPublicProfileProjection?
 
   @@index([city])
   @@index([createdAt])
@@ -636,4 +638,66 @@ model OneTimePreKey {
 
   @@unique([userId, deviceId, keyId])
   @@index([userId, deviceId])
+}
+
+// ---------------------------------------------------------------------------
+// Smart Nearby Discovery Map (Platform Phase 2, checkpoint 3) — DARK.
+// Additive tables only; minimum persistence for discovery. No precise GPS
+// (coarse cell + coarse point only, produced on-device — ADR-018/019/024).
+// No sensitive attribute is projected (P6/A3: no age, no gender). The
+// canonical user profile is NOT duplicated — the projection holds approved
+// public fields only and is derived, rebuildable, and deleted with the user
+// (A9; FK ON DELETE CASCADE).
+
+/// My discovery presence/visibility (P3: opt-in, reversible, auto-expiring).
+model DiscoveryVisibility {
+  userId            String   @id
+  enabled           Boolean  @default(false)
+  /// Coarse privacy-cell identifier (ADR-018); opaque.
+  coarseCell        String
+  /// Coarse public point ONLY — the on-device approximation, never a fix.
+  coarseLat         Float
+  coarseLon         Float
+  /// PostGIS geography for spatial indexing; written by the repository from
+  /// (coarseLon, coarseLat) — same coarse data, spatially indexable.
+  geog              Unsupported("geography(Point, 4326)")?
+  updatedAt         DateTime @updatedAt
+  /// Presence expires; expired rows are unqueryable (threat model C-EXPIRE).
+  expiresAt         DateTime
+  /// Monotonic — realtime consumers drop stale versions (C-REPLAY).
+  visibilityVersion Int      @default(1)
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([expiresAt])
+  @@index([enabled, expiresAt])
+}
+
+/// Approved PUBLIC projection for discovery. References the canonical handle
+/// but is NEVER the authority for handle uniqueness/ownership/lifecycle (A9)
+/// — hence no unique constraint here; the identity model stays authoritative.
+model DiscoveryPublicProfileProjection {
+  userId           String   @id
+  handle           String?
+  /// Normalized (lowercased/folded) search projection of the handle.
+  normalizedHandle String?
+  displayName      String
+  avatarRef        String?
+  discoverable     Boolean  @default(false)
+  updatedAt        DateTime @updatedAt
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([normalizedHandle])
+  @@index([discoverable])
+}
+
+/// Block projection for discovery-time filtering, BOTH directions indexed
+/// (threat model C-BLOCK). Derived from the canonical Block model; kept as a
+/// projection so discovery queries never join the full social graph.
+model DiscoveryBlockProjection {
+  ownerUserId   String
+  blockedUserId String
+  createdAt     DateTime @default(now())
+
+  @@id([ownerUserId, blockedUserId])
+  @@index([blockedUserId])
 }

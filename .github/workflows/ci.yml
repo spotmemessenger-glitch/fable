@@ -28,7 +28,11 @@ jobs:
 
     services:
       postgres:
-        image: postgres:16
+        # postgis/postgis (not plain postgres): the Phase 2 discovery schema
+        # declares a geography(Point,4326) column, and `prisma db push` cannot
+        # run CREATE EXTENSION itself — this image pre-enables PostGIS on
+        # POSTGRES_DB at init, so the push succeeds. Same major version.
+        image: postgis/postgis:16-3.4
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
@@ -220,7 +224,9 @@ jobs:
     # refuses a send in a real browser. This is where that gets answered.
     services:
       postgres:
-        image: postgres:16
+        # postgis/postgis for the same reason as the backend job: the discovery
+        # schema's geography column must push onto a PostGIS-enabled database.
+        image: postgis/postgis:16-3.4
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
