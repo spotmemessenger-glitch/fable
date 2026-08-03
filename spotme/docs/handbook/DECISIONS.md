@@ -149,3 +149,28 @@ source uses them (2026-08-03 audit, §5/§14) — it appears to be a stray
 install at the wrong directory level. Remove in the same change that splits
 ysnap out (or immediately as a follow-up hygiene PR; not done in this
 mission per its limits).
+
+---
+
+## Owner marks recorded — 2026-08-03 (G8 crypto train)
+
+The owner authorised the G8 dark-merge milestone across three execution
+sessions and recorded the following marks. Recorded here per Governance G9;
+this section is the decision, the items above remain the recommendations they
+resolve.
+
+- **Decisions 1–8 (this sheet):** **approved as recommended.**
+- **ADR-025 (libsignal vs custom e2e_v3):** **Accepted** — merged as PR #68
+  (Status flipped Proposed → Accepted before merge). Added to the ADR index.
+- **Multi-device safety-number question (ADR-008 §BLOCKING):** **NOT DECIDED.**
+  Consequently **PR #43 (multi-device) is SKIPPED** and remains unmerged;
+  Phase D of the crypto train does not run until the owner picks a
+  `SAFETY_VERSION` construction (ADR-008 §BLOCKING options 1–4).
+- **G8 crypto train — merged DARK, in order, fences green at every step:**
+  - **PR #39** (signing-key publication + executable rollback) — merged, master `67bc221`.
+  - **PR #41** (X3DH + prekeys) — merged, master `f9fe579`.
+  - **PR #42** (Double Ratchet, 004b-oracle conformant) — merged, master `288b8ca`.
+  - Every layer landed **DARK**: `SIGNING_PUBLICATION_ENABLED = false` and the
+    `spotme.e2e3` rollout flag unread by any app module, verified by fence
+    tests after every merge. **Activation is out of scope and unscheduled** —
+    it requires a separate owner-authorised change. No flag was flipped.

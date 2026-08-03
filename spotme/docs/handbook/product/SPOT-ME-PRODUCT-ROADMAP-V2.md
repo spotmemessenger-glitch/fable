@@ -196,9 +196,12 @@ applied):
 - Media in IndexedDB; client→bucket storage seam; transport authorisation seam.
 - CI that runs real assertions; ESLint gate; Playwright e2e foundation.
 
-**Known baseline defect:** Discovery v1 on `master` still broadcasts precise GPS
-in public presence. The fix (approximate-only model) exists in **draft PR #60**,
-not yet merged. Do not describe it as fixed until #60 merges.
+**Baseline defect — FIXED 2026-08-03:** Discovery v1 previously broadcast precise
+GPS in public presence. This was fixed on `master` by the **coarse-location
+hotfix (PR #66, merge `069905e`, ADR-024)** — public presence now emits only
+coarsened output, guarded by `web/test/discovery-coarse-broadcast.test.js`. The
+broader approximate-only Discovery model (draft PR #60) supersedes the interim
+`coarse()` call and rebases onto ADR-024.
 
 ---
 
