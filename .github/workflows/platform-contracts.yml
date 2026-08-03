@@ -5,6 +5,10 @@
 # package is types-only and self-contained, so nothing outside it can break it.
 name: platform-contracts
 
+# Least-privilege: this workflow only reads the repo and runs npm test.
+permissions:
+  contents: read
+
 on:
   pull_request:
     paths:
