@@ -16,11 +16,23 @@ import { Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { DiscoveryController } from './discovery.controller';
 import { DiscoveryService } from './discovery.service';
+import {
+  DISCOVERY_PEOPLE_REPOSITORY,
+  DISCOVERY_VISIBILITY_REPOSITORY,
+} from './discovery.repository';
+import {
+  PrismaDiscoveryPeopleRepository,
+  PrismaDiscoveryVisibilityRepository,
+} from './discovery.prisma.repository';
 
 @Module({
   imports: [JwtModule.register({})],
   controllers: [DiscoveryController],
-  providers: [DiscoveryService],
+  providers: [
+    DiscoveryService,
+    { provide: DISCOVERY_PEOPLE_REPOSITORY, useClass: PrismaDiscoveryPeopleRepository },
+    { provide: DISCOVERY_VISIBILITY_REPOSITORY, useClass: PrismaDiscoveryVisibilityRepository },
+  ],
   exports: [DiscoveryService],
 })
 export class DiscoveryModule {}
