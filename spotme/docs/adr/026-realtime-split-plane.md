@@ -1,11 +1,12 @@
 # ADR-026 — Realtime ownership: a split control/data plane
 
-**Status: PROPOSED** · **Date:** 2026-08-03 · **Owner decision required.**
+**Status: ACCEPTED — owner decision recorded 2026-08-03 (delegated engineering approval, Platform Phase 1 landing mission).** · **Date:** 2026-08-03
 **Relates to:** ADR-002 (transport interface), the platform-migration Phase 1
 foundations (`feat/platform-phase-1`), and the Dragonfly runtime note.
 
-> Proposed only. Nothing in this ADR is wired in; it records a direction for the
-> owner to accept or reject. Acceptance does not itself deploy anything.
+> Accepted 2026-08-03 under delegated engineering approval. Nothing is wired in
+> by acceptance — this records the direction; implementation remains future,
+> separately reviewed work. Acceptance does not itself deploy anything.
 
 ## Context
 

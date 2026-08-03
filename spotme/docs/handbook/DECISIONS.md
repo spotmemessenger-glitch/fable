@@ -174,3 +174,42 @@ resolve.
     `spotme.e2e3` rollout flag unread by any app module, verified by fence
     tests after every merge. **Activation is out of scope and unscheduled** —
     it requires a separate owner-authorised change. No flag was flipped.
+
+---
+
+## Owner delegation — 2026-08-03 (Platform Phase 1 landing)
+
+The owner **delegated engineering approval** for the Platform Phase 1 landing
+mission. Recorded here per Governance G9. The delegation authorized exactly:
+
+- **Merging the verified Platform Phase 1 stack** (PRs #72–#78, merge commits
+  only — never squash/rebase/force-push).
+- **Selecting the Phase 2 search target** (decision recorded below and in
+  `../09-TECH-STACK.md`).
+- **Accepting ADR-026** (realtime split-plane) and **ADR-027** (mobile-native
+  boundary) — statuses flipped Proposed → Accepted, dated.
+
+The owner **explicitly retained authority** over — none of which this mission
+touches:
+
+- any feature activation; any feature-flag changes;
+- PR #43 (multi-device), PR #60 (Discovery V2), PR #61 (Live Nearby Events),
+  the Camera programme PRs (#55/#56/#58/#59);
+- decision-sheet items D5, D6, D11, D14, D15, D16;
+- repository split; deleting branches or files;
+- any user-visible behavioural change.
+
+**Everything landed DARK.** Both crypto flags verified false throughout;
+nothing activated, deployed, or wired into the running product.
+
+### Search-engine selection (delegated decision)
+
+**Typesense is the selected Phase 2 search target**, chosen from the committed
+reproducible benchmark (`spotme/packages/search-bench`, recorded run
+2026-08-03): ~12× faster warm p50/p95 (3.60/5.05 ms vs 44.02/44.59 ms) at an
+acceptable memory trade-off (223 MB vs 66 MB RSS on the 20k-doc corpus).
+**Meilisearch remains the documented fallback.** The engine is **NOT wired
+into the application and NOT active**. **Mandatory revisit:** rerun the
+committed benchmark on production hardware with a production-scale corpus
+before wiring search into the application; if the numbers differ materially,
+reopen the decision.

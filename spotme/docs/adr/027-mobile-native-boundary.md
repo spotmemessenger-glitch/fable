@@ -1,11 +1,12 @@
 # ADR-027 — Mobile-native boundary: React Native target, Capacitor transitional
 
-**Status: PROPOSED** · **Date:** 2026-08-03 · **Owner decision required.**
+**Status: ACCEPTED — owner decision recorded 2026-08-03 (delegated engineering approval, Platform Phase 1 landing mission).** · **Date:** 2026-08-03
 **Relates to:** the camera suite (PRs #55/#56/#58/#59), calls (`rooms.js`,
 Trystero/WebRTC), Discovery/Nearby (background location, Bluetooth), and the
 platform-migration Phase 1 foundations (`feat/platform-phase-1`).
 
-> Proposed only. Nothing here is built or wired. Acceptance sets a direction for
+> Accepted 2026-08-03 under delegated engineering approval. Nothing is built or
+> wired by acceptance. Acceptance sets a direction for
 > where native capability work lands; it does not itself start a rewrite.
 
 ## Context
