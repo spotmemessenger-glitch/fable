@@ -1,10 +1,10 @@
 # ADR-022 — Discovery execution sequence (five steps)
 
-**Status:** Proposed (2026-08-03) — **awaiting owner ratification.** The owner
-explicitly reserved this decision ("Ratify ADR-022 if you decide the Discovery
-sequence changes permanently"). Supersedes the *sequence portion* of
-[ADR-021](021-spotme-unified-product-ecosystem.md) when Accepted; ADR-021 itself
-remains immutable and otherwise in force.
+**Status:** Accepted (ratified by the owner 2026-08-03 — "I would ratify
+ADR-022 if it simply formalizes the sequence you've already adopted elsewhere";
+it does exactly that, matching roadmap v2.0 §12). Supersedes the *sequence
+portion* of [ADR-021](021-spotme-unified-product-ecosystem.md); ADR-021 itself
+remains immutable and otherwise in force. Immutable from here per G6.
 
 ## Context
 

@@ -70,7 +70,7 @@ Green-field. Labelled honestly; nothing here may be described as built.
 
 | Gap | Specified in | Note |
 |---|---|---|
-| **Intent Graph** — source registry, publish/consume contracts | [03](03-INTENT-GRAPH-AND-SEARCH.md) §3.2–§3.4 | The platform thesis itself; [ADR-023](../../adr/023-exchange-platform-service-intent-graph.md) is **Proposed**, not Accepted |
+| **Intent Graph** — source registry, publish/consume contracts | [03](03-INTENT-GRAPH-AND-SEARCH.md) §3.2–§3.4 | The platform thesis itself; [ADR-023](../../adr/023-exchange-platform-service-intent-graph.md) Accepted (owner-ratified 2026-08-03); no code yet |
 | **Runtime configuration service** — three classes, validation, audit | [11](11-FLAGS-CONFIG-OBSERVABILITY.md) | Only compile-time flags exist today |
 | **Notification outbox + Discovery notification classes** | [07](07-NOTIFICATION-SERVICE.md) | #48/#52 provide transports only; no outbox, no Discovery classes |
 | **Offline compose/action queues for Discovery surfaces** | [09](09-OFFLINE-SYNC.md) | Messaging's IndexedDB media baseline is merged prior art, not Discovery code |

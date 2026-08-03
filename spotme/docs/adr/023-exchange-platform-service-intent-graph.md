@@ -1,7 +1,10 @@
 # ADR-023 — Exchange as a platform service: the universal Intent Graph
 
-**Status:** Proposed (2026-08-03) — **awaiting owner ratification.** Records the
-owner's architectural directive from the PR #64 review.
+**Status:** Accepted (ratified by the owner 2026-08-03, with the scoping note
+that this ADR fixes the **architectural boundary and responsibilities only** —
+implementation detail lives in the DPAS and per-surface specs, not here).
+Records the owner's architectural directive from the PR #64 review. Immutable
+from here per G6.
 
 ## Context
 

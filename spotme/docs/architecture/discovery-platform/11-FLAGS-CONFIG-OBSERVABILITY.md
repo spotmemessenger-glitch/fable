@@ -99,11 +99,16 @@ review-time prose.
 
 Three classes; the class is part of each key's schema:
 
-| Class | Who may change it | Examples |
+| Class | Who may change it — and how | Examples |
 |---|---|---|
-| `privacy-critical` | **Owner sign-off required** | `discovery.privacy.cellM` = 500 · `discovery.privacy.windowMs` = 1800000 · `discovery.privacy.maxOffsetM` = 150 |
-| `product` | Product decision | `discovery.radius.steps` = [10,15,25,50,100] km · `discovery.radius.minResults` = 8 · `places.ranking.weights` · `events.ranking.weights` · `exchange.ranking.weights` · `notify.match.threshold` = 0.6 · `notify.digest.windowMin` = 30 · `data.retention.resolvedDays` = 30 · `events.retention.endedHours` = 6 |
-| `ops` | SRE | `events.ttl.staleMin` = 15 · `api.page.maxSize` · `api.idempotency.windowHours` · provider timeouts/breakers ([05 §5.6](05-PROVIDER-ABSTRACTION.md)) |
+| `privacy-critical` | **Not ordinary runtime configuration** (owner directive, 2026-08-03). Anything affecting a privacy *guarantee* — location precision, consent semantics, what may cross the wire — changes only through a **code-reviewed change with explicit owner approval** (a reviewed PR whose mutation/fence tests are updated in the same change), never through the runtime config service. The values are declared in code; the registry lists them **read-only** for visibility. | `discovery.privacy.cellM` = 500 · `discovery.privacy.windowMs` = 1800000 · `discovery.privacy.maxOffsetM` = 150 |
+| `product` | Product decision, via the validated + audited runtime path | `discovery.radius.steps` = [10,15,25,50,100] km · `discovery.radius.minResults` = 8 · `places.ranking.weights` · `events.ranking.weights` · `exchange.ranking.weights` · `notify.match.threshold` = 0.6 · `notify.digest.windowMin` = 30 · `data.retention.resolvedDays` = 30 · `events.retention.endedHours` = 6 |
+| `ops` | SRE, via the validated + audited runtime path | `events.ttl.staleMin` = 15 · `api.page.maxSize` · `api.idempotency.windowHours` · provider timeouts/breakers ([05 §5.6](05-PROVIDER-ABSTRACTION.md)) |
+
+**The privacy floor is structural, not procedural:** no `product` or `ops` key
+may exist whose adjustment could expose precise coordinates or weaken consent —
+such a knob is a design defect, rejected at schema-review time. Runtime
+configuration can tune *how well* the platform works, never *how private* it is.
 
 All defaults `[PROPOSED]`; chapter-local keys (ranking falloffs, notification
 rate caps, page bounds) register in this same registry under their owning

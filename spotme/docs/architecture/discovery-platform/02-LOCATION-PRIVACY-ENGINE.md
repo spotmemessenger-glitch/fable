@@ -152,8 +152,8 @@ Per the platform configuration principle
 ([11-FLAGS-CONFIG-OBSERVABILITY](11-FLAGS-CONFIG-OBSERVABILITY.md)):
 ACTIVATION stays compile-time (ADR-015/
 [ADR-016](../../adr/016-dark-shipping.md)); TUNING is runtime config in three
-classes. The engine's parameters are class **`privacy-critical` —
-owner-governed**:
+classes. The engine's parameters are class **`privacy-critical` — excluded
+from ordinary runtime tuning entirely**:
 
 | Key | Owner-approved value | Meaning |
 |---|---|---|
@@ -161,14 +161,17 @@ owner-governed**:
 | `discovery.privacy.windowMs` | 1800000 (30 min) | Rotation window — how often the in-cell offset changes |
 | `discovery.privacy.maxOffsetM` | 150 | Cap on the in-cell offset (m), kept well under `cellM / 2` |
 
-These are **NOT ops knobs**. The 500 m / 30 min / 150 m values are
-owner-approved (ADR-018, PR #60 review) and currently live as constants
-(`CELL_M`, `WINDOW_MS`, `MAX_OFFSET_M`) with per-call overrides used only by
-tests. `[PROPOSED]`: lifting them into the config service keeps the same
-governance — any change requires owner sign-off, passes validation invariants
+These are **NOT runtime-tunable at all** (owner directive, 2026-08-03:
+privacy-guarantee-affecting values cannot be altered by ordinary runtime
+configuration). The 500 m / 30 min / 150 m values are owner-approved (ADR-018,
+PR #60 review) and **stay declared in code** as constants (`CELL_M`,
+`WINDOW_MS`, `MAX_OFFSET_M`), with per-call overrides used only by tests. Any
+change ships as a **code-reviewed change with explicit owner approval**, whose
+same PR updates the mutation/privacy tests and re-validates the invariants
 (`maxOffsetM < cellM / 2`; `windowMs ≥` a floor that keeps rotation
-meaningful; all three finite and positive), and is audited. Weakening any of
-them is a privacy decision, never a tuning exercise.
+meaningful; all three finite and positive). The config registry lists the keys
+**read-only, for visibility** ([11 §11.5](11-FLAGS-CONFIG-OBSERVABILITY.md)).
+Weakening any of them is a privacy decision, never a tuning exercise.
 
 ## 2.7 Invariants the mutation tests pin
 

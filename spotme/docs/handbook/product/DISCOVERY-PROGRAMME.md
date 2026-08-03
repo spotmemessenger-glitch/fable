@@ -27,7 +27,7 @@ Steps run in this order. Do **not** reorder or skip ahead. **Owner-controlled.**
 > **Sequence updated (owner decision, 2026-08-03):** **SpotMe Exchange** is
 > inserted as **step 2**, making the sequence five steps. This **supersedes** the
 > four-step sequence in **ADR-021**, which remains **immutable** (G6) and is not
-> edited — **ADR-022 is drafted (Proposed)** for the owner to ratify
+> edited — **ADR-022 is Accepted (owner-ratified 2026-08-03)**
 > ([../../adr/022-discovery-execution-sequence.md](../../adr/022-discovery-execution-sequence.md)).
 > Full detail: [SPOT-ME-PRODUCT-ROADMAP-V2 §12/§14](SPOT-ME-PRODUCT-ROADMAP-V2.md).
 > The engineering blueprint for the shared Discovery services is the

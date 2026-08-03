@@ -68,8 +68,8 @@ sequencing, gates).
 ## 1.3 The Intent Graph (owner directive)
 
 **Exchange is a platform service, not a module.** The owner's directive
-(2026-08-03, recorded in proposed
-[ADR-023](../../adr/023-exchange-platform-service-intent-graph.md)): Exchange
+(2026-08-03, recorded in
+[ADR-023](../../adr/023-exchange-platform-service-intent-graph.md), Accepted): Exchange
 must not become one more self-contained screen. It becomes the **universal
 Intent Graph** — a publish/consume service boundary through which *every* Spot
 Me surface expresses what people **need** and what is **available** near them.
@@ -155,7 +155,7 @@ reviewed.
 | Service | Today | Evidence |
 |---|---|---|
 | Location & Privacy Engine | **Implemented on draft PR #60 — live-path on merge, not flag-gated** (the privacy fix activates with the merge itself) | `[REUSE]` `spotme/web/src/lib/geo-approx.js` (draft PR #60): 500 m cell snap, 30 min rotating window, ≤150 m bounded offset, deterministic from (id, window) |
-| Intent Graph & Search Orchestration | Search orchestration + adaptive radius **dark**; the Intent Graph itself **green-field** (ADR-023 Proposed) | `[REUSE]` `spotme/web/src/lib/discovery-v2/{search,radius}.js` (PR #60), `spotme/web/src/lib/live-events/search.js` (PR #61) |
+| Intent Graph & Search Orchestration | Search orchestration + adaptive radius **dark**; the Intent Graph itself **green-field** (ADR-023 Accepted; no code yet) | `[REUSE]` `spotme/web/src/lib/discovery-v2/{search,radius}.js` (PR #60), `spotme/web/src/lib/live-events/search.js` (PR #61) |
 | Ranking Service | Two **dark** weight profiles exist | `[REUSE]` `spotme/web/src/lib/discovery-v2/ranking.js` (PR #60), `spotme/web/src/lib/live-events/ranking.js` (PR #61) |
 | Provider Abstraction | Provider seams + whitelist normalization **dark** within the two engines; no shared package yet | `[REUSE]` `spotme/web/src/lib/discovery-v2/{search,directions,people}.js`, `spotme/web/src/lib/live-events/{search,detail,safety}.js` |
 | AI Interfaces | Deterministic query-intent seam **dark** (no LLM, no network) | `[REUSE]` `spotme/web/src/lib/discovery-v2/intent.js` (PR #60) |

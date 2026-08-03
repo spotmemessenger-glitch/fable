@@ -107,9 +107,8 @@ Accepted ADR disagree, the ADR wins until superseded (Governance G6).
   ecosystem). [ADR-022](../../adr/022-discovery-execution-sequence.md)
   (five-step sequence) and
   [ADR-023](../../adr/023-exchange-platform-service-intent-graph.md) (Exchange
-  as platform service / Intent Graph) are **Proposed — awaiting owner
-  ratification**, not Accepted; this spec is written to conform to them but
-  does not treat them as settled.
+  as platform service / Intent Graph) were **ratified by the owner 2026-08-03**
+  and are Accepted; this spec conforms to both.
 - **Canonical target architecture** (owner-controlled migrated build memory;
   reconciled in roadmap v2.0 §9/§11) — the TypeScript monorepo: React/Vite PWA
   (`apps/web`), NestJS/Prisma/PostgreSQL (`apps/api`), shared

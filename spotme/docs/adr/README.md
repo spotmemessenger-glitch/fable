@@ -40,13 +40,13 @@ Handbook v1.0; 021 added with the Product Authority):
 | [020](020-stacked-pr-strategy.md) | Stacked draft-PR strategy | Accepted |
 | [021](021-spotme-unified-product-ecosystem.md) | SpotMe Unified Product Ecosystem (3 pillars, the loop, fixed Discovery order) | Accepted |
 
-### Proposed — awaiting owner ratification (022–023)
-Drafted for the owner to ratify; **not** in force until Accepted:
+### Ratified 2026-08-03 (022–023)
+Drafted with the DPAS and ratified by the owner:
 
 | ADR | Title | Status |
 |---|---|---|
-| [022](022-discovery-execution-sequence.md) | Discovery execution sequence — five steps (supersedes ADR-021's sequence when Accepted) | Proposed |
-| [023](023-exchange-platform-service-intent-graph.md) | Exchange as a platform service — the universal Intent Graph | Proposed |
+| [022](022-discovery-execution-sequence.md) | Discovery execution sequence — five steps (supersedes ADR-021's sequence) | Accepted |
+| [023](023-exchange-platform-service-intent-graph.md) | Exchange as a platform service — the universal Intent Graph (boundary & responsibilities only) | Accepted |
 
 ## Format
 
