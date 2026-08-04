@@ -49,7 +49,7 @@ another document**. Full audit evidence:
 | Camera suite CAM-1…4 | Implemented (Draft PR **#56/#58/#59/#55**, `feat/camera-engine` + stacked) | branches **frozen** by owner directive; dark flags |
 | Discovery V2 map | Implemented (Draft PR **#60**, `feat/discovery-v2-map-foundation`) | dark, fence-tested; **rebase pending** after #66 (ADR-024) |
 | Live Nearby Events | Implemented (Draft PR **#61**, `feat/live-nearby-events`, stacked on #60) | dark, fence-tested |
-| Nearby Moments | Planned | no module, contract, or ADR; data/privacy-model ADR required before code |
+| Nearby Moments | In Progress (Phase 5 dark chain) | ADR-028 (Proposed) + contracts in **Phase 5A** (`feat/platform-phase-5a-moments-contracts`); see the Phase 5 rows below |
 | SpotMe Exchange | Planned | PRD draft in PR **#64** (`handbook/product/exchange/`), pending A5 ratification; **no code** |
 | Live voice translation | Implemented (Draft PR **#49** scaffold + **#54** pipeline, `feat/live-voice-*`) | scaffolding; not on master |
 | Adaptive transport + Bluetooth mesh | Implemented (Draft PR **#50**, `feat/adaptive-transport-scaffold`) | scaffolding; not on master |
@@ -78,6 +78,7 @@ another document**. Full audit evidence:
 | **Platform Phase 4B** — dark `EventsModule` (unimported) + additive PostGIS storage (Event/DedupDecision/SearchProjection; no user-origin column) + normalize boundary (venue coarsening, source-only popularity, C3 provenance, C5 time) + conservative cross-provider dedup (C4) + provider port (fixture/unavailable only) + sanitized projection + keyset browse | **Implemented (Merged — DARK)** | **PR #93**, merge `2e76944`; `backend/src/events/`, migration `20260804140000_events_backend` — `EventsModule` NOT imported by `AppModule` |
 | **Platform Phase 4C** — transparent events ranking (closed registry; engagement throws; popularity last, tie-break only, unknown omitted — C2) + inert web-next Events surface (browse/detail/save/map, source attribution + provenance, coarsening boundary, honest states, A3) | **Implemented (Merged — DARK)** | **PR #94**, merge `c236044`; `backend/src/events/events.ranking.ts`, `web-next/src/events/` — fixtures only, `App.tsx` unchanged |
 | **Platform Phase 4D** — Events dark integration fences (11, incl. web-next-entry + no-origin-column + behavioral venue-coarsening) + privacy-safe instrumentation (closed metric/label registries) + benchmark (50k achieved) + runbooks + activation checklist + docs | **Implemented (Merged — DARK)** | **PR #95**, merge `5949e4f`; `backend/test/events-dark-fences.spec.ts`, `backend/src/events/events.observability.ts`, `docs/architecture/events-platform/` |
+| **Platform Phase 5A** — Nearby Moments versioned contracts (M5 four-tier visibility with `FeedVisibility` excluding private, M3 six-state stories, M4 flat comments + closed reactions, closed M2 ranking registry, no engagement counts on public shapes) + compile-time negatives + **ADR-028** data/privacy model (Proposed) + M6 threat model + Phase 5 programme | Implemented (Draft PR — DARK) | branch `feat/platform-phase-5a-moments-contracts`; `packages/contracts/src/moments.ts`, `docs/adr/028-nearby-moments-data-privacy-model.md`, `docs/architecture/moments-platform/01-CONTRACTS-ADR-THREAT-MODEL.md` |
 
 ## Platform Phase 1 — landed decisions (2026-08-03, delegated approval)
 
