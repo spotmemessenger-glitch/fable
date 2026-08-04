@@ -29,19 +29,17 @@ export class DiscoveryController {
     }
   }
 
-  /** My visibility preference (P3) — principal-keyed, body ids ignored. */
+  /** My visibility preference (P3) — principal-keyed, body ids ignored. The
+   *  payload is validated and COARSENED server-side (precise-shape refusal,
+   *  grid re-quantization, bounded TTL) exactly like the query origin. */
   @Put('visibility')
-  setVisibility(
-    @CurrentUser() principal: AuthenticatedPrincipal,
-    @Body() body: { enabled?: boolean; coarseLat?: number; coarseLon?: number; coarseCell?: string; expiresAt?: string },
-  ) {
-    return this.discovery.setVisibility(principal.id, {
-      enabled: body?.enabled === true,
-      coarseLat: Number(body?.coarseLat ?? 0),
-      coarseLon: Number(body?.coarseLon ?? 0),
-      coarseCell: String(body?.coarseCell ?? ''),
-      expiresAt: body?.expiresAt ? new Date(body.expiresAt) : new Date(Date.now() + 30 * 60 * 1000),
-    });
+  setVisibility(@CurrentUser() principal: AuthenticatedPrincipal, @Body() body: unknown) {
+    try {
+      return this.discovery.setVisibility(principal.id, body);
+    } catch (e) {
+      if (e instanceof DiscoveryError) return { state: 'failed', error: e.toWire() };
+      throw e;
+    }
   }
 
   @Get('visibility')

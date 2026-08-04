@@ -4,11 +4,12 @@
  * the threat model says must be refused, is refused here with a typed error.
  */
 
-import { validateDiscoveryQuery, decodeCursor, encodeCursor, DISCOVERY_POLICY_DEFAULTS } from '../src/discovery/discovery.policy';
+import { validateDiscoveryQuery, decodeCursor, encodeCursor, validateVisibilityUpsert, DISCOVERY_POLICY_DEFAULTS } from '../src/discovery/discovery.policy';
 import { DiscoveryError } from '../src/discovery/discovery.errors';
 import { DiscoveryService } from '../src/discovery/discovery.service';
 import { DiscoveryPeopleRepository, DiscoveryVisibilityRepository } from '../src/discovery/discovery.repository';
 import { PersonCandidateRow } from '../src/discovery/discovery.types';
+import { orderPeople, explainPerson } from '../src/discovery/discovery.ranking';
 
 const okQuery = (over: Record<string, unknown> = {}) => ({
   contractsVersion: 1,
@@ -76,11 +77,31 @@ describe('discovery policy — validation & ceilings', () => {
     expectCode(() => validateDiscoveryQuery('me', okQuery({ origin: { lat: 91, lon: 0 } })), 'MALFORMED_QUERY');
   });
 
-  it('cursors are opaque and round-trip; garbage is INVALID_CURSOR', () => {
-    const c = encodeCursor({ d: 1234, u: 'user_9' });
-    expect(decodeCursor(c)).toEqual({ d: 1234, u: 'user_9' });
+  it('cursors are opaque, signed, and round-trip an EXACT float distance (F10.1)', () => {
+    // A fractional distance must survive verbatim — rounding it would re-emit
+    // or skip keyset-boundary rows.
+    const c = encodeCursor({ d: 1234.4567, u: 'user_9', depth: 2 });
+    expect(decodeCursor(c)).toEqual({ d: 1234.4567, u: 'user_9', depth: 2 });
     expectCode(() => decodeCursor('not-a-cursor'), 'INVALID_CURSOR');
     expectCode(() => validateDiscoveryQuery('me', okQuery({ cursor: 'zzz' })), 'INVALID_CURSOR');
+  });
+
+  it('a FORGED cursor is rejected — the payload is signed, not just base64 (F6)', () => {
+    // An attacker crafting {d,u,depth} by hand (no valid HMAC) cannot turn the
+    // cursor into a distance oracle.
+    const forged = Buffer.from(JSON.stringify({ d: 500, u: 'victim', depth: 0 }), 'utf8').toString('base64url') + '.deadbeefdeadbeefdeadbe';
+    expectCode(() => decodeCursor(forged), 'INVALID_CURSOR');
+    // Tampering with a legitimately-issued cursor's payload also fails the check.
+    const good = encodeCursor({ d: 10, u: 'u', depth: 0 });
+    const tampered = Buffer.from(JSON.stringify({ d: 999999, u: 'u', depth: 0 }), 'utf8').toString('base64url') + '.' + good.split('.')[1];
+    expectCode(() => decodeCursor(tampered), 'INVALID_CURSOR');
+  });
+
+  it('cursor depth is the enforced enumeration bound (F5)', () => {
+    const deep = encodeCursor({ d: 10, u: 'u', depth: 20 });
+    expectCode(() => validateDiscoveryQuery('me', okQuery({ cursor: deep })), 'CURSOR_TOO_DEEP');
+    const shallow = encodeCursor({ d: 10, u: 'u', depth: 3 });
+    expect(() => validateDiscoveryQuery('me', okQuery({ cursor: shallow }))).not.toThrow();
   });
 
   it('contracts version is pinned', () => {
@@ -126,7 +147,10 @@ describe('discovery service — composition over in-memory fakes', () => {
     expect(person?.distanceBand).toBe('under500m');
     const json = JSON.stringify(page);
     expect(json).not.toContain('coarseDistanceM');
-    expect(json).not.toContain('"340"');
+    // The metre value 340 must not appear in ANY numeric context — a bare
+    // `:340` is how JSON serializes a leaked number, so a quoted-only check was
+    // vacuous (F11.2). The cursor is NOT a leak here (single row → no cursor).
+    expect(json).not.toMatch(/[:,[]\s*340\s*[,}\]]/);
     expect((person as unknown as Record<string, unknown>).deviceDistanceM).toBeUndefined();
   });
 
@@ -153,5 +177,64 @@ describe('discovery service — composition over in-memory fakes', () => {
     expect(typeof page.cursor).toBe('string');
     const short = await service([mk('a', 1)]).queryPeople('me', okQuery(), now);
     expect(short.cursor).toBeNull();
+  });
+
+  it('setVisibility validates + coarsens the body (F1) and bounds the TTL (F4.1)', async () => {
+    let stored: unknown = null;
+    const people: DiscoveryPeopleRepository = { findNearbyPeople: async () => [] };
+    const vis: DiscoveryVisibilityRepository = {
+      setVisibility: async (_id, v) => { stored = v; return { visibilityVersion: 1 }; },
+      getVisibility: async () => null,
+    };
+    const svc = new DiscoveryService(people, vis);
+    // A precise fix REQUESTING a year-long window: coords must be re-quantized
+    // to the coarse grid and the TTL clamped to the ceiling.
+    await svc.setVisibility('me', { enabled: true, origin: { lat: 12.9716523, lon: 77.5946891 }, expiresInMinutes: 525600 });
+    const s = stored as { coarseLat: number; coarseLon: number; expiresAt: Date };
+    expect(s.coarseLat).toBe(12.972); // 3-decimal grid, not the precise value
+    expect(s.coarseLon).toBe(77.595);
+    const ttlMin = (s.expiresAt.getTime() - Date.now()) / 60_000;
+    expect(ttlMin).toBeLessThanOrEqual(DISCOVERY_POLICY_DEFAULTS.maxVisibilityTtlMinutes + 1);
+  });
+});
+
+describe('visibility write refusals (F1)', () => {
+  const expectCode = (fn: () => unknown, code: string) => {
+    try { fn(); throw new Error('expected a refusal'); }
+    catch (e) { expect(e).toBeInstanceOf(DiscoveryError); expect((e as DiscoveryError).code).toBe(code); }
+  };
+  it('refuses a precise GeolocationCoordinates shape', () => {
+    expectCode(() => validateVisibilityUpsert({ enabled: true, origin: { lat: 1, lon: 2, accuracy: 5 } }), 'PRECISE_LOCATION_REFUSED');
+    expectCode(() => validateVisibilityUpsert({ enabled: true, coords: { latitude: 1 } } as unknown), 'PRECISE_LOCATION_REFUSED');
+  });
+  it('refuses unknown keys (A3: no age/gender ride-along) and out-of-range coords', () => {
+    // Unknown keys fail the shared exact-key allow-list (MALFORMED_QUERY);
+    // range/shape failures raise VISIBILITY_REFUSED. Both are typed, fail-closed.
+    expectCode(() => validateVisibilityUpsert({ enabled: true, origin: { lat: 1, lon: 2 }, age: 30 } as unknown), 'MALFORMED_QUERY');
+    expectCode(() => validateVisibilityUpsert({ enabled: true, origin: { lat: 200, lon: 2 } }), 'VISIBILITY_REFUSED');
+  });
+  it('disabling needs no coordinates', () => {
+    const v = validateVisibilityUpsert({ enabled: false });
+    expect(v.enabled).toBe(false);
+  });
+});
+
+describe('ranking explanation preserves the sort order (F4.2, P5)', () => {
+  const row = (userId: string, dist: number, minsLeft: number): PersonCandidateRow => ({
+    userId, displayName: userId, handle: null, avatarRef: null, coarseDistanceM: dist,
+    coarseLat: 0, coarseLon: 0, coarseCell: 'c',
+    observedAt: new Date(Date.now() - 10 * 60_000), expiresAt: new Date(Date.now() + minsLeft * 60_000),
+  });
+  it('for every adjacent pair in orderPeople, explain(a).total >= explain(b).total', () => {
+    const now = new Date();
+    // A nearer-but-stale row vs a farther-but-fresh row — the exact case that
+    // made the old 0.6/0.4 weights display a total contradicting the rank.
+    const rows = [row('near-stale', 100, 1), row('far-fresh', 1500, 60), row('mid', 700, 30), row('nearest-fresh', 50, 55)];
+    const ordered = orderPeople(rows, now);
+    for (let i = 1; i < ordered.length; i++) {
+      const a = explainPerson(ordered[i - 1], now).total;
+      const b = explainPerson(ordered[i], now).total;
+      expect(a).toBeGreaterThanOrEqual(b);
+    }
   });
 });
