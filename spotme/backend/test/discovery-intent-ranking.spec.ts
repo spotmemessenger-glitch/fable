@@ -12,6 +12,7 @@ import {
   RANKING_WEIGHTS_DEFAULTS,
   RANKING_SIGNALS,
   ClosedRegistryError,
+  InvalidRankingWeightError,
 } from '../src/discovery/discovery.ranking.engine';
 
 describe('intent routing — deterministic baseline (no LLM, no keys, no network)', () => {
@@ -94,6 +95,17 @@ describe('ranking engine — explainable, honest, closed-registry', () => {
     );
     expect(r.breakdown.total).toBeCloseTo(RANKING_WEIGHTS_DEFAULTS.proximity, 4);
     expect(r.breakdown.confidence).toBeLessThan(0.5); // sparse evidence = low confidence, disclosed
+  });
+
+  it('WEIGHT VALIDATION (F4.3): negative, NaN, and unregistered weights are refused', () => {
+    const c = cand('x', { evidence: { proximity: { value: 1, reason: 'close' } } });
+    // A negative proximity weight would silently invert "closer beats popular".
+    expect(() => rankCandidates([c], { ...RANKING_WEIGHTS_DEFAULTS, proximity: -0.3 })).toThrow(InvalidRankingWeightError);
+    expect(() => rankCandidates([c], { ...RANKING_WEIGHTS_DEFAULTS, freshness: NaN })).toThrow(InvalidRankingWeightError);
+    // An unregistered weight key is rejected by the closed registry.
+    expect(() => rankCandidates([c], { ...RANKING_WEIGHTS_DEFAULTS, sponsored: 1 } as never)).toThrow(ClosedRegistryError);
+    // The defaults pass.
+    expect(() => rankCandidates([c])).not.toThrow();
   });
 
   it('SPONSORED INFLUENCE IS ABSENT: the registry is closed and rejects it loudly', () => {
