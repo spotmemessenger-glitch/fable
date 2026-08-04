@@ -230,3 +230,26 @@ reopen the decision.
   Phase 2 ships NO gender or age filter anywhere; no age or gender field is
   added to any schema, index, contract, or UI (mission amendment A3). The
   Phase 2 filter sheet is distance band, category, and open-now only.
+
+## Owner delegation — 2026-08-04 (Phase 2 landing + Phase 3B–3E dark build)
+
+The owner delegated engineering authority to **land the verified Platform
+Phase 2 chain into master** (merge commits #80→#85, in order) and to **build
+Platform Phase 3B–3E as dark draft PRs**. Recorded here per the mission.
+
+- **Landed under delegation:** Phase 2A–2F merged to master via ordinary merge
+  commits (SHAs in `03-IMPLEMENTATION-STATUS.md`). Everything landed DARK —
+  both crypto flags remain false, `DiscoveryModule` is not imported by
+  `AppModule`, no route, no flag flip, no deploy, no user-visible change.
+- **Delegated for this mission:** merges of the verified Phase 2 chain; all
+  engineering decisions for Phase 3B–3E; continuing between steps without
+  pausing.
+- **RETAINED by the owner (NOT delegated):** any activation or feature-flag
+  flip; deployment; production configuration; touching PR #43/#60/#61 or the
+  camera branches; gender/age anywhere (A3); payments/escrow/advertising/
+  sponsored ranking; and approval of the open policy items **A5** (Exchange
+  PRD ratification), **D4** (business participation — dark seam only, v1 stays
+  individuals-only), **D6/D7** (age/gender policy). Those remain config seams
+  with documented defaults, never approved product decisions.
+- **Phase 3 does NOT merge this mission** — 3A (#86) and 3B–3E stay draft;
+  Phase 3 landing is a later owner mission.
