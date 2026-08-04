@@ -14,369 +14,327 @@
 
 # START HERE — pickup brief (RETIRED — see banner above)
 
-**Written:** 2026-08-01, end of the identity-sequence + E2E-foundation session.
-**Supersedes** the 2026-07-31 brief entirely (PRs #2–#7 era). That text is in
-git history (`git log .handoff/NEXT-SESSION.md`) and in `SESSION-*.md`; nothing
-below depends on it.
+> ## ⏱ UPDATE — 2026-08-02 (later): AI Camera Wave 2 subset done, review ACCEPTED
+>
+> **Status recorded per owner review:** *Wave 2 report accepted pending
+> owner/read-only code review; no merge, wiring, activation, dependency
+> selection, or further implementation authorized.* Implementation-complete,
+> activation-incomplete. **Do not merge, wire, activate, pick dependencies, or
+> start new implementation** without a fresh explicit owner go-ahead.
+>
+> What changed since the 13:00 brief below (§3 "Wave 2 — foundation only" is
+> now superseded for AI Vision + AR/Beauty):
+> - **AI Camera Wave 2 finishable subset built, reviewed, and PR'd** — the
+>   subset that needs no owner-reserved decision (owner directive this session).
+>   - **#58** `feat/ai-vision` (head `44da9ff`) — `createVision` factory,
+>     barcode/QR scan, honest dark OCR/translate seams + dark cloud port.
+>     Draft, stacked on #56, CI green.
+>   - **#59** `feat/ar-beauty` (head `97aebee`) — `createArBeauty` factory,
+>     tier-0 beauty + face-tracking box adapter/smoother, dark landmark/hand/
+>     world legs. Draft, stacked on #56, CI green.
+>   - Both: additive, flag-gated OFF, byte-identical-when-off (fence + dist
+>     scan), full `npm test` green, eslint clean. An internal two-lens
+>     adversarial review found no HIGH; findings fixed with regression tests.
+> - **docscan de-scoped**: the ai-vision document scanner was unreviewed wip
+>   failing 11/36 golden tests (clean pages → `NO_QUAD_FOUND`); preserved on
+>   branch **`wip/ai-vision-docscan-unreviewed`**, NOT shipped. ADR-014b §4.
+> - **Still frozen** (§4 below unchanged): nothing merged/wired. Review #56
+>   first — both Wave 2 PRs depend on it.
+> - **Wave 2 legs still blocked on owner decisions** (activation gates):
+>   ADR-014b §3 (tesseract OCR dep; D1 cloud boundary + D5 cost; medical
+>   policy) and ADR-014c §3 (MediaPipe face/hand landmarker dep + self-hosted
+>   model assets; WebXR/native for world AR).
+> - **UNPROVEN** (owner review emphasised): real camera/browser behavior,
+>   mobile GPU output/visual equivalence, performance, thermal, battery — none
+>   validated. Tests are deterministic-fake only.
+>
+> Everything below is the original 13:00 brief, still accurate except where
+> this banner supersedes §3 for the two Wave 2 missions.
+
+---
+
+**Written:** 2026-08-02, ~13:00 UTC, mid Priority 2 build phase.
+**Supersedes** the 2026-08-01 brief entirely (the identity-sequence/E2E-foundation
+era, PRs up to #36). That text is in git history
+(`git log .handoff/NEXT-SESSION.md`) and in `SESSION-*.md`.
+
+**Why this brief exists now, specifically:** the owner is likely switching to a
+new account (current one is hitting usage limits) and needs a new session to
+pick this up cold. Everything below is written for that: what's true right
+now, what's mid-flight, and exactly what a fresh session needs to re-attach.
 
 **Rule that has not changed:** never claim something works because this brief
-says so. The brief is a record, not a live check. Anything marked UNPROVEN
-stays unproven until re-run. Every number below says where it was measured.
+says so. It is a record, not a live check. Anything marked UNPROVEN stays
+unproven until re-run. Every PR head below is a real SHA, verified at write
+time — re-verify before trusting it, heads move.
 
 ---
 
-## 0. Repository state (verified 2026-08-01 ~16:10 UTC)
+## 0. Repository state (verified 2026-08-02 ~13:00 UTC)
 
-```
-master  fb02b99   feat(web): signing-key storage per ADR-008 (#36)
-        43fce9e  feat(web): send enforcement, computed always and switched off (A5) (#31)
-        d29c1b6  test(web): mechanise the A5 device matrix, and fix the race it found (#30)
-        7f78a11  docs: roadmap V2 controlling + V1→V2 mapping (#35)
-        f9a5af8  docs(handoff): rewrite the pickup brief for the post-#29 state (#33)
-        a934e11  feat(web): a signing identity, and bindings that prove possession (A7) (#29)
-```
+`master` is `31e1894` (docs: owner amendment 2026-08-01 — execution order + AI
+provider principle, #37). `feat/multi-device` (the tip of the still-open P1
+crypto stack) is `fc26de4`. **Nothing has merged since the last brief** — the
+review freeze (§4) still holds everything open.
 
-Measured on post-#36 `master` in this container: **web 936/936**, lint clean,
-build clean; backend 13 suites / 121 tests (in CI); **e2e 15/15** (in CI).
+### Every open PR, current heads
 
-### Merged this session, newest first
+| PR | Title | Branch → base | State |
+|---|---|---|---|
+| **#56** | Camera Engine (AI Camera CAM-1) | `feat/camera-engine`→master | draft, `c7c8020`, **CI green (4/4)** |
+| **#55** | Creative Studio (AI Camera CAM-4) | `feat/creative-studio`→master | draft, `d7ef3fa`, web-tests green, backend/e2e were still running at write time — **check before trusting** |
+| #54 | Live Voice Translation platform (P2C) | `feat/live-voice-platform`→`feat/live-voice-scaffold` | draft, `4c60717`, CI green |
+| #53 | AR/Snap-Camera-Kit research docs | `claude/snap-camera-kit-repos-65c88r`→master | **NOT MINE** — a separate session's PR, docs-only, out of scope; leave it alone |
+| #52 | Push platform, production-hardened (P2 A) | `feat/push-platform`→`feat/push-notification-sdks` | draft, `642ed18`, CI green |
+| #51 | Translation platform, completed (P2 B) | `feat/translation-abstraction`→master | draft, `839dd1e`, CI green |
+| #50 | Adaptive Communication Network, production (P2 D) | `feat/adaptive-transport-scaffold`→master | draft, `a9c7b5f`, CI green |
+| #49 | Live Voice scaffold (superseded by #54) | `feat/live-voice-scaffold`→master | draft, `3e6d6b7`, CI green, kept as #54's base |
+| #48 | Push SDKs, packages-only | `feat/push-notification-sdks`→master | draft, `62adff1`, CI green |
+| #47 | Priority 2 planning package + build report | `docs/priority-2-planning`→`docs/platform-adrs` | draft, `ed6e3e2`, CI green |
+| #46 | P1 HIGH-only cleanup (H1/H2/NEW-4/B1) | `cleanup/priority-1-high`→`feat/multi-device` | draft, `13638f3`, CI green |
+| #45 | P1 final review board — **verdict APPROVED** | `docs/priority-1-review`→`feat/multi-device` | draft, `57bb690`, CI green |
+| #44 | P1 completion evidence (Phase 6) | `docs/priority-1-completion`→`feat/multi-device` | draft, unchanged since 08-01 |
+| #43 | Multi-device safety numbers (Phase 5) | `feat/multi-device`→`feat/double-ratchet` | draft, **needs owner ratification** — the safety-number construction decision, unchanged |
+| #42 | Double Ratchet, e2e_v3 (Phase 4) | `feat/double-ratchet`→`feat/x3dh-prekeys` | draft, unchanged since 08-01 |
+| #41 | X3DH prekeys (Phase 3) | `feat/x3dh-prekeys`→`feat/signing-key-publication` | draft, unchanged since 08-01 |
+| #40 | Platform ADRs 009–012 (planning) | `docs/platform-adrs`→master | draft, unchanged since 08-01 |
+| #39 | Signing-key publication (ADR-008 Phase 2B) | `feat/signing-key-publication`→master | **NOT a draft** — ready-for-review, unchanged since 08-01 |
+| #38 | Owner amendment 2 docs | `docs/owner-amendment-2`→master | draft, unchanged since 08-01 |
+| #34 | Product audit docs | `docs/product-audit-2026-08-01`→master | draft, unchanged since 08-01 |
+| #8 | ybot — unrelated, pre-existing | `claude/next-session-yol4aj`→master | draft, untouched this whole arc |
 
-| PR | What | Merge SHA |
+### Branches pushed but with NO PR open (deliberately — see §2)
+
+| Branch | Head | What |
 |---|---|---|
-| #36 | ADR-008 signing-key **storage** (publication still design-only) | `fb02b99` |
-| #31 | A5 enforcement — verdict always computed, flag **OFF** | `43fce9e` |
-| #30 | A5 matrix mechanised + `loadIdentity` race fix | `d29c1b6` |
-| #35 | Roadmap V2 controlling + V1→V2 mapping | `7f78a11` |
-| #33 | Handoff rewrite (the pre-V2 edition of this file) | `f9a5af8` |
-| #29 | A7 signing foundation + six review revisions | `a934e11` |
-| #32 | Playwright E2E foundation + warm-build fix | `ad36a37` |
-| #28 | QR scanner wired into verify screen | `8fc603b` |
-| #27 | A6a availability axis | `6f0fd15` |
-| #26 | A4 scanned code bound before believed | `0fa467b` |
-| #25 | A2+A3 propose-never-adopt | `a7235d1` |
-| #24 | A1 trust state machine | `08e3c0a` |
-| #23 | MinIO in CI + R2 smoke test | `8f3cebc` |
+| `feat/ai-vision` | `3adf646` | AI Camera CAM-2 — **foundation only**, NOT reviewed, NOT gate-verified |
+| `feat/ar-beauty` | `085b677` | AI Camera CAM-3 — **foundation only**, NOT reviewed, NOT gate-verified |
 
-#30/#31/#36 were merged on the owner's explicit 2026-08-01 approval ("Approve
-#30, #31, and #36 — those are all foundational security work"), each only
-after GitHub CI ran green **on its exact head** and the displayed diff showed
-only its own files. #31 and #36 were rebuilt onto master first (§5's
-`checkout -B` + cherry-pick discipline; #36's two conflicts resolved as a
-union — every test suite kept, `wipeDevice` keeps `clearedTrust` +
-`clearedSigning` + all three `dropDatabase` calls).
-
-### Open PRs
-
-| PR | Branch | State |
-|---|---|---|
-| **#34** product audit (draft) | `docs/product-audit-2026-08-01` | voice-cloning + translation-provider corrections pushed; awaiting owner review |
-| governance amendment | `docs/execution-order-2026-08-01` | the PR carrying this very edit + the roadmap "Owner Amendment" + CLAUDE.md pointer |
-
-For A5: enforcement stays default-OFF, and **disabling the flag — not
-reverting — is the supported operational rollback** (ADR-007 §Rollback says
-why: reverting removes the review UI and strands a `Changed` peer).
-
-### Untouched / blocked (standing)
-
-- **#8 (ybot)** untouched. **Railway deployment blocked.** **Priorities 2 and 3
-  blocked.**
-- `r2-staging` GitHub environment (required reviewers + R2_* secrets) is
-  owner-only work; the proxy blocks the environments API from here.
-- Stage B of the S3 plan blocked.
+**Nothing is merged. Nothing should be merged without the owner's explicit
+authorization** — see §4.
 
 ---
 
-## 1. THE HARD STOP — read before writing any crypto code
+## 1. THE HARD STOP — unchanged, read before writing any crypto code
 
 > **No production signing-key generation, persistence, publication, revocation
 > transport, prekeys, X3DH, ratchet implementation, or multi-device
 > implementation may begin until the publication-rollback problem in ADR-008
 > §12 is resolved or separately authorized by the owner.**
 
-ADR-008 §12, short form: before a key is published, rollback is free; after,
-reverting the client leaves a signing key on the server that peers may have
-pinned, and withdraw-vs-leave-inert needs a server-side key lifecycle that does
-not exist. A rollback plan that cannot be executed is not a rollback plan.
+Still enforced in code: `test/signing-not-shipped.test.js` fails the build if
+any app module imports the signing foundation outside its fence. Also still
+blocking: **what a safety number represents under multi-device** (ADR-008
+§BLOCKING, four candidate constructions) — this is what #43 needs ratified.
 
-Enforced in code today: `test/signing-not-shipped.test.js` fails the build if
-any app module imports the signing foundation, names the generator, or
-references a signing-key field.
-
-Also blocking, recorded in ADR-008 §BLOCKING: **what a safety number represents
-under multi-device** (four candidate constructions). Must be decided before
-multi-device implementation, not during.
-
----
-
-## 2. Governance
-
-**2026-08-01, later: the owner supplied `MASTER-ENGINEERING-ROADMAP-V2.md`**
-(committed under `spotme/docs/` with the source .docx) and ordered it consulted
-on every coding change — CLAUDE.md now points at it. Its V1→V2 mapping
-(`14-ROADMAP-V1-TO-V2-MAPPING.md`) was **APPROVED by owner directive
-2026-08-01** — V2 is controlling; V1 is historical; stricter gate still wins
-(V2 Appendix B). **Execution order AMENDED by the owner 2026-08-01** (recorded
-in the roadmap's "Owner Amendment" section — read that, not the superseded
-phase list): #30/#31/#36 were approved and merged, and the strategic order is
-now ① push notifications (Android+iOS, background/terminated/foreground,
-production-grade) → ② translation platform (provider abstraction over the
-existing multi-provider engine in `web/api/translate.js`) → ③ live voice
-translation (flagship; dedicated architecture, NOT a voice-notes extension;
-MVP < 2.5 s) → ④ adaptive communication layer (automatic transport switching
-incl. native Bluetooth offline) → ⑤ remaining Priority 1 crypto (X3DH →
-Double Ratchet → multi-device → completion evidence), which **remains
-mandatory before Priority 1 is declared complete**. AI Communication ADRs:
-planning may proceed. New standing principle: every AI feature optimises
-accuracy + latency + privacy simultaneously; no hard provider dependency.
-ADR-008 §12 is UNCHANGED by the amendment. **V1/V2 priority numbers differ —
-the mapping
-§1 restates every standing owner block under V2 numbering; renumbering never
-unblocks.** Our A1–A7 / B1–B10 labels remain an implementation breakdown only.
-Priority 1 completes only when every requirement and checklist item passes.
-
-Priority 1 checklist, honestly, as of this write:
-
-| Item | State |
-|---|---|
-| Compile / lint / unit / integration / no regressions / docs | ✅ |
-| End-to-end tests | ✅ foundation + scenario 1 in CI; **scenarios 2–12 open** |
-| Rollback documented | ✅ ADR-005/006/007/008 |
-| Web type checking | ❌ plan approved (tsconfig `allowJs`+`checkJs`, JSDoc on crypto modules, `tsc --noEmit` in CI, must fail on a deliberate error) — not built |
-| Identity benchmarks | ❌ scope defined by owner (pin-store r/w, concurrent observations, verification persistence, Changed resolution, startup, 100s–1000s of peers, A5 gate overhead on/off) |
-| Formal security review | ❌ owner wants a dedicated adversarial report (silent substitution, decrypt-refetch, TOFU limits, stale verification, replay, cross-device binding, wipe, key export, IndexedDB tampering, flag bypass, rollback risks) — self-review + mutation testing is evidence, not the report |
-| Performance review | ❌ |
-| Secure key storage | **storage half implemented + merged (#36)** — `spotme-signing` DB, promise-cached load, write-then-read-back, UNREADABLE≠absent, explicit-only rotation, wipe integration; publication + rollback-after-publication remain design-only (§1 / ADR-008 §12, the second Phase 2 PR) |
-| Prekeys / X3DH / Double Ratchet / FS / break-in recovery / rotation | ❌ blocked by §1 |
-| Multi-device | ❌ blocked by §1 + the safety-number question; minimum spec is **normative in ADR-006** (9 points; backup/history/restore deferrable if documented, core crypto flow not) |
-| Manual device matrix | ❌ owner executes; the automatable rows are #30 |
+**Extended this session, same principle:** the "seal-lift" (moving AES-GCM
+seal/open above the transport, in #50's adaptive network design) and the
+notification-encryption key (in #52's push platform) are BOTH new crypto-
+adjacent surfaces gated the same way — implemented but held behind flags,
+pending their own ADR-008 §12-style security review. Neither generates,
+persists, or publishes a key today. Full detail: `91-ENGINEERING-RISK-REGISTER.md`
+D1–D23 (below).
 
 ---
 
-## 3. Next work — the owner's AMENDED order (2026-08-01)
+## 2. What happened between the last brief (08-01) and this one (08-02)
 
-The pre-amendment queue (E2E seam next, then scenarios 2–12) is
-**re-sequenced, not cancelled**. The strategic order is now:
+In order, each phase gated on the owner's explicit go-ahead:
 
-1. **① Push notifications** — Android AND iOS; background/terminated/
-   foreground; messages, calls, mentions, group events, stories;
-   production-grade delivery. Starting point: web-push/VAPID and Android FCM
-   are live; **iOS APNs is a dead dep** (`@parse/node-apn` installed, 0
-   imports) and needs Apple Developer/APNs credentials from the owner.
-2. **② Translation platform** — formal provider abstraction over the
-   existing multi-provider engine (`web/api/translate.js`: Google Cloud v2,
-   Azure v3, Sarvam, Gemini leg + Anthropic/Gemini/OpenAI LLM chain);
-   dynamic best-provider by language pair/latency/quality/availability;
-   conversation context; quality metrics, fallback, retries, caching,
-   observability.
-3. **③ Live voice translation** — flagship; DEDICATED architecture (owner:
-   "Do not treat this as an extension of voice notes"); capture → streaming
-   STT → incremental translation → streaming TTS → voice preservation;
-   MVP < 2.5 s end-to-end, production target < 1 s.
-4. **④ Adaptive communication layer** — flagship; Socket.IO, Centrifugo,
-   P2P, native Bluetooth offline messaging; automatic transport switching
-   ("Users should never manually select a transport"); offline sync; future
-   Wi-Fi Direct/mesh.
-5. **⑤ Remaining Priority 1 crypto** — X3DH → Double Ratchet → multi-device
-   → completion evidence. **Still mandatory before Priority 1 is declared
-   complete**; the §1 hard stop governs when this begins.
+1. **Priority 1 review board** (#45) — five specialist reviews folded in, every
+   HIGH/CRITICAL cross-verified with a 12-axis analysis, one consolidated risk
+   register, one cleanup plan. Full doc: `spotme/docs/18-PRIORITY-1-REVIEW-BOARD.md`
+   on `docs/priority-1-review`.
+2. **HIGH-only cleanup** (#46) — H1 (signing-key race, advisory-lock fix),
+   H2 (base64 encoding canonicalization), NEW-4 (`onversionchange` IndexedDB
+   handle leak), B1 (a wrong ratchet test vector). Verified via mutation
+   testing, 17/17 e2e locally.
+3. **Board re-verification** — an independent adversarial agent confirmed all
+   7 required points; verdict flipped **APPROVED WITH FIXES → APPROVED**.
+   Both #45 and #46 are sitting ready for the owner's final merge decision —
+   **still not merged**, freeze holds regardless of verdict.
+4. **Priority 2 planning** (#47) — five workstream design docs (push,
+   translation, live voice, adaptive network, AI platform) plus cross-cutting
+   synthesis. Read `spotme/docs/priority-2/00-EXECUTIVE-SUMMARY.md` first,
+   then `90-IMPLEMENTATION-ORDER-AND-DEPENDENCIES.md` (phasing) and
+   `91-ENGINEERING-RISK-REGISTER.md` (the D1–D23 owner-decision register —
+   **this is the actual gate on activating anything built below**).
+5. **Priority 2 autonomous build** — four draft PRs, additive/flag-gated:
+   push SDKs (#48) → push platform completed to production (#52) →
+   translation platform completed to production (#51) → live voice built to
+   production (#49 scaffold → #54 platform) → adaptive network built to
+   production (#50, scaffold → production in the same PR).
+   Full report: `spotme/docs/priority-2/99-PRIORITY-2-BUILD-REPORT.md`.
+6. **AI Camera & Creative Studio** (the newest mission, mid-flight) — see §3.
 
-The approved E2E seam design (§4) and scenarios 2–12 stay valid and fold
-into the completion-evidence phase (or earlier if the owner pulls them
-forward). Do NOT mix into any feature PR: A5 activation, signing-key
-publication, revocation transport, prekeys, X3DH, ratchet code,
-multi-device.
-
----
-
-## 4. The E2E seam — APPROVED design (build exactly this)
-
-Purpose, narrow: *"for E2E fixture account X, the next
-`GET /api/v2/auth/keys/:userId` returns this controlled alternate public
-key."* One-shot, one account, public keys only. Needed by scenario 7.
-
-### Gates and controls (all owner-approved, all required)
-
-- `NODE_ENV=test` **AND** `SPOTME_E2E_CONTROL=1` — either alone does nothing.
-- **Production boot FAILS** if `SPOTME_E2E_CONTROL` is set while
-  `NODE_ENV !== 'test'` (same pattern as the existing JWT-length boot guard in
-  `backend/src/main.ts`).
-- Namespace **`/__e2e/`** — outside `/api`, never confusable with product
-  surface.
-- Loopback binding — **defense in depth only, not the security boundary**
-  (owner: CI container networking makes loopback ambiguous).
-- **Per-run random token**, generated by the Playwright config, passed via
-  env; **constant-time comparison** (`crypto.timingSafeEqual` with a length
-  pre-check).
-- **Fixture/run ownership**: allowlisted fixture-account prefix / run id;
-  reject if the target account is not owned by the current E2E run.
-- **Short expiry** (~60s), **one successful use only**.
-- **In-memory only**; cleared on process restart; never persisted to
-  PostgreSQL, Redis, files, logs, or application caches; never logged.
-- **No read endpoint.** Accepts a public key + fixture id, returns an
-  acknowledgement only. It cannot read or return private key material.
-
-### The path stays real (owner refinement 2)
-
-The seam substitutes **only the public-key value at the final serialization
-boundary** of the keys route. It must NOT bypass: authentication, account
-lookup, authorization, normal route handling, response serialization, client
-fetch logic, socket transport, `identity-store.js`, `rooms.js`. The test is
-valuable only because everything around the substituted value is production
-code.
-
-### Forbidden (owner-listed)
-
-No general DB mutation endpoint. No hidden query parameter on production APIs.
-No Playwright IndexedDB edits for scenario 7. No mocking of `rooms.js`,
-`identity-store.js`, or the transport. Not reachable in previews or Railway.
-No separate compile-time build shape (owner: runtime gates + absence tests are
-better than maintaining a second build).
-
-### The 12 seam tests (all required)
-
-1. Missing token → rejected
-2. Wrong token → rejected
-3. Wrong run/account prefix → rejected
-4. Invalid public-key encoding → rejected
-5. Oversized body → rejected
-6. Override applies once only
-7. Override expires unused
-8. Restart clears it
-9. A second E2E run cannot consume the first run's override
-10. No key value or token appears in logs
-11. Endpoint absent (404) in production mode
-12. Boot fails when the flag is set outside `NODE_ENV=test`
-
-### Scenarios 2–12 (owner-scoped)
-
-Conversation create/open · **real two-context send/receive over the socket
-path** (sender sees sent; recipient receives via socket; reload preserves;
-reconnect does not duplicate; contexts isolated) · reload/history · offline/
-reconnect · first-key pinning · different-key proposal (via the seam; 8 proofs:
-initial key trusted → server returns different key → original pin unchanged →
-proposal raised → warning/review UI appears → send behaviour matches flag state
-→ reload preserves pin AND proposal → restoring the original server key does
-NOT silently clear Changed) · verification persists across reload · A5
-flag-off behaviour · **device wipe deletes localStorage + `spotme-e2e` +
-media/blob IndexedDB + `spotme-identity-pins`, and a store that cannot be
-cleared surfaces a failure to the user** (`wipeDevice` returns
-`{ ok, failures }` — assert both paths) · unauthorized room access rejected ·
-log/secret hygiene (harness already exists in
-`spotme/e2e/tests/log-hygiene.spec.js`).
+Every one of steps 1–5 ended with me independently re-running the full gate
+(tests/lint/build/fence) myself before pushing — not trusting the building
+agent's self-report. Same discipline applies to step 6.
 
 ---
 
-## 5. Process guidance — learned the hard way this session
+## 3. AI Camera & Creative Studio — where this stands right now
 
-### The squash-merge stacked-rebase trap (this happened today)
+Owner's mission: build the flagship AI Camera & Creative Studio platform,
+split into 4 bounded sub-missions run as 2 waves (their own recommendation,
+adopted): Wave 1 = camera engine + creative studio (disjoint); Wave 2 = AI
+vision + AR/beauty (both stack on the camera engine's `FrameSource` seam).
 
-After #29 squash-merged, `git rebase origin/master` on the stacked #30
-**conflicted with its own parent's content** — the four A7 commits were now in
-master as one squash. Worse: commands were chained with `;`, so
-`git push --force-with-lease` ran on a conflicted tree and **briefly pushed an
-invalid state**. A second `;`-chain then made a `cd` failure read as a passing
-test run (`exit=0` was the failed `cd`, not the suite).
+### Wave 1 — DONE, reviewed, fixed, pushed
 
-**Recovery that works:** `git checkout -B <branch> origin/master` then
-`git cherry-pick <only its own commits>`. Verify, then push.
+- **#56 Camera Engine** (`feat/camera-engine`): capture core, `FrameSource`
+  seam, own FFT + phase-correlation alignment, Mertens HDR (refuses when
+  there's no real exposure control), night stacking, TIER_BASIC EIS,
+  negotiated video/timelapse/slow-mo/burst with an own EBML/WebM muxer.
+  11 layered flags, all dark. Docs: `spotme/docs/ai-camera/*` (9 files) +
+  ADR-014/014a.
+- **#55 Creative Studio** (`feat/creative-studio`): non-destructive op-graph
+  editor, real adjustments/looks/Telea inpainting/chroma+sky replace/2D
+  relight, a from-spec WebM writer with Opus passthrough for stories/reels,
+  drafts joined to the wipe path, dark D5/D1-gated cloud-AI legs behind an
+  env-disabled `api/studio-ai.js`. 12 layered flags. Docs:
+  `spotme/docs/ai-camera/studio*.md` + ADR-014d.
+- **An independent adversarial review board** (read-only, re-ran every gate
+  itself) found **2 HIGH bugs in the camera session lifecycle** (a
+  late-`getUserMedia` stream leak past the open timeout; `release()` racing
+  an in-flight `switchTo` and resurrecting a live camera) plus MED/LOW issues
+  in both branches (a dark-stub shape-parity gap in the camera engine; an
+  eager-evaluation flag-gate bug, a wrong azure provider leg, and an
+  ImageBitmap leak in the studio). **All fixed by me directly** (not
+  re-delegated — the weekly agent-call limit hit right as review landed),
+  each with a regression test proved to fail without the fix and pass with
+  it. Both branches are back to fully green (`c7c8020` / `d7ef3fa`).
+- **One live integration issue, not yet resolved, needs a decision at
+  wiring time:** the camera engine and the creative studio each independently
+  defined an `ISegmenter` contract (portrait blur vs background replace) —
+  same idea, incompatible shapes (mask type, geometry rule, registry
+  lifecycle). Whoever wires activation needs to pick ONE and adapt the other.
+  Full delta table is in the review board's findings (not committed as a
+  standalone doc — reconstructible from the two ADRs' segmenter sections if
+  needed, or re-run a review agent against both branches).
 
-**Rules, permanent:**
+### Wave 2 — FOUNDATION ONLY, blocked, not reviewed
 
-- `set -euo pipefail`, or chain **only** with `&&`. Never `;` between
-  a mutation and its verification.
-- Before EVERY push: `git status --short` (clean?) →
-  `git merge-base HEAD origin/master` (expected base?) →
-  `git diff --stat origin/master...HEAD` (only intended files?) →
-  `npm test` (exit code checked on its own line).
-- After every push: verify **GitHub's displayed file list**, not just the
-  local three-dot diff. (Standing owner rule since the PR #2 era.)
-- **GitHub CI is the final authority before any merge — never local runs.**
+Two build agents (AI Vision on `feat/ai-vision`, AR & Beauty on
+`feat/ar-beauty`) were launched in parallel and both died mid-build on the
+**same** failure:
 
-### Environment traps (all hit and verified this session)
+> `You've hit your weekly limit · resets Aug 4, 8pm (UTC)`
 
-- `curl` to `api.github.com` `/actions` paths → **403 via the proxy**. Use the
-  GitHub MCP tools (`mcp__github__*`); they work.
-- The check-runs endpoint **served stale `in_progress` ~10 min after a job
-  finished** (once). Before diagnosing a "hung" job, re-fetch;
-  `actions_get get_workflow_job` was accurate when the check-runs list was not.
-- Playwright in this sandbox: the pinned browser needs
-  `E2E_CHROMIUM=/opt/pw-browsers/chromium-1194/chrome-linux/chrome`. CI
-  installs its own (`playwright install --with-deps chromium`) and must NOT
-  set `E2E_CHROMIUM`. Do not run `playwright install` locally.
-- `reuseExistingServer: !CI` means a **stale local backend** (`pkill -f
-  "dist/main.js"`) will be reused — the build-identity spec then fails,
-  *correctly*. Kill stale backends before local e2e runs.
-- The web app uses **hash routing** and assigns `location.hash` during boot —
-  a navigation that kills in-flight `page.evaluate`. Use the `booted(page)`
-  helper in `spotme/e2e/tests/foundation.spec.js`; never inspect the page
-  before it.
-- Local stack bring-up (verified): `service postgresql start` →
-  `su postgres -c "createdb spotme_e2e"` → backend env `DATABASE_URL`,
-  `JWT_ACCESS_SECRET` (**≥32 chars or it refuses to boot — keep that guard**),
-  `PORT`. Guest accounts: `POST /api/auth/guest` with client-chosen
-  `{id: hex 8-64, username: /^[a-z0-9_]{3,16}$/, secret: ≥8}` — this is what
-  makes `spotme/e2e/lib/accounts.js` deterministic.
-- The backend warm-build bug (emit-nothing-exit-0) is fixed
-  (`tsBuildInfoFile` inside `dist/`) and regression-tested as its own CI step.
-  `dist/BUILD_ID` is a **source** hash served at `GET /api/version`; the e2e
-  suite fails if the running process does not report the current source's id.
+Each had completed and committed one solid foundation piece before dying
+(vision: flags + a multi-format barcode/QR scan engine over `FrameSource`;
+AR/beauty: flags + an `IFaceTracker` seam + Shape-Detection adapter + temporal
+smoothing) — real work, not stubs, but nowhere near the scope their mission
+briefs specified (document scanner, OCR/recognition/assistant legs, beauty
+shaders, gesture classifiers, mask compositor all still unbuilt). Their
+in-progress uncommitted diffs were committed as explicit `wip(...)` commits
+("NOT reviewed or tested") so nothing was lost, then **pushed to origin as
+plain branches — deliberately with no PR opened**, since a PR implies
+reviewable/ready and this isn't. Don't open one until the work is actually
+finished to the same bar as Wave 1.
 
----
-
-## 6. Map of the identity code
-
-| Module | Role | Where |
-|---|---|---|
-| `web/src/lib/crypto/e2e-v2.js` | X25519/P-256 ECDH → HKDF → AES-GCM room keys | master |
-| `…/identity-pin.js` | pure five-state trust machine (Unverified·Pinned·Verified·Changed·Revoked) | master |
-| `…/identity-pin-store.js` | its own DB `spotme-identity-pins`; refused transition ABORTS | master |
-| `…/identity-availability.js` | server axis only; structurally cannot touch trust | master |
-| `…/identity-store.js` | device identity; pin seeded from local, never fetch; `loadIdentity` caches the **promise** (race fix in #30) | master (+#30 fix) |
-| `…/safety-number.js` | 60 digits; v2 QR payload binds room+time+version before digits | master |
-| `…/signing-identity.js` | Ed25519/P-256 signing, canonical `transcript()` (normative, ADR-006 §3a/3b), runtime non-extractability | master |
-| `…/identity-binding.js` | claim + signature + DH proof-of-possession; HISTORICAL vs LIVE results are **typed**, `requireLiveAuthentication` throws on the weaker; unknown trust fails **closed** | master |
-| `…/identity-enforcement.js` | A5 send verdicts, always computed, flag OFF | **#31 only** |
-| `web/src/lib/qr-scan.js` | native BarcodeDetector, lazy jsQR fallback | master |
-| `spotme/e2e/` | Playwright foundation, 15/15 | master |
-
-ADRs: 005 (pinning), 006 (signing + normative claim fields + multi-device
-minimum), 007 (**#31 branch only** until merged), 008 (storage design +
-§12 hard stop + §BLOCKING multi-device safety numbers).
-
-Deliberate asymmetry a reviewer WILL flag: `identity-binding.js` fails
-**closed** on unknown trust; `identity-enforcement.js` fails **open** on an
-unreadable pin store. Different questions — "should I START trusting this
-claim" vs "may I send to a peer I already trust (message still goes to the
-pinned key)". Both headers cross-reference. Keep them doing so.
+**Next step, once agent calls work again (after 2026-08-04 20:00 UTC, or on a
+fresh account with its own limit):** re-launch both builds from where the
+committed work stops — read the existing `feat/ai-vision` / `feat/ar-beauty`
+commits first so the continuation doesn't duplicate the foundation, then
+finish each to the same production bar as Wave 1, run the same independent
+review board over all four AI Camera branches together, fix findings, push,
+open the two remaining draft PRs, then deliver the mission's 15-point report
+and STOP — **the owner was explicit that no new implementation starts after
+this platform's report lands.**
 
 ---
 
-## 7. Standing constraints (owner-set, all still in force)
+## 4. The standing freeze — what's actually blocking a merge
 
-- No AGPL code or dependencies (lockfile is the audit trail: jsqr
-  Apache-2.0, qrcode-generator MIT).
-- No cryptographic primitives from scratch — WebCrypto only.
-- Private keys never reach the server; non-extractable everywhere.
-- **No production signing keys** until the owner confirms — see §1.
-- ADR-008 §6: there is **no backup and no recovery** for the signing key;
-  the eventual UI must warn before key creation and before destructive local
-  actions, and must never imply account recovery restores identity trust.
-- R2 credentials: rotated, least-privilege, GitHub-secrets only, one isolated
-  bucket/prefix, unique object names, delete after, never in memory/chat/
-  code/logs/PR text, never connected to production.
-- A `Changed` peer gets NO "dismiss" — verify, accept, or reject only.
-- CLAUDE.md: files under 500 lines; read before edit; no Co-Authored-By; never
-  commit secrets; `.handoff/` updated and committed at session end.
+**Nothing merges until the owner:**
+1. Accepts the Priority 1 **APPROVED** verdict (#45) and authorizes merging
+   the crypto stack (#39 → #41 → #42 → #43 → #46, in that dependency order).
+2. Ratifies #43's safety-number construction (the ADR-008 §BLOCKING decision).
+3. Green-lights Priority 2 **activation/wiring** — everything built (#48–#56)
+   ships dark behind flags; being CI-green is not the same as being wired in.
+4. Rules on the two crypto-adjacent security reviews: the notification-
+   encryption key (#52) and the transport seal-lift (#50) — both ADR-008
+   §12-style, both currently just held behind flags pending review.
+5. Answers the D1–D23 owner-decision register in
+   `spotme/docs/priority-2/91-ENGINEERING-RISK-REGISTER.md` — the P0 cluster
+   (D1 provider-plaintext boundary, D2 server translation cache, D3 no
+   server-side plaintext index, D4 notification key ≠ "key publication",
+   D5 cost-governance policy) is the real gate on translation/live-voice/AI
+   shipping in a form consistent with the E2EE brand promise.
+
+None of this is optional or assumed — if a new session is asked to merge
+anything, the answer is "not yet" until it can point to the owner's explicit
+word on the specific item.
 
 ---
 
-## 8. UNPROVEN — do not claim these work
+## 5. Process notes specific to THIS handoff (account-switch aware)
 
-- The camera scan path on real hardware (no phone in any session yet).
-- Genuine multi-device, real OS key loss, IndexedDB version-change blocking
-  between live connections — the manual matrix rows (#30 prints them every run).
-- The E2E seam: **designed, approved, not built.**
-- Socket transport under Playwright (scenario 3): expected to work, never run.
-- The A5 gate in `rooms.js` under enforcement ON: covered by decision tests +
-  a source tripwire; the tripwire cannot catch a present-but-wrong gate.
-  Scenario 9 / the manual matrix close this.
+- **The armed safety-net check-ins (`send_later`/Routines) do NOT transfer to
+  a new account.** They're bound to this session/account. A new session
+  either re-arms its own babysitting or just checks PR status directly on
+  request — don't assume anything is being watched until you've re-armed it.
+- **Local worktrees under `.claude/worktrees/` are container-local and
+  ephemeral.** Every piece of real work this session produced was pushed to
+  `origin` before the worktree was removed — if you ever find an unpushed
+  worktree with commits, push the branch before doing anything else with it.
+- **Weekly agent-call limit**: hit once already this session (mid Wave-2
+  build), resets **2026-08-04 20:00 UTC**. If build agents fail immediately
+  with a "weekly limit" error, don't retry in a loop — either wait for reset
+  or do the fix/build directly without spawning a sub-agent (as was done for
+  the review-board fixes above).
+- **`node_modules` is not present in a fresh worktree** — symlink it from the
+  main checkout (`ln -s /home/user/fable/spotme/web/node_modules
+  <worktree>/spotme/web/node_modules`) before running `npm test`/`build`;
+  remove the symlink before committing (a real `node_modules` must never be
+  committed, and neither should a symlink to one outside the worktree).
+- All prior environment traps from the 08-01 brief (proxy 403s on
+  `/actions` REST paths → use `mcp__github__*` tools; stale check-runs
+  caching; Playwright browser path; hash-routing navigation killing
+  `page.evaluate`) are unchanged and still apply — see that section preserved
+  in git history if needed (`git log -p .handoff/NEXT-SESSION.md`).
+
+---
+
+## 6. Standing constraints (owner-set, all still in force)
+
+- No AGPL code or dependencies. No cryptographic primitives from scratch —
+  WebCrypto/`node:crypto` only.
+- Private keys never reach the server; transports never see plaintext or own
+  keys (extended this session to cover the adaptive network's transport
+  adapters explicitly).
+- No production signing keys until the owner confirms — §1.
+- No `Co-Authored-By` trailer (CLAUDE.md; `attribution.commit` unset). No
+  secrets/.env in commits. Files under 500 lines; read before edit.
+- Every Priority 2 feature ships **additive, flag-gated OFF, byte-identical
+  when off** — proven by a fence test + a post-build dist string-scan on
+  every single platform built this session, not just asserted.
+- Model running this work is `claude-fable-5` / `claude-sonnet-5` /
+  `claude-opus-5` depending on point in session — never put a model
+  identifier in commits, PR bodies, or any file pushed to the repo.
+
+---
+
+## 7. UNPROVEN — do not claim these work
+
+Carried forward from 08-01 (still true, nothing has changed them):
+camera-scan-on-real-hardware, genuine multi-device, real OS key loss,
+IndexedDB version-change blocking between live connections, the E2E seam
+(§4 of the old brief — still designed-not-built), socket transport under
+Playwright scenario 3.
+
+New this session:
+- **All of AI Camera Wave 2** (AI vision, AR/beauty) beyond the committed
+  foundation pieces — not built, let alone proven.
+- **GPU/CPU visual equivalence** for both the camera engine's and the
+  studio's WebGL paths — no headless GPU in this environment; both ship with
+  CPU-path golden tests and an honest "manual matrix" admission for the rest.
+- **Real-device behavior for every AI Camera capability** — HDR/night/
+  portrait/slow-mo/stabilization, the studio's inpaint/chroma/sky/relight —
+  all tested against deterministic fakes, none against a real camera or a
+  real browser's WebCodecs/MediaRecorder/Web Bluetooth implementation.
+- **The four Priority 2 platforms' behavior once actually wired** — CI-green
+  and fence-proven-dark is not the same claim as "works when a flag flips
+  on"; that's what activation-guide.md in each platform's docs is for, and
+  none of those steps have been executed yet.
