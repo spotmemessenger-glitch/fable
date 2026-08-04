@@ -227,7 +227,7 @@ export function createFaceTracker(deps: FaceTrackerDeps = {}) {
         y: f.boundingBox.y / image.height,
         width: f.boundingBox.width / image.width,
         height: f.boundingBox.height / image.height,
-        confidence: 0.5, // Shape Detection reports no confidence — honest fixed floor, never invented
+        confidence: 0, // Shape Detection reports NO confidence — 0 = unknown, never invented (F-CAM-2)
         source: 'platform-shape-detection',
       }));
       return { state: 'tracked', faces: smooth(boxes) };
