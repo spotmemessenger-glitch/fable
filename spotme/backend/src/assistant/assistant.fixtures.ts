@@ -9,13 +9,15 @@
 
 import { AssistantError } from './assistant.errors';
 import { mintEvidenceRecord } from './assistant.evidence';
+import { buildProviderRoute } from './assistant.route';
 import { ASSISTANT_DOMAINS } from './assistant.types';
 import type {
   AssistantDomain, DomainAvailability, DomainDarknessRegistry, EvidenceRecord,
+  RouteAdvice, RouteOrigin,
 } from './assistant.types';
 import type {
   AssistantDomainPort, DomainEvidencePort, EvidenceBundle, EvidenceStatement,
-  ReviewEvidenceBundle, ReviewEvidenceRecord, ReviewSourcePort,
+  ReviewEvidenceBundle, ReviewEvidenceRecord, ReviewSourcePort, RouteEvidencePort,
 } from './assistant.ports';
 import type { AssistantIntent } from './assistant.intent';
 
@@ -136,9 +138,39 @@ export class FixtureReviewSource implements ReviewSourcePort {
     return {
       records: [a, b],
       statements: [
+        // Supported facet: two sources agree on service.
         { id: 'r1', category: 'place-review', templateKey: 'place-review-theme',
-          params: { theme: 'friendly staff' }, citationIds: [a.id, b.id] },
+          params: { facet: 'service', theme: 'friendly and quick', stance: 'positive' },
+          citationIds: [a.id, b.id] },
+        // MIXED facet: the two sources conflict on noise — both must stay visible.
+        { id: 'r2', category: 'place-review', templateKey: 'place-review-theme',
+          params: { facet: 'noise-level', theme: 'quiet on weekdays', stance: 'positive' },
+          citationIds: [a.id] },
+        { id: 'r3', category: 'place-review', templateKey: 'place-review-theme',
+          params: { facet: 'noise-level', theme: 'loud on weekends', stance: 'negative' },
+          citationIds: [b.id] },
       ],
     };
+  }
+}
+
+/** Route fixture (X6) — provider passthrough via the 6C route engine, on
+ *  synthetic CURRENT route-leg evidence. */
+export class FixtureRouteEvidence implements RouteEvidencePort {
+  constructor() { assertTestEnvironment('fixture-routes'); }
+
+  async advise(origin: RouteOrigin, destinationRef: string): Promise<RouteAdvice> {
+    if (destinationRef !== 'place:cafe-azul') {
+      return { kind: 'unavailable', reason: 'provider-unconfigured' };
+    }
+    const leg = fixtureRecord({
+      id: 'ev:route:azul:walk', sourceId: 'fixture:routes', category: 'route-leg',
+      licenseClass: 'licensed-provider', contentRef: 'ref:route:azul:walk',
+      integrityDigest: 'sha256:0008', attributionLabel: 'Fixture Routes',
+    });
+    return buildProviderRoute(origin, [{
+      mode: 'walk', providerDistanceM: 850, providerDurationS: 660,
+      attribution: 'Fixture Routes', citationId: leg.id,
+    }], [leg]);
   }
 }

@@ -18,13 +18,16 @@ export type AssistantErrorCode =
   | 'uncited-claim'
   | 'unknown-template'
   | 'fixture-mode-forbidden'
-  | 'provider-unconfigured';
+  | 'provider-unconfigured'
+  | 'unknown-facet'
+  | 'precise-route-origin';
 
 const CODES: ReadonlySet<string> = new Set([
   'invalid-query', 'unlicensed-evidence', 'forbidden-evidence-field',
   'unknown-evidence-category', 'malformed-evidence', 'citation-unresolved',
   'citation-category-mismatch', 'stale-current-state', 'uncited-claim',
   'unknown-template', 'fixture-mode-forbidden', 'provider-unconfigured',
+  'unknown-facet', 'precise-route-origin',
 ]);
 
 /** Safe details: closed identifiers only (a field NAME, a class NAME — never
