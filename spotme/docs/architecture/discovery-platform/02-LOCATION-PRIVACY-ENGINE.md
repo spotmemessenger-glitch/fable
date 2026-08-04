@@ -229,3 +229,34 @@ Tests advance the injected clock across window boundaries to pin stability,
 rotation and the no-teleport chord, and sweep many windows to pin the
 centroid collapse. The suite is the executable form of this chapter: a change
 that passes review but violates §2.7 must still fail CI.
+
+## 2.9 As built (Phase 2A/2B/2E — Draft PR, DARK): PostGIS query & index guide
+
+**Storage.** `DiscoveryVisibility` holds ONLY the coarse public point
+(`coarseLat`/`coarseLon`/`coarseCell` per ADR-018) plus a
+`geography(Point,4326)` column (`geog`) written from the SAME coarse values,
+indexed with GIST (`backend/prisma/migrations/20260803190000_discovery_postgis/`
+— the migration header records rollback, permissions, retention and deletion
+posture). `expiresAt` makes presence ephemeral; `visibilityVersion` is
+monotonic for realtime staleness drops.
+
+**The query** (`backend/src/discovery/discovery.prisma.repository.ts`): one
+CTE with EVERY exclusion in SQL — enabled, non-null geog, unexpired, not
+self, `ST_DWithin` radius bound, both-direction block anti-join,
+`discoverable` projection join — so an unauthorized row is never fetched.
+Ordering `ST_Distance ASC, userId ASC`; keyset continuation strictly after
+`(distance, userId)`; `LIMIT` bound by policy (max page 30). The computed
+distance is SERVER-INTERNAL: it derives the band and the cursor and never
+serializes to a client (C12 fence). Clients receive distance BANDS only.
+
+**Client boundary.** The precise device fix exists only inside the web-next
+geolocation port scope; `coarsenForPublic` (`web-next/src/discovery/coarsen.ts`
+— deterministic per-identity jitter ±~100 m + 3-decimal rounding, displacement
+proven 1–250 m) is the ONLY constructor of the branded coarse type; the
+privacy mutation battery scans every outbound surface for the raw values.
+
+**Capacity.** Measured to 1M profiles — see
+[15-PERFORMANCE-AND-CAPACITY](15-PERFORMANCE-AND-CAPACITY.md) §15.2 for the
+latency tables, the wide-radius bottleneck, plan-instability observation and
+the KNN scaling trigger. `ANALYZE` freshness is operationally load-bearing
+(runbook §16.2).

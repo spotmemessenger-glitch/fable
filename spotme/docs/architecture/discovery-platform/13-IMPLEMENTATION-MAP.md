@@ -183,3 +183,75 @@ coordinate, proximity-outranks-popularity); ports under §13.4 must keep those
 suites green unchanged; fence tests (`*-not-shipped`) exist for every dark
 subsystem and travel with every port. A PR that weakens or drops a pinned test
 fails review by definition (§13.6 checklist).
+
+## 13.9 Phase 2 as-built map (2026-08-03/04 — Implemented, Draft PR — DARK)
+
+The Smart Nearby Discovery Map foundation was BUILT dark across six stacked
+draft PRs (2A #80 → 2B #81 → 2C #82 → 2D #83 → 2E #84 → 2F #85). Status is
+**Implemented (Draft PR — DARK)** — never shipped, live, deployed, activated
+or production. This table is the implementation guide: every subsystem with
+its real path and its proving suite.
+
+| Checkpoint | Subsystem | Source (real paths) | Proving suite |
+|---|---|---|---|
+| 1 | Contracts v1 (branded `CoarsePublicLocation`, 12-state machine, bands-only people distance) | `packages/contracts/src/discovery.ts` | `packages/contracts/test/discovery-negative.test.ts` (11 `@ts-expect-error`), `discovery-usage.test.ts` |
+| 2 | Dark `DiscoveryModule` (policy, typed errors, service, controller) | `backend/src/discovery/discovery.{policy,errors,service,controller,module}.ts` | `backend/test/discovery-policy.spec.ts` |
+| 3 | PostGIS models + hand-written migration (GIST, retention header) | `backend/prisma/schema.prisma`, `backend/prisma/migrations/20260803190000_discovery_postgis/` | migration applied on clean + upgraded DB (final validation) |
+| 4 | Threat model | `14-PRIVACY-ABUSE-THREAT-MODEL.md` | C12 fences pin the controls |
+| 5 | People query engine (all exclusions in SQL, keyset pagination) | `backend/src/discovery/discovery.prisma.repository.ts` | `backend/test/discovery-people.e2e-spec.ts` (real PostGIS) |
+| 6 | `SearchPort` + zero-dependency Typesense adapter (timeout, breaker, ceiling, exact-handle pin, allow-list projection) | `backend/src/discovery/search/` | `backend/test/discovery-search.spec.ts` (incl. LIVE typo/prefix vs Typesense 27.1) |
+| 7 | Place/directions ports + deterministic adapters (normalize-or-drop, honest open-now) | `backend/src/discovery/places/` | `backend/test/discovery-places.spec.ts` |
+| 8 | Intent router + closed-registry ranking engine (safety hard gate, mandatory breakdowns) | `backend/src/discovery/discovery.intent.ts`, `discovery.ranking.engine.ts` | `backend/test/discovery-intent-ranking.spec.ts` |
+| 9 | Realtime contract (2 channel families, 60 s claims ≤4 channels, publish-time content guard, Disabled default) | `backend/src/discovery/realtime/` | `backend/test/discovery-realtime.spec.ts` |
+| 10 | web-next Discovery UI (pure components, SVG map renderer, 12-state banner, virtualized list) | `web-next/src/discovery/{components.tsx,MapView.tsx,DiscoveryShell.tsx,discovery.css}` | `web-next/test/discovery-ui.test.tsx` |
+| 11 | Client application layer (5 ports, epoch cancellation, disclosed radius expansion, on-device coarsening) | `web-next/src/discovery/{controller.ts,coarsen.ts,ports.ts,fixtures.ts}` | `web-next/test/discovery-controller.test.ts`, `discovery-privacy-mutation.test.ts` |
+| 12 | Dark integration fences (13 assertions incl. build-artifact scan) | — | `backend/test/discovery-dark-fences.spec.ts` |
+| 13 | Performance benchmarks (1M profiles achieved on both legs) | `backend/test/discovery-benchmark.e2e-spec.ts`, `web-next/test/discovery-perf.test.ts` | [15-PERFORMANCE-AND-CAPACITY](15-PERFORMANCE-AND-CAPACITY.md) |
+| 14 | Dark instrumentation (closed metric registry, label allow-lists, correlation logging) | `backend/src/discovery/discovery.observability.ts` | `backend/test/discovery-observability.spec.ts` |
+| 15 | Documentation & governance | this chapter, ch. 15/16, handbook status/roadmap, tech-stack §14 addendum | — |
+
+### 13.9.1 Activation checklist (owner-gated; every box is owner-retained)
+
+Activation is NOT an engineering decision. When the owner elects to activate,
+the gates of §13.7 apply in full, concretely:
+
+1. Owner approves activation of the Discovery surface (D-series decisions:
+   D6/D7 remain OPEN; D9/D10 were approved for dark build only).
+2. Production-hardware search re-benchmark (tech-stack §14) run and reviewed;
+   KNN rewrite decision taken against ch. 15 scaling triggers.
+3. `DiscoveryModule` import added to `AppModule` in a reviewed activation PR
+   (one line — the same line §16.6 removes on rollback).
+4. `TYPESENSE_URL`/`TYPESENSE_API_KEY` provisioned host-side (env panel only —
+   never committed); index rebuilt from projections through the adapter.
+5. Realtime adapter selection (ADR-026 split-plane) and channel authz review.
+6. web-next deployment decision (separate from backend activation; ADR-027
+   boundary review).
+7. Privacy re-review: threat model ch. 14 controls re-verified on the
+   activation diff; C12 fence spec inverted expectations reviewed one by one.
+8. **Wire the checkpoint-14 instrumentation into the service/adapters** (the
+   metric/log/trace call sites — reviewed), THEN enable the sinks: without this
+   the ch. 16 detection signals are silent (F12-1). Runbooks (ch. 16) staffed;
+   metrics/log sinks enabled and verified redacting.
+9. Staged rollout plan + executed rollback drill (§13.7 Definition of Done).
+
+### 13.9.2 Rollback
+
+Immediate dark rollback is specified operationally in
+[16-OPERATIONS-RUNBOOK §16.6](16-OPERATIONS-RUNBOOK.md): surface order
+(client → AppModule import → realtime adapter → search env → optional data),
+with "dark restored" DEFINED as the C12 fence spec passing again.
+
+### 13.9.3 PR #60 reuse and supersession
+
+PR #60 (the earlier dark Discovery Map draft) remains byte-identical and
+untouched. The Phase 2 foundation re-cut its viable concepts instead of
+modifying it in place:
+
+| PR #60 concept | Phase 2 disposition |
+|---|---|
+| Coarse-location broadcast idea (ADR-024 interim `coarse()`) | Superseded by the branded-contract + on-device `coarsenForPublic` boundary (2A/2E); ADR-018 parameters unchanged |
+| Map-centric discovery UI sketch | Re-built as prop-driven web-next components behind `MapPort` (2E); no legacy `spotme/web` surface touched |
+| Nearby-people listing | Re-built as the PostGIS keyset engine with bands-only projection (2B) |
+| Any precise-distance display | REJECTED — bands only; anti-triangulation controls in ch. 14 |
+| Direct-chat-from-result | REJECTED — D9 friend-request accept gate is the only communication path (P7) |
+

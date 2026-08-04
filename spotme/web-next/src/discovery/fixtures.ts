@@ -15,6 +15,7 @@ import type {
   VisibilityPreference,
 } from '@spotme/contracts';
 import type { DiscoveryApiPort } from './ports';
+import { coarsenForPublic } from './coarsen';
 
 const ranking = (band: string): RankingBreakdown => ({
   total: 0.6,
@@ -48,15 +49,17 @@ export class FixtureDiscoveryApi implements DiscoveryApiPort {
     if (this.empty) {
       return { contractsVersion: 1, results: [], radius: q.radius, cursor: null, freshness: {} };
     }
-    const near = (dLat: number, dLon: number): CoarsePublicLocation =>
-      ({ lat: q.origin.lat + dLat, lon: q.origin.lon + dLon, cell: q.origin.cell } as CoarsePublicLocation);
+    // Fixture "server" coordinates go through the SAME coarsening boundary —
+    // coarsen.ts stays the client's only constructor of the branded type.
+    const near = (dLat: number, dLon: number, id: string): CoarsePublicLocation =>
+      coarsenForPublic({ lat: q.origin.lat + dLat, lon: q.origin.lon + dLon }, id);
 
     const results: DiscoveryResult[] = [
       {
         type: 'person',
         person: {
           userId: 'fx-person-1', handle: 'priya_k', displayName: 'Priya', distanceBand: 'under500m',
-          approxLocation: near(0.002, 0.001),
+          approxLocation: near(0.002, 0.001, 'fx-person-1'),
           freshness: { observedAt: '2026-08-03T18:00:00Z', expiresAt: '2099-01-01T00:00:00Z' },
           friendRequest: { canSendRequest: true, state: 'none' },
           safety: { canBlock: true, canReport: true, canHide: true },
@@ -67,7 +70,7 @@ export class FixtureDiscoveryApi implements DiscoveryApiPort {
         type: 'place',
         place: {
           placeId: 'fx-place-1', name: 'Cubbon Coffee House', category: 'cafe',
-          approxLocation: near(-0.003, 0.002), deviceDistanceM: 380, openNow: true,
+          approxLocation: near(-0.003, 0.002, 'fx-place-1'), deviceDistanceM: 380, openNow: true,
           source: { kind: 'place-provider', provider: 'in-memory-fixture', attribution: 'Deterministic Test Fixture Data' },
           freshness: {},
         },

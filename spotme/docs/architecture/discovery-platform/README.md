@@ -60,6 +60,9 @@ Accepted ADR disagree, the ADR wins until superseded (Governance G6).
 | 12 | [Scalability](12-SCALABILITY.md) | Load model, budgets, capacity direction within v1 datastore limits |
 | 13 | [Implementation Map](13-IMPLEMENTATION-MAP.md) | Reuse of dark code, migration to the target architecture, sequencing, gates |
 | 14 | [Privacy & Abuse Threat Model](14-PRIVACY-ABUSE-THREAT-MODEL.md) | Formal Phase 2 threat model — assets, 18 threats, fence/type-enforced controls, residual risks |
+| 15 | [Performance & Capacity (Measured)](15-PERFORMANCE-AND-CAPACITY.md) | Checkpoint 13 measurements — 1M-profile PostGIS + Typesense runs, pagination stability, client timings, measured limits and scaling triggers (nothing extrapolated) |
+| 16 | [Operations Runbook](16-OPERATIONS-RUNBOOK.md) | Dark-foundation runbooks — provider/PostGIS/realtime degradation, stale presence sweep, privacy incident response, immediate dark rollback |
+| 17 | [Adversarial Review & Repair Record](17-ADVERSARIAL-REVIEW-PHASE-2.md) | The Phase 2 12-lens review: every finding, severity, owning PR, and disposition (fixed with a regression test, or documented) |
 
 ## Conventions
 

@@ -1,48 +1,59 @@
-# @spotme/web-next — React strangler beachhead
+# web-next — React strangler beachhead (NOT DEPLOYED)
 
-A **React + TypeScript** surface that will, over time, take over screens from the
-current vanilla-JS `spotme/web` (the strangler-fig pattern). Right now it is a
-**beachhead**: one inert, read-only screen rendered from the shared
-`@spotme/contracts` types, proving the React surface consumes the same domain
-contracts as the rest of the platform.
+**Status: Implemented (Draft PR — DARK).** This package is inert: it is not
+deployed, not referenced by the live `spotme/web` app, outside the Vercel
+root, and carries no backend wiring, routing, or authentication. It exists so
+the React migration (ADR-027 boundary) can grow behind fences instead of
+landing as a big-bang rewrite.
 
-## Status — inert and isolated
+## Architecture (Discovery experience, Platform Phase 2E)
 
-- **Not deployed.** The Vercel project is rooted at `spotme/web` (see
-  `spotme/web/vercel.json`, whose build is `vite build` in that directory).
-  `web-next` is a sibling directory outside that root, so the Vercel build never
-  sees it. It has no production host of its own.
-- **Not referenced by `spotme/web`.** Nothing in the running app imports it; it
-  is a standalone Vite app with its own `package.json`.
-- **Inert.** The single screen (`src/App.tsx`) has no state, no handlers, no
-  network, no routing. It renders a hardcoded `ExchangeItemPublic`.
-
-## Develop
-
-```bash
-cd spotme/web-next
-npm install
-npm run typecheck   # tsc --noEmit — strict
-npm run build       # vite build — proves it is self-contained
-npm run dev         # local only
+```
+React components (pure, prop-driven)          src/discovery/components.tsx
+        ▲ props/callbacks only                 src/discovery/MapView.tsx
+        │                                      src/discovery/DiscoveryShell.tsx
+DiscoveryController (framework-free            src/discovery/controller.ts
+state machine; useSyncExternalStore)
+        ▲ 5 injected ports
+        │
+DiscoveryApiPort · GeolocationPort ·           src/discovery/ports.ts
+RealtimePort · ClockPort · CachePort           src/discovery/fixtures.ts
+(this phase: fixture/disabled adapters only)
 ```
 
-The `@spotme/contracts` import is aliased (tsconfig `paths` + Vite `resolve.alias`)
-to `../packages/contracts/src/index.ts`. Those imports are type-only, so the
-runtime bundle contains none of the contracts source.
+Rules the tests pin:
 
-## Isolation fence (`npm test`)
+- **No fetch in components.** Components render state and raise callbacks;
+  only the controller talks to ports; only ports could ever touch a network
+  (this phase none do — the API port is a deterministic fixture).
+- **Precise location is device-local.** The raw fix exists only inside the
+  controller's search scope; `src/discovery/coarsen.ts` is the ONLY
+  constructor of the branded `CoarsePublicLocation` (C12 fence) — deterministic
+  per-identity jitter + rounding before anything outbound. The privacy
+  mutation battery (`test/discovery-privacy-mutation.test.ts`) scans request
+  bodies, URLs, logs, cache, realtime events, error objects and final state
+  for the raw coordinate substrings.
+- **Epoch cancellation.** A superseded search can never overwrite a newer
+  one; stale responses drop silently.
+- **One disclosed radius expansion** on empty results — never silent.
+- **People show distance BANDS only**; no total counts; the filter sheet is
+  distance band / category / open-now(places-only) — no age/gender controls
+  exist anywhere (A3).
+- **Accessibility:** 44 px touch targets, keyboard-activatable map markers,
+  visible focus, reduced-motion support, fixed-size skeletons (no layout
+  shift), virtualized result list (fixed 132 px rows).
 
-`scripts/check-boundaries.mjs` (6/6) proves the isolation instead of promising
-it: no imports from legacy `spotme/web`/`spotme-core` · no backend calls or
-network primitives · no routing integration · no authentication or credential
-storage · imports limited to `react/*`, siblings, and **type-only**
-`@spotme/contracts` · non-vacuous. Then `tsc --noEmit` and `vite build`.
+## Commands
 
-## Vercel gate (verified read-only, 2026-08-03)
+```
+npm run test:unit   # vitest (jsdom): UI + controller + privacy mutation suites
+npm test            # same
+npm run build       # vite production build (artifact is NOT deployed anywhere)
+npx tsc --noEmit    # strict TypeScript
+RUN_DISCOVERY_BENCH=1 npx vitest run test/discovery-perf.test.ts   # perf leg (loud-skip otherwise)
+```
 
-No repo-root or `spotme/`-level `vercel.json` exists; the only Vercel config is
-`spotme/web/vercel.json`, whose build runs relative to `spotme/web`. The
-project root is `spotme/web` (its vendored-core arrangement exists precisely
-because siblings are not uploaded). `web-next` is a sibling → **not
-discovered, not built by Vercel**. No Vercel configuration was changed.
+Isolation is enforced from the backend side by the C12 fences
+(`spotme/backend/test/discovery-dark-fences.spec.ts`): no live `spotme/web`
+module references this package, no vercel config points at it, and the only
+brand-cast site is `coarsen.ts`.

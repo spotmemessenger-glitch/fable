@@ -30,7 +30,7 @@ owner-controlled execution order — do not reorder or skip:
 
 | # | Step | State |
 |---|---|---|
-| 1 | Smart Nearby Discovery Map | Implemented (Draft PR), dark — PR #60 |
+| 1 | Smart Nearby Discovery Map | Implemented (Draft PRs), dark — Platform Phase 2 stacked PRs #80–#85; PR #60 remains the byte-identical earlier draft, reusable concepts re-cut per the Phase 0 classification |
 | 2 | **SpotMe Exchange** (AI-matched Needs & Offers) | Planned — flagship |
 | 3 | Live Nearby Events | Implemented (Draft PR), dark — PR #61 |
 | 4 | **Nearby Moments** | **Next approved mission** (after handbook merge) |
