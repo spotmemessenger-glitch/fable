@@ -49,3 +49,10 @@ to master only after the parent merges. Landing order is strict.
 
 "Continue the Overnight Migration Programme Phase 3 from the last pushed PR;
 verify all prior Phase 3 branches before continuing."
+
+## Build record
+
+| Group | Branch | State | Evidence |
+|---|---|---|---|
+| 3A | `feat/platform-phase-3a-exchange-contracts-policy` (PR #86) | Pushed, green | contracts + negative fences + threat model |
+| 3B | `feat/platform-phase-3b-exchange-backend` | Pushed, green | dark ExchangeModule + 5 PostGIS tables + lifecycle engine; policy spec 15/15, real-PostGIS e2e 8/8; migrations clean + upgraded |
