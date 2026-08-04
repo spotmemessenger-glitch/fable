@@ -30,3 +30,29 @@ export type {
   ExchangeSearchInput,
   ExchangeSearchResult,
 } from './exchange.ts';
+
+export { DISCOVERY_CONTRACTS_VERSION } from './discovery.ts';
+export type {
+  DiscoveryContractsVersion,
+  CoarsePublicLocation,
+  DistanceBand,
+  DiscoveryRadius,
+  DiscoveryIntent,
+  DiscoveryScope,
+  DiscoveryFilters,
+  SearchCursor,
+  DiscoveryQuery,
+  FreshnessMetadata,
+  RankingComponent,
+  RankingBreakdown,
+  ResultSource,
+  FriendRequestCapability,
+  BlockReportCapability,
+  NearbyPersonPublic,
+  NearbyPlacePublic,
+  DiscoveryResult,
+  DiscoveryResultPage,
+  DiscoveryState,
+  DiscoveryError,
+  VisibilityPreference,
+} from './discovery.ts';
