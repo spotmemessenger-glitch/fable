@@ -60,6 +60,12 @@ recorded in `handbook/DECISIONS.md`). Acceptance wires nothing in.
 | [026](026-realtime-split-plane.md) | Realtime ownership — split control (Socket.IO) / data (Centrifugo) plane; calls stay on Trystero/WebRTC; broker = Valkey/Dragonfly; pgvector deferred | Accepted |
 | [027](027-mobile-native-boundary.md) | Mobile-native boundary — React Native + native modules target (camera/AR, calls, Bluetooth, background location); Capacitor transitional | Accepted |
 
+### Platform migration Phase 5 (028)
+
+| ADR | Title | Status |
+|---|---|---|
+| [028](028-nearby-moments-data-privacy-model.md) | Nearby Moments — data & privacy model (four-tier visibility, coarse-only opt-in location, EXIF-strip-before-persistence, no engagement telemetry, retention/cascade) | Accepted (2026-08-04, delegated Phase 5 review authority) |
+
 ## Format
 
 Each ADR: **Status**, **Context**, **Decision**, **Consequences**, **Evidence**.

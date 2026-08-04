@@ -89,6 +89,36 @@ export type {
   EventCapabilities,
 } from './events.ts';
 
+// Platform Phase 5 — versioned Nearby Moments contracts (DARK).
+export { MOMENTS_CONTRACTS_VERSION, MOMENT_REACTIONS } from './moments.ts';
+export type {
+  MomentsContractsVersion,
+  MomentVisibility,
+  FeedVisibility,
+  MomentKind,
+  MomentAuthorRef,
+  MomentMediaRef,
+  MomentModerationState,
+  MomentModerationReason,
+  MomentPublic,
+  StoryState,
+  StoryPublic,
+  MomentCommentPublic,
+  MomentReaction,
+  MomentReactionState,
+  MomentFeedMode,
+  MomentFeedOrder,
+  MomentRankingSignal,
+  MomentRankingComponent,
+  MomentRankingBreakdown,
+  RankedMomentPublic,
+  MomentCursor,
+  MomentPage,
+  MomentSafetyCapabilities,
+  MomentReportInput,
+  MomentModerationEventPublic,
+} from './moments.ts';
+
 export { DISCOVERY_CONTRACTS_VERSION } from './discovery.ts';
 export type {
   DiscoveryContractsVersion,
