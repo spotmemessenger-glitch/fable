@@ -1,0 +1,3 @@
+
+# Stage 2A: staged model binaries are build outputs, never committed
+public/models/

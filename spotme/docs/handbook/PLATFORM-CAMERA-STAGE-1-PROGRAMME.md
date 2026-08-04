@@ -61,3 +61,15 @@ WebXR engines · D6/A5/D5 policy · Wave 0 artifacts (paused, untouched).
 
 master `64c9334` · #55 `d7ef3fa` · #56 `c7c8020` · #58 `44da9ff` ·
 #59 `97aebee` · snap-camera-kit `1439f24` · docscan park `3adf646`.
+
+## Stage 2A — asset vendoring + activation prep + device-lab harness
+
+Stacked on C5 (`feat/camera-stage2a-assets-harness`, draft PR, nothing
+merges). Fills the honest empty manifest with the pinned bundle (MediaPipe
+face-landmarker 1.0.1 float16, tesseract.js 7.0.0 / -core 6.1.2 worker+wasm,
+eng+kan tessdata) — real sha256 digests in the committed `MODEL_ASSET_MANIFEST`,
+Apache-2.0 across; binaries staged reproducibly by `stage-camera-assets.mjs`
+(never committed), digest-verified at build AND load. The four activation
+wirings are real code in `lab/` behind `CAMERA_LAB_ENABLED` (default false,
+fence-proven absent from the production artifact). The device-lab page is the
+owner's Stage 2B cockpit; runbook at `docs/ai-camera/STAGE-2B-DEVICE-MATRIX.md`.

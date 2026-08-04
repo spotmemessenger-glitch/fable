@@ -236,11 +236,11 @@ describe('face tracking', () => {
     expect(second.faces[0].x).toBeLessThan(0.5);
   });
 
-  it('the MediaPipe registration path goes through the integrity loader — with the Stage 1 EMPTY manifest it always refuses', async () => {
+  it('the MediaPipe registration path goes through the integrity loader — tampered bytes refuse asset-integrity-failed (Stage 2A manifest is filled)', async () => {
     const tracker = createFaceTracker({
-      assetLoader: { fetchBytes: async () => new Uint8Array([1]), digest: async () => 'whatever' },
+      assetLoader: { fetchBytes: async () => new Uint8Array([1]), digest: async () => 'sha256:deadbeef' },
     });
-    expect(await tracker.registerLandmarker()).toEqual({ state: 'unavailable', reason: 'no-landmark-engine' });
+    expect(await tracker.registerLandmarker()).toEqual({ state: 'unavailable', reason: 'asset-integrity-failed' });
     expect(tracker.landmarkAvailability()).toBe(false);
   });
 
@@ -281,8 +281,8 @@ describe('asset integrity loader (ADR-029 §4)', () => {
     digest: async () => digest,
   });
 
-  it('the committed manifest is EMPTY at Stage 1 — every load refuses unknown-asset', async () => {
-    expect(await loadVerifiedAsset('face-landmarker', deps('abc')))
+  it('an unknown assetId still refuses unknown-asset (the manifest is closed)', async () => {
+    expect(await loadVerifiedAsset('not-a-real-asset', deps('abc')))
       .toEqual({ state: 'unavailable', reason: 'unknown-asset' });
   });
 

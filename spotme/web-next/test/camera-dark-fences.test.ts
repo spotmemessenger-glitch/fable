@@ -12,15 +12,15 @@ import { loadVerifiedAsset, MODEL_ASSET_MANIFEST } from '../src/camera/model-ass
 import type { CloudConsentContext } from '@spotme/contracts';
 
 describe('camera — behavioral dark fences', () => {
-  it('NO model asset can load at Stage 1: the committed manifest is EMPTY and refusal precedes any fetch', async () => {
-    expect(MODEL_ASSET_MANIFEST.length).toBe(0);
+  it('an unknown asset is refused BEFORE any fetch — loading is always explicit, never at boot', async () => {
+    expect(MODEL_ASSET_MANIFEST.length).toBeGreaterThan(0); // Stage 2A: filled
     let fetches = 0;
-    const result = await loadVerifiedAsset('anything', {
+    const result = await loadVerifiedAsset('not-a-real-asset', {
       fetchBytes: async () => { fetches++; return new Uint8Array(); },
       digest: async () => 'x',
     });
     expect(result).toEqual({ state: 'unavailable', reason: 'unknown-asset' });
-    expect(fetches).toBe(0); // refused BEFORE any fetch — nothing loads at boot or ever
+    expect(fetches).toBe(0); // unknown asset never triggers a fetch
   });
 
   it('a cloud call WITHOUT the consent parameter cannot run — even past the types', async () => {
