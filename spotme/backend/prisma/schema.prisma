@@ -135,6 +135,8 @@ model User {
   discoveryVisibility DiscoveryVisibility?
   discoveryProfile    DiscoveryPublicProfileProjection?
   exchangeIntents     ExchangeIntent[]  @relation("ExchangeIntentOwner")
+  moments             Moment[]          @relation("MomentAuthor")
+  momentStories       MomentStory[]     @relation("MomentStoryAuthor")
 
   @@index([city])
   @@index([createdAt])
@@ -968,4 +970,145 @@ model MomentMediaAsset {
   createdAt    DateTime  @default(now())
   /// Story retention stamp (24h [PROPOSED]); null for regular post media.
   expiresAt    DateTime?
+}
+
+/// ─────────────────────────────────────────────────────────────────────────
+/// Nearby Moments (Platform Phase 5C) — DARK. MomentsModule is NOT imported by
+/// AppModule. PRIVACY (M5/ADR-028): location is an OPT-IN coarse cell on
+/// nearby/public posts only — never a precise fix, and there is NO viewer/
+/// origin column anywhere. 'private' posts never enter any feed query (SQL
+/// carries the tier filter). No engagement counters are stored per-viewer.
+/// ─────────────────────────────────────────────────────────────────────────
+
+model Moment {
+  id              String    @id @default(cuid())
+  authorId        String
+  /// photo | video | text
+  kind            String
+  text            String?
+  /// MomentMediaAsset ids (refCount managed by the media service).
+  mediaIds        String[]
+  /// private | friends | nearby | public (M5; per-post, poster-controlled)
+  visibility      String    @default("private")
+  /// Poster-opted COARSE attach — nearby/public tiers only (ADR-028 §2).
+  coarseLat       Float?
+  coarseLon       Float?
+  coarseCell      String?
+  /// Server-derived 1-decimal (~11 km) city cell — never finer.
+  cityCell        String?
+  geog            Unsupported("geography(Point, 4326)")?
+  /// visible | reported | limited | removed
+  moderationState String    @default("visible")
+  versionSeq      Int       @default(1)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  deletedAt       DateTime?
+  author          User      @relation("MomentAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  comments        MomentComment[]
+  reactions       MomentReactionRow[]
+
+  @@index([authorId, createdAt])
+  @@index([cityCell])
+  @@index([visibility, moderationState])
+}
+
+/// 24h stories (M3 six-state lifecycle). Named MomentStory — the legacy
+/// client-E2E `Story` model (ciphertext stories) is untouched and unrelated.
+model MomentStory {
+  id              String   @id @default(cuid())
+  authorId        String
+  mediaId         String
+  /// friends | nearby | public (private stories are unrepresentable)
+  visibility      String   @default("friends")
+  /// active | expired | deleted | archived | hidden | moderation-hidden (M3)
+  state           String   @default("active")
+  versionSeq      Int      @default(1)
+  createdAt       DateTime @default(now())
+  /// 24h from publish ([PROPOSED]); the {story-expiry} sweep flips state.
+  expiresAt       DateTime
+  author          User     @relation("MomentStoryAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([state, expiresAt])
+  @@index([authorId, state])
+}
+
+/// Flat, parent-REFERENCED comments (M4) — nesting is render-side only.
+model MomentComment {
+  id              String   @id @default(cuid())
+  momentId        String
+  /// Parent comment id or null; NEVER nested storage (M4).
+  parentId        String?
+  authorId        String
+  text            String
+  /// visible | reported | limited | removed
+  moderationState String   @default("visible")
+  createdAt       DateTime @default(now())
+  moment          Moment   @relation(fields: [momentId], references: [id], onDelete: Cascade)
+
+  @@index([momentId, createdAt])
+}
+
+/// One reaction per (moment, user); the registry is CLOSED (M4) — service +
+/// a raw CHECK constraint both enforce membership.
+model MomentReactionRow {
+  momentId  String
+  userId    String
+  /// like | love | laugh | wow | support (closed, M4)
+  reaction  String
+  createdAt DateTime @default(now())
+  moment    Moment   @relation(fields: [momentId], references: [id], onDelete: Cascade)
+
+  @@id([momentId, userId])
+}
+
+/// Explicit follows (M2 'explicitFollows' signal + the friends feed source).
+model MomentFollow {
+  followerId String
+  targetId   String
+  createdAt  DateTime @default(now())
+
+  @@id([followerId, targetId])
+  @@index([targetId])
+}
+
+/// Two-way block: either direction removes content from every read path.
+model MomentBlock {
+  blockerId String
+  blockedId String
+  createdAt DateTime @default(now())
+
+  @@id([blockerId, blockedId])
+  @@index([blockedId])
+}
+
+/// Sanitized reports (ids + closed reason codes; note optional, bounded).
+model MomentReport {
+  id         String   @id @default(cuid())
+  reporterId String
+  /// moment | comment | story
+  targetKind String
+  targetId   String
+  reason     String
+  note       String?
+  /// open | actioned | dismissed
+  status     String   @default("open")
+  createdAt  DateTime @default(now())
+
+  @@index([targetKind, targetId])
+  @@index([reason, status])
+}
+
+/// Append-only, SANITIZED moderation audit (ids + closed codes, never content).
+model MomentModerationEvent {
+  id         String   @id @default(cuid())
+  targetKind String
+  targetId   String
+  fromState  String
+  toState    String
+  reason     String?
+  /// reporter | moderation | system
+  byKind     String
+  createdAt  DateTime @default(now())
+
+  @@index([targetId, createdAt])
 }
