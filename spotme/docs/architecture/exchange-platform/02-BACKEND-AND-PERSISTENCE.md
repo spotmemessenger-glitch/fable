@@ -66,3 +66,28 @@ Guarantees, each pinned by a test:
 
 No matching/ranking (Phase 3C), no search index wiring, no UI (3D), no route,
 no activation. Nothing is imported into the running application.
+
+---
+
+## Phase 3C — Matching, search & ranking (as built)
+
+- **Matching engine** (`backend/src/exchange/exchange.matching.ts`): a CLOSED
+  `EXCHANGE_MATCH_SIGNALS` registry (`intentFit`, `proximity`, `availability`,
+  `trust`, `freshness`) with [PROPOSED] weights. `safetyEligible` is a HARD GATE
+  applied before scoring; a `sponsored`/`popularity` signal (or an out-of-range
+  weight) throws (`ExchangeClosedRegistryError`/`ExchangeWeightError`); unknown
+  evidence contributes exactly 0; proximity is weighted so a closer viable
+  counterpart beats a popular-but-distant one; every match carries a full
+  `ExchangeMatchExplanation` whose total equals the sum of weighted components.
+- **Search projection** (`exchange.search.ts`): `toSearchProjection` is an
+  allow-list builder — the indexed doc has exactly `{id, kind, category, title,
+  normalizedText, intentLabels, coarseCell}` and NO coordinate field; coordinate-
+  shaped tokens are stripped from the title, labels, AND the searchable text, so
+  no owner id / budget / price / precise field / coordinate can reach the index
+  (T-EX-19). `orderExchangeHits` pins exact public-identifier matches ahead of
+  fuzzy hits. The default `ExchangeSearchPort` adapter is UNCONFIGURED — typed
+  `provider-unavailable`, no network — and bound in the (dark) module.
+- **Tests** (`backend/test/exchange-matching.spec.ts`, 12): closer-beats-distant,
+  safety-exclusion-always-wins, unavailable-cannot-be-promoted, unknown-evidence-
+  no-benefit, sponsored-rejected, exact-outranks-fuzzy, no-coordinate-in-index,
+  no-prohibited-field-in-projection.
