@@ -6,6 +6,7 @@
 
 import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
+import { validateIntentInput } from '../src/exchange/exchange.policy';
 
 const BACKEND = join(__dirname, '..');
 const REPO = join(BACKEND, '../..');
@@ -22,6 +23,14 @@ function walk(dir: string, exts: string[], out: string[] = []): string[] {
   return out;
 }
 const read = (p: string) => readFileSync(p, 'utf8');
+/** A quoted import specifier that reaches the `exchange` path segment of the
+ *  subtree: `'./exchange'`, `'../exchange/x'`, `'src/exchange.module'`. A
+ *  subtree specifier ALWAYS has a `/` before `exchange` (relative/aliased path),
+ *  so a leading path segment is REQUIRED — that excludes bare `'exchange'`
+ *  DOMAIN-LABEL literals (discovery's future-domain enum) which are values, not
+ *  imports. `exchange` must be followed by a path delimiter (`/ . - '"`), so
+ *  `exchangeThing` / `data-exchange-rate` don't false-positive either. */
+const EXCHANGE_REACH = /['"][^'"]*\/exchange[\/.'"-]/;
 /** Strip block + line comments so prose ("no business logic", "precise point")
  *  never trips a code-shape fence. */
 const stripComments = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/\/\/[^\n]*/g, ' ');
@@ -36,9 +45,22 @@ describe('Exchange — dark integration fences', () => {
 
   it('no backend module OUTSIDE src/exchange imports the exchange code (static or dynamic)', () => {
     const files = walk(join(BACKEND, 'src'), ['.ts']).filter((f) => !f.includes('/exchange/'));
-    const REACH = /(from|import|require)\s*\(?['"][^'"]*\/exchange(\/|['"])|['"][^'"]*\/exchange\/[^'"]*['"]/;
-    expect(files.filter((f) => REACH.test(read(f)))).toEqual([]);
+    // Any quoted import specifier whose path reaches the exchange segment — as
+    // `/exchange`, `/exchange/…`, or `/exchange.module` — at a path boundary.
+    // Broadened (review IMPORTER-REGEX): the previous form required a trailing
+    // slash and missed `./exchange.module`-style specifiers.
+    expect(files.filter((f) => EXCHANGE_REACH.test(read(f)))).toEqual([]);
     expect(read(join(BACKEND, 'src/main.ts'))).not.toMatch(/exchange/i);
+  });
+
+  it('the web-next entry (App/main) mounts NEITHER ExchangeShell NOR the exchange subtree', () => {
+    // WEBNEXT-UNFENCED: the client shell is dark too — the app entry renders
+    // only Discovery; nothing imports or mounts the exchange UI.
+    for (const entry of ['src/App.tsx', 'src/main.tsx']) {
+      const s = read(join(WEBNEXT, entry));
+      expect(s).not.toMatch(/ExchangeShell/);
+      expect(EXCHANGE_REACH.test(s)).toBe(false);
+    }
   });
 
   it('the Exchange search index type carries NO coordinate field', () => {
@@ -67,6 +89,14 @@ describe('Exchange — dark integration fences', () => {
     const controller = stripComments(read(join(BACKEND, 'src/exchange/exchange.controller.ts')));
     expect(controller).not.toMatch(/business/i);
     expect(files.length).toBeGreaterThan(0);
+    // BEHAVIORAL (review BUSINESS-FENCE): the ONLY public input path stamps
+    // ownerKind='user'. A business owner cannot be produced through validation,
+    // so the business seam is unreachable in fact, not just by convention.
+    const v = validateIntentInput('u1', {
+      kind: 'need', category: 'services/plumbing', title: 'Tap', text: 'leaks',
+      origin: { lat: 12.9716, lon: 77.5946 }, idempotencyKey: 'k1',
+    });
+    expect(v.ownerKind).toBe('user');
   });
 
   it('no exchange feature flag is true; crypto flags remain dark', () => {

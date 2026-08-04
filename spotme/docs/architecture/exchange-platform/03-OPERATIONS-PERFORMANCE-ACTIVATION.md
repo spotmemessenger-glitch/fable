@@ -5,16 +5,20 @@
 > activation checklist. Nothing here activates code. The `[when instrumented]`
 > caveat applies: `createExchangeMetrics` has no call sites yet.
 
-## 1. Dark integration fences (`backend/test/exchange-dark-fences.spec.ts`, 9)
+## 1. Dark integration fences (`backend/test/exchange-dark-fences.spec.ts`, 10)
 
 Load-bearing assertions over source, manifests, and build artifacts:
 `AppModule` imports neither `ExchangeModule` nor the exchange subtree; no
-backend module outside `src/exchange` imports it (static or dynamic); `main.ts`
-is exchange-free; the search index type carries no coordinate field; no
+backend module outside `src/exchange` imports it (static or dynamic — the
+import-reach matcher covers `/exchange`, `/exchange/…`, and `/exchange.module`
+forms); `main.ts` is exchange-free; **the web-next entry (`App.tsx`/`main.tsx`)
+mounts neither `ExchangeShell` nor the exchange subtree** (the client shell is
+dark too); the search index type carries no coordinate field; no
 age/gender/payment field exists anywhere in the exchange subtree; the business
-seam is dark (no reachable business flow — D4); no exchange feature flag is
-true and crypto flags stay false; no secret-shaped literal; the compiled
-`dist/exchange/*` output carries no Typesense endpoint or secret; and a
+seam is dark — no reachable business flow **and, behaviorally, the only public
+input path (`validateIntentInput`) stamps `ownerKind='user'`** (D4); no exchange
+feature flag is true and crypto flags stay false; no secret-shaped literal; the
+compiled `dist/exchange/*` output carries no Typesense endpoint or secret; and a
 non-vacuous cluster→test map (every exchange module has a proving suite).
 
 ## 2. Instrumentation (`backend/src/exchange/exchange.observability.ts`)
@@ -41,11 +45,26 @@ id)`), warm latency:
 | 10,000 | 11.1 ms | 14.2 ms |
 | 100,000 | 44.3 ms | 47.8 ms |
 
-Sub-linear growth; the indexed keyset query stays flat with page depth (same
-property the discovery keyset buys). These are dev-container numbers and do
-NOT replace a production-hardware re-benchmark before activation (A4). Nothing
-beyond 100k is claimed. The lifecycle/idempotency/concurrency paths are
-covered by the e2e suite, not separately micro-benchmarked.
+**What was measured (review PERF-OVERCLAIM):** *first-page* browse latency as
+the corpus grows to 100k — latency rises sub-linearly with corpus size. **What
+was NOT separately measured:** deep-page latency at fixed corpus. Depth-
+invariance is a *design property* of keyset pagination — the query seeks on the
+`(createdAt, id)` index and scans no `OFFSET` prefix, so page N costs the same
+as page 1 — but this run did not sweep page depth, so the doc no longer claims a
+measured "flat with page depth" result; only the first-page-vs-scale figures
+above are measured. A depth-sweep bench is a pre-activation follow-up (A4).
+
+**Seed caveat (review SEED-CAVEAT):** the harness seeds *synthetic, uniformly
+distributed* intents across a small coarse-cell grid with uniform categories.
+Real corpora are skewed (hot categories, hot cells, bursty `createdAt`), which
+changes index selectivity and cache behaviour. These numbers are an
+order-of-magnitude sanity check, not a production SLA; the production-hardware
+re-benchmark (A4) must use a representative distribution.
+
+These are dev-container numbers and do NOT replace a production-hardware
+re-benchmark before activation (A4). Nothing beyond 100k is claimed. The
+lifecycle/idempotency/concurrency paths are covered by the e2e suite, not
+separately micro-benchmarked.
 
 ## 4. Runbooks (dark foundation)
 
@@ -68,6 +87,17 @@ covered by the e2e suite, not separately micro-benchmarked.
 - **Immediate dark rollback** — remove the `ExchangeModule` import from
   `AppModule` (today it is already absent — activation is the one-line import;
   rollback deletes it). "Dark restored" = the exchange dark-fence spec passing.
+- **Free-text self-disclosure (review TITLE-SELF-DISCLOSURE)** — the platform
+  derives location from the coarse grid and strips *coordinate-shaped tokens*
+  from the search projection, but it does NOT redact arbitrary user-authored
+  content: a user who types a street address, phone number, or precise landmark
+  into `title`/`text`/`category` self-discloses it, and that free text is
+  stored and (for the sanitized fields) indexed as written. This is a
+  moderation + user-education surface, not a coordinate leak — the
+  system-derived location stays coarse regardless. Activation must pair it with
+  (a) compose-time guidance ("don't post your exact address"), (b) the
+  pre-publish content classifier (T-EX-1/2/15), and (c) report/takedown. No
+  automated PII redaction of free text is claimed at this phase. **[post-activation]**
 
 ## 5. Activation checklist (owner-gated)
 
