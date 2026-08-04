@@ -133,7 +133,7 @@ describe('people discovery engine (real PostGIS)', () => {
     const p1 = await query({ limit: 2 });
     expect(p1).toHaveLength(2);
     const last = p1[p1.length - 1];
-    const p2 = await query({ limit: 10, cursor: { d: last.coarseDistanceM, u: last.userId } });
+    const p2 = await query({ limit: 10, cursor: { d: last.coarseDistanceM, u: last.userId, depth: 1 } });
     const ids1 = p1.map((r) => r.userId);
     const ids2 = p2.map((r) => r.userId);
     expect(ids2.some((i) => ids1.includes(i))).toBe(false);
@@ -156,6 +156,17 @@ describe('people discovery engine (real PostGIS)', () => {
     expect(first.ranking.components.length).toBeGreaterThan(0);
     const json = JSON.stringify(page);
     expect(json).not.toContain('coarseDistanceM');
+  });
+
+  it('the geog GIST index exists on a migrated DB (drift guard, finding 3.1)', async () => {
+    // The spatial index is raw-SQL-managed (Prisma-Unsupported column). If a
+    // future `migrate dev` drops it, ST_DWithin falls back to a full scan —
+    // this assertion turns that regression into a failing test.
+    const rows = await prisma.$queryRawUnsafe<{ indexdef: string }[]>(
+      `SELECT indexdef FROM pg_indexes WHERE tablename = 'DiscoveryVisibility' AND indexname = 'DiscoveryVisibility_geog_idx'`,
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0].indexdef.toLowerCase()).toContain('gist');
   });
 
   it('visibility upsert bumps the monotonic version (C-REPLAY)', async () => {

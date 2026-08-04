@@ -38,7 +38,10 @@ export class FixtureDiscoveryApi implements DiscoveryApiPort {
 
   async query(q: DiscoveryQuery, _signal?: AbortSignal): Promise<DiscoveryResultPage> {
     this.outbound.push(JSON.stringify(q));
-    this.urls.push(`/v2/discovery/query?o=${q.origin.lat},${q.origin.lon}&r=${q.radius.km}`);
+    // Canonical form: the origin rides the POST BODY (recorded in `outbound`),
+    // NEVER the URL — a coarse location in a query string would still reach
+    // access logs and history (F4). The URL is location-free.
+    this.urls.push(`/v2/discovery/query?r=${q.radius.km}`);
     if (this.offline) {
       const e = new TypeError('network request failed');
       throw e;
@@ -79,7 +82,8 @@ export class FixtureDiscoveryApi implements DiscoveryApiPort {
 
   async setVisibility(v: { enabled: boolean; origin: CoarsePublicLocation | null; expiresInMinutes: number }): Promise<VisibilityPreference> {
     this.outbound.push(JSON.stringify(v));
-    this.urls.push(`/v2/discovery/visibility?enabled=${v.enabled}${v.origin ? `&o=${v.origin.lat},${v.origin.lon}` : ''}`);
+    // Location-free URL — the coarse origin rides the body only (F4).
+    this.urls.push(`/v2/discovery/visibility?enabled=${v.enabled}`);
     this.visibility = {
       enabled: v.enabled,
       visibilityVersion: this.visibility.visibilityVersion + 1,

@@ -8,6 +8,19 @@
  * callers and the branded return type do not change. The algorithm's numbers
  * are owned by the live web module; this mirror is pinned by tests to the same
  * observable bounds (≤ ~250 m displacement), not to identical outputs.
+ *
+ * PRIVACY BUDGET — READ HONESTLY (review finding F2): the anonymity this
+ * provides is the **3-decimal rounding grid (~110 m)**, NOT the jitter. The
+ * jitter is seeded by `selfId`, which is public (it is served in every person
+ * result), so an informed adversary can recompute and subtract it to recover
+ * the rounded grid point. Its purpose is ANTI-CORRELATION (two users sharing a
+ * grid cell do not collapse to a single identical public point), never added
+ * displacement privacy. A stronger model — a secret per-user salt, or the
+ * ADR-018 equal-area cell with a rotating server-side offset — is an
+ * ACTIVATION decision, deliberately not pre-empted here. Longitude cells also
+ * shrink by cos(latitude); the equal-area cell model supersedes this at
+ * activation. The controlling privacy guarantee remains: the PRECISE fix never
+ * leaves the device, proven by the mutation battery.
  */
 
 import type { CoarsePublicLocation } from '@spotme/contracts';

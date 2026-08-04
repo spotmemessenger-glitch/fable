@@ -152,7 +152,13 @@ export function PersonCard(props: {
     <article
       className={`disc-card ${props.selected ? 'selected' : ''}`}
       aria-label={`Nearby person ${person.displayName}`}
+      // F7-1: the card is keyboard-operable from the list, not just the map —
+      // a real button role, tab stop, aria-pressed, and Enter/Space activation.
+      role="button"
+      tabIndex={0}
+      aria-pressed={props.selected}
       onClick={props.onSelect}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); props.onSelect(); } }}
     >
       <header>
         <strong>{person.displayName}</strong>
@@ -186,7 +192,15 @@ export function PersonCard(props: {
 export function PlaceCard(props: { place: NearbyPlacePublic; selected: boolean; onSelect(): void; onDirections(): void; onSave(): void }) {
   const { place } = props;
   return (
-    <article className={`disc-card ${props.selected ? 'selected' : ''}`} aria-label={`Place ${place.name}`} onClick={props.onSelect}>
+    <article
+      className={`disc-card ${props.selected ? 'selected' : ''}`}
+      aria-label={`Place ${place.name}`}
+      role="button"
+      tabIndex={0}
+      aria-pressed={props.selected}
+      onClick={props.onSelect}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); props.onSelect(); } }}
+    >
       <header>
         <strong>{place.name}</strong>
         {place.category && <span className="disc-category">{place.category}</span>}
@@ -224,21 +238,29 @@ export function ResultList(props: {
 }) {
   const [scrollTop, setScrollTop] = useState(0);
   const viewportRows = props.viewportRows ?? 6;
-  const start = Math.max(0, Math.floor(scrollTop / ROW_HEIGHT) - 2);
-  const end = Math.min(props.results.length, start + viewportRows + 4);
+  const count = props.results.length;
+  // F7-7: clamp scroll to the real maximum so a windowing computation can never
+  // exceed the list — a shrunk result set (hide/refresh) or an end-of-list
+  // selection would otherwise render blank rows until a native scroll corrects it.
+  const maxScroll = Math.max(0, count * ROW_HEIGHT - viewportRows * ROW_HEIGHT);
+  const clampedTop = Math.min(scrollTop, maxScroll);
+  const start = Math.min(Math.max(0, count - 1), Math.max(0, Math.floor(clampedTop / ROW_HEIGHT) - 2));
+  const end = Math.min(count, start + viewportRows + 4);
   const visible = props.results.slice(start, end);
   const listRef = useRef<HTMLDivElement>(null);
 
-  // Selection sync: scroll the selected row into the window (stable across refresh).
+  // Selection sync: scroll the selected row into the window (stable across
+  // refresh). `results` is a dep so a shrinking list re-clamps (F7-7).
   useEffect(() => {
     if (!props.selectedId) return;
     const idx = props.results.findIndex((r) => idOf(r) === props.selectedId);
     if (idx >= 0 && (idx < start || idx >= end)) {
-      listRef.current?.scrollTo({ top: idx * ROW_HEIGHT });
-      setScrollTop(idx * ROW_HEIGHT);
+      const target = Math.min(idx * ROW_HEIGHT, maxScroll);
+      listRef.current?.scrollTo({ top: target });
+      setScrollTop(target);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [props.selectedId]);
+  }, [props.selectedId, props.results]);
 
   return (
     <div
@@ -253,7 +275,13 @@ export function ResultList(props: {
         {visible.map((r, i) => {
           const id = idOf(r);
           return (
-            <div key={id} role="listitem" style={{ position: 'absolute', top: (start + i) * ROW_HEIGHT, height: ROW_HEIGHT, left: 0, right: 0 }}>
+            <div
+              key={id}
+              role="listitem"
+              aria-setsize={count}
+              aria-posinset={start + i + 1}
+              style={{ position: 'absolute', top: (start + i) * ROW_HEIGHT, height: ROW_HEIGHT, left: 0, right: 0 }}
+            >
               {r.type === 'place' ? (
                 <PlaceCard
                   place={r.place}

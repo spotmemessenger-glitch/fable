@@ -31,6 +31,19 @@ import {
 
 export const TYPESENSE_COLLECTION = 'discovery_public';
 
+/** A decimal-degree / coordinate-pair shape that must never enter the index,
+ *  even inside an allow-listed string field (F8 — value screening, not just
+ *  key screening). Legitimate handles/labels never carry this shape. */
+const COORDINATE_SHAPE = /-?\d{1,3}\.\d{3,}\s*,\s*-?\d{1,3}\.\d{3,}|-?\d{1,3}\.\d{4,}/;
+
+/** Drop a coordinate-shaped string value; recurse arrays; pass everything else
+ *  through unchanged. A projection-builder bug can no longer index a location. */
+function coordinateSafe(v: unknown): unknown {
+  if (typeof v === 'string') return COORDINATE_SHAPE.test(v) ? '' : v;
+  if (Array.isArray(v)) return v.map(coordinateSafe).filter((x) => x !== '');
+  return v;
+}
+
 /** The complete index schema — privacy-safe projections ONLY (C-INDEX-MIN). */
 export const TYPESENSE_SCHEMA = {
   name: TYPESENSE_COLLECTION,
@@ -115,7 +128,10 @@ export class TypesenseSearchAdapter implements SearchPort {
         headers: { 'X-TYPESENSE-API-KEY': this.cfg.apiKey as string, 'Content-Type': 'application/json', ...init?.headers },
         signal: ctrl.signal,
       });
-      if (!res.ok && res.status >= 500) throw new Error(`typesense ${res.status}`);
+      // ANY non-2xx is a failure (F10): a 401/403/404 must surface as typed
+      // provider-unavailability, not parse to zero hits and masquerade as
+      // no-results while silently resetting the breaker (P4 honesty).
+      if (!res.ok) throw new Error(`typesense ${res.status}`);
       this.failures = 0;
       return res.json();
     } finally {
@@ -179,7 +195,7 @@ export class TypesenseSearchAdapter implements SearchPort {
     // attached (a coordinate or private field can never ride along).
     const allowed = new Set<string>(TYPESENSE_SCHEMA.fields.map((f) => f.name));
     const clean: Record<string, unknown> = { id: doc.id };
-    for (const [k, v] of Object.entries(doc)) if (allowed.has(k)) clean[k] = v;
+    for (const [k, v] of Object.entries(doc)) if (allowed.has(k)) clean[k] = coordinateSafe(v);
     try {
       await this.request(`/collections/${TYPESENSE_COLLECTION}/documents?action=upsert`, {
         method: 'POST',

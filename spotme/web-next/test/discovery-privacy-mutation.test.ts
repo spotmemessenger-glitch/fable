@@ -19,6 +19,24 @@ import { coarsenForPublic } from '../src/discovery/coarsen';
 const PRECISE = { lat: 12.971612345678, lon: 77.594609876543 };
 const PRECISE_MARKERS = ['12.971612345678', '77.594609876543', '971612345', '594609876'];
 
+/**
+ * Truncated-precision leak guard (F11.1). A substring scan misses a leak of
+ * `lat.toFixed(6)` ("12.971612"). But a naive truncated marker is UNSAFE here:
+ * the coarse output is `round(lat,3) + jitter` with jitter up to ~±100 m, so a
+ * legitimate coarse value CAN coincidentally share a 6-decimal prefix with the
+ * precise fix. So instead of guessing markers we assert STRUCTURALLY: every
+ * coordinate-shaped number that appears in an outbound body must be exactly a
+ * coarsened value (never a longer-precision one). This can't false-positive.
+ */
+const COORD_TOKEN = /-?\d{1,3}\.\d{3,}/g;
+function assertOnlyCoarseCoords(body: string, allowed: Set<string>): void {
+  for (const tok of body.match(COORD_TOKEN) ?? []) {
+    // A coordinate-shaped number in an outbound body is only allowed if it is
+    // exactly one of the coarsened values we produced.
+    expect(allowed.has(tok), `outbound body carried a non-coarse coordinate token ${tok}`).toBe(true);
+  }
+}
+
 const preciseGeo: GeolocationPort = { getFix: async () => ({ state: 'ok', fix: PRECISE }) };
 
 class RecordingRealtime implements RealtimePort {
@@ -97,6 +115,12 @@ describe('precise coordinates never leave the client boundary', () => {
     const coarse = coarsenForPublic(PRECISE, 'me-1');
     expect(surfaces.requestBodies).toContain(String(coarse.lat));
     expect(surfaces.urls.length).toBeGreaterThan(0);
+
+    // Structural truncated-leak guard (F11.1): the ONLY coordinate-shaped
+    // numbers allowed in outbound bodies/URLs are the exact coarse values.
+    const allowed = new Set([String(coarse.lat), String(coarse.lon)]);
+    assertOnlyCoarseCoords(surfaces.requestBodies, allowed);
+    assertOnlyCoarseCoords(surfaces.urls, allowed);
   });
 
   it('the coarsening boundary bounds displacement (~≤250 m) and is deterministic', () => {

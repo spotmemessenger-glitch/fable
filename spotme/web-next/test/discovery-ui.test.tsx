@@ -153,9 +153,29 @@ describe('map/list synchronization', () => {
     ];
     const markers = markersFor(results, 'p1');
     render(<MapView markers={markers} center={coarse} selectedId={'p1'} onSelect={onSelect} />);
-    fireEvent.click(screen.getByLabelText('Map marker u1 (approximate)'));
+    // The accessible name is the display name, not the raw id (F7-2).
+    fireEvent.click(screen.getByLabelText('Person u1 (approximate location)'));
     expect(onSelect).toHaveBeenCalledWith('u1');
     expect(document.querySelector('.disc-marker.selected')).toBeTruthy();
+  });
+
+  it('result cards are keyboard-operable: Enter and Space select (F7-1)', () => {
+    const onSelect = vi.fn();
+    render(
+      <ResultList
+        results={[{ type: 'person', person: person('u1'), ranking }]}
+        selectedId={null}
+        onSelect={onSelect}
+        onFriendRequest={() => {}} onBlock={() => {}} onReport={() => {}}
+        onHide={() => {}} onDirections={() => {}} onSave={() => {}}
+      />,
+    );
+    const card = screen.getByLabelText('Nearby person Person u1');
+    expect(card.getAttribute('tabIndex')).toBe('0');
+    expect(card.getAttribute('role')).toBe('button');
+    fireEvent.keyDown(card, { key: 'Enter' });
+    fireEvent.keyDown(card, { key: ' ' });
+    expect(onSelect).toHaveBeenCalledTimes(2);
   });
 
   it('person markers always render as approximate', () => {

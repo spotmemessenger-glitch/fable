@@ -62,11 +62,32 @@ export class ClosedRegistryError extends Error {
   }
 }
 
+export class InvalidRankingWeightError extends Error {
+  constructor(signal: string) {
+    super(`ranking weight for '${signal}' must be a finite number >= 0 — a negative/NaN weight would invert or corrupt the deterministic order`);
+    this.name = 'InvalidRankingWeightError';
+  }
+}
+
 export function rankCandidates(
   candidates: RankingCandidate[],
   weights: Record<RankingSignal, number> = RANKING_WEIGHTS_DEFAULTS,
 ): RankedCandidate[] {
   const registered = new Set<string>(RANKING_SIGNALS);
+
+  // Validate the weight vector BEFORE scoring (F4.3): a negative weight would
+  // silently invert "closer beats popular"; a NaN/missing weight yields NaN
+  // totals and a non-deterministic sort. Every registered signal must have a
+  // finite, non-negative weight, and no unregistered weight may be supplied.
+  for (const signal of RANKING_SIGNALS) {
+    const w = weights[signal];
+    if (typeof w !== 'number' || !Number.isFinite(w) || w < 0) {
+      throw new InvalidRankingWeightError(signal);
+    }
+  }
+  for (const key of Object.keys(weights)) {
+    if (!registered.has(key)) throw new ClosedRegistryError(key);
+  }
 
   const eligible = candidates.filter((c) => c.safetyEligible === true);
 

@@ -19,7 +19,7 @@ import {
   VisibilityUpsert,
 } from './discovery.repository';
 import { bandForDistanceM, explainPerson, orderPeople } from './discovery.ranking';
-import { encodeCursor, validateDiscoveryQuery, DISCOVERY_POLICY_DEFAULTS } from './discovery.policy';
+import { encodeCursor, validateDiscoveryQuery, validateVisibilityUpsert, DISCOVERY_POLICY_DEFAULTS } from './discovery.policy';
 import {
   DISCOVERY_CONTRACTS_VERSION,
   DiscoveryResult,
@@ -64,17 +64,23 @@ export class DiscoveryService {
       ranking: explainPerson(row, now),
     }));
 
+    // Next page's depth = this page's depth + 1; the signed cursor carries it
+    // so validateDiscoveryQuery can enforce the enumeration bound (F5).
+    const nextDepth = (q.cursor?.depth ?? 0) + 1;
+
     return {
       contractsVersion: DISCOVERY_CONTRACTS_VERSION,
       results,
       radius: { km: q.radiusKm },
-      cursor: hasMore && last ? encodeCursor({ d: last.coarseDistanceM, u: last.userId }) : null,
+      cursor: hasMore && last ? encodeCursor({ d: last.coarseDistanceM, u: last.userId, depth: nextDepth }) : null,
       freshness: { observedAt: now.toISOString() },
     };
   }
 
-  /** Principal-keyed visibility write (P3); body user-ids are ignored. */
-  setVisibility(principalId: string, v: VisibilityUpsert) {
+  /** Principal-keyed visibility write (P3); body is validated + coarsened here
+   *  (precise-shape refusal, grid re-quantization, bounded TTL) before storage. */
+  setVisibility(principalId: string, body: unknown) {
+    const v: VisibilityUpsert = validateVisibilityUpsert(body);
     return this.visibility.setVisibility(principalId, v);
   }
 

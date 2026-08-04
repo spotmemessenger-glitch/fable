@@ -33,10 +33,12 @@ export function MapView(props: {
         <g
           key={m.id}
           role="button"
-          aria-label={`Map marker ${m.id}${m.approximate ? ' (approximate)' : ''}`}
+          aria-label={`${m.label ?? `${m.kind} marker`}${m.approximate ? ' (approximate location)' : ''}`}
           tabIndex={0}
           onClick={() => props.onSelect(m.id)}
-          onKeyDown={(e) => e.key === 'Enter' && props.onSelect(m.id)}
+          // F7-2: the button pattern requires BOTH Enter and Space, and Space
+          // must preventDefault or it scrolls the page.
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); props.onSelect(m.id); } }}
           className={`disc-marker ${m.kind} ${m.selected || props.selectedId === m.id ? 'selected' : ''}`}
         >
           {m.approximate && <circle cx={x(m.lon)} cy={y(m.lat)} r={6} className="disc-approx-ring" />}

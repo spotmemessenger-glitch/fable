@@ -116,6 +116,29 @@ describe('typesense adapter — reliability contract (deterministic doubles)', (
     }
   });
 
+  it('INDEX VALUE SCREEN: a coordinate string inside an allow-listed field is dropped (F8)', async () => {
+    const bodies: string[] = [];
+    const a = adapterWith(async (_url, init) => { if (init?.body) bodies.push(init.body); return okJson({}); });
+    // A projection-builder bug leaks a coordinate into localityLabels / aliases —
+    // schema-legal KEYS, but the VALUE is a location.
+    await a.indexDoc({
+      id: 'u2', kind: 'place', name: 'Cafe', localityLabels: ['12.9716,77.5946', 'Indiranagar'],
+      aliases: ['77.59460'],
+    } as never);
+    expect(bodies).toHaveLength(1);
+    expect(bodies[0]).not.toContain('12.9716');
+    expect(bodies[0]).not.toContain('77.59460');
+    expect(bodies[0]).toContain('Indiranagar'); // the honest label survives
+  });
+
+  it('4xx IS a failure, not silent no-results (F10)', async () => {
+    let calls = 0;
+    const a = adapterWith(async () => { calls += 1; return { ok: false, status: 401, json: async () => ({ hits: [] }) }; });
+    const out = await a.search('priya', { kind: 'username' });
+    expect(out.state).toBe('provider-unavailable'); // never 'no-results'
+    expect(calls).toBe(1);
+  });
+
   it('the committed schema itself contains no coordinate field', () => {
     const names = TYPESENSE_SCHEMA.fields.map((f) => f.name).join(',');
     for (const banned of ['lat', 'lon', 'geo', 'coord', 'location']) {

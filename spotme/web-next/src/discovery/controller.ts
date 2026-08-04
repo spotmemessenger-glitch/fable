@@ -97,8 +97,12 @@ export class DiscoveryController {
 
   hide(id: string): void {
     this.hidden.add(id);
+    // Apply to the visible page whether we are online (ready) or serving the
+    // offline cache — hiding must take effect in both (F7-12).
     if (this.state_.kind === 'ready') {
       this.set({ kind: 'ready', page: this.stripHidden(this.state_.page) });
+    } else if (this.state_.kind === 'offline' && this.state_.cached) {
+      this.set({ kind: 'offline', cached: this.stripHidden(this.state_.cached) });
     }
   }
 
@@ -190,7 +194,11 @@ export class DiscoveryController {
   private normalizeError(e: unknown): DiscoveryState {
     const err = e as { code?: string; message?: string; retryable?: boolean; nextStep?: string; name?: string };
     if (err?.name === 'TypeError' || /network|fetch/i.test(String(err?.message))) {
-      const cached = this.deps.cache.get('last-page');
+      // Re-filter the cached page for freshness AND hidden results before
+      // re-serving it — a cached row that expired or was hidden since caching
+      // must not reappear just because we went offline (F3/F7-12).
+      const raw = this.deps.cache.get('last-page');
+      const cached = raw ? this.dropExpired(this.stripHidden(raw)) : null;
       return { kind: 'offline', ...(cached ? { cached } : {}) };
     }
     const wire: DiscoveryError =
@@ -201,15 +209,35 @@ export class DiscoveryController {
   }
 
   /* ----------------------------------------------------------- visibility */
+  /** Visibility failure is surfaced HERE and NEVER overwrites the search state
+   *  machine (F7-4): the two are independent writers, so a rejected visibility
+   *  write leaves search results intact and reports via `visibilityError`. */
+  visibilityError: string | null = null;
+
   async setVisibility(next: boolean): Promise<void> {
-    let origin: CoarsePublicLocation | null = null;
-    if (next) {
-      const loc = await this.deps.geo.getFix();
-      if (loc.state !== 'ok') return this.set(loc.state === 'permission-required' ? { kind: 'permission-required' } : { kind: 'location-unavailable', reason: 'reason' in loc ? loc.reason : 'unknown' });
-      origin = coarsenForPublic(loc.fix, this.deps.selfId);
+    this.visibilityError = null;
+    try {
+      let origin: CoarsePublicLocation | null = null;
+      if (next) {
+        const loc = await this.deps.geo.getFix();
+        if (loc.state !== 'ok') {
+          // A geo failure while enabling is a visibility problem, not a search
+          // one — report it without touching the search state.
+          this.visibilityError =
+            loc.state === 'permission-required'
+              ? 'Location permission is required to appear on the map.'
+              : `Location unavailable${'reason' in loc && loc.reason ? `: ${loc.reason}` : ''}.`;
+          for (const cb of this.listeners) cb();
+          return;
+        }
+        origin = coarsenForPublic(loc.fix, this.deps.selfId);
+      }
+      const pref = await this.deps.api.setVisibility({ enabled: next, origin, expiresInMinutes: 30 });
+      this.visibilityEnabled = pref.enabled;
+    } catch {
+      // Never leaves the toggle in a lying state: report and keep the old value.
+      this.visibilityError = 'Could not update your visibility. Please try again.';
     }
-    const pref = await this.deps.api.setVisibility({ enabled: next, origin, expiresInMinutes: 30 });
-    this.visibilityEnabled = pref.enabled;
     for (const cb of this.listeners) cb();
   }
 }
