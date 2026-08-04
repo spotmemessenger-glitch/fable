@@ -31,13 +31,32 @@ export class PrismaExchangeIntentRepository implements ExchangeIntentRepository 
   constructor(private readonly prisma: PrismaService) {}
 
   async createDraft(input: ValidatedExchangeIntentInput): Promise<CreateIntentResult> {
-    const existing = await this.prisma.exchangeIntent.findUnique({
+    const find = () => this.prisma.exchangeIntent.findUnique({
       where: { ownerId_idempotencyKey: { ownerId: input.ownerId, idempotencyKey: input.idempotencyKey } },
       select: SELECT,
     });
+    const existing = await find();
     if (existing) return { row: existing as ExchangeIntentRow, idempotentReplay: true };
 
-    const created = await this.prisma.$transaction(async (tx) => {
+    let created: ExchangeIntentRow;
+    try {
+      created = await this.insert(input);
+    } catch (e) {
+      // Race-safe idempotency (review IDEMPOTENCY-RACE): two concurrent requests
+      // with the same key both miss the find; the unique constraint rejects the
+      // loser with P2002. Catch it and return the winner's row as a replay,
+      // rather than surfacing a 500.
+      if ((e as { code?: string }).code === 'P2002') {
+        const row = await find();
+        if (row) return { row: row as ExchangeIntentRow, idempotentReplay: true };
+      }
+      throw e;
+    }
+    return { row: created, idempotentReplay: false };
+  }
+
+  private async insert(input: ValidatedExchangeIntentInput): Promise<ExchangeIntentRow> {
+    return this.prisma.$transaction(async (tx) => {
       const row = await tx.exchangeIntent.create({
         data: {
           ownerId: input.ownerId, ownerKind: input.ownerKind, kind: input.kind, status: 'draft',
@@ -55,8 +74,7 @@ export class PrismaExchangeIntentRepository implements ExchangeIntentRepository 
       await tx.$executeRaw`UPDATE "ExchangeIntent" SET "geog" = ST_SetSRID(ST_MakePoint(${input.coarseLon}, ${input.coarseLat}), 4326)::geography WHERE "id" = ${row.id}`;
       await tx.exchangeLifecycleEvent.create({ data: { intentId: row.id, fromStatus: 'draft', toStatus: 'draft', byKind: 'owner', reasonCode: 'owner-action' } });
       return row;
-    });
-    return { row: created as ExchangeIntentRow, idempotentReplay: false };
+    }) as unknown as ExchangeIntentRow;
   }
 
   async findById(id: string): Promise<ExchangeIntentRow | null> {
@@ -124,7 +142,7 @@ export class PrismaExchangeIntentRepository implements ExchangeIntentRepository 
       FROM "ExchangeIntent"
       WHERE "visibility" = 'discoverable'
         AND "status" IN ('active', 'matched')
-        AND "moderationState" <> 'removed'
+        AND "moderationState" = 'clear'
         AND ("expiresAt" IS NULL OR "expiresAt" > ${q.now})
         AND "ownerId" <> ${q.principalId}
         ${kindF} ${catF} ${keyset}

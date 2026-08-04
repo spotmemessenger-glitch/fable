@@ -162,3 +162,12 @@ ALTER TABLE "ExchangeMatchProjection" ADD CONSTRAINT "ExchangeMatchProjection_of
 -- column, which cannot be expressed in schema.prisma; MANAGED HERE. Preserve
 -- across future `migrate dev` runs, same as DiscoveryVisibility_geog_idx.)
 CREATE INDEX "ExchangeIntent_geog_idx" ON "ExchangeIntent" USING GIST ("geog");
+
+-- CreateIndex (raw SQL — a PARTIAL index supporting the discoverable browse
+-- keyset `ORDER BY "createdAt" DESC, "id" DESC` over the exact discoverable
+-- predicate, so pagination is index-ordered and flat with page depth rather
+-- than a full top-N sort. Partial + DESC + composite is not expressible in
+-- schema.prisma, so it is MANAGED HERE (preserve across `migrate dev`).)
+CREATE INDEX "ExchangeIntent_discoverable_keyset_idx"
+  ON "ExchangeIntent" ("createdAt" DESC, "id" DESC)
+  WHERE "visibility" = 'discoverable' AND "status" IN ('active','matched') AND "moderationState" = 'clear';

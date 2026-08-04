@@ -45,6 +45,17 @@ describe('exchange input validation', () => {
     expectCode(() => validateIntentInput('me', { ...okBody(), coords: { latitude: 1 } }), 'PRECISE_LOCATION_REFUSED');
   });
 
+  it('CELL-BYPASS: a client origin.cell is never trusted — server derives it', () => {
+    // A crafted precise cell alongside coarse lat/lon must be refused, not stored.
+    expectCode(() => validateIntentInput('me', okBody({ origin: { lat: 12.972, lon: 77.595, cell: '12.9716123,77.5946098' } })), 'PRECISE_LOCATION_REFUSED');
+    // A non-matching (even if coarse-shaped) cell is refused.
+    expectCode(() => validateIntentInput('me', okBody({ origin: { lat: 12.972, lon: 77.595, cell: 'g0.0:0.0' } })), 'MALFORMED_INTENT');
+    // A cell that exactly matches the derived grid is accepted; the stored cell
+    // is the server-derived value regardless.
+    const v = validateIntentInput('me', okBody({ origin: { lat: 12.9716, lon: 77.5946, cell: 'g12.972:77.595' } }));
+    expect(v.coarseCell).toBe('g12.972:77.595');
+  });
+
   it('A3: an age/gender field is structurally unsupported', () => {
     expectCode(() => validateIntentInput('me', okBody({ age: 30 })), 'UNSUPPORTED_FIELD');
     expectCode(() => validateIntentInput('me', okBody({ gender: 'x' })), 'UNSUPPORTED_FIELD');
@@ -112,8 +123,11 @@ class FakeRepo implements ExchangeIntentRepository {
     };
   }
   async createDraft(input: ValidatedExchangeIntentInput): Promise<CreateIntentResult> {
+    // Mirror prod: the unique (ownerId, idempotencyKey) constraint is
+    // UNCONDITIONAL — a repeated key always replays the existing row, whatever
+    // its status (review IDEMPOTENCY-FAKE).
     for (const r of this.rows.values()) {
-      if (r.ownerId === input.ownerId && r.status !== 'removed' && (r as { _k?: string })._k === input.idempotencyKey) {
+      if (r.ownerId === input.ownerId && (r as { _k?: string })._k === input.idempotencyKey) {
         return { row: r, idempotentReplay: true };
       }
     }
@@ -185,6 +199,9 @@ describe('exchange lifecycle engine', () => {
     const { svc } = mk();
     const c = await svc.createDraft('me', okBody({ informationalPrice: '~₹500' }));
     expect(c.informationalPrice).toEqual({ label: '~₹500', disclaimer: 'informational-only-no-payment' });
-    expect((c as unknown as Record<string, unknown>).priceAmount).toBeUndefined();
+    // Non-vacuous: assert the payment field is ABSENT from the shape (a
+    // regression that added it would make `in` true), not a tautological
+    // undefined-access (review TAUTOLOGY).
+    expect('priceAmount' in (c as object)).toBe(false);
   });
 });
