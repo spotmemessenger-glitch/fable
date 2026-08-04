@@ -30,21 +30,46 @@ const codeOf = (fn: () => unknown): string => {
   throw new Error('expected throw');
 };
 
-describe('validateRouteOrigin (X6)', () => {
-  it('accepts the coarse public grid and place references', () => {
-    expect(validateRouteOrigin(coarse)).toBe(coarse);
+describe('validateRouteOrigin (X6, F1 quantizing model)', () => {
+  it('passes grid values through unchanged in value, and place references as-is', () => {
+    const checked = validateRouteOrigin(coarse);
+    if (checked.kind !== 'coarse') throw new Error('expected coarse');
+    expect(checked.origin).toEqual({ lat: 12.972, lon: 77.595 });
     expect(validateRouteOrigin(placeRef)).toBe(placeRef);
   });
 
-  it('THROWS on device-precision coordinates — never rounds a leak into silence', () => {
-    for (const [lat, lon] of [[12.9716123, 77.595], [12.972, 77.5946098], [12.97161, 77.59461]]) {
-      expect(codeOf(() => validateRouteOrigin({ kind: 'coarse', origin: { lat, lon } })))
-        .toBe('precise-route-origin');
+  it('QUANTIZES device-precision coordinates to the public grid — nothing finer survives (F1)', () => {
+    const checked = validateRouteOrigin({ kind: 'coarse', origin: { lat: 12.9716123, lon: 77.5946098 } });
+    if (checked.kind !== 'coarse') throw new Error('expected coarse');
+    expect(checked.origin).toEqual({ lat: 12.972, lon: 77.595 });
+    // The precise digits are unrecoverable from what leaves the boundary.
+    expect(JSON.stringify(checked)).not.toContain('12.9716123');
+    expect(JSON.stringify(checked)).not.toContain('77.5946098');
+  });
+
+  it("F1 regression: the client's JITTERED coarse output is accepted, not rejected", () => {
+    // coarsenForPublic = 3-decimal grid + per-identity jitter (±0.0009°);
+    // the old exact-grid check rejected 100% of this legitimate traffic.
+    const jittered = { lat: 12.972 + 0.00072, lon: 77.595 - 0.00054 };
+    const checked = validateRouteOrigin({ kind: 'coarse', origin: jittered });
+    if (checked.kind !== 'coarse') throw new Error('expected coarse');
+    expect(Math.abs(checked.origin.lat - 12.972)).toBeLessThanOrEqual(0.0011); // one grid cell + float noise
+    expect(Number.isInteger(checked.origin.lat * 1000 + Number.EPSILON) ||
+      Math.abs(Math.round(checked.origin.lat * 1000) - checked.origin.lat * 1000) < 1e-6).toBe(true);
+  });
+
+  it('F1 regression: float-hostile grid values (e.g. 32.331) are no longer falsely rejected', () => {
+    for (const lat of [32.331, -16.092, 32.608, -65.514]) {
+      const checked = validateRouteOrigin({ kind: 'coarse', origin: { lat, lon: 77.595 } });
+      if (checked.kind !== 'coarse') throw new Error('expected coarse');
+      expect(checked.origin.lat).toBeCloseTo(lat, 6);
     }
   });
 
   it('THROWS on out-of-range or malformed origins', () => {
     expect(codeOf(() => validateRouteOrigin({ kind: 'coarse', origin: { lat: 91, lon: 0 } })))
+      .toBe('malformed-evidence');
+    expect(codeOf(() => validateRouteOrigin({ kind: 'coarse', origin: { lat: Number.NaN, lon: 0 } })))
       .toBe('malformed-evidence');
     expect(codeOf(() => validateRouteOrigin({ kind: 'place-ref', placeRefId: '' })))
       .toBe('malformed-evidence');
@@ -90,10 +115,13 @@ describe('buildProviderRoute (X6 passthrough)', () => {
       .toBe('malformed-evidence');
   });
 
-  it('a precise origin cannot reach the provider path', () => {
-    expect(codeOf(() => buildProviderRoute(
-      { kind: 'coarse', origin: { lat: 12.9716123, lon: 77.5946098 } }, [candidate], [legRecord()])))
-      .toBe('precise-route-origin');
+  it('a precise origin cannot reach the provider path — quantized before the adapter (F1)', () => {
+    const advice = buildProviderRoute(
+      { kind: 'coarse', origin: { lat: 12.9716123, lon: 77.5946098 } }, [candidate], [legRecord()]);
+    if (advice.kind !== 'provider-route') throw new Error('expected route');
+    expect(advice.origin).toEqual({ kind: 'coarse', origin: { lat: 12.972, lon: 77.595 } });
+    expect(JSON.stringify(advice)).not.toContain('9716123');
+    expect(JSON.stringify(advice)).not.toContain('5946098');
   });
 });
 
@@ -109,12 +137,22 @@ describe('buildStraightLineEstimate (X6 fallback)', () => {
     expect(JSON.stringify(advice)).not.toMatch(/duration|eta/i);
   });
 
-  it('THROWS on a precise origin or destination', () => {
-    expect(codeOf(() => buildStraightLineEstimate(
-      { kind: 'coarse', origin: { lat: 12.9716123, lon: 77.595 } }, { lat: 12.982, lon: 77.605 })))
-      .toBe('precise-route-origin');
-    expect(codeOf(() => buildStraightLineEstimate(coarse, { lat: 12.9812345, lon: 77.605 })))
-      .toBe('precise-route-origin');
+  it('QUANTIZES a precise origin/destination — the estimate carries only grid values (F1)', () => {
+    const advice = buildStraightLineEstimate(
+      { kind: 'coarse', origin: { lat: 12.9716123, lon: 77.595 } }, { lat: 12.9812345, lon: 77.605 });
+    if (advice.kind !== 'straight-line') throw new Error('expected estimate');
+    expect(advice.origin).toEqual({ kind: 'coarse', origin: { lat: 12.972, lon: 77.595 } });
+    expect(JSON.stringify(advice)).not.toContain('9716123');
+    expect(JSON.stringify(advice)).not.toContain('9812345');
+    // The quantized estimate matches the grid-value computation.
+    const grid = buildStraightLineEstimate(coarse, { lat: 12.981, lon: 77.605 });
+    if (grid.kind !== 'straight-line') throw new Error('expected estimate');
+    expect(advice.estimate.distanceM).toBe(grid.estimate.distanceM);
+  });
+
+  it('THROWS on an out-of-range destination', () => {
+    expect(codeOf(() => buildStraightLineEstimate(coarse, { lat: 120, lon: 77.605 })))
+      .toBe('malformed-evidence');
   });
 
   it('is honestly unavailable from a place-ref origin (no coordinates in phase-1)', () => {

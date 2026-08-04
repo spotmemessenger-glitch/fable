@@ -20,6 +20,11 @@ export type AssistantErrorCode =
   | 'fixture-mode-forbidden'
   | 'provider-unconfigured'
   | 'unknown-facet'
+  /** RESERVED since review repair F1: server-side off-grid detection is
+   *  numerically impossible (jittered coarse values deviate MORE from the
+   *  grid than raw fixes do), so the route boundary QUANTIZES instead of
+   *  throwing. Kept in the closed registry for an activation-time
+   *  origin-provenance model (e.g. signed coarse origins). */
   | 'precise-route-origin';
 
 const CODES: ReadonlySet<string> = new Set([
