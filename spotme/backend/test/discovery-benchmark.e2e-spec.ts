@@ -118,13 +118,17 @@ const report: Record<string, unknown> = {
 jest.setTimeout(45 * 60_000);
 
 bench('discovery performance benchmarks (checkpoint 13)', () => {
-  const prisma = new PrismaClient({ datasources: { db: { url: BENCH_DB } } });
-  const repo = new PrismaDiscoveryPeopleRepository(prisma as unknown as PrismaService);
+  // Constructed in beforeAll — a describe.skip body still EXECUTES, so nothing
+  // here may touch BENCH_DB at collection time.
+  let prisma: PrismaClient;
+  let repo: PrismaDiscoveryPeopleRepository;
   const NOW = new Date();
   const EXPIRES = new Date(NOW.getTime() + 365 * 24 * 3600_000);
   const PRINCIPAL = 'bench-principal';
 
   beforeAll(async () => {
+    prisma = new PrismaClient({ datasources: { db: { url: BENCH_DB } } });
+    repo = new PrismaDiscoveryPeopleRepository(prisma as unknown as PrismaService);
     const [{ version }] = await prisma.$queryRawUnsafe<{ version: string }[]>('SELECT version()');
     const [{ postgis_version }] = await prisma.$queryRawUnsafe<{ postgis_version: string }[]>(
       'SELECT postgis_version()',
