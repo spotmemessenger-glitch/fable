@@ -35,7 +35,9 @@ export function assertConsent(consent: CloudConsentContext, nowUTC: number): voi
       typeof consent.grantedAtUTC !== 'number' || typeof consent.surface !== 'string' || !consent.surface) {
     throw new CloudConsentError('malformed');
   }
-  if (nowUTC - consent.grantedAtUTC > CONSENT_FRESHNESS_MS) throw new CloudConsentError('stale');
+  const age = nowUTC - consent.grantedAtUTC;
+  // Future-granted consent is as invalid as stale consent (F-CAM-1).
+  if (age < 0 || age > CONSENT_FRESHNESS_MS) throw new CloudConsentError('stale');
 }
 
 export interface CloudVisionPort {
@@ -45,7 +47,9 @@ export interface CloudVisionPort {
 
 /** The default and ONLY live binding this stage: disabled, zero egress. */
 export class DisabledCloudVision implements CloudVisionPort {
-  constructor(private readonly now: () => number = () => 0) {}
+  /** The clock is REQUIRED (review repair F-CAM-1): a defaulted clock made
+   *  staleness unenforceable — any real grantedAtUTC read as "future". */
+  constructor(private readonly now: () => number) {}
 
   async request(_op: CloudVisionOp, _contentRef: string, consent: CloudConsentContext): Promise<CloudVisionResult> {
     // Consent is validated even on the disabled path: a surface that forgot
