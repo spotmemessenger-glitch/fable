@@ -9,23 +9,30 @@
     "build": "vite build",
     "typecheck": "tsc --noEmit",
     "check:boundaries": "node scripts/check-boundaries.mjs",
-    "test": "npm run check:boundaries && npm run check:camera-fences && npm run typecheck && npm run test:unit && npm run build",
+    "test": "npm run check:boundaries && npm run check:camera-fences && npm run typecheck && npm run typecheck:lab && npm run test:unit && npm run build && npm run check:camera-lab-absent",
     "preview": "vite preview",
     "test:unit": "vitest run",
-    "check:camera-fences": "node scripts/check-camera-fences.mjs"
+    "check:camera-fences": "node scripts/check-camera-fences.mjs",
+    "typecheck:lab": "tsc --noEmit -p tsconfig.lab.json",
+    "check:camera-lab-absent": "node scripts/check-camera-lab-absent.mjs",
+    "stage:camera-assets": "node scripts/stage-camera-assets.mjs"
   },
   "dependencies": {
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },
   "devDependencies": {
+    "@mediapipe/tasks-vision": "1.0.1",
     "@testing-library/react": "^16.3.2",
     "@testing-library/user-event": "^14.6.1",
+    "@types/node": "^26.1.2",
     "@types/react": "^18.3.11",
     "@types/react-dom": "^18.3.1",
     "@vitejs/plugin-react": "^4.3.2",
     "@vitest/coverage-v8": "^4.1.10",
     "jsdom": "^30.0.1",
+    "jsqr": "1.4.0",
+    "tesseract.js": "7.0.0",
     "typescript": "^5.6.3",
     "vite": "^5.4.9",
     "vitest": "^4.1.10"
