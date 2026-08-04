@@ -115,20 +115,20 @@ multi-device implementation, not during.
 on every coding change — CLAUDE.md now points at it. Its V1→V2 mapping
 (`14-ROADMAP-V1-TO-V2-MAPPING.md`) was **APPROVED by owner directive
 2026-08-01** — V2 is controlling; V1 is historical; stricter gate still wins
-(V2 Appendix B). **Execution order AMENDED by the owner 2026-08-01** (recorded
-in the roadmap's "Owner Amendment" section — read that, not the superseded
-phase list): #30/#31/#36 were approved and merged, and the strategic order is
-now ① push notifications (Android+iOS, background/terminated/foreground,
-production-grade) → ② translation platform (provider abstraction over the
-existing multi-provider engine in `web/api/translate.js`) → ③ live voice
-translation (flagship; dedicated architecture, NOT a voice-notes extension;
-MVP < 2.5 s) → ④ adaptive communication layer (automatic transport switching
-incl. native Bluetooth offline) → ⑤ remaining Priority 1 crypto (X3DH →
-Double Ratchet → multi-device → completion evidence), which **remains
-mandatory before Priority 1 is declared complete**. AI Communication ADRs:
-planning may proceed. New standing principle: every AI feature optimises
-accuracy + latency + privacy simultaneously; no hard provider dependency.
-ADR-008 §12 is UNCHANGED by the amendment. **V1/V2 priority numbers differ —
+(V2 Appendix B). **Execution order: Owner Amendment 2 (2026-08-01, later)
+controls — read the roadmap's "Owner Amendment 2" section.** It supersedes
+Amendment 1's implementation-first sequencing of the five pillars. The order
+now: **Phase 2B — publication together with rollback-after-publication**
+(publish, withdraw, supersede, server lifecycle, rollback semantics; one PR,
+ADR-008 §12's designed resolution) → **X3DH → Double Ratchet →
+Multi-device**. In parallel, PLANNING ONLY: adaptive communication network,
+AI communication platform, translation platform (provider abstraction), live
+voice translation architecture (shipped voice-note re-voicing is its
+foundation), push notifications elevated to launch-critical. **No merges
+without review — every PR, code or docs, returns to the owner** with CI +
+benchmarks where applicable + rollback documentation + updated ADRs before
+requesting review. Standing principle (Amendment 1, kept): every AI feature
+optimises accuracy + latency + privacy; no hard provider dependency. **V1/V2 priority numbers differ —
 the mapping
 §1 restates every standing owner block under V2 numbering; renumbering never
 unblocks.** Our A1–A7 / B1–B10 labels remain an implementation breakdown only.
@@ -152,39 +152,46 @@ Priority 1 checklist, honestly, as of this write:
 
 ---
 
-## 3. Next work — the owner's AMENDED order (2026-08-01)
+## 3. Next work — Owner Amendment 2 order (2026-08-01, later — controlling)
 
-The pre-amendment queue (E2E seam next, then scenarios 2–12) is
-**re-sequenced, not cancelled**. The strategic order is now:
+Amendment 2 superseded Amendment 1's implementation-first pillar order.
+**Implementation track (in order):**
 
-1. **① Push notifications** — Android AND iOS; background/terminated/
-   foreground; messages, calls, mentions, group events, stories;
-   production-grade delivery. Starting point: web-push/VAPID and Android FCM
-   are live; **iOS APNs is a dead dep** (`@parse/node-apn` installed, 0
-   imports) and needs Apple Developer/APNs credentials from the owner.
-2. **② Translation platform** — formal provider abstraction over the
-   existing multi-provider engine (`web/api/translate.js`: Google Cloud v2,
-   Azure v3, Sarvam, Gemini leg + Anthropic/Gemini/OpenAI LLM chain);
-   dynamic best-provider by language pair/latency/quality/availability;
-   conversation context; quality metrics, fallback, retries, caching,
-   observability.
-3. **③ Live voice translation** — flagship; DEDICATED architecture (owner:
-   "Do not treat this as an extension of voice notes"); capture → streaming
-   STT → incremental translation → streaming TTS → voice preservation;
-   MVP < 2.5 s end-to-end, production target < 1 s.
-4. **④ Adaptive communication layer** — flagship; Socket.IO, Centrifugo,
-   P2P, native Bluetooth offline messaging; automatic transport switching
-   ("Users should never manually select a transport"); offline sync; future
-   Wi-Fi Direct/mesh.
-5. **⑤ Remaining Priority 1 crypto** — X3DH → Double Ratchet → multi-device
-   → completion evidence. **Still mandatory before Priority 1 is declared
-   complete**; the §1 hard stop governs when this begins.
+1. **Phase 2B — publication + rollback-after-publication, one PR.** The
+   owner: "Phase 2B should implement publication together with
+   rollback-after-publication (publish, withdraw, supersede, server
+   lifecycle, rollback semantics) in its own PR… publication is never
+   merged without its complete rollback path." This is the sanctioned path
+   through §1's hard stop — the lifecycle §12 demands, arriving in the same
+   change that first publishes. Return for review before merge.
+2. **X3DH** (ADR-004 family designs + vectors exist).
+3. **Double Ratchet** (ADR-004b vectors exist).
+4. **Multi-device** — still gated by the ADR-008 §BLOCKING safety-number
+   question, which must be decided BEFORE implementation.
 
-The approved E2E seam design (§4) and scenarios 2–12 stay valid and fold
-into the completion-evidence phase (or earlier if the owner pulls them
-forward). Do NOT mix into any feature PR: A5 activation, signing-key
-publication, revocation transport, prekeys, X3DH, ratchet code,
-multi-device.
+**Planning-only track (parallel, no implementation):** roadmap + ADR
+documents for adaptive communication network · AI communication platform ·
+translation platform provider abstraction (OpenAI, Gemini, Azure, Sarvam,
+ElevenLabs where applicable; enterprise-grade accuracy/latency/fallback/
+observability/cost-aware routing) · live voice translation architecture
+(streaming STT → translation → TTS, voice preservation, interruptions,
+captions, provider failover, latency targets, privacy; shipped voice-note
+re-voicing is the foundation) · push notifications as launch-critical
+(Android+iOS production delivery, background/terminated, call
+notifications, delivery metrics, retry behavior). Push implementation
+groundwork already scouted: pushes fire for `msg`/`knock` only
+(`rooms.gateway.ts` `pushForEvent`); FCM path carries a tuned `apns` block;
+`@parse/node-apn` is a dead dep; mention-pushes need an owner privacy call
+(mention text is inside E2EE — a mention-specific push leaks *that* a
+mention happened via routing metadata).
+
+**Process (owner, standing): no merges without review — every PR returns.**
+Small reversible PRs; CI + benchmarks where applicable + rollback docs +
+updated ADRs before requesting review.
+
+The approved E2E seam design (§4) and scenarios 2–12 stay valid, folded
+into completion evidence unless the owner pulls them forward. Do NOT mix
+into any PR: A5 activation, prekeys, X3DH, ratchet code, multi-device.
 
 ---
 

@@ -570,3 +570,63 @@ cryptography stays mandatory before Priority 1 is declared complete.
     **accuracy, latency, and privacy**. No provider may become a hard
     dependency. The system must be able to choose or fall back between
     providers based on quality, availability, cost, and response time.
+
+---
+
+## Owner Amendment 2 — 2026-08-01, later (supersedes Amendment 1's sequencing)
+
+Issued by the owner in review of the merged train (#30 `d29c1b6`, #31
+`43fce9e`, #36 `fb02b99`). **This amendment supersedes Amendment 1's
+"immediate launch priorities" sequencing**; it keeps Amendment 1's elevation
+of those capabilities as V2 priorities and keeps §2 rule 10 verbatim.
+
+### Phase 2 stays two PRs
+
+- **#36 (merged) remains storage only** — generation, lifecycle, persistence,
+  wipe, rotation, benchmarks, tests, ADR updates. Publication was not and
+  must not be folded into it.
+- **Phase 2B** implements **publication together with
+  rollback-after-publication** — publish, withdraw, supersede, the
+  server-side key lifecycle, and rollback semantics — **in its own PR**, so
+  storage stays independently reviewable and publication is never merged
+  without its complete rollback path. This is ADR-008 §12's designed
+  resolution, not an exception to it.
+
+### Implementation order after Phase 2
+
+1. **X3DH**
+2. **Double Ratchet**
+3. **Multi-device**
+
+### Parallel track — PLANNING ONLY, no implementation yet
+
+While the crypto phases progress, the roadmap and ADRs are updated to
+reflect the V2 priorities as planning documents:
+
+- **Adaptive Communication Network** as a core platform capability —
+  Socket.IO, Centrifugo, P2P, native Bluetooth offline messaging, automatic
+  transport selection, future mesh. (Implementation is NOT scheduled by this
+  amendment; Amendment 1's partial lift of the transport hold is withdrawn —
+  the hold stands for implementation.)
+- **AI Communication Platform** as a core product pillar.
+- **Translation Platform** with provider abstraction — OpenAI, Gemini,
+  Azure, Sarvam AI, ElevenLabs where applicable — emphasizing
+  enterprise-grade accuracy, latency, fallback, observability, and
+  cost-aware routing.
+- **Live Voice Translation** architecture — streaming STT → translation →
+  TTS with voice preservation, interruption handling, captions, provider
+  failover, latency targets, and privacy. The shipped voice-note
+  translation with re-voicing in the sender's cloned voice is the
+  foundation this architecture builds on.
+- **Push Notifications** elevated to **launch-critical** — production-grade
+  Android and iOS delivery, background/terminated handling, call
+  notifications, delivery metrics, and retry behavior. (Planning/ADR track
+  now; implementation is sequenced by the owner, not started by this
+  amendment.)
+
+### Process rules (standing, restated by the owner)
+
+- **No merges without review.** Every PR — code or docs — returns for owner
+  review before merging.
+- Small, reversible PRs with **full CI, benchmarks where applicable,
+  rollback documentation, and updated ADRs before requesting review**.
