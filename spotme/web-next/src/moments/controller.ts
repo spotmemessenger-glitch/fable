@@ -11,7 +11,7 @@
 import { coarsenForPublic } from '../discovery/coarsen';
 import type { GeolocationPort } from '../discovery/ports';
 import type {
-  MomentsApiPort, CameraRollPort, MomentFeedMode, MomentPageView, MomentVisibility,
+  MomentsApiPort, CameraRollPort, CameraPort, MomentFeedMode, MomentPageView, MomentVisibility,
   MomentReaction, StoryView, ComposeMomentInput, PickedMedia,
 } from './ports';
 
@@ -44,7 +44,37 @@ export class MomentsController {
   stories: StoryView[] = [];
   actionError: string | null = null;
 
-  constructor(private readonly deps: { api: MomentsApiPort; geo: GeolocationPort; cameraRoll: CameraRollPort; selfId: string }) {}
+  constructor(private readonly deps: {
+    api: MomentsApiPort;
+    geo: GeolocationPort;
+    cameraRoll: CameraRollPort;
+    selfId: string;
+    /** Camera Stage 1 C4: the CameraPort seam — OPTIONAL and defaulting to
+     *  absent, so every existing composition stays gallery-only. When a
+     *  future owner-authorized wiring registers the engine adapter, capture
+     *  flows join the draft exactly like library picks: mediaId only —
+     *  capture output has no location field (contract law), and the bytes
+     *  meet the Phase 5B EXIF strip at upload like all media. */
+    camera?: CameraPort;
+  }) {}
+
+  /** Live capture into the composer — honest no-op error while unwired. */
+  async captureFromCamera(kind: 'photo' | 'video'): Promise<void> {
+    this.actionError = null;
+    const camera = this.deps.camera;
+    if (!camera) {
+      this.actionError = 'Camera capture is not available.';
+      return this.notify();
+    }
+    const result = kind === 'photo' ? await camera.capturePhoto() : await camera.captureVideo();
+    if (result.state !== 'captured') {
+      this.actionError = 'Camera capture is not available.';
+      return this.notify();
+    }
+    this.draft.media = [...this.draft.media, result.media];
+    this.draft.kind = result.media.kind === 'video' ? 'video' : 'photo';
+    this.notify();
+  }
 
   subscribe = (cb: () => void) => { this.listeners.add(cb); return () => this.listeners.delete(cb); };
   getState = (): MomentsState => this.state_;
