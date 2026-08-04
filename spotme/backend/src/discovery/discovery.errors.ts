@@ -16,7 +16,9 @@ export type DiscoveryErrorCode =
   | 'RADIUS_OUT_OF_BOUNDS'
   | 'UNSUPPORTED_FILTER'
   | 'INVALID_CURSOR'
+  | 'CURSOR_TOO_DEEP'
   | 'RATE_LIMITED'
+  | 'VISIBILITY_REFUSED'
   | 'SCOPE_UNAVAILABLE';
 
 export class DiscoveryError extends Error {
