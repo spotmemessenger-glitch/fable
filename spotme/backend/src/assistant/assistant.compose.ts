@@ -37,6 +37,16 @@ export function sanitizeParam(value: string): string {
   return String(value).replace(/[\u0000-\u001f\u007f<>]/g, '').slice(0, 160);
 }
 
+/**
+ * X4 LANGUAGE guard (review repair F4): a current-state ASSERTION can arrive
+ * as free text inside a param (e.g. a review theme claiming "open right
+ * now"), dodging the category-based freshness gate. Any rendered claim
+ * containing current-state language must BE a current-state-category claim on
+ * fully current evidence — otherwise the statement dies, fail closed.
+ */
+export const CURRENT_STATE_LANGUAGE =
+  /\b(open (right )?now|currently open|available (right )?now|happening now|open at the moment|closes? in \d|right now)\b/i;
+
 function renderStatement(statement: EvidenceStatement): string {
   const template = TEMPLATES[statement.templateKey];
   if (!template) throw new AssistantError('unknown-template', statement.templateKey.slice(0, 64));
@@ -54,12 +64,16 @@ export class DeterministicSummaryComposer implements AssistantSummaryPort {
     const citedRecordIds = new Set<string>();
 
     for (const statement of bundle.statements) {
-      // An uncited statement never becomes a claim (X1).
-      if (!statement.citationIds.length) continue;
+      // An uncited statement never becomes a claim (X1). Duplicated citation
+      // ids are collapsed BEFORE anything counts them (review repair F3 —
+      // citing one record ten times must not inflate the density basis).
+      const citationIds = [...new Set(statement.citationIds)];
+      if (!citationIds.length) continue;
 
       const cited: EvidenceRecord[] = [];
       let valid = true;
-      for (const cid of statement.citationIds) {
+      let allCurrent = true;
+      for (const cid of citationIds) {
         const record = recordsById.get(cid);
         // Unresolved or category-mismatched citations disqualify the
         // statement (X3) — fail closed, no partial credit.
@@ -68,15 +82,24 @@ export class DeterministicSummaryComposer implements AssistantSummaryPort {
         if (CURRENT_STATE_CATEGORIES.has(statement.category) && record.freshness !== 'current') {
           valid = false; break;
         }
+        if (record.freshness !== 'current') allCurrent = false;
         cited.push(record);
       }
       if (!valid) continue;
 
+      const text = renderStatement(statement);
+      // F4: current-state LANGUAGE requires a current-state category on fully
+      // current evidence — a review theme saying "open right now" dies here.
+      if (CURRENT_STATE_LANGUAGE.test(text) &&
+          (!CURRENT_STATE_CATEGORIES.has(statement.category) || !allCurrent)) {
+        continue;
+      }
+
       claims.push({
         id: `claim:${statement.id}`,
-        text: renderStatement(statement),
+        text,
         category: statement.category,
-        citationIds: statement.citationIds as unknown as NonEmptyArray<string>,
+        citationIds: citationIds as unknown as NonEmptyArray<string>,
         confidence: confidenceFor(cited),
         evidenceStatus: 'supported',
       });
