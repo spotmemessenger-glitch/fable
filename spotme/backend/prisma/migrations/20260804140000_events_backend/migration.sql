@@ -123,6 +123,8 @@ CREATE INDEX "EventSearchProjection_category_startAt_idx" ON "EventSearchProject
 CREATE INDEX "Event_geog_idx" ON "Event" USING GIST ("geog");
 
 -- CreateIndex (partial keyset index for the discoverable browse query — newest
--- first over live, canonical, scheduled events; keeps deep pagination flat.)
-CREATE INDEX "Event_browse_keyset_idx" ON "Event" ("startAt" DESC, "id" DESC)
-  WHERE "canonicalId" IS NULL AND "lifecycle" <> 'cancelled';
+-- first over live, canonical events; keeps deep pagination flat. Indexed on the
+-- COALESCE expression the browse query orders by, so NULL-start (tbd/postponed)
+-- rows remain reachable across page boundaries and the index is still used.)
+CREATE INDEX "Event_browse_keyset_idx" ON "Event" (COALESCE("startAt", TIMESTAMP '1970-01-01 00:00:00') DESC, "id" DESC)
+  WHERE "canonicalId" IS NULL;
