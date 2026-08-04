@@ -21,6 +21,8 @@ seams; LLM provider choice is owner-retained.
 | Doc | Contents |
 |---|---|
 | [01-CONTRACTS-AND-THREAT-MODEL.md](01-CONTRACTS-AND-THREAT-MODEL.md) | 6A: `assistant.ts` contracts v1 + the Phase 6 threat model |
+| [02-BACKEND-REVIEW-ROUTE-UI.md](02-BACKEND-REVIEW-ROUTE-UI.md) | 6B–6D: dark AssistantModule, X5 review engine, X6 routes, web-next surface |
+| [03-OPERATIONS-ACTIVATION.md](03-OPERATIONS-ACTIVATION.md) | 6E: closed metrics, runbooks, owner-gated activation checklist |
 
 Programme table + build record: `docs/handbook/PLATFORM-PHASE-6-PROGRAMME.md`.
 Corrections of record: X1–X12 (typed claims; evidence integrity; fail-closed
