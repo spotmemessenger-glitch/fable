@@ -31,6 +31,37 @@ export type {
   ExchangeSearchResult,
 } from './exchange.ts';
 
+// Platform Phase 3 — versioned Exchange contracts (DARK).
+export { EXCHANGE_CONTRACTS_VERSION } from './exchange.ts';
+export type {
+  ExchangeContractsVersion,
+  ExchangeOwnerRef,
+  ExchangeIntentKind,
+  ExchangeIntentStatus,
+  ExchangeVisibility,
+  ExchangeAvailability,
+  ExchangeRadiusPolicy,
+  ExchangeInformationalPrice,
+  ExchangeVersion,
+  ExchangeModerationState,
+  ExchangeIntentBase,
+  ExchangeNeed,
+  ExchangeOffer,
+  ExchangeService,
+  ExchangeIntent,
+  ExchangeLifecycleEvent,
+  ExchangeMatchStatus,
+  ExchangeMatchSignal,
+  ExchangeMatchExplanation,
+  ExchangeMatch,
+  ExchangeReputationSummary,
+  ExchangeBusinessPublic,
+  ExchangeSearchQuery,
+  ExchangeCursor,
+  ExchangePage,
+  ExchangeContactCapability,
+} from './exchange.ts';
+
 export { DISCOVERY_CONTRACTS_VERSION } from './discovery.ts';
 export type {
   DiscoveryContractsVersion,

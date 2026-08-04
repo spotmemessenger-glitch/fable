@@ -16,6 +16,7 @@ import type {
   LocationPrecision,
   RadiusKm,
 } from './location.ts';
+import type { CoarsePublicLocation, DistanceBand } from './discovery.ts';
 
 /** An Exchange item is either a need or an offer. */
 export type ItemType = 'need' | 'offer';
@@ -132,4 +133,194 @@ export interface ExchangeSearchResult {
   readonly results: readonly ExchangeItemPublic[];
   readonly radiusKm: RadiusKm;
   readonly cursor?: string | null;
+}
+
+/* ==========================================================================
+ * PLATFORM PHASE 3 — versioned Exchange contracts (DARK)
+ *
+ * The authoritative, framework-neutral contract set for the SpotMe Exchange
+ * dark foundation. Built ON the Phase 2 chain: locations are the BRANDED
+ * `CoarsePublicLocation` from the discovery contracts, so a raw {lat,lon} is
+ * unassignable by type (privacy by construction, not by convention). The
+ * pre-Phase-3 beachhead types above remain for the inert web-next screen.
+ *
+ * Derived from the Exchange PRD (handbook/product/exchange, pending A5). Every
+ * [PROPOSED]/pending-A5 numeric default stays a documented config seam — none
+ * is hardcoded here, and nothing converts open product policy into an approved
+ * decision. No payment/escrow/checkout contract exists. No age/gender/
+ * sensitive-trait field exists in any shape (A3). Contact follows explicit
+ * acceptance — no shape opens a chat implicitly.
+ * ========================================================================== */
+
+export const EXCHANGE_CONTRACTS_VERSION = 1 as const;
+export type ExchangeContractsVersion = typeof EXCHANGE_CONTRACTS_VERSION;
+
+/** Canonical identity stays authoritative (user/business services). A REFERENCE
+ *  only — Exchange owns no identity uniqueness/ownership/lifecycle. */
+export interface ExchangeOwnerRef {
+  readonly kind: 'user' | 'business';
+  readonly id: string;
+}
+
+export type ExchangeIntentKind = 'need' | 'offer' | 'service';
+
+/** The eight canonical lifecycle states (mission). */
+export type ExchangeIntentStatus =
+  | 'draft' | 'active' | 'paused' | 'matched' | 'fulfilled' | 'expired' | 'withdrawn' | 'removed';
+
+export type ExchangeVisibility = 'hidden' | 'discoverable';
+
+/** Explicit unknown semantics — absence of evidence is 'unknown', never a
+ *  fabricated availability. */
+export type ExchangeAvailability =
+  | { readonly state: 'window'; readonly fromIso: string; readonly toIso: string }
+  | { readonly state: 'recurring'; readonly scheduleLabel: string }
+  | { readonly state: 'unknown' };
+
+/** Radius policy — expansion is DISCLOSED (mirrors Discovery). Numeric defaults
+ *  are [PROPOSED] config, not constants. */
+export interface ExchangeRadiusPolicy {
+  readonly km: number;
+  readonly maxKm: number;
+  readonly expanded?: true;
+}
+
+/** Display-only price label; structurally NOT a payment object. */
+export interface ExchangeInformationalPrice {
+  readonly label: string;
+  readonly disclaimer: 'informational-only-no-payment';
+}
+
+/** Optimistic concurrency + idempotent mutations. */
+export interface ExchangeVersion {
+  readonly seq: number;
+  readonly idempotencyKey: string;
+}
+
+export type ExchangeModerationState = 'clear' | 'pending-review' | 'restricted' | 'removed';
+
+export interface ExchangeIntentBase {
+  readonly contractsVersion: ExchangeContractsVersion;
+  readonly id: string;
+  readonly owner: ExchangeOwnerRef;
+  readonly status: ExchangeIntentStatus;
+  readonly category: string;
+  readonly title: string;
+  readonly text: string;
+  readonly tags: readonly string[];
+  readonly budgetBand?: BudgetBand;
+  readonly informationalPrice?: ExchangeInformationalPrice;
+  readonly availability: ExchangeAvailability;
+  /** Approximate ONLY — branded; coarsened on-device before it can exist here. */
+  readonly approxLocation: CoarsePublicLocation;
+  readonly radius: ExchangeRadiusPolicy;
+  readonly visibility: ExchangeVisibility;
+  readonly moderation: ExchangeModerationState;
+  readonly version: ExchangeVersion;
+  readonly createdAtIso: string;
+  readonly updatedAtIso: string;
+  readonly expiresAtIso: string | null;
+}
+
+export interface ExchangeNeed extends ExchangeIntentBase { readonly kind: 'need'; }
+export interface ExchangeOffer extends ExchangeIntentBase { readonly kind: 'offer'; }
+export interface ExchangeService extends ExchangeIntentBase { readonly kind: 'service'; }
+export type ExchangeIntent = ExchangeNeed | ExchangeOffer | ExchangeService;
+
+export interface ExchangeLifecycleEvent {
+  readonly intentId: string;
+  readonly from: ExchangeIntentStatus;
+  readonly to: ExchangeIntentStatus;
+  readonly atIso: string;
+  readonly by: ExchangeOwnerRef | { readonly kind: 'moderation' } | { readonly kind: 'system-expiry' };
+  /** Closed reason codes — free text never enters the audit stream. */
+  readonly reasonCode?: 'owner-action' | 'ttl' | 'moderation-removed' | 'fulfilled-confirmed' | 'superseded';
+}
+
+export type ExchangeMatchStatus =
+  | 'proposed' | 'viewed' | 'accepted' | 'declined' | 'dismissed' | 'superseded' | 'expired';
+
+/** Closed signal registry (mirrors the Discovery ranking discipline). Weights
+ *  are runtime config with [PROPOSED] defaults (PRD §4.4); the SHAPE — weighted
+ *  sum + full breakdown + safety hard gate — is contract. */
+export type ExchangeMatchSignal = 'intentFit' | 'proximity' | 'availability' | 'trust' | 'freshness';
+
+export interface ExchangeMatchExplanation {
+  readonly components: readonly {
+    readonly signal: ExchangeMatchSignal;
+    readonly weight: number;
+    readonly value: number;   // [0,1]; unknown evidence contributes 0
+    readonly weighted: number;
+  }[];
+  readonly total: number;     // equals the sum of weighted (tested)
+  readonly omittedSignals: readonly ExchangeMatchSignal[];
+  /** An ineligible match is UNREPRESENTABLE — the literal true makes the safety
+   *  gate a type property, not a runtime hope. */
+  readonly safetyEligible: true;
+}
+
+export interface ExchangeMatch {
+  readonly contractsVersion: ExchangeContractsVersion;
+  readonly id: string;
+  readonly needId: string;
+  readonly offerId: string;
+  readonly status: ExchangeMatchStatus;
+  readonly score: number;
+  readonly explanation: ExchangeMatchExplanation;
+  readonly epoch: number;     // supersede guard
+  /** Distance is a BAND — never metres between two parties. */
+  readonly distanceBand: DistanceBand;
+  readonly proposedAtIso: string;
+}
+
+/** Derived, non-sensitive, first-party only. */
+export interface ExchangeReputationSummary {
+  readonly subject: ExchangeOwnerRef;
+  readonly completedCount: number;
+  readonly verified: boolean;
+  readonly score01: number;   // [0,1] derived; never purchasable
+}
+
+export interface ExchangeBusinessPublic {
+  readonly businessId: string;
+  readonly displayName: string;
+  readonly verified: boolean;
+  readonly categoryLabels: readonly string[];
+  readonly attribution: string;
+  readonly approxLocation: CoarsePublicLocation | null;
+}
+
+export interface ExchangeSearchQuery {
+  readonly contractsVersion: ExchangeContractsVersion;
+  readonly text?: string;
+  readonly kind?: ExchangeIntentKind;
+  readonly origin: CoarsePublicLocation;
+  readonly radius: ExchangeRadiusPolicy;
+  /** Allowed filters ONLY: category / availability / distance band. */
+  readonly filters?: {
+    readonly category?: string;
+    readonly distanceBand?: DistanceBand;
+    readonly availableNow?: boolean;
+  };
+  readonly cursor: ExchangeCursor | null;
+}
+
+declare const ExchangeCursorBrand: unique symbol;
+/** Opaque keyset cursor — undecodable and unforgeable by type. */
+export type ExchangeCursor = string & { readonly [ExchangeCursorBrand]: true };
+
+/** NO total count anywhere enumeration risk exists. */
+export interface ExchangePage<T> {
+  readonly contractsVersion: ExchangeContractsVersion;
+  readonly results: readonly T[];
+  readonly cursor: ExchangeCursor | null;
+  readonly state: 'ok' | 'partial' | 'empty' | 'unavailable' | 'failed';
+}
+
+/** Consent-gated communication: chat capability exists ONLY after explicit
+ *  acceptance; nothing here opens a conversation implicitly. */
+export interface ExchangeContactCapability {
+  readonly canRequestContact: boolean;
+  readonly state: 'none' | 'requested' | 'accepted' | 'declined';
+  readonly requiresExplicitConsent: true;
 }
