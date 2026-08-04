@@ -19,10 +19,20 @@
 
 import { DistanceBand, PersonCandidateRow, RankingBreakdown } from './discovery.types';
 
-/** Documented default weights for the people explanation (config values). */
+/**
+ * Documented default weights for the people explanation (config values).
+ *
+ * BAND-DOMINANT BY CONSTRUCTION (P5 honesty, F4.2): ordering is lexicographic
+ * (band, then freshness), so the displayed `total` must be monotonic with that
+ * order or the number contradicts the position. Adjacent bands differ by
+ * `proximity × 0.25` in the proximity value; freshness spans `freshness × 1`.
+ * With proximity 0.85 / freshness 0.15 the per-band gap (0.2125) strictly
+ * exceeds the whole freshness span (0.15), so a nearer band always outscores a
+ * farther one regardless of freshness — total now explains the rank.
+ */
 export const PEOPLE_RANKING_WEIGHTS = {
-  proximity: 0.6,
-  freshness: 0.4,
+  proximity: 0.85,
+  freshness: 0.15,
 } as const;
 
 export function bandForDistanceM(d: number): DistanceBand {

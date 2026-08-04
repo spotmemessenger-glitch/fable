@@ -127,12 +127,16 @@ export interface ValidatedDiscoveryQuery {
   pageSize: number;
 }
 
-/** Keyset cursor internals — OPAQUE on the wire (base64url of these fields). */
+/** Keyset cursor internals — OPAQUE AND SIGNED on the wire (see policy.ts).
+ *  Never round `d`: the SQL keyset is `d > cursor.d OR (d = cursor.d AND u > …)`,
+ *  so a rounded distance re-emits or skips boundary rows (F10.1). */
 export interface DecodedCursor {
-  /** Last row's server-computed distance in metres (deterministic per origin). */
+  /** Last row's server-computed distance in metres — EXACT float, never rounded. */
   d: number;
   /** Last row's userId — the deterministic tie-breaker. */
   u: string;
+  /** Page depth reached so far — the enforced enumeration bound (F5). */
+  depth: number;
 }
 
 /** A candidate person row as the repository returns it (pre-projection). */

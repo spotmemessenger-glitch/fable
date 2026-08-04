@@ -24,7 +24,15 @@
 -- unqueryable by contract and sweepable by ops); ON DELETE CASCADE removes a
 -- user's visibility and projection rows with the account (A9); block
 -- projections are keyed by both ids and swept with account deletion by the
--- projection rebuild.
+-- projection rebuild (they carry no FK by design, so the rebuild — not a
+-- cascade — is the deletion path; see review finding 3.2 and runbook §16.3).
+--
+-- PRISMA DRIFT (review finding 3.1): the `geog` column is Prisma-`Unsupported`
+-- and its GIST index below CANNOT be expressed in schema.prisma, so it is
+-- MANAGED ONLY in this raw SQL. `prisma migrate dev` will report it as drift
+-- and may propose to DROP it — it must be preserved (review generated
+-- migrations with `--create-only`). The e2e suite asserts the index exists on
+-- a freshly-migrated DB so an accidental drop fails a test, not production.
 
 CREATE TABLE "DiscoveryVisibility" (
     "userId" TEXT NOT NULL,
