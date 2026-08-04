@@ -101,6 +101,26 @@ describe('state machine', () => {
     expect(s.kind === 'offline' && s.cached?.results.length).toBeGreaterThan(0);
   });
 
+  it('OFFLINE cache is re-filtered for expiry (F3) and honours hide (F7-12)', async () => {
+    // Prime the cache while the person is fresh, then go offline in the far
+    // future: the expired person must NOT reappear from cache.
+    const future = make({ clock: new FixedClock(Date.parse('2100-01-01T00:00:00Z')) });
+    await future.controller.search();
+    future.api.offline = true;
+    await future.controller.search();
+    let s = future.controller.getState();
+    expect(s.kind === 'offline' && s.cached?.results.every((r) => r.type === 'place')).toBe(true);
+
+    // Hiding while offline removes the result from the served cache.
+    const on = make();
+    await on.controller.search();
+    on.api.offline = true;
+    await on.controller.search();
+    on.controller.hide('fx-place-1');
+    s = on.controller.getState();
+    expect(s.kind === 'offline' && s.cached?.results.some((r) => r.type === 'place')).toBe(false);
+  });
+
   it('FRESHNESS: expired results are dropped at render time', async () => {
     const { controller, api } = make({ clock: new FixedClock(Date.parse('2100-01-01T00:00:00Z')) });
     await controller.search();

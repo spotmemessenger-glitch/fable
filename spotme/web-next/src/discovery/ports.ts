@@ -46,6 +46,9 @@ export interface MapMarker {
   kind: 'person' | 'place' | 'self';
   approximate: boolean;
   selected: boolean;
+  /** Human-readable label for the accessible name — a display name, never a
+   *  raw id (F7-2). Falls back to the kind when absent. */
+  label?: string;
 }
 
 export interface MapPort {

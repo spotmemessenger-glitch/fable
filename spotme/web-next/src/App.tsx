@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState, useSyncExternalStore } from 'react';
 import type { DiscoveryFilters } from '@spotme/contracts';
-import { DiscoveryShell, markersFor } from './discovery/DiscoveryShell';
+import { DiscoveryShell, markersFor, resultsOf } from './discovery/DiscoveryShell';
 import { DiscoveryController, MemoryCache } from './discovery/controller';
 import { FixtureDiscoveryApi } from './discovery/fixtures';
 import { DisabledRealtime } from './discovery/ports';
@@ -38,10 +38,9 @@ export function App() {
   const [, bump] = useState(0);
   const rerender = useCallback(() => bump((n) => n + 1), []);
 
-  const results =
-    state.kind === 'ready' ? state.page.results
-    : state.kind === 'partial' ? state.page.results
-    : [];
+  // One derivation shared with the Shell — the map and list never disagree,
+  // including in offline / provider-unavailable states (F7-3).
+  const results = resultsOf(state);
 
   return (
     <DiscoveryShell

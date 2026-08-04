@@ -41,13 +41,25 @@ export interface DiscoveryShellProps {
   onEnableLocation(): void;
 }
 
+/** The single source of truth for "which results does this state render?".
+ *  Shared by the Shell and App so the map, list and openNow-support derivation
+ *  can never disagree (F7-3) — notably in offline/provider-unavailable. */
+export function resultsOf(state: DiscoveryState): readonly DiscoveryResult[] {
+  switch (state.kind) {
+    case 'ready':
+    case 'partial':
+      return state.page.results;
+    case 'provider-unavailable':
+      return state.page ? state.page.results : [];
+    case 'offline':
+      return state.cached ? state.cached.results : [];
+    default:
+      return [];
+  }
+}
+
 export function DiscoveryShell(p: DiscoveryShellProps) {
-  const results: readonly DiscoveryResult[] =
-    p.state.kind === 'ready' ? p.state.page.results
-    : p.state.kind === 'partial' ? p.state.page.results
-    : p.state.kind === 'provider-unavailable' && p.state.page ? p.state.page.results
-    : p.state.kind === 'offline' && p.state.cached ? p.state.cached.results
-    : [];
+  const results = resultsOf(p.state);
 
   const showMap = p.mode === 'map' || p.mode === 'split';
   const showList = p.mode === 'list' || p.mode === 'split';
@@ -86,11 +98,13 @@ export function markersFor(results: readonly DiscoveryResult[], selectedId: stri
       markers.push({
         id: r.place.placeId, lat: r.place.approxLocation.lat, lon: r.place.approxLocation.lon,
         kind: 'place', approximate: true, selected: selectedId === r.place.placeId,
+        label: r.place.name,
       });
     } else if (r.person.approxLocation) {
       markers.push({
         id: r.person.userId, lat: r.person.approxLocation.lat, lon: r.person.approxLocation.lon,
         kind: 'person', approximate: true, selected: selectedId === r.person.userId,
+        label: r.person.displayName,
       });
     }
   }

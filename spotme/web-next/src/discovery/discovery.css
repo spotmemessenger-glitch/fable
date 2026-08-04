@@ -11,11 +11,18 @@
 
 .disc-filters { display: flex; flex-wrap: wrap; gap: 12px; border: 1px solid #ddd; border-radius: 10px; padding: 10px; }
 .disc-filters select { min-height: 44px; }
+/* F7-9: the open-now label is the touch target, so the whole control clears 44px. */
+.disc-filters label { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; }
+.disc-filters input[type='checkbox'] { min-width: 24px; min-height: 24px; }
 .disc-unsupported { opacity: 0.6; }
 .disc-note { font-size: 12px; color: #777; }
 
-.disc-card { border: 1px solid #ddd; border-radius: 12px; padding: 10px 12px; height: 116px; overflow: hidden; box-sizing: border-box; }
+.disc-card { border: 1px solid #ddd; border-radius: 12px; padding: 10px 12px; height: 116px; overflow: hidden; box-sizing: border-box; cursor: pointer; }
 .disc-card.selected { border-color: #0a7; box-shadow: 0 0 0 2px #0a74; }
+/* F7-1/F7-2: visible keyboard focus for the now-focusable cards and markers. */
+.disc-card:focus-visible { outline: 3px solid #0a7; outline-offset: 2px; }
+.disc-marker:focus-visible circle { stroke: #0a7; stroke-width: 1.5; }
+.disc-marker:focus-visible { outline: none; }
 .disc-card footer { display: flex; gap: 6px; flex-wrap: wrap; }
 .disc-handle { color: #578; margin-left: 8px; }
 .disc-distance { color: #555; font-size: 13px; margin: 4px 0; }
