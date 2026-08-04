@@ -108,3 +108,25 @@ describe('ReviewIntelligenceEngine (X5)', () => {
     expect(claim.confidence.basis.density).toBe(3);
   });
 });
+
+describe('X11 review repairs — regression battery (6C scope)', () => {
+  it('F4: a review theme asserting current-state language yields NO claim', () => {
+    const a = reviewRecord('ev:r1', 'src-a');
+    const bundle: ReviewEvidenceBundle = {
+      records: [a],
+      statements: [
+        { id: 'sneaky', category: 'place-review', templateKey: 'place-review-theme',
+          params: { facet: 'service', theme: 'great and open right now', stance: 'positive' },
+          citationIds: [a.id] },
+        { id: 'ok', category: 'place-review', templateKey: 'place-review-theme',
+          params: { facet: 'service', theme: 'consistently friendly', stance: 'positive' },
+          citationIds: [a.id] },
+      ],
+    };
+    const intel = engine.build('place:x', bundle)!;
+    const service = intel.facets.find((f) => f.field === 'service')!;
+    expect(service.claims.length).toBe(1);
+    expect(service.claims[0].text).toContain('consistently friendly');
+    expect(JSON.stringify(intel)).not.toContain('open right now');
+  });
+});

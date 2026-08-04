@@ -50,9 +50,13 @@ export class AssistantService {
     const correlationId = mintCorrelationId();
     const handle = new QueryHandle(rawText); // throws invalid-query, text-free
 
+    // Classified BEFORE the try so failure paths keep the category (F2): a
+    // crisis query hitting an unconfigured provider must not lose its notice.
+    let sensitiveCategory: SensitiveQueryCategory = 'none';
+
     try {
       const text = handle.read();
-      const sensitiveCategory = classifySensitiveQuery(text);
+      sensitiveCategory = classifySensitiveQuery(text);
       const intent = this.intent.parse(text);
 
       // X8: a non-activated domain answers domain-not-active — the assistant
@@ -79,13 +83,13 @@ export class AssistantService {
       });
     } catch (err) {
       if (err instanceof AssistantError && err.code === 'provider-unconfigured') {
-        return this.respond(correlationId, 'none',
+        return this.respond(correlationId, sensitiveCategory,
           { kind: 'unavailable', reason: 'provider-unconfigured' });
       }
       if (err instanceof AssistantError) throw err; // closed-code, text-free
       // Unknown failures collapse to a typed unavailable answer — the raw
       // error (which could echo inputs) is NOT rethrown or logged here.
-      return this.respond(correlationId, 'none', { kind: 'unavailable', reason: 'error' });
+      return this.respond(correlationId, sensitiveCategory, { kind: 'unavailable', reason: 'error' });
     } finally {
       handle.dispose(); // bounded in-memory lifetime (X9)
     }
