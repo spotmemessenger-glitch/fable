@@ -38,8 +38,10 @@ const files = walk(join(ROOT, 'src')).map((f) => {
   return { path: relative(ROOT, f), body, code: stripComments(body) };
 });
 
-// 1. No imports from the legacy app (or anything under spotme/web).
-const LEGACY = /from\s+['"][^'"]*(\.\.\/web\/|spotme\/web\/|vendor\/spotme-core|spotme-core)/;
+// 1. No imports from the legacy app (or anything under spotme/web) or the
+//    backend. Intra-web-next sibling reuse (e.g. exchange → ../discovery) is
+//    allowed by rule 5; escaping web-next toward web/backend is not.
+const LEGACY = /from\s+['"][^'"]*(\.\.\/web\/|spotme\/web\/|vendor\/spotme-core|spotme-core|\/backend\/|spotme\/backend)/;
 const legacyHits = files.filter((f) => LEGACY.test(f.code));
 check('no imports from legacy spotme/web or spotme-core', legacyHits.length === 0,
   legacyHits.map((f) => f.path).join(', '));
@@ -67,6 +69,9 @@ const imports = files.flatMap((f) =>
   [...f.code.matchAll(IMPORT_STMT)].map((m) => ({ path: f.path, typeOnly: Boolean(m[1]), spec: m[3] })));
 const allowed = (i) =>
   i.spec.startsWith('react') || i.spec.startsWith('./') ||
+  // Intra-web-next sibling reuse (exchange ↔ discovery). Escapes toward
+  // web/backend are still blocked by rule 1 (LEGACY).
+  i.spec.startsWith('../') ||
   (i.spec === '@spotme/contracts' && i.typeOnly);
 const badImports = imports.filter((i) => !allowed(i));
 check('imports limited to react/*, siblings, and type-only @spotme/contracts',

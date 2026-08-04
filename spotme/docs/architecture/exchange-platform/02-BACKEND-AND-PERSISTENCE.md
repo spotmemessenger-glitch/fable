@@ -91,3 +91,30 @@ no activation. Nothing is imported into the running application.
   safety-exclusion-always-wins, unavailable-cannot-be-promoted, unknown-evidence-
   no-benefit, sponsored-rejected, exact-outranks-fuzzy, no-coordinate-in-index,
   no-prohibited-field-in-projection.
+
+---
+
+## Phase 3D — web-next Exchange experience (as built)
+
+Inert, undeployed React surface under `spotme/web-next/src/exchange/` (fixtures
+only; no backend wiring, routing, or auth — isolation fence 6/6):
+
+- **Composer** (`components.tsx` `IntentComposer`): Need/Offer/Service selector,
+  category, title, description, an **informational price with the no-payment
+  disclaimer**, visible-radius, and a map-visibility toggle whose copy states
+  "approximate area only — never your exact location". **No age/gender control
+  anywhere (A3).**
+- **Controller** (`controller.ts`): a framework-free state machine behind ports;
+  the precise fix exists only inside `publish`'s scope and is converted through
+  the discovery `coarsenForPublic` boundary (the single brand-cast site) before
+  anything outbound. Lifecycle actions thread the optimistic-concurrency version.
+- **Matches** (`MatchCard`): renders the explainable `ExchangeMatchExplanation`
+  and a **consent gate** — "Request contact" moves to a *requested* status, and
+  an **Open chat** control appears ONLY once the counterpart has *accepted*; the
+  controller never auto-opens a chat.
+- **Tests**: `exchange-controller.test.ts` (7), `exchange-ui.test.tsx` (9,
+  a11y + consent-gate + A3 + no-payment disclaimer), and
+  `exchange-privacy-mutation.test.ts` (2) — a distinctive precise fix drives the
+  full flow; request bodies, logs, state, and the draft are scanned and the
+  only coordinate tokens outbound are the exact coarse values. web-next suite:
+  51 tests + production build + isolation fence 6/6.
