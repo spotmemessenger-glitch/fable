@@ -253,3 +253,26 @@ Platform Phase 3B–3E as dark draft PRs**. Recorded here per the mission.
   with documented defaults, never approved product decisions.
 - **Phase 3 does NOT merge this mission** — 3A (#86) and 3B–3E stay draft;
   Phase 3 landing is a later owner mission.
+
+## Owner decisions — 2026-08-04 (Camera Stage 1: freeze lift + engine bundle)
+
+Recorded by the Camera Stage 1 mission under the standing 2026-08-04
+delegation. Full record: **ADR-029**.
+
+- **Camera freeze LIFTED for web integration only.** The four camera draft
+  PRs (#55 #56 #58 #59) and `snap-camera-kit` become SOURCE MATERIAL to
+  migrate from; the original branches/PRs are READ-ONLY history — never
+  modified, rebased, closed, or deleted. PRs stay open for the owner.
+- **Engine bundle APPROVED:** MediaPipe face-landmarker (Apache-2.0, pinned,
+  self-hosted, integrity-manifested — no runtime CDN fallback) ·
+  tesseract.js OCR (lazy-loaded, on-device) · cloud vision ONLY through the
+  Phase 1E AI Gateway with owner-held provider keys (no new vendor, no
+  direct SDK) · barcode/QR = platform-native detector else the existing
+  jsQR fallback, never a new barcode vendor.
+- **Cloud consent technically enforced:** every cloud-vision port method
+  takes a non-optional single-request `CloudConsentContext`; default adapter
+  returns disabled with zero network activity; scans fail on any provider
+  client outside the gateway package.
+- **Still owner-retained:** activation/flags, deployment, #43/#60/#61,
+  gender/age (A3), real-device validation claims (Stage 2), any vendor
+  beyond the approved bundle, hand-landmark/segmentation/WebXR engines.
