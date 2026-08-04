@@ -56,3 +56,6 @@ verify all prior Phase 3 branches before continuing."
 |---|---|---|---|
 | 3A | `feat/platform-phase-3a-exchange-contracts-policy` (PR #86) | Pushed, green | contracts + negative fences + threat model |
 | 3B | `feat/platform-phase-3b-exchange-backend` | Pushed, green | dark ExchangeModule + 5 PostGIS tables + lifecycle engine; policy spec 15/15, real-PostGIS e2e 8/8; migrations clean + upgraded |
+| 3C | `feat/platform-phase-3c-exchange-matching` (PR #88) | Pushed, green | closed-registry matching engine + sanitized search projection; 12/12 proof obligations |
+| 3D | `feat/platform-phase-3d-exchange-webnext` (PR #89) | Pushed, green | inert web-next Exchange UI; consent gate, no-payment disclaimer, A3; web-next 51 + fence 6/6 |
+| 3E | `feat/platform-phase-3e-exchange-fences-ops-docs` | Pushed, green | dark fences (9), instrumentation (closed registry), benchmark (100k achieved), runbooks, activation checklist |
