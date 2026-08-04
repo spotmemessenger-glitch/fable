@@ -837,3 +837,106 @@ model ExchangeBusinessParticipation {
   coarseCell      String?
   updatedAt       DateTime @updatedAt
 }
+
+/// ─────────────────────────────────────────────────────────────────────────
+/// Live Nearby Events (Platform Phase 4B) — DARK. `EventsModule` is NOT imported
+/// by `AppModule`; no `/v1/events` route exists until an owner-gated activation.
+/// All models are additive; no existing table is touched. Instants are stored as
+/// UTC `DateTime` and surfaced as epoch-ms at the boundary; the source timezone
+/// is preserved for display only. Raw provider payloads are NEVER persisted.
+/// ─────────────────────────────────────────────────────────────────────────
+
+/// A stored public event from a provider feed. Location is the COARSE public
+/// venue point only (never a precise fix); there is no user-origin column.
+model Event {
+  /// `${provider}:${providerEventId}`.
+  id                String    @id
+  provider          String
+  providerEventId   String
+  providerSourceId  String?
+  /// Canonical organizer reference (stable across a provider's events).
+  organizerRef      String?
+  sourceName        String?
+  url               String?
+  /// Source's last revision/update instant.
+  revisionAt        DateTime?
+  /// Source-supplied confidence 0..1; null = unknown.
+  confidence        Float?
+  category          String    @default("other")
+  title             String
+  description       String?
+  /// UTC instants; null = tbd (e.g. postponed). end < start is rejected before write.
+  startAt           DateTime?
+  endAt             DateTime?
+  /// IANA timezone id, preserved for DISPLAY only.
+  timezone          String?
+  allDay            Boolean   @default(false)
+  /// Recurrence occurrence id — PROVIDER-SUPPLIED ONLY, never inferred.
+  occurrenceId      String?
+  /// scheduled|cancelled|postponed (source-asserted; overrides the clock).
+  lifecycle         String    @default("scheduled")
+  /// Provenance for a source-asserted cancel/postpone.
+  provenanceBy      String?
+  provenanceAt      DateTime?
+  provenanceNote    String?
+  /// Coarse public venue point ONLY; never a precise fix.
+  coarseLat         Float
+  coarseLon         Float
+  coarseCell        String
+  /// PostGIS geography for spatial queries; written from the coarse point.
+  geog              Unsupported("geography(Point, 4326)")?
+  /// Sourced popularity 0..1; null = unknown (ranks as omitted, never invented).
+  popularity        Float?
+  /// Dedup: the canonical event id this row folds into (null/self = canonical).
+  canonicalId       String?
+  /// Retrieval instant (freshness).
+  fetchedAt         DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  /// Retention sweep target (ended + retention window).
+  expiresAt         DateTime?
+
+  @@unique([provider, providerEventId])
+  @@index([canonicalId])
+  @@index([startAt])
+  @@index([coarseCell])
+}
+
+/// An EXPLAINABLE dedup decision (C4). Exact provider identity folds
+/// automatically; a cross-provider merge records the evidence that justified it.
+model EventDedupDecision {
+  id           String   @id @default(cuid())
+  /// The surviving canonical event id.
+  canonicalId  String
+  /// The event id folded into the canonical.
+  mergedId     String
+  /// exact-provider-identity | cross-provider-match
+  basis        String
+  /// Cross-provider evidence — ALL four must hold to merge; carried for audit.
+  titleMatch   Boolean  @default(false)
+  venueMatch   Boolean  @default(false)
+  timeOverlap  Boolean  @default(false)
+  areaMatch    Boolean  @default(false)
+  createdAt    DateTime @default(now())
+
+  @@unique([mergedId])
+  @@index([canonicalId])
+}
+
+/// Sanitized public search projection — labels + coarse cell only, NEVER
+/// coordinates or raw payload (T-EV-5/6). Rebuildable from Event.
+model EventSearchProjection {
+  /// The event id.
+  id             String    @id
+  category       String
+  title          String
+  normalizedText String
+  /// Coarse cell ONLY — no lat/lon field exists on the projection.
+  coarseCell     String
+  startAt        DateTime?
+  /// Derived state at projection time (upcoming|happening-now|ended|cancelled|postponed).
+  state          String
+  updatedAt      DateTime  @updatedAt
+
+  @@index([category, startAt])
+}
