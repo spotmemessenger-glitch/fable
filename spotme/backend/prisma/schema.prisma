@@ -134,6 +134,7 @@ model User {
   oneTimePreKeys   OneTimePreKey[]
   discoveryVisibility DiscoveryVisibility?
   discoveryProfile    DiscoveryPublicProfileProjection?
+  exchangeIntents     ExchangeIntent[]  @relation("ExchangeIntentOwner")
 
   @@index([city])
   @@index([createdAt])
@@ -700,4 +701,139 @@ model DiscoveryBlockProjection {
 
   @@id([ownerUserId, blockedUserId])
   @@index([blockedUserId])
+}
+
+// ============================================================================
+// SpotMe Exchange (Platform Phase 3B) — DARK.
+//
+// ADDITIVE ONLY. No existing model is touched. The ExchangeModule that reads
+// these tables is NOT imported by AppModule — nothing reaches them until an
+// owner-authorized activation change. Locations are the on-device COARSE public
+// position only (ADR-018/019) — never a precise fix. No age/gender/sensitive
+// column exists (A3). No payment/escrow column exists; an informational price
+// is a display label only. Business participation is a DARK SEAM (D4): the
+// table exists but no business flow is reachable — v1 posture is individuals-only.
+// ============================================================================
+
+/// An Exchange intent (need / offer / service). Coarse location + geography for
+/// spatial matching; keyset-paginated; expiry makes stale intents unqueryable.
+model ExchangeIntent {
+  id                    String   @id @default(cuid())
+  ownerId               String
+  /// 'user' | 'business' — a REFERENCE to canonical identity; Exchange owns no
+  /// identity lifecycle (A9). Business is a dark seam (D4).
+  ownerKind             String   @default("user")
+  /// 'need' | 'offer' | 'service'
+  kind                  String
+  /// draft|active|paused|matched|fulfilled|expired|withdrawn|removed
+  status                String   @default("draft")
+  category              String
+  title                 String
+  text                  String
+  tags                  String[]
+  budgetBand            String?
+  /// Display-only price label; NOT a payment field.
+  informationalPrice    String?
+  /// 'window' | 'recurring' | 'unknown'
+  availabilityState     String   @default("unknown")
+  availabilityFrom      DateTime?
+  availabilityTo        DateTime?
+  availabilitySchedule  String?
+  /// Coarse public point ONLY (ADR-018); never a precise fix.
+  coarseLat             Float
+  coarseLon             Float
+  coarseCell            String
+  /// PostGIS geography for spatial matching; written from the coarse point.
+  geog                  Unsupported("geography(Point, 4326)")?
+  radiusKm              Float    @default(5)
+  maxRadiusKm           Float    @default(25)
+  /// 'hidden' | 'discoverable'
+  visibility            String   @default("hidden")
+  /// 'clear' | 'pending-review' | 'restricted' | 'removed'
+  moderationState       String   @default("clear")
+  /// Optimistic concurrency — bumped on every mutation.
+  versionSeq            Int      @default(1)
+  /// Client-supplied idempotency key, unique per owner (replay-safe mutations).
+  idempotencyKey        String
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  expiresAt             DateTime?
+  owner                 User     @relation("ExchangeIntentOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  lifecycle             ExchangeLifecycleEvent[]
+  matchesAsNeed         ExchangeMatchProjection[] @relation("ExchangeMatchNeed")
+  matchesAsOffer        ExchangeMatchProjection[] @relation("ExchangeMatchOffer")
+
+  @@unique([ownerId, idempotencyKey])
+  @@index([ownerId, status])
+  @@index([kind, status])
+  @@index([status, expiresAt])
+  @@index([expiresAt])
+}
+
+/// Sanitized PUBLIC projection for search/index — labels only, NEVER
+/// coordinates, private profile, message content, or age/gender (threat model
+/// T-EX-19). Derived, rebuildable, deleted with the intent.
+model ExchangeSearchProjection {
+  intentId         String   @id
+  kind             String
+  category         String
+  title            String
+  /// Normalized (folded) searchable text projection.
+  normalizedText   String
+  /// Authorized intent labels (future Exchange-compatible), never free PII.
+  intentLabels     String[]
+  /// Coarse cell only — discretized, never a precise point.
+  coarseCell       String
+  updatedAt        DateTime @updatedAt
+
+  @@index([kind, category])
+}
+
+/// Append-only lifecycle audit. Closed reason codes only — no free text.
+model ExchangeLifecycleEvent {
+  id          String   @id @default(cuid())
+  intentId    String
+  fromStatus  String
+  toStatus    String
+  /// 'owner' | 'moderation' | 'system-expiry'
+  byKind      String
+  /// owner-action|ttl|moderation-removed|fulfilled-confirmed|superseded
+  reasonCode  String?
+  createdAt   DateTime @default(now())
+  intent      ExchangeIntent @relation(fields: [intentId], references: [id], onDelete: Cascade)
+
+  @@index([intentId, createdAt])
+}
+
+/// Match projection between a need and an offer (supersede-guarded via epoch).
+model ExchangeMatchProjection {
+  id            String   @id @default(cuid())
+  needId        String
+  offerId       String
+  /// proposed|viewed|accepted|declined|dismissed|superseded|expired
+  status        String   @default("proposed")
+  score         Float
+  epoch         Int      @default(1)
+  /// Distance is a BAND — never metres between two parties.
+  distanceBand  String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  need          ExchangeIntent @relation("ExchangeMatchNeed", fields: [needId], references: [id], onDelete: Cascade)
+  offer         ExchangeIntent @relation("ExchangeMatchOffer", fields: [offerId], references: [id], onDelete: Cascade)
+
+  @@unique([needId, offerId])
+  @@index([needId, status, score])
+  @@index([offerId, status])
+}
+
+/// Business participation — DARK SEAM ONLY (D4). The table exists so the
+/// contract is complete, but NO business flow is reachable in v1 (individuals
+/// only). Never authoritative for identity.
+model ExchangeBusinessParticipation {
+  businessId      String   @id
+  displayName     String
+  verified        Boolean  @default(false)
+  categoryLabels  String[]
+  coarseCell      String?
+  updatedAt       DateTime @updatedAt
 }
