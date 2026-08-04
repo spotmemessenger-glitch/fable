@@ -1,0 +1,25 @@
+/* Assistant surface (Phase 6D) — inert styles; not deployed. */
+.as-shell { max-width: 42rem; margin: 0 auto; padding: 1rem; }
+.as-touch { min-height: 44px; min-width: 44px; padding: 0.5rem 0.9rem; }
+.as-querybar { display: flex; gap: 0.5rem; align-items: center; }
+.as-querybar input { flex: 1; min-height: 44px; padding: 0 0.6rem; }
+.as-mic[aria-disabled='true'] { opacity: 0.5; cursor: not-allowed; min-height: 44px; min-width: 44px; }
+.as-answer { border: 1px solid #ddd; border-radius: 8px; padding: 0.9rem; margin: 0.9rem 0; }
+.as-honest { color: #555; background: #f7f7f7; border-radius: 8px; padding: 0.9rem; }
+.as-claims { list-style: none; padding: 0; }
+.as-claim { margin-bottom: 0.6rem; }
+.as-cite { border: none; background: #eef; border-radius: 4px; margin-left: 0.25rem; cursor: pointer; }
+.as-confidence { display: block; color: #777; font-size: 0.8rem; }
+.as-stale { color: #a60; font-size: 0.8rem; margin-left: 0.4rem; }
+.as-sources { border-top: 1px solid #eee; margin-top: 0.6rem; padding-top: 0.4rem; font-size: 0.85rem; }
+.as-sensitive { background: #fff7e6; border-radius: 8px; padding: 0.9rem; margin: 0.9rem 0; }
+.as-review ul { list-style: none; padding: 0; }
+.as-facet { margin-bottom: 0.6rem; }
+.as-facet-field { font-weight: 600; margin-right: 0.4rem; }
+.as-facet-mixed { color: #a60; font-size: 0.85rem; display: block; }
+.as-facet-empty { color: #999; }
+.as-route { border: 1px solid #ddd; border-radius: 8px; padding: 0.9rem; margin: 0.9rem 0; }
+.as-attribution { color: #777; font-size: 0.85rem; }
+.as-busy { color: #777; }
+.as-visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+:focus-visible { outline: 2px solid #06c; outline-offset: 2px; }
