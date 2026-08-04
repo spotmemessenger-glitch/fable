@@ -47,8 +47,8 @@ branches · gender/age (A3) · payments/ads · deletions.
 
 | Group | PR | State | Evidence |
 |---|---|---|---|
-| 6A | — | In progress | `assistant.ts` v1 + negative/usage compile-time fences + threat model (T-AS-1..12); contracts typecheck + build + boundary fence 6/6 |
-| 6B | — | Pending | — |
+| 6A | #103 | **Draft PR — DARK** | `assistant.ts` v1 + negative/usage compile-time fences + threat model (T-AS-1..12); contracts typecheck + build + boundary fence 6/6 |
+| 6B | — | In progress | dark AssistantModule (unimported): X7 ports, live darkness registry (all domains implemented-dark), deterministic intent + template composer, evidence mint boundary (license THROW / forbidden-field THROW / X3 category match / X4 freshness gate), QueryHandle + closed-code errors (X9), [PROPOSED] sensitive copy; 45 tests green |
 | 6C | — | Pending | — |
 | 6D | — | Pending | — |
 | 6E | — | Pending | — |
