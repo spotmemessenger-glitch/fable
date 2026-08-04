@@ -80,3 +80,16 @@ fails the contracts negative tests.
   thresholds before enforcement; recorded as future controls, not invented.
 - Provider-side logging of place queries is governed by provider agreements —
   ports send coarse origins only (C7), which bounds but does not eliminate it.
+
+## 14.9 Enforcement references (Phase 2F)
+
+Every control in this model is now pinned by at least one of: the C12 dark
+integration fences (`backend/test/discovery-dark-fences.spec.ts` — 13
+assertions over source, import graphs, manifests, configs and BUILD
+ARTIFACTS), the contracts negative tests, the policy/service suites, the
+web-next privacy mutation battery, or the observability label/redaction
+suite. Measured capacity behaviour relevant to abuse economics (scan cost,
+pagination stability) is recorded in
+[15-PERFORMANCE-AND-CAPACITY](15-PERFORMANCE-AND-CAPACITY.md); operational
+response procedures, including privacy incident response and immediate dark
+rollback, are in [16-OPERATIONS-RUNBOOK](16-OPERATIONS-RUNBOOK.md).

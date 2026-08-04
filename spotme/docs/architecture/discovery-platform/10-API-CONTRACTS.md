@@ -214,3 +214,27 @@ all cursors of a fixed dataset yields each result exactly once in a stable
 order; each of the five server states is reachable and exclusive, and no
 server fixture ever carries `loading`/`superseded`; and schema round-trip of
 every golden fixture — the CI gate of §10.10 as an executable assertion.
+
+## 10.9 As built (Phase 2A/2D — Draft PR, DARK): realtime contract
+
+Wire contracts are `@spotme/contracts` `discovery.ts` v1
+(`contractsVersion: 1`): branded `CoarsePublicLocation` (unconstructable from
+raw lat/lon outside the coarsening boundary), 12-state discriminated client
+state machine, `DiscoveryResultPage` with NO total count (anti-enumeration),
+opaque base64url cursors, typed errors with `nextStep` on every code.
+
+**Realtime contract** (`backend/src/discovery/realtime/realtime.port.ts`):
+
+- Channel families (exactly two): `discovery:cell:{cell}` and
+  `discovery:self:{userId}` — nothing else is derivable.
+- Claims: `deriveChannelClaim` issues 60 s TTL claims covering ≤4 channels.
+- Events (closed set of 5): presence-updated, presence-expired,
+  visibility-changed, results-invalidated, self-notice; every event carries
+  `visibilityVersion` — consumers DROP stale versions (C-REPLAY).
+- `assertPublishable` walks every nested payload at publish time and refuses
+  forbidden keys (precise coordinates, message content, credentials,
+  credentialed URLs) — the guard runs even on the Disabled adapter
+  (validate-then-drop), so a violating publish fails tests while dark.
+- Default adapter: Disabled. No broker dependency exists (C12 fence: no
+  Centrifugo package, no instantiation in the discovery subtree); ADR-026
+  governs the split-plane selection at activation.

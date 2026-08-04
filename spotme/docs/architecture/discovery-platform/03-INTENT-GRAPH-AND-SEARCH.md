@@ -258,3 +258,31 @@ results — the fence for the no-fabrication rule); explicit user category
 survives intent parsing; ranking order is reproducible with ties broken by id;
 and no precise coordinate appears in any published intent, envelope, or map
 snapshot (chapter [02 §2.7](02-LOCATION-PRIVACY-ENGINE.md) boundary suite).
+
+## 3.9 As built (Phase 2C/2D — Draft PR, DARK)
+
+**Typesense index guide.** The concrete index schema lives in code as the
+single source of truth: `backend/src/discovery/search/typesense-search.adapter.ts`
+(`TYPESENSE_SCHEMA`, collection `discovery_public`). Fields: `kind` (facet),
+`handle`, `normalizedHandle`, `displayName`, `aliases[]`, `name`, `category`
+(facet), `localityLabels[]`, `intentLabels[]`. **No coordinate field exists in
+the schema — by design (threat model T-EXACT/C-INDEX-MIN)**, and `indexDoc`
+applies an allow-list projection so an unexpected field can never ride along.
+Normalization (`search/normalize.ts`) is NFKC + zero-width strip + casefold on
+both index and query sides. Reliability contract in the adapter: 2 s timeout,
+circuit breaker (3 failures → open, 30 s cool-down, half-open probe), result
+ceiling 20, exact-normalized-handle pin (D10) with deterministic tie order.
+The adapter is UNCONFIGURED by default (`TYPESENSE_URL`/`TYPESENSE_API_KEY`
+absent ⇒ typed `provider-unavailable: unconfigured`); no credentials exist in
+the repository. Index rebuild: derived projection — re-index discoverable
+`DiscoveryPublicProfileProjection` rows through the adapter (runbook §16.1).
+
+**Intent routing as built.** `backend/src/discovery/discovery.intent.ts` —
+deterministic router: `@handle` grammar (`/^@([\p{L}\p{N}_]{2,64})$/u`) →
+username scope; future-domain vocabulary is refused BEFORE category matching
+(typed `UNSUPPORTED_INTENT`); category vocabulary routes place intents;
+everything else is mixed people/places. No ML, no fabricated confidence.
+Proving suite: `backend/test/discovery-intent-ranking.spec.ts`; live
+typo/prefix behaviour verified against Typesense 27.1 in
+`backend/test/discovery-search.spec.ts`. Capacity measured to 1M docs —
+[15-PERFORMANCE-AND-CAPACITY §15.4](15-PERFORMANCE-AND-CAPACITY.md).

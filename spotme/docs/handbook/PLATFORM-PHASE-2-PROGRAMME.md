@@ -60,3 +60,18 @@ later landing mission merges and retargets strictly in order 2A → 2B → 2C �
 
 "Continue Platform Phase 2 from the last pushed PR; verify all prior PRs
 before continuing."
+
+## Build record (updated 2026-08-04)
+
+| Group | PR | State | Checkpoints delivered |
+|---|---|---|---|
+| 2A | #80 (draft) | Pushed, green | 1 (contracts) + programme/decisions docs + 4 (threat model) |
+| 2B | #81 (draft) | Pushed, green | 2 (module) + 3 (PostGIS models/migration) + 5 (people engine on real PostGIS) |
+| 2C | #82 (draft) | Pushed, green | 6 (Typesense SearchPort, live-verified) + 7 (place/directions ports) |
+| 2D | #83 (draft) | Pushed, green | 8 (intent + closed-registry ranking) + 9 (realtime contract) |
+| 2E | #84 (draft) | Pushed, green | 10 (Discovery UI) + 11 (client application layer + privacy mutation battery) |
+| 2F | draft PR from `feat/platform-phase-2f-fences-perf-ops-docs` | Pushed, green | 12 (dark fences) + 13 (benchmarks — 1M achieved) + 14 (instrumentation + runbooks) + 15 (docs/governance) + final validation |
+
+Landing order (owner-retained): 2A → 2B → 2C → 2D → 2E → 2F, strictly in
+order, retargeting each next PR to master as its parent merges. Nothing in
+this programme is merged, deployed, activated, or user-visible.

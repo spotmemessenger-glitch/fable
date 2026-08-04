@@ -216,3 +216,26 @@ reach the organic score. `[REUSE]` test pattern:
 `spotme/web/test/discovery-v2-ranking.test.js` and
 `spotme/web/test/live-events-ranking.test.js` (draft PRs #60/#61) pin the two
 dark profiles today.
+
+## 4.9 As built (Phase 2B/2D — Draft PR, DARK)
+
+Two cooperating layers exist in code:
+
+- **People ordering** (`backend/src/discovery/discovery.ranking.ts`):
+  deterministic band → freshness → userId ordering; `explainPerson` emits a
+  `RankingBreakdown` for every result with `omittedSignals` honestly declared
+  (`mutual-context` is specified but not computed this phase).
+- **Closed-registry engine** (`backend/src/discovery/discovery.ranking.engine.ts`):
+  `RANKING_SIGNALS` = { intentMatch .30, proximity .30, relevance .15,
+  freshness .10, sourceConfidence .10, availabilityEvidence .05 } —
+  `[PROPOSED]` defaults per the Configuration Principle. `safetyEligible` is
+  a HARD GATE before scoring; an unregistered signal throws
+  `ClosedRegistryError` (no popularity/sponsored/engagement path can be added
+  without changing the registry in review); confidence = evidence coverage;
+  unknown evidence scores zero — never an invented benefit.
+
+Proof obligations pinned in `backend/test/discovery-intent-ranking.spec.ts`:
+closer-viable-beats-popular-distant, safety-exclusion-always-wins,
+unknown-evidence-no-benefit, sponsored-signal-rejected, breakdown-mandatory.
+Ranking cost is negligible at page scale (measured —
+[15 §15.3](15-PERFORMANCE-AND-CAPACITY.md)).

@@ -215,3 +215,18 @@ secret-shaped key, or raw provider payload survives serialisation (the
 [02 §2.7](02-LOCATION-PRIVACY-ENGINE.md) scanner extended to logs and span
 attributes); and with the config store faked down, every engine runs on
 compiled-in defaults — the fail-safe invariant as an assertion.
+
+## 11.9 As built (Phase 2F/C14 — Draft PR, DARK)
+
+Discovery telemetry (`backend/src/discovery/discovery.observability.ts`)
+rides the Phase 1G posture verbatim: prom-client instruments register on the
+SHARED registry only when `METRICS_ENABLED=true`; structured logs only when
+`LOG_FORMAT=json`; tracing is span-name constants only (OTel activation
+remains owned by the Phase 1G initializer). The metric set is CLOSED
+(`DISCOVERY_METRICS`, 7 names) with per-metric label allow-lists;
+`assertDiscoveryLabels` refuses non-allow-listed keys, identity/position keys,
+and data-shaped values at runtime; radius collapses to a 4-member bucket enum.
+Discovery logs redact query-shaped fields (search text is behavioural data)
+ON TOP of the Phase 1G recursive redactor, and every line carries an opaque
+`correlationId` (UUID, derived from nothing). Proving suite:
+`backend/test/discovery-observability.spec.ts`.

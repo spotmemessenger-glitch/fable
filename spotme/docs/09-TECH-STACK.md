@@ -353,3 +353,16 @@ behind the opt-in `search-benchmark` profile.
 production hardware with a production-scale corpus before search is wired into
 the application. If the numbers are materially different, reopen the decision
 (recorded in `handbook/DECISIONS.md`, "Owner delegation — 2026-08-03").
+
+**Platform Phase 2 addendum (2026-08-03, dark):** a zero-dependency Typesense
+adapter now exists behind `SearchPort`
+(`backend/src/discovery/search/typesense-search.adapter.ts` — unconfigured by
+default, no credentials in the repository), and the checkpoint 13 capacity
+measurement reached **1,000,000 synthetic username docs** on a local Typesense
+27.1 node (search p50 ≤ 44 ms, p95 ≤ 62 ms through the adapter; measured, not
+extrapolated — see
+`docs/architecture/discovery-platform/15-PERFORMANCE-AND-CAPACITY.md`). This
+does not replace the production-hardware revisit above, and it did not rerun
+the comparative engine benchmark (A4). Discovery's spatial layer runs on
+PostGIS (`geography(Point,4326)` + GIST; CI uses `postgis/postgis:16-3.4`
+images); `web-next` testing uses vitest + @testing-library/react + jsdom.

@@ -179,3 +179,24 @@ supersede between calls resolve `superseded`; the search origin never appears
 on any result (`[REUSE]` `assertNoOriginLeak`, `live-events/safety.js`); and
 routing under a downed provider selects a fallback without any non-adapter
 code change.
+
+## 5.9 As built (Phase 2C — Draft PR, DARK): provider integration guide
+
+Ports: `PlaceSearchPort`, `PlaceDetailsPort`, `DirectionsPort`
+(`backend/src/discovery/places/place.ports.ts`). Adapters shipped this phase:
+`DeterministicInMemoryPlaceAdapter` (fixtures routed through the SAME
+normalizer as any future live provider), `UnavailablePlaceAdapter` (typed
+unavailability), `StraightLineDirectionsAdapter` (straight-line distance +
+label only — no route, no ETA, no fabricated navigation). The places layer
+makes NO network call (C12 fence).
+
+Integrating a real provider later means: implement the port; run every
+response through `place.normalize.ts` (**normalize-or-drop** — a result that
+cannot be normalized is dropped, never patched; `looksSecretShaped` refuses
+credentialed URLs/keys/JWT-shaped strings anywhere in provider payloads);
+`openNow` stays `null` unless the provider supplies a boolean (unknown ≠
+open — the open-now filter EXCLUDES unknown); attribution is mandatory and
+rendered; provider identity is carried in `source`. Provider credentials are
+owner-provisioned host-side env only. Amendment A8 binds every adapter:
+open-now applies ONLY to place results with authorized provider evidence and
+never to people or usernames.
