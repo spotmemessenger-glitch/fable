@@ -48,7 +48,7 @@ branches · gender/age (A3) · payments/ads · deletions.
 | Group | PR | State | Evidence |
 |---|---|---|---|
 | 6A | #103 | **Draft PR — DARK** | `assistant.ts` v1 + negative/usage compile-time fences + threat model (T-AS-1..12); contracts typecheck + build + boundary fence 6/6 |
-| 6B | — | In progress | dark AssistantModule (unimported): X7 ports, live darkness registry (all domains implemented-dark), deterministic intent + template composer, evidence mint boundary (license THROW / forbidden-field THROW / X3 category match / X4 freshness gate), QueryHandle + closed-code errors (X9), [PROPOSED] sensitive copy; 45 tests green |
-| 6C | — | Pending | — |
+| 6B | #104 | **Draft PR — DARK** | dark AssistantModule (unimported): X7 ports, live darkness registry (all domains implemented-dark), deterministic intent + template composer, evidence mint boundary (license THROW / forbidden-field THROW / X3 category match / X4 freshness gate), QueryHandle + closed-code errors (X9), [PROPOSED] sensitive copy; 45 tests green |
+| 6C | — | In progress | X5 review-facet engine (closed facet registry, mixed keeps both sides, no rating key anywhere, honest insufficient-evidence rows) + route phase-1 (X6: precise origin THROWS — never rounded; attributed provider passthrough with CURRENT route-leg citations; labeled straight-line with no duration field; road-reports named as a future Moments seam, not built); 21 tests green |
 | 6D | — | Pending | — |
 | 6E | — | Pending | — |

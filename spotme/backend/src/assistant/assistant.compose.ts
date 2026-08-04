@@ -33,7 +33,7 @@ const TEMPLATES: Readonly<Record<string, (p: Record<string, string>) => string>>
 
 /** Param sanitization: bounded plain text, control characters stripped —
  *  params are DATA slotted into fixed templates, never markup or directives. */
-function sanitizeParam(value: string): string {
+export function sanitizeParam(value: string): string {
   return String(value).replace(/[\u0000-\u001f\u007f<>]/g, '').slice(0, 160);
 }
 
