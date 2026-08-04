@@ -1,6 +1,6 @@
 import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
-import { INestApplication, ValidationPipe } from '@nestjs/common';
+import { INestApplication, ValidationPipe, RequestMethod } from '@nestjs/common';
 import { pathToFileURL } from 'node:url';
 import { join } from 'node:path';
 import { AppModule } from './app.module';
@@ -160,7 +160,14 @@ async function bootstrap() {
   app.useGlobalPipes(
     new ValidationPipe({ whitelist: true, transform: true, forbidNonWhitelisted: true }),
   );
-  app.setGlobalPrefix('api');
+  // /health and /ready sit OUTSIDE the api prefix, at conventional root paths,
+  // so orchestrators and the Wave-0 verification probe them directly.
+  app.setGlobalPrefix('api', {
+    exclude: [
+      { path: 'health', method: RequestMethod.GET },
+      { path: 'ready', method: RequestMethod.GET },
+    ],
+  });
 
   /* Encrypted media slices arrive as raw bytes, not JSON.
    *
