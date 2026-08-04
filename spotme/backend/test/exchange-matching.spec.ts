@@ -108,6 +108,12 @@ describe('exchange search projection (T-EX-19)', () => {
     expect('lat' in doc).toBe(false);
   });
 
+  it('a coordinate embedded in the free-form CATEGORY is stripped from the projection (INDEX-CATEGORY)', () => {
+    const doc = toSearchProjection(row({ category: 'services/plumbing 12.9716,77.5946' }));
+    expect(doc.category).toBe('services/plumbing');
+    expect(JSON.stringify(doc)).not.toContain('12.9716');
+  });
+
   it('NO prohibited private/PII field enters the projection (owner id, budget, price, precise fields)', () => {
     const doc = toSearchProjection(row());
     const keys = Object.keys(doc).sort();
