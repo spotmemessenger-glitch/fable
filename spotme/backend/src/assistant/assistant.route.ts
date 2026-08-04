@@ -30,16 +30,29 @@ import type {
 /** The public coarse grid step (discovery discipline: 3-decimal rounding). */
 const GRID_DECIMALS = 3;
 
-function isOnCoarseGrid(value: number): boolean {
+/** Quantize to the public grid — float-safe. */
+export function snapToPublicGrid(value: number): number {
   const factor = 10 ** GRID_DECIMALS;
-  return Number.isFinite(value) && Math.round(value * factor) === value * factor;
+  return Math.round(value * factor) / factor;
 }
 
 /**
- * Validate a route origin (X6). A coarse origin must sit EXACTLY on the
- * public grid — any extra precision means a device fix leaked, and the
- * boundary THROWS instead of rounding (rounding here would normalize a leak
- * into silence; the coarsening boundary is device-local, not ours).
+ * Validate a route origin (X6) — REVIEW REPAIR F1. The original boundary
+ * threw on any coordinate not EXACTLY on the 3-decimal grid; that was doubly
+ * wrong: (a) float representation falsely rejects ~1.6% of legitimate grid
+ * values, and (b) the client's canonical `coarsenForPublic` output carries
+ * per-identity jitter (±0.0009°), so the platform's own branded coarse
+ * values would ALWAYS be rejected. Numerically, a raw device fix is at most
+ * 0.0005° from the grid — closer than the jitter envelope — so an off-grid
+ * detector for "precise" simply cannot exist server-side.
+ *
+ * The honest enforcement (events venue-coarsening precedent): the PRIMARY
+ * X6 boundary is the client's branded type + device-local coarsening; here,
+ * defence in depth QUANTIZES to the public grid before anything downstream,
+ * so nothing finer than cell resolution can reach a route adapter or an
+ * estimate BY CONSTRUCTION — even if a raw fix were smuggled in. The
+ * 'precise-route-origin' code stays in the closed registry, reserved for an
+ * activation-time origin-provenance model (e.g. signed coarse origins).
  */
 export function validateRouteOrigin(origin: RouteOrigin): RouteOrigin {
   if (origin.kind === 'place-ref') {
@@ -49,13 +62,10 @@ export function validateRouteOrigin(origin: RouteOrigin): RouteOrigin {
     return origin;
   }
   const { lat, lon } = origin.origin;
-  if (Math.abs(lat) > 90 || Math.abs(lon) > 180) {
+  if (!Number.isFinite(lat) || !Number.isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180) {
     throw new AssistantError('malformed-evidence', 'origin-range');
   }
-  if (!isOnCoarseGrid(lat) || !isOnCoarseGrid(lon)) {
-    throw new AssistantError('precise-route-origin');
-  }
-  return origin;
+  return { kind: 'coarse', origin: { lat: snapToPublicGrid(lat), lon: snapToPublicGrid(lon) } };
 }
 
 /** A provider-supplied candidate leg — ONLY these fields are read. */
@@ -130,15 +140,19 @@ export function buildStraightLineEstimate(
     // A place-ref origin has no coordinates here — phase-1 cannot estimate.
     return { kind: 'unavailable', reason: 'provider-unconfigured' };
   }
-  if (!isOnCoarseGrid(destination.lat) || !isOnCoarseGrid(destination.lon)) {
-    throw new AssistantError('precise-route-origin');
+  if (!Number.isFinite(destination.lat) || !Number.isFinite(destination.lon) ||
+      Math.abs(destination.lat) > 90 || Math.abs(destination.lon) > 180) {
+    throw new AssistantError('malformed-evidence', 'destination-range');
   }
+  // F1: the destination is quantized like the origin — only grid-resolution
+  // values enter the computation.
+  const dest = { lat: snapToPublicGrid(destination.lat), lon: snapToPublicGrid(destination.lon) };
 
   const toRad = (d: number) => (d * Math.PI) / 180;
-  const dLat = toRad(destination.lat - checkedOrigin.origin.lat);
-  const dLon = toRad(destination.lon - checkedOrigin.origin.lon);
+  const dLat = toRad(dest.lat - checkedOrigin.origin.lat);
+  const dLon = toRad(dest.lon - checkedOrigin.origin.lon);
   const a = Math.sin(dLat / 2) ** 2 +
-    Math.cos(toRad(checkedOrigin.origin.lat)) * Math.cos(toRad(destination.lat)) *
+    Math.cos(toRad(checkedOrigin.origin.lat)) * Math.cos(toRad(dest.lat)) *
     Math.sin(dLon / 2) ** 2;
   const distanceM = Math.round(2 * EARTH_RADIUS_M * Math.asin(Math.sqrt(a)));
 

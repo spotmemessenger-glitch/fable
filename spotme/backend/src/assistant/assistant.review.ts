@@ -17,7 +17,7 @@
  */
 
 import { AssistantError } from './assistant.errors';
-import { sanitizeParam } from './assistant.compose';
+import { CURRENT_STATE_LANGUAGE, sanitizeParam } from './assistant.compose';
 import { confidenceFor } from './assistant.evidence';
 import type {
   CitedClaim, EvidenceRecord, NonEmptyArray, ReviewFacet, ReviewIntelligence,
@@ -73,10 +73,15 @@ export class ReviewIntelligenceEngine {
       }
       if (!valid) continue; // fail closed (X3) — no partial credit
 
+      const text = renderReviewText(facet, statement.params.theme ?? '');
+      // F4: a review is never a current-state claim — a theme asserting
+      // "open right now" (or any current-state language) dies here.
+      if (CURRENT_STATE_LANGUAGE.test(text)) continue;
+
       const acc = accumulators.get(facet) ?? { claims: [], stances: new Set<string>() };
       acc.claims.push({
         id: `review:${subjectRef}:${facet}:${statement.id}`,
-        text: renderReviewText(facet, statement.params.theme ?? ''),
+        text,
         category: 'place-review',
         citationIds: statement.citationIds as unknown as NonEmptyArray<string>,
         confidence: confidenceFor(cited),
