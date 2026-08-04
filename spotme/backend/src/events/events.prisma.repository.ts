@@ -93,8 +93,12 @@ export class PrismaEventsRepository implements EventsRepository {
   async findNearby(q: NearbyEventsQuery): Promise<EventRow[]> {
     const radiusM = Math.max(0, q.radiusKm) * 1000;
     const nowDate = new Date(q.now);
+    // Keyset on COALESCE("startAt", epoch) so NULL-start (tbd/postponed) rows
+    // order deterministically (as epoch, last) AND remain reachable across page
+    // boundaries — a plain "startAt < x" makes NULL rows unpageable (review
+    // KEYSET-NULL). The cursor's `t` is 0 for a NULL-start anchor, matching epoch.
     const keyset = q.cursor
-      ? Prisma.sql`AND ("startAt" < ${new Date(q.cursor.t)} OR ("startAt" = ${new Date(q.cursor.t)} AND "id" < ${q.cursor.i}))`
+      ? Prisma.sql`AND (COALESCE("startAt", TIMESTAMP '1970-01-01 00:00:00') < ${new Date(q.cursor.t)} OR (COALESCE("startAt", TIMESTAMP '1970-01-01 00:00:00') = ${new Date(q.cursor.t)} AND "id" < ${q.cursor.i}))`
       : Prisma.empty;
     const catF = q.category ? Prisma.sql`AND "category" = ${q.category}` : Prisma.empty;
     const rows = await this.prisma.$queryRaw<Array<Record<string, unknown>>>(Prisma.sql`
@@ -109,7 +113,7 @@ export class PrismaEventsRepository implements EventsRepository {
         AND "geog" IS NOT NULL
         AND ST_DWithin("geog", ST_SetSRID(ST_MakePoint(${q.origin.lon}, ${q.origin.lat}), 4326)::geography, ${radiusM})
         ${catF} ${keyset}
-      ORDER BY "startAt" DESC NULLS LAST, "id" DESC
+      ORDER BY COALESCE("startAt", TIMESTAMP '1970-01-01 00:00:00') DESC, "id" DESC
       LIMIT ${q.limit}
     `);
     return rows.map((r) => this.toRow(r, q.now, Number(r.distanceM)));
