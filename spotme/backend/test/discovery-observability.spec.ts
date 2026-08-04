@@ -36,7 +36,7 @@ describe('discovery metrics (checkpoint 14)', () => {
     const m = createDiscoveryMetrics();
     expect(m).not.toBeNull();
     m!.observeQuery({ scope: 'people', outcome: 'ok', radius_bucket: radiusBucket(2) }, 0.012);
-    m!.countRealtimePublish({ event_type: 'presence', outcome: 'dropped' });
+    m!.countRealtimePublish({ event_type: 'cell-presence-updated', outcome: 'ok' });
     const text = await getRegistry()!.metrics();
     expect(text).toContain(DISCOVERY_METRICS.queryDuration);
     expect(text).toContain(DISCOVERY_METRICS.realtimePublishes);
@@ -65,12 +65,15 @@ describe('discovery metrics (checkpoint 14)', () => {
     ).toThrow(DiscoveryLabelViolation);
   });
 
-  it('REFUSES label values shaped like data: precise coordinates, tokens, URLs, free text', () => {
+  it('REFUSES any value outside the closed enum — incl. the shapes a regex missed (F9-1)', () => {
     const m = DISCOVERY_METRICS.queryDuration;
+    // Full-precision coordinate (caught before, still caught):
     expect(() => assertDiscoveryLabels(m, { scope: '12.971612' })).toThrow(DiscoveryLabelViolation);
-    expect(() => assertDiscoveryLabels(m, { scope: 'eyJhbGciOiJIUzI1NiJ9' })).toThrow(DiscoveryLabelViolation);
-    expect(() => assertDiscoveryLabels(m, { scope: 'redis://x@y' })).toThrow(DiscoveryLabelViolation);
-    expect(() => assertDiscoveryLabels(m, { scope: 'free text here' })).toThrow(DiscoveryLabelViolation);
+    // The bypasses the shape regex allowed — now refused by enum membership:
+    expect(() => assertDiscoveryLabels(m, { scope: '12.971' })).toThrow(DiscoveryLabelViolation); // 3-decimal coord
+    expect(() => assertDiscoveryLabels(m, { scope: 'priya' })).toThrow(DiscoveryLabelViolation); // short handle
+    expect(() => assertDiscoveryLabels(m, { scope: 'dXNlci0xMjM0' })).toThrow(DiscoveryLabelViolation); // base64 id
+    expect(() => assertDiscoveryLabels(m, { outcome: 'sneaky' } as never)).toThrow(DiscoveryLabelViolation);
     // The intended enum members pass.
     expect(() =>
       assertDiscoveryLabels(m, { scope: 'people', outcome: 'ok', radius_bucket: 'lte2' }),
@@ -108,6 +111,31 @@ describe('discovery structured logging (checkpoint 14)', () => {
     expect(parsed.lat).toBe('[redacted]');
     expect(parsed.query).toBe('[redacted]');
     expect(parsed.resultCount).toBe(7);
+  });
+
+  it('redacts short query aliases and user-id fields (F9-3) and cannot be overridden (F9-4)', () => {
+    const lines: string[] = [];
+    const logger = createDiscoveryLogger(createJsonLogger({ enabled: true, sink: (l) => lines.push(l) }));
+    logger.log('info', 'served', {
+      q: 'clinic near me',        // short alias the base redactor misses
+      needle: 'plumber',
+      userId: 'u-123',            // never log a user id (runbook promise)
+      handle: 'priya',
+      resultCount: 3,
+      // An attempt to override the opaque id / component must NOT win.
+      correlationId: 'attacker-supplied',
+      component: 'not-discovery',
+    });
+    const parsed = JSON.parse(lines[0]);
+    expect(parsed.q).toBe('[redacted]');
+    expect(parsed.needle).toBe('[redacted]');
+    expect(parsed.userId).toBe('[redacted]');
+    expect(parsed.handle).toBe('[redacted]');
+    expect(parsed.resultCount).toBe(3);
+    expect(parsed.component).toBe('discovery');            // not overridden
+    expect(parsed.correlationId).toBe(logger.correlationId); // not overridden
+    expect(lines[0]).not.toContain('clinic near me');
+    expect(lines[0]).not.toContain('attacker-supplied');
   });
 
   it('is a NO-OP without LOG_FORMAT=json (Phase 1G gate inherited)', () => {

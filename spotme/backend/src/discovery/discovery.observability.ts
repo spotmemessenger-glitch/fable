@@ -54,9 +54,24 @@ export const DISCOVERY_METRIC_LABELS: Record<DiscoveryMetricName, readonly strin
 const FORBIDDEN_LABEL_KEYS =
   /(user|principal|handle|name|query|text|message|token|secret|key|lat|lon|lng|coord|cell|cursor|ip|email|phone)/i;
 
-/** Label VALUES that look like data rather than an enum member. */
-const FORBIDDEN_LABEL_VALUE =
-  /^-?\d{1,3}\.\d{4,}$|eyJ[A-Za-z0-9_-]{10,}|:\/\/|@|\s/;
+/**
+ * CLOSED VALUE SETS per label key (F9-1). Enum membership — not a shape regex —
+ * is the real defence: a shape regex let ≤32-char tokens (a base64 userId, a
+ * short handle, a 3-decimal coordinate '12.971') through. A value not in its
+ * key's set is refused, so a label can never become an identity/position
+ * channel. New enum members are added here in review, deliberately.
+ */
+export const DISCOVERY_LABEL_VALUES: Record<string, readonly string[]> = {
+  scope: ['people', 'places', 'usernames', 'mixed'],
+  outcome: ['ok', 'empty', 'partial', 'error', 'timeout', 'no-results', 'provider-unavailable', 'refused'],
+  radius_bucket: ['lte2', 'lte5', 'lte10', 'lte25'],
+  provider: ['typesense', 'fixture', 'in-memory', 'unconfigured'],
+  to_state: ['open', 'half-open', 'closed'],
+  event_type: ['cell-presence-updated', 'cell-presence-expired', 'self-visibility-changed', 'self-projection-updated', 'self-results-invalidated'],
+};
+
+/** A value carrying a decimal number is never a legitimate enum member. */
+const DECIMAL_VALUE = /\d\.\d/;
 
 export class DiscoveryLabelViolation extends Error {
   constructor(detail: string) {
@@ -64,7 +79,8 @@ export class DiscoveryLabelViolation extends Error {
   }
 }
 
-/** Refuses unknown metrics, non-allow-listed keys, and data-shaped values. */
+/** Refuses unknown metrics, non-allow-listed keys, and any value outside its
+ *  key's closed enum (F9-1). */
 export function assertDiscoveryLabels(
   metric: DiscoveryMetricName,
   labels: Record<string, string>,
@@ -74,8 +90,11 @@ export function assertDiscoveryLabels(
   for (const [k, v] of Object.entries(labels)) {
     if (!allowed.includes(k)) throw new DiscoveryLabelViolation(`label key '${k}' not allow-listed for ${metric}`);
     if (FORBIDDEN_LABEL_KEYS.test(k)) throw new DiscoveryLabelViolation(`label key '${k}' is categorically forbidden`);
-    if (typeof v !== 'string' || v.length > 32 || FORBIDDEN_LABEL_VALUE.test(v)) {
-      throw new DiscoveryLabelViolation(`label value for '${k}' looks like data, not an enum member`);
+    if (typeof v !== 'string') throw new DiscoveryLabelViolation(`label value for '${k}' must be a string`);
+    if (DECIMAL_VALUE.test(v)) throw new DiscoveryLabelViolation(`label value for '${k}' contains a number — refused`);
+    const values = DISCOVERY_LABEL_VALUES[k];
+    if (!values || !values.includes(v)) {
+      throw new DiscoveryLabelViolation(`label value '${v}' is not a registered enum member for '${k}'`);
     }
   }
 }
@@ -90,14 +109,24 @@ export function radiusBucket(radiusKm: number): 'lte2' | 'lte5' | 'lte10' | 'lte
 
 /* ------------------------------------------------------------ instruments */
 
+// Union-literal label types (F9-2): a call site can only pass a registered
+// enum member — free text (an error.name, a provider string) is a compile
+// error, not merely a runtime refusal.
+export type Scope = 'people' | 'places' | 'usernames' | 'mixed';
+export type Outcome = 'ok' | 'empty' | 'partial' | 'error' | 'timeout' | 'no-results' | 'provider-unavailable' | 'refused';
+export type RadiusBucket = 'lte2' | 'lte5' | 'lte10' | 'lte25';
+export type Provider = 'typesense' | 'fixture' | 'in-memory' | 'unconfigured';
+export type BreakerState = 'open' | 'half-open' | 'closed';
+export type RealtimeEventType = 'cell-presence-updated' | 'cell-presence-expired' | 'self-visibility-changed' | 'self-projection-updated' | 'self-results-invalidated';
+
 export interface DiscoveryMetrics {
-  observeQuery(labels: { scope: string; outcome: string; radius_bucket: string }, seconds: number): void;
-  countResults(labels: { scope: string; outcome: string }, n: number): void;
-  observeSearchProvider(labels: { provider: string; outcome: string }, seconds: number): void;
-  countBreakerTransition(labels: { provider: string; to_state: string }): void;
-  countVisibilityWrite(labels: { outcome: string }): void;
-  countRealtimePublish(labels: { event_type: string; outcome: string }): void;
-  countExpiredSwept(labels: { outcome: string }, n: number): void;
+  observeQuery(labels: { scope: Scope; outcome: Outcome; radius_bucket: RadiusBucket }, seconds: number): void;
+  countResults(labels: { scope: Scope; outcome: Outcome }, n: number): void;
+  observeSearchProvider(labels: { provider: Provider; outcome: Outcome }, seconds: number): void;
+  countBreakerTransition(labels: { provider: Provider; to_state: BreakerState }): void;
+  countVisibilityWrite(labels: { outcome: Outcome }): void;
+  countRealtimePublish(labels: { event_type: RealtimeEventType; outcome: Outcome }): void;
+  countExpiredSwept(labels: { outcome: Outcome }, n: number): void;
 }
 
 /**
@@ -113,7 +142,10 @@ export function createDiscoveryMetrics(): DiscoveryMetrics | null {
   // importing this module never loads it on the dark path.
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   const client = require('prom-client') as typeof import('prom-client');
-  const secondsBuckets = [0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5];
+  // Buckets extend past the platform's own measured wide-radius latencies
+  // (ch. 15 records p95 > 3 s) so "p95 climbing" stays observable, not saturated
+  // in +Inf (F9-5).
+  const secondsBuckets = [0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10];
 
   const hist = (name: DiscoveryMetricName, help: string): Histogram<string> =>
     (registry.getSingleMetric(name) as Histogram<string>) ??
@@ -188,10 +220,14 @@ export interface DiscoveryLogger {
 
 /**
  * Discovery goes FURTHER than the Phase 1G redactor: a user's SEARCH TEXT is
- * behavioural data ("clinic near me") and never belongs in logs, so
- * query-shaped fields are redacted here before the base redactor runs.
+ * behavioural data ("clinic near me") and never belongs in logs, and a user id
+ * must never be logged (the runbook promises "never a user id"). Both are
+ * redacted here before the base redactor runs (F9-3). The key list is broad —
+ * short aliases (`q`, `needle`, `keyword`, `phrase`) that the base redactor's
+ * anchored patterns miss are covered.
  */
-const DISCOVERY_SENSITIVE_KEY = /(query|search|term|input|intent[_-]?text)/i;
+const DISCOVERY_SENSITIVE_KEY =
+  /(^q$|query|search|term|needle|keyword|phrase|filter|input|intent[_-]?text|^user|userid|principal|handle|^uid$)/i;
 
 export function createDiscoveryLogger(
   base: StructuredLogger = createJsonLogger(),
@@ -204,7 +240,9 @@ export function createDiscoveryLogger(
       for (const [k, v] of Object.entries(fields)) {
         scrubbed[k] = DISCOVERY_SENSITIVE_KEY.test(k) ? '[redacted]' : v;
       }
-      base.log(level, message, { component: 'discovery', correlationId, ...scrubbed });
+      // Constants spread LAST (F9-4): a `component`/`correlationId` field in the
+      // caller's payload can never override the opaque, derived-from-nothing id.
+      base.log(level, message, { ...scrubbed, component: 'discovery', correlationId });
     },
   };
 }

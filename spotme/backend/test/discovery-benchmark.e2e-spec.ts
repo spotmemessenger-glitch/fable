@@ -33,7 +33,8 @@ import { PrismaDiscoveryPeopleRepository } from '../src/discovery/discovery.pris
 import { PrismaService } from '../src/prisma/prisma.service';
 import { orderPeople, explainPerson } from '../src/discovery/discovery.ranking';
 import { rankCandidates, RankingCandidate } from '../src/discovery/discovery.ranking.engine';
-import { PersonCandidateRow } from '../src/discovery/discovery.types';
+import { DecodedCursor, PersonCandidateRow } from '../src/discovery/discovery.types';
+import { encodeCursor, decodeCursor } from '../src/discovery/discovery.policy';
 import {
   TypesenseSearchAdapter,
   TYPESENSE_COLLECTION,
@@ -100,7 +101,7 @@ const report: Record<string, unknown> = {
       'lon = 77.5946 + (((i*40503) mod 999983)/999983 - 0.5)*0.46 (integer hash, no random())',
     distribution: 'pseudo-uniform over a ~50 km × 50 km box centred on a public landmark',
     coldMethod: 'first post-ANALYZE execution per (scale, radius) — approximation, NOT a cold-buffer restart',
-    warmMethod: 'per (scale, radius): 3 warm-up runs, then N measured runs round-robin over 5 origins',
+    warmMethod: 'per (scale, radius): warm EVERY one of the 5 origins once, then N measured runs round-robin over them',
     pageSize: PAGE,
     scalesTargeted: SCALES,
   },
@@ -245,7 +246,9 @@ bench('discovery performance benchmarks (checkpoint 13)', () => {
         const cold0 = nsNow();
         const first = await queryOnce(ORIGINS[0], radiusKm);
         const coldMs = ms(cold0, nsNow());
-        for (let w = 0; w < 3; w++) await queryOnce(ORIGINS[w % ORIGINS.length], radiusKm); // warm-up
+        // Warm EVERY origin once (F10.5), so no measured sample is a first-touch
+        // that would inflate the "warm" p95.
+        for (const o of ORIGINS) await queryOnce(o, radiusKm);
         const samples: number[] = [];
         for (let r = 0; r < RUNS; r++) {
           const o = ORIGINS[r % ORIGINS.length];
@@ -267,7 +270,7 @@ bench('discovery performance benchmarks (checkpoint 13)', () => {
 
   it('pagination is keyset-stable at the largest seeded scale (no dups, no gaps, flat latency)', async () => {
     const seen = new Set<string>();
-    let cursor: { d: number; u: string } | null = null;
+    let cursor: DecodedCursor | null = null;
     let prev: { d: number; u: string } | null = null;
     const pageLatencies: number[] = [];
     for (let page = 0; page < 10; page++) {
@@ -293,7 +296,9 @@ bench('discovery performance benchmarks (checkpoint 13)', () => {
         prev = { d: r.coarseDistanceM, u: r.userId };
       }
       const last = rows[rows.length - 1];
-      cursor = { d: last.coarseDistanceM, u: last.userId };
+      // Drive the PRODUCTION cursor path (encode → decode), so this measures
+      // what ships — a rounding regression (F10.1) would surface as a dup/gap.
+      cursor = decodeCursor(encodeCursor({ d: last.coarseDistanceM, u: last.userId, depth: page + 1 }));
       if (rows.length < PAGE) break;
     }
     report.pagination = {
@@ -446,14 +451,16 @@ bench('discovery performance benchmarks (checkpoint 13)', () => {
         for (const [label, q] of QUERIES) {
           for (let w = 0; w < 3; w++) await adapter.search(q, { kind: 'username' });
           const samples: number[] = [];
-          let lastState = '';
+          // Count EVERY run's state (F10.2): a mid-run timeout/unavailable must
+          // be visible, not overwritten by the last run's state.
+          const states: Record<string, number> = {};
           for (let r = 0; r < 30; r++) {
             const t1 = nsNow();
             const out = await adapter.search(q, { kind: 'username' });
             samples.push(ms(t1, nsNow()));
-            lastState = out.state;
+            states[out.state] = (states[out.state] ?? 0) + 1;
           }
-          perQuery[label] = { ...stats(samples), lastState };
+          perQuery[label] = { ...stats(samples), states, allOk: states.ok === 30 };
         }
         byScale[`scale_${scale}`] = { importMs: Math.round(importMs), queries: perQuery };
       } catch (e) {

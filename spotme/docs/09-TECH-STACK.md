@@ -359,7 +359,7 @@ adapter now exists behind `SearchPort`
 (`backend/src/discovery/search/typesense-search.adapter.ts` — unconfigured by
 default, no credentials in the repository), and the checkpoint 13 capacity
 measurement reached **1,000,000 synthetic username docs** on a local Typesense
-27.1 node (search p50 ≤ 44 ms, p95 ≤ 62 ms through the adapter; measured, not
+27.1 node (search p50 ≈ 44 ms, p95 ≈ 62.4 ms through the adapter; measured, not
 extrapolated — see
 `docs/architecture/discovery-platform/15-PERFORMANCE-AND-CAPACITY.md`). This
 does not replace the production-hardware revisit above, and it did not rerun

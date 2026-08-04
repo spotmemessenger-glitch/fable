@@ -14,6 +14,14 @@ All instrumentation referenced here is checkpoint 14's
 line carries an opaque `correlationId` (never a user id). Metric names below
 are members of the closed `DISCOVERY_METRICS` registry.
 
+> **[when instrumented] — the instruments exist but have NO call sites yet
+> (F12-1).** `createDiscoveryMetrics`/`createDiscoveryLogger` are dark
+> foundation; the detection signals in §16.1/§16.2/§16.4 below only emit once
+> activation wires the instruments into the service/adapters (see the
+> activation checklist, DPAS §13.9.1 — the "wire checkpoint-14 instrumentation"
+> step). Until then, treat those rows as the intended dashboards, not live
+> ones; §16.3's Postgres-side SQL checks work today regardless.
+
 ---
 
 ## 16.1 Typesense unavailable **[post-activation]**

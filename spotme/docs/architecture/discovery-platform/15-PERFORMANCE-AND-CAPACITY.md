@@ -36,7 +36,7 @@ time-derived seeds — a re-run reproduces the data byte-for-byte.
 | Scales seeded | 1k / 10k / 100k / 1M visible, discoverable profiles (largest achieved: **1M**) |
 | Block rows | ~0.1% of scale + 50 involving the querying principal (the anti-join is never vacuous) |
 | Query set | 5 fixed origins × radii {2, 5, 25} km, page size 30 |
-| Warm method | 3 warm-ups, then 30 measured runs round-robin over origins (10 runs for 25 km at ≥100k) |
+| Warm method | warm every one of the 5 origins once, then 30 measured runs round-robin (10 runs for 25 km at ≥100k) |
 | Cold method | first post-`ANALYZE` execution — an approximation, NOT a cold-buffer restart |
 
 ## 15.2 PostGIS people query (production SQL via `PrismaDiscoveryPeopleRepository`)
@@ -50,16 +50,19 @@ Warm latency, ms (single connection, sequential):
 | 100k | 134.7 / 160.3 | 184.0 / 241.1 | 682 / 791 |
 | 1M | 948 / 1024 | 1026 / 1115 | 2756 / 3192 |
 
-Seeding: 1M rows (users + projections + visibility + GIST maintenance) in
-~46 s via batched `generate_series` inserts.
+Seeding is incremental, so the recorded `seedMs` at the 1M scale covers the
+final **900k increment (100k→1M)** plus block seeding and `ANALYZE` — ~46 s —
+not a cold 1M load (F10.4).
 
-**Measured findings (not projections):**
+**Measured findings:**
 
 1. **Latency scales with the candidate set inside the radius, not with page
-   size.** The query computes `ST_Distance` for every in-radius candidate and
-   sorts before `LIMIT 30`. `ST_DWithin` + GIST prunes by area, but a 2 km
-   query over 1M uniformly-spread profiles still owns a ~5k-candidate set and
-   costs ~950 ms p50 on this container.
+   size** *(analysis, not a swept measurement — page size was fixed at 30 and
+   candidate-set cardinality was not counted per query; F10.3)*. The query
+   computes `ST_Distance` for every in-radius candidate and sorts before
+   `LIMIT 30`. `ST_DWithin` + GIST prunes by area, but a 2 km query over 1M
+   uniformly-spread profiles owns an estimated ~5k-candidate set (density
+   estimate, not measured) and costs ~950 ms p50 on this container.
 2. **Wide radius is the bottleneck at every scale ≥10k.** 25 km covers ~78%
    of the seeded box, so the "spatial" query degenerates toward a full-table
    distance sort (measured p50 2.5–2.8 s at 10k and 1M).
@@ -113,7 +116,7 @@ per-document through the adapter's allow-list).
 
 **Findings:** sub-linear growth — 1000× the corpus cost ~6× the latency; all
 query classes stayed under the adapter's 2 s timeout by >30× at 1M; every
-query returned `ok` (breaker never opened). Search is NOT the discovery
+query returned `ok` on every one of its 30 runs (per-run state counts recorded; breaker never opened). Search is NOT the discovery
 platform's bottleneck at these scales; the PostGIS radius scan is.
 
 ## 15.5 web-next (jsdom under vitest — JS work only, no layout/paint)

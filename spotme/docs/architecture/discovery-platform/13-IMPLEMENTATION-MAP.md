@@ -187,7 +187,7 @@ fails review by definition (§13.6 checklist).
 ## 13.9 Phase 2 as-built map (2026-08-03/04 — Implemented, Draft PR — DARK)
 
 The Smart Nearby Discovery Map foundation was BUILT dark across six stacked
-draft PRs (2A #80 → 2B #81 → 2C #82 → 2D #83 → 2E #84 → 2F). Status is
+draft PRs (2A #80 → 2B #81 → 2C #82 → 2D #83 → 2E #84 → 2F #85). Status is
 **Implemented (Draft PR — DARK)** — never shipped, live, deployed, activated
 or production. This table is the implementation guide: every subsystem with
 its real path and its proving suite.
@@ -228,7 +228,10 @@ the gates of §13.7 apply in full, concretely:
    boundary review).
 7. Privacy re-review: threat model ch. 14 controls re-verified on the
    activation diff; C12 fence spec inverted expectations reviewed one by one.
-8. Runbooks (ch. 16) staffed; metrics/log sinks enabled and verified redacting.
+8. **Wire the checkpoint-14 instrumentation into the service/adapters** (the
+   metric/log/trace call sites — reviewed), THEN enable the sinks: without this
+   the ch. 16 detection signals are silent (F12-1). Runbooks (ch. 16) staffed;
+   metrics/log sinks enabled and verified redacting.
 9. Staged rollout plan + executed rollback drill (§13.7 Definition of Done).
 
 ### 13.9.2 Rollback

@@ -35,27 +35,41 @@ describe('C12 — dark integration fences', () => {
     }
   });
 
-  it('no backend module OUTSIDE src/discovery imports the discovery code', () => {
+  it('no backend module OUTSIDE src/discovery imports the discovery code — static OR dynamic (8.1)', () => {
     const files = walk(join(BACKEND, 'src'), ['.ts']).filter((f) => !f.includes('/discovery/'));
-    const importers = files.filter((f) => /from ['"].*\/discovery\//.test(read(f)));
+    // Catch `from '.../discovery/'`, a barrel `from '.../discovery'`, AND the
+    // dynamic forms the boot path actually uses — import('.../discovery/…'),
+    // require('.../discovery/…'), and any string literal naming the subtree.
+    const REACH = /(from|import|require)\s*\(?['"][^'"]*\/discovery(\/|['"])|['"][^'"]*\/discovery\/[^'"]*['"]/;
+    const importers = files.filter((f) => REACH.test(read(f)));
     expect(importers).toEqual([]);
+    // The boot path (main.ts) must not reference discovery at all.
+    expect(read(join(BACKEND, 'src/main.ts'))).not.toMatch(/discovery/i);
   });
 
-  it('NO LIVE spotme/web MODULE imports Phase 2 code (web-next, contracts, discovery backend)', () => {
-    const files = walk(WEB_SRC, ['.js', '.mjs']);
-    const offenders = files.filter((f) => {
-      const s = read(f);
-      return /web-next|@spotme\/contracts|backend\/src\/discovery/.test(s);
-    });
+  it('NO LIVE spotme/web MODULE (src OR api) imports Phase 2 code (8.2)', () => {
+    // spotme/web/api holds the Vercel serverless functions bridged into the
+    // running backend — the most deploy-reachable web-tier code. Fence it too.
+    const roots = [WEB_SRC, join(REPO, 'spotme/web/api')].filter((d) => existsSync(d));
+    const files = roots.flatMap((d) => walk(d, ['.js', '.mjs']));
+    const offenders = files.filter((f) => /web-next|@spotme\/contracts|backend\/src\/discovery/.test(read(f)));
     expect(offenders).toEqual([]);
   });
 
-  it('web-next is NOT deployed: no root/spotme vercel config; the only vercel.json is rooted at spotme/web and never mentions web-next', () => {
-    expect(existsSync(join(REPO, 'vercel.json'))).toBe(false);
-    expect(existsSync(join(REPO, 'spotme/vercel.json'))).toBe(false);
+  it('web-next is NOT deployed: no vercel/now config anywhere links or builds it (8.3)', () => {
+    // No stray deploy config that could bring web-next / Phase 2 online.
+    const deployConfigs = ['vercel.json', 'spotme/vercel.json', 'now.json', 'spotme/now.json', '.vercel/project.json', 'spotme/.vercel/project.json', 'spotme/web-next/vercel.json'];
+    expect(deployConfigs.filter((p) => existsSync(join(REPO, p)))).toEqual([]);
+    // The one real config is rooted at spotme/web and never targets web-next in
+    // any of the fields Vercel actually deploys from.
     const v = read(join(REPO, 'spotme/web/vercel.json'));
     expect(v).not.toContain('web-next');
-    expect(existsSync(join(WEBNEXT, 'vercel.json'))).toBe(false);
+    for (const field of ['functions', 'builds', 'outputDirectory']) {
+      if (v.includes(field)) {
+        const idx = v.indexOf(field);
+        expect(v.slice(idx, idx + 200)).not.toContain('web-next');
+      }
+    }
   });
 
   it('Centrifugo: no package dependency, no adapter instantiation anywhere in backend src', () => {
@@ -74,9 +88,10 @@ describe('C12 — dark integration fences', () => {
       // Nothing ASSIGNS the env vars (reading with no default is the contract).
       expect(s).not.toMatch(/process\.env\.TYPESENSE_URL\s*=/);
     }
-    // .env.example must not pre-fill a Typesense endpoint either.
+    // .env.example must not pre-fill a Typesense endpoint — quoted OR unquoted
+    // (the old quoted-only regex let `TYPESENSE_URL=http://…` through, F11.4).
     const envx = read(join(BACKEND, '.env.example'));
-    expect(envx).not.toMatch(/TYPESENSE_URL="[^"]+"/);
+    expect(envx).not.toMatch(/^\s*TYPESENSE_URL\s*=\s*\S/m);
   });
 
   it('place providers make NO network call (no fetch/http in the places layer)', () => {
@@ -101,9 +116,15 @@ describe('C12 — dark integration fences', () => {
     expect(webApp.filter((f) => /spotme\.e2e3/.test(read(f)))).toEqual([]);
   });
 
-  it('no precise coordinate crosses the serialization boundary: internal distance fields never reach the controller layer', () => {
-    const controller = read(join(BACKEND, 'src/discovery/discovery.controller.ts'));
-    expect(controller).not.toContain('coarseDistanceM');
+  it('no precise coordinate crosses the serialization boundary: the SERVICE projection never emits internal distance (F11.3)', () => {
+    // The real protection is in the service projection, not the pass-through
+    // controller — assert BOTH, and that the projected public shape carries
+    // distanceBand, never coarseDistanceM.
+    expect(read(join(BACKEND, 'src/discovery/discovery.controller.ts'))).not.toContain('coarseDistanceM');
+    const service = read(join(BACKEND, 'src/discovery/discovery.service.ts'));
+    const project = service.slice(service.indexOf('private project'));
+    expect(project).toContain('distanceBand');
+    expect(project).not.toContain('coarseDistanceM:'); // never assigned into the public shape
     // The client's ONLY brand-cast lives in coarsen.ts.
     const clientFiles = walk(join(WEBNEXT, 'src'), ['.ts', '.tsx']).filter((f) => !f.endsWith('coarsen.ts'));
     const casters = clientFiles.filter((f) => /as CoarsePublicLocation/.test(read(f)));
