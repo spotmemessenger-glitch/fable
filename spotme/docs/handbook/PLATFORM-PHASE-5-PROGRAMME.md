@@ -43,8 +43,36 @@ deletions.
 
 | Group | PR | State | Evidence |
 |---|---|---|---|
-| 5A | #97 | Draft PR — DARK | `moments.ts` v1 + negative/usage compile-time fences + ADR-028 (Proposed) + M6 threat model; contracts typecheck + build + boundary fence 6/6 |
-| 5B | #98 | Draft PR — DARK | media ports on the storage seam + EXIF strip proven + M8 queue contracts (inert) + dedup/cascade; moment-media spec 10/10; migration clean+upgraded |
-| 5C | #99 | Draft PR — DARK | MomentsModule (unimported): M5 feeds in SQL + M2 frozen ranking + M3 stories + M4 social + moderation machine; policy/ranking/e2e 25 green; migration clean+upgraded |
-| 5D | #100 | Draft PR — DARK | inert web-next surface: two-step location attach, untrusted URLs, closed reactions, privacy-mutation battery; web-next 84 + fence 6/6 |
-| 5E | #101 | Draft PR — DARK | dark fences (12) + M9 battery + closed metrics + benchmark (100k achieved, linear-growth flag) + runbooks + activation checklist |
+| 5A | #97 | **Merged — DARK** (`bd94cf2`) | `moments.ts` v1 + negative/usage compile-time fences + ADR-028 (Proposed) + M6 threat model; contracts typecheck + build + boundary fence 6/6 |
+| 5B | #98 | **Merged — DARK** (`c8d0c0d`) | media ports on the storage seam + EXIF strip proven + M8 queue contracts (inert) + dedup/cascade; moment-media spec 10/10; migration clean+upgraded |
+| 5C | #99 | **Merged — DARK** (`7865f8f`) | MomentsModule (unimported): M5 feeds in SQL + M2 frozen ranking + M3 stories + M4 social + moderation machine; policy/ranking/e2e 25 green; migration clean+upgraded |
+| 5D | #100 | **Merged — DARK** (`74e4d19`) | inert web-next surface: two-step location attach, untrusted URLs, closed reactions, privacy-mutation battery; web-next 84 + fence 6/6 |
+| 5E | #101 | **Merged — DARK** (`ba50e38`) | dark fences (12) + M9 battery + closed metrics + benchmark (100k achieved, linear-growth flag) + runbooks + activation checklist |
+
+## Landing (2026-08-04, delegated approval)
+
+The Phase 5 chain (5A→5E) landed on `master` via a five-commit `--no-ff` merge
+train (`master` `9a8384e` → `ba50e38`): #97 `bd94cf2` → #98 `c8d0c0d` → #99
+`7865f8f` → #100 `74e4d19` → #101 `ba50e38`. **ADR-028 was flipped to Accepted
+on the #97 branch (`9f63782`) before the train**, under the owner-delegated
+Phase 5 review-and-merge authority. Each PR was marked Ready for Review,
+diff-inspected against its base, retargeted to master stepwise (no GitHub
+refusal — each retarget had unique commits, so the base-advance precedent was
+not needed), and merged conflict-free (additive only), with flags and affected
+suites re-verified after every merge.
+
+Post-landing on `ba50e38`: backend **418** + legacy web **1017** (lint +
+production build + coarse-broadcast privacy regression 5/5) + contracts
+(typecheck/decl/boundary 6/6 incl. moments negatives) + web-next **84** (+
+isolation 6/6, tsc, production build) all green. Dark fences by file:
+`discovery-dark-fences` 13 · `exchange-dark-fences` 10 · `events-dark-fences`
+11 · `moments-dark-fences` 13 · `signing-not-shipped` 20 · `e2e-v3-not-shipped`
+9 · `ai-gateway-not-shipped` 11 · `discovery-coarse-broadcast` 5 · web-next +
+contracts boundary fences 6/6 each. Environment-free boot: discovery/exchange/
+events/moments/media routes all 404, real routes live; EXIF-strip fence green;
+secret scan clean; `MomentsModule`/`MediaModule` unimported; no queue worker or
+storage provider starts; no Typesense/Centrifugo/Dragonfly wiring; both crypto
+conditions false; all protected heads byte-identical. **Everything landed
+DARK.** Activation (moderation staffing + legal review as HARD prerequisites,
+D6, storage provider/spend, camera unfreeze, queue/worker wiring) stays
+owner-retained.
