@@ -75,3 +75,25 @@ before continuing."
 Landing order (owner-retained): 2A → 2B → 2C → 2D → 2E → 2F, strictly in
 order, retargeting each next PR to master as its parent merges. Nothing in
 this programme is merged, deployed, activated, or user-visible.
+
+## Landing history (2026-08-04, delegated authority)
+
+The verified chain landed on master via ordinary merge commits, in order, each
+re-verified crypto-flags-false and dark:
+
+| PR | Merge SHA | Group |
+|---|---|---|
+| #80 | `093a598` | 2A — contracts + threat model |
+| #81 | `0db5f81` | 2B — DiscoveryModule + PostGIS + people engine |
+| #82 | `69db179` | 2C — SearchPort + place/directions ports |
+| #83 | `ac2db6b` | 2D — intent + ranking + realtime |
+| #84 | `bb6f550` | 2E — web-next Discovery UI + client layer |
+| #85 | `ce5a605` | 2F — fences + perf + ops + docs + review repairs |
+
+Post-landing validation on the new master: backend 25 suites / 255 tests
+(live PostGIS + Typesense); legacy web 24/24 + crypto/AI fences
+(signing-not-shipped 20/20, e2e-v3-not-shipped 9/9, ai-gateway-not-shipped
+11/11) + location regression 5/5 + lint + build; contracts + declaration
+build; web-next 33 tests + isolation fence 6/6 + build; environment-free
+startup (discovery routes 404, real routes live); secret scan clean; both
+crypto flags false. Nothing activated, wired, or deployed.

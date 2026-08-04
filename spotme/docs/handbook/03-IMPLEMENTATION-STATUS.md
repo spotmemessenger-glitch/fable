@@ -6,9 +6,11 @@ path or an open PR + branch — **verified against the repository, never against
 another document**. Full audit evidence:
 [SPOTME-REPO-AUDIT-2026-08-03](../SPOTME-REPO-AUDIT-2026-08-03.md).
 
-> Verified 2026-08-03 against `master` `9147485`
-> (`Merge pull request #78` — G8 crypto train AND Platform Phase 1 (#72–#78)
-> landed DARK) and the live open-PR list.
+> Verified 2026-08-04 against `master` after landing the Platform Phase 2 chain
+> (`Merge PR #80`…`#85` — Smart Nearby Discovery Map foundation landed **DARK**:
+> `DiscoveryModule` NOT imported by `AppModule`, both crypto flags false, no
+> route, no flag flip, no deploy). Prior baseline was `9147485`
+> (`Merge pull request #78` — Platform Phase 1). Landing SHAs in the rows below.
 > *Implemented (Merged)* is on master and runs. *Implemented (Draft PR)* is
 > built but lives only on a branch behind an open, unmerged PR — usually dark —
 > and is **not** in the product.
@@ -61,12 +63,12 @@ another document**. Full audit evidence:
 | **Platform Phase 1F** — `web-next` React strangler beachhead (inert; outside the Vercel root; isolation-fenced) | Implemented (Merged — DARK) | **PR #77**, merge `f59d0ec`; `spotme/web-next` |
 | **Platform Phase 1G** — storage characterization tests + observability baseline (all legs no-op without env; redaction-fenced) | Implemented (Merged — DARK) | **PR #78**, merge `9147485`; `backend/src/observability/`, `test/storage-characterization.spec.ts` — `ObservabilityModule` NOT imported |
 | Engineering Handbook (this document set) | Implemented (Draft PR **#62**, stack #63/#64/#65) | `docs/engineering-handbook-v1` → `docs/discovery-platform-architecture` |
-| **Platform Phase 2A** — Discovery contracts v1 (`@spotme/contracts` discovery types, branded `CoarsePublicLocation`, compile-time negative tests) + programme doc + D9/D10 recorded + DPAS ch. 14 threat model | Implemented (Draft PR — DARK) | **PR #80**; `packages/contracts/src/discovery.ts`, `docs/architecture/discovery-platform/14-PRIVACY-ABUSE-THREAT-MODEL.md` |
-| **Platform Phase 2B** — dark `DiscoveryModule` (policy/errors/ranking/service/controller), PostGIS models + hand-written migration, people query engine on real PostGIS | Implemented (Draft PR — DARK) | **PR #81**; `backend/src/discovery/`, migration `20260803190000_discovery_postgis` — `DiscoveryModule` NOT imported by `AppModule` |
-| **Platform Phase 2C** — SearchPort + zero-dependency Typesense adapter (timeout/breaker/ceiling/exact-handle pin; live typo/prefix verification) + place/directions ports with deterministic adapters | Implemented (Draft PR — DARK) | **PR #82**; `backend/src/discovery/search/`, `backend/src/discovery/places/` — unconfigured by default, no credentials exist |
-| **Platform Phase 2D** — deterministic intent router, closed-registry transparent ranking engine (safety hard gate), realtime contract (2 channel families, 60 s claims ≤4 channels, publish-time content guard, Disabled default) | Implemented (Draft PR — DARK) | **PR #83**; `backend/src/discovery/discovery.intent.ts`, `discovery.ranking.engine.ts`, `realtime/` |
-| **Platform Phase 2E** — web-next Discovery UI (pure prop-driven components, SVG map, 12-state banner) + framework-free application layer behind 5 ports, on-device coarsening boundary, privacy mutation battery | Implemented (Draft PR — DARK) | **PR #84**; `web-next/src/discovery/` — NOT deployed, fixture ports only |
-| **Platform Phase 2F** — dark integration fences (13 assertions incl. build-artifact scan), performance benchmarks (1M profiles achieved, PostGIS + Typesense), dark instrumentation (closed metric registry, redacted correlation logging), DPAS ch. 15/16 + doc set | Implemented (Draft PR — DARK) | **PR #85**; `backend/test/discovery-dark-fences.spec.ts`, `backend/test/discovery-benchmark.e2e-spec.ts`, `backend/src/discovery/discovery.observability.ts` |
+| **Platform Phase 2A** — Discovery contracts v1 (branded `CoarsePublicLocation`, compile-time negative tests) + programme doc + DPAS ch. 14 threat model | **Implemented (Merged — DARK)** | **PR #80**, merge `093a598`; `packages/contracts/src/discovery.ts`, `docs/architecture/discovery-platform/14-PRIVACY-ABUSE-THREAT-MODEL.md` |
+| **Platform Phase 2B** — dark `DiscoveryModule` (policy/errors/ranking/service/controller), PostGIS models + hand-written migration, people query engine on real PostGIS | **Implemented (Merged — DARK)** | **PR #81**, merge `0db5f81`; `backend/src/discovery/`, migration `20260803190000_discovery_postgis` — `DiscoveryModule` NOT imported by `AppModule` |
+| **Platform Phase 2C** — SearchPort + zero-dependency Typesense adapter (timeout/breaker/ceiling/exact-handle pin; live typo/prefix verification) + place/directions ports | **Implemented (Merged — DARK)** | **PR #82**, merge `69db179`; `backend/src/discovery/search/`, `backend/src/discovery/places/` — unconfigured by default, no credentials exist |
+| **Platform Phase 2D** — deterministic intent router, closed-registry transparent ranking engine (safety hard gate), realtime contract | **Implemented (Merged — DARK)** | **PR #83**, merge `ac2db6b`; `backend/src/discovery/discovery.intent.ts`, `discovery.ranking.engine.ts`, `realtime/` |
+| **Platform Phase 2E** — web-next Discovery UI (pure prop-driven components, SVG map, 12-state banner) + framework-free application layer behind 5 ports, on-device coarsening boundary, privacy mutation battery | **Implemented (Merged — DARK)** | **PR #84**, merge `bb6f550`; `web-next/src/discovery/` — NOT deployed, fixture ports only |
+| **Platform Phase 2F** — dark integration fences (13 assertions incl. build-artifact scan), performance benchmarks (1M profiles achieved, PostGIS + Typesense), dark instrumentation (closed metric registry, redacted correlation logging), DPAS ch. 15/16/17 + doc set + 12-lens adversarial-review repairs | **Implemented (Merged — DARK)** | **PR #85**, merge `ce5a605`; `backend/test/discovery-dark-fences.spec.ts`, `backend/test/discovery-benchmark.e2e-spec.ts`, `backend/src/discovery/discovery.observability.ts`, `docs/architecture/discovery-platform/17-ADVERSARIAL-REVIEW-PHASE-2.md` |
 
 ## Platform Phase 1 — landed decisions (2026-08-03, delegated approval)
 
