@@ -1,9 +1,11 @@
 # ADR-028 — Nearby Moments: data & privacy model
 
-**Status: PROPOSED — owner review of the Phase 5A PR is the approval gate**
-(per the Phase 5 mission's ADR note; this document satisfies the handbook's
-"data/privacy-model ADR required before code" obligation for Nearby Moments).
-**Date:** 2026-08-04 · **Relates to:** ADR-018/019/024 (coarse location),
+**Status: ACCEPTED — accepted 2026-08-04 under the owner-delegated Phase 5
+review-and-merge authority** (the Phase 5 landing mission explicitly delegates
+accepting ADR-028 as the Nearby Moments data/privacy decision; this document
+satisfies the handbook's "data/privacy-model ADR required before code"
+obligation for Nearby Moments). Acceptance records the decision only — nothing
+is activated by acceptance. **Date:** 2026-08-04 · **Relates to:** ADR-018/019/024 (coarse location),
 ADR-021 (product ecosystem), ADR-022 (execution sequence), ADR-026 (realtime
 split-plane), Phase 5 corrections M1–M9.
 
