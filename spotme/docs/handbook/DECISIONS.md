@@ -231,6 +231,42 @@ reopen the decision.
   added to any schema, index, contract, or UI (mission amendment A3). The
   Phase 2 filter sheet is distance band, category, and open-now only.
 
+## Owner decisions recorded — 2026-08-04 (launch integrations: tiles · analytics · bot protection)
+
+The owner's launch-integrations mission recorded three technology decisions,
+each with a short ADR (in the part's own draft PR) and a dark, additive
+foundation. **Nothing merged; nothing activated.** Full evidence:
+`../reports/launch-integrations.md`.
+
+1. **Map tiles = MapLibre GL JS + Protomaps-schema PMTiles, self-hosted on the
+   existing R2 bucket** (**ADR-030**, PR **#117** `feat/map-tiles-selfhosted`).
+   The Google key remains licensed ONLY for AI-Map data (Places, reviews,
+   directions) — never tiles; fence-tested in source and in the built
+   artifact. Env name: `TILES_URL` (build-time; unset = map structurally
+   inert). Owner runbook for the India extract:
+   `web-next/scripts/build-tiles.md`.
+2. **Product analytics = PostHog** (**ADR-031**, PR **#118**
+   `feat/analytics-posthog`). Provider-neutral `AnalyticsPort` in contracts;
+   CLOSED event vocabulary (screen_view, signup_step, session_start,
+   feature_used{name}, error_shown); privacy laws compile-time-negative- and
+   runtime-fence-tested (no coordinates, cell ids, content, query text,
+   age/sex; opaque user id only). NOOP default; enabled ⇔ compile-time flag
+   AND `POSTHOG_KEY` present (`POSTHOG_HOST` default
+   `https://us.i.posthog.com` — owner is on US Cloud). Wave 1 brief:
+   `../15-ANALYTICS-WAVE-1.md` (analytics PR).
+3. **Bot protection = Cloudflare Turnstile on the auth surfaces** (**ADR-032**,
+   PR **#119** `feat/auth-turnstile`). Backend gate on signup/guest/OTP:
+   structurally bypassed while `TURNSTILE_SECRET_KEY` is absent, timeout-safe
+   and FAIL-OPEN on Turnstile outage (logged warning), fail-closed on
+   verdicts. Invisible client widget behind `TURNSTILE_SITE_KEY` presence;
+   a11y fallback documented. Activation ordering: site key into the web build
+   BEFORE (or with) the server secret.
+
+Retained by the owner (NOT done by this mission): activation/flags ·
+deployment · spend beyond free tiers · adding/editing Railway variables ·
+any credential value (env NAMES only, in `backend/.env.example` and the
+env-name matrix `../16-ENV-NAME-MATRIX.md`).
+
 ## Owner delegation — 2026-08-04 (Phase 2 landing + Phase 3B–3E dark build)
 
 The owner delegated engineering authority to **land the verified Platform

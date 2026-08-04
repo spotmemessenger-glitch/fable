@@ -66,6 +66,20 @@ recorded in `handbook/DECISIONS.md`). Acceptance wires nothing in.
 |---|---|---|
 | [028](028-nearby-moments-data-privacy-model.md) | Nearby Moments — data & privacy model (four-tier visibility, coarse-only opt-in location, EXIF-strip-before-persistence, no engagement telemetry, retention/cascade) | Accepted (2026-08-04, delegated Phase 5 review authority) |
 
+### Launch integrations (030–032)
+
+Recorded by the 2026-08-04 launch-integrations mission (owner decisions:
+tiles · analytics · bot protection). **The ADR files ride in the mission's
+three draft PRs** — #117 / #118 / #119, one per foundation, all dark — and
+land on master when those PRs merge. (029 is reserved by the open camera
+Stage 1 PR #109.)
+
+| ADR | Title | Status |
+|---|---|---|
+| [030](030-map-tiles-selfhosted-pmtiles.md) | Map tiles — MapLibre GL + self-hosted Protomaps PMTiles on R2; `TILES_URL`; Google licensed for AI-Map data only, never tiles (PR #117) | Accepted |
+| [031](031-product-analytics-posthog.md) | Product analytics — PostHog behind a closed-vocabulary AnalyticsPort; flag+key gated; privacy laws fence-tested (PR #118) | Accepted |
+| [032](032-bot-protection-turnstile.md) | Bot protection — Cloudflare Turnstile on signup/OTP; structural bypass without key, fail-open on outage (PR #119) | Accepted |
+
 ## Format
 
 Each ADR: **Status**, **Context**, **Decision**, **Consequences**, **Evidence**.
