@@ -940,3 +940,32 @@ model EventSearchProjection {
 
   @@index([category, startAt])
 }
+
+/// ─────────────────────────────────────────────────────────────────────────
+/// Nearby Moments — media assets (Platform Phase 5B) — DARK. MediaModule is NOT
+/// imported by AppModule. Only METADATA-STRIPPED bytes are ever persisted
+/// (exif-strip boundary); originals never touch storage. Content-hash dedup;
+/// refCount-driven deletion cascade (5C moments hold the references).
+/// ─────────────────────────────────────────────────────────────────────────
+model MomentMediaAsset {
+  id           String    @id @default(cuid())
+  /// image | video
+  kind         String
+  mimeType     String
+  sizeBytes    Int       @default(0)
+  /// sha256 of the STRIPPED bytes — dedup key.
+  contentHash  String    @unique
+  /// Object key on the Phase 1 storage seam (IStorageAdapter).
+  storageKey   String
+  thumbnailKey String?
+  width        Int?
+  height       Int?
+  durationMs   Int?
+  /// References held by moments/stories; asset deletes when this hits zero.
+  refCount     Int       @default(0)
+  /// INVARIANT: true always — only stripped bytes are persisted.
+  exifStripped Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+  /// Story retention stamp (24h [PROPOSED]); null for regular post media.
+  expiresAt    DateTime?
+}
