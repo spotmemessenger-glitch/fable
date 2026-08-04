@@ -61,9 +61,25 @@ the category allow-list are config seams with documented defaults, pending A5.
 
 ## Build record
 
-| Group | PR | State | Evidence |
-|---|---|---|---|
-| 4A | #92 | Draft PR — DARK | `events.ts` v1 + negative/usage compile-time fences + threat model; contracts typecheck + build + boundary fence 6/6 |
-| 4B | #93 | Draft PR — DARK | dark `EventsModule` + 3 PostGIS tables + normalize/time/dedup/safety + provider port (fixture/unavailable) + keyset browse; pure-logic specs (30) + real-PostGIS e2e (7); migration clean + upgraded; backend suite 342 |
-| 4C | #94 | Draft PR — DARK | closed-registry ranking (popularity tie-break only, unknown omitted) + inert web-next surface; ranking spec (8) + web-next controller/ui/mutation (16); web-next 67 + fence 6/6 |
-| 4D | #95 | Draft PR — DARK | dark fences (11) + closed metrics registry (observability spec) + benchmark (50k achieved) + runbooks + activation checklist + docs |
+| Group | PR | State | Merge SHA | Evidence |
+|---|---|---|---|---|
+| 4A | #92 | **Merged — DARK** | `b8f0372` | `events.ts` v1 + negative/usage compile-time fences + threat model; contracts typecheck + build + boundary fence 6/6 |
+| 4B | #93 | **Merged — DARK** | `2e76944` | dark `EventsModule` + 3 PostGIS tables + normalize/time/dedup/safety + provider port (fixture/unavailable) + keyset browse; pure-logic specs + real-PostGIS e2e (8, incl. KEYSET-NULL); migration clean + upgraded |
+| 4C | #94 | **Merged — DARK** | `c236044` | closed-registry ranking (popularity tie-break only, unknown omitted) + inert web-next surface; ranking spec (8) + web-next controller/ui/mutation (16); web-next 67 + fence 6/6 |
+| 4D | #95 | **Merged — DARK** | `5949e4f` | dark fences (11) + closed metrics registry (observability spec) + benchmark (50k achieved) + runbooks + activation checklist + docs |
+
+## Landing (2026-08-04, delegated approval)
+
+The Phase 4 chain (4A→4D) landed on `master` via a four-commit `--no-ff` merge
+train (`master` `1f92b25` → `5949e4f`), under the recorded 2026-08-04 owner
+delegation of engineering merge approval. Each merge was conflict-free (additive
+only) and re-verified crypto flags false and the affected suites. PRs #92–#95
+closed as merged via the base-advance precedent (GitHub retarget refused with the
+usual 422 "no new commits"). Post-landing validation on `5949e4f`: full backend
+(367) + legacy web (1017) + contracts + web-next (67) green; crypto / discovery /
+exchange / events dark fences green (34); environment-free boot leaves all dark
+routes (events/discovery/exchange) 404 while real routes stay live; secret scan
+clean; `EventsModule` unimported; crypto flags false; all seven protected heads
+byte-identical. **Everything landed DARK** — no activation, no wiring, no flag
+flip. Activation (A5 PRD ratification, provider integration, the one-line
+`AppModule` import + privacy re-review + rollback drill) stays owner-retained.
