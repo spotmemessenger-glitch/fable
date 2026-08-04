@@ -47,6 +47,34 @@ export class PrismaMomentsRepository implements MomentRepositoryPort {
     return row ? this.toRow(row as never) : null;
   }
 
+  /** Direct-by-id access with the FULL tier + block + moderation gate in SQL
+   *  (review PRIVATE-INTERACT). The author always sees their own live post. */
+  async findViewable(viewerId: string, id: string): Promise<MomentRow | null> {
+    const rows = await this.prisma.$queryRaw<Array<Record<string, unknown>>>(Prisma.sql`
+      SELECT ${Prisma.raw(MOMENT_SELECT)}
+      FROM "Moment" m
+      WHERE m."id" = ${id}
+        AND m."deletedAt" IS NULL
+        AND (
+          m."authorId" = ${viewerId}
+          OR (
+            m."moderationState" <> 'removed'
+            AND NOT EXISTS (
+              SELECT 1 FROM "MomentBlock" b
+              WHERE (b."blockerId" = ${viewerId} AND b."blockedId" = m."authorId")
+                 OR (b."blockerId" = m."authorId" AND b."blockedId" = ${viewerId}))
+            AND (
+              m."visibility" IN ('nearby', 'public')
+              OR (m."visibility" = 'friends'
+                  AND EXISTS (SELECT 1 FROM "MomentFollow" f WHERE f."followerId" = ${viewerId} AND f."targetId" = m."authorId"))
+            )
+          )
+        )
+      LIMIT 1
+    `);
+    return rows.length ? this.toRow(rows[0] as never) : null;
+  }
+
   async deleteOwn(authorId: string, id: string, expectedVersion: number): Promise<boolean> {
     const res = await this.prisma.moment.updateMany({
       where: { id, authorId, versionSeq: expectedVersion, deletedAt: null },
