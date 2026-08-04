@@ -43,4 +43,8 @@ deletions.
 
 | Group | PR | State | Evidence |
 |---|---|---|---|
-| 5A | — | Draft PR — DARK | `moments.ts` v1 + negative/usage compile-time fences + ADR-028 (Proposed) + M6 threat model; contracts typecheck + build + boundary fence 6/6 |
+| 5A | #97 | Draft PR — DARK | `moments.ts` v1 + negative/usage compile-time fences + ADR-028 (Proposed) + M6 threat model; contracts typecheck + build + boundary fence 6/6 |
+| 5B | #98 | Draft PR — DARK | media ports on the storage seam + EXIF strip proven + M8 queue contracts (inert) + dedup/cascade; moment-media spec 10/10; migration clean+upgraded |
+| 5C | #99 | Draft PR — DARK | MomentsModule (unimported): M5 feeds in SQL + M2 frozen ranking + M3 stories + M4 social + moderation machine; policy/ranking/e2e 25 green; migration clean+upgraded |
+| 5D | #100 | Draft PR — DARK | inert web-next surface: two-step location attach, untrusted URLs, closed reactions, privacy-mutation battery; web-next 84 + fence 6/6 |
+| 5E | #101 | Draft PR — DARK | dark fences (12) + M9 battery + closed metrics + benchmark (100k achieved, linear-growth flag) + runbooks + activation checklist |
