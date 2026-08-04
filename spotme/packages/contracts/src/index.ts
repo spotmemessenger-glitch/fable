@@ -119,6 +119,39 @@ export type {
   MomentModerationEventPublic,
 } from './moments.ts';
 
+// Platform Phase 6 — versioned Assistant contracts (DARK).
+export { ASSISTANT_CONTRACTS_VERSION } from './assistant.ts';
+export type {
+  AssistantContractsVersion,
+  NonEmptyArray,
+  EvidenceRecordId,
+  EvidenceLicenseClass,
+  FreshnessState,
+  EvidenceCategory,
+  CurrentStateCategory,
+  EvidencePermittedUse,
+  EvidenceRecord,
+  ClaimEvidenceStatus,
+  ConfidenceLevel,
+  ClaimConfidence,
+  CitedClaim,
+  CitedSummary,
+  AssistantDomain,
+  DomainAvailability,
+  DomainDarknessRegistry,
+  VoiceSeamRef,
+  AssistantQuery,
+  SensitiveQueryCategory,
+  AssistantAnswer,
+  ReviewFacetState,
+  ReviewFacet,
+  ReviewIntelligence,
+  RouteOrigin,
+  RouteLeg,
+  StraightLineEstimate,
+  RouteAdvice,
+} from './assistant.ts';
+
 export { DISCOVERY_CONTRACTS_VERSION } from './discovery.ts';
 export type {
   DiscoveryContractsVersion,
