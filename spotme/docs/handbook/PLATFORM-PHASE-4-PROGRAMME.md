@@ -61,6 +61,9 @@ the category allow-list are config seams with documented defaults, pending A5.
 
 ## Build record
 
-| Group | Branch | State | Evidence |
+| Group | PR | State | Evidence |
 |---|---|---|---|
-| 4A | `feat/platform-phase-4a-events-contracts` | Draft PR — DARK | `events.ts` v1 + negative/usage compile-time fences + threat model; contracts typecheck + build + boundary fence 6/6 |
+| 4A | #92 | Draft PR — DARK | `events.ts` v1 + negative/usage compile-time fences + threat model; contracts typecheck + build + boundary fence 6/6 |
+| 4B | #93 | Draft PR — DARK | dark `EventsModule` + 3 PostGIS tables + normalize/time/dedup/safety + provider port (fixture/unavailable) + keyset browse; pure-logic specs (30) + real-PostGIS e2e (7); migration clean + upgraded; backend suite 342 |
+| 4C | #94 | Draft PR — DARK | closed-registry ranking (popularity tie-break only, unknown omitted) + inert web-next surface; ranking spec (8) + web-next controller/ui/mutation (16); web-next 67 + fence 6/6 |
+| 4D | #95 | Draft PR — DARK | dark fences (11) + closed metrics registry (observability spec) + benchmark (50k achieved) + runbooks + activation checklist + docs |
