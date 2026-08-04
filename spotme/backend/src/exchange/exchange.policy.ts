@@ -37,6 +37,8 @@ const INPUT_KEYS = new Set([
 ]);
 const ORIGIN_KEYS = new Set(['lat', 'lon', 'cell']);
 const PRECISE_SHAPE_MARKERS = ['accuracy', 'altitude', 'altitudeAccuracy', 'heading', 'speed', 'timestamp', 'coords', 'latitude', 'longitude'];
+/** A precise coordinate / coordinate-pair shape (for refusing a crafted cell). */
+const COORDINATE_SHAPE = /-?\d{1,3}\.\d{3,}\s*,\s*-?\d{1,3}\.\d{3,}|-?\d{1,3}\.\d{4,}/;
 const KINDS = new Set(['need', 'offer', 'service']);
 const BUDGET = new Set(['low', 'medium', 'high']);
 const VISIBILITY = new Set(['hidden', 'discoverable']);
@@ -157,11 +159,22 @@ export function validateIntentInput(
   const lat = origin.lat, lon = origin.lon;
   if (typeof lat !== 'number' || typeof lon !== 'number' || !Number.isFinite(lat) || !Number.isFinite(lon)) throw bad('origin lat/lon must be finite', 'send the coarse origin');
   if (lat < -90 || lat > 90 || lon < -180 || lon > 180) throw bad('origin out of range', 'send WGS84 coordinates');
-  if ('cell' in origin && typeof origin.cell !== 'string') throw bad('origin.cell must be a string', 'omit or send a coarse cell');
   const q = 10 ** policy.coarseGridDecimals;
   const coarseLat = Math.round(lat * q) / q;
   const coarseLon = Math.round(lon * q) / q;
-  const coarseCell = typeof origin.cell === 'string' && origin.cell ? origin.cell : `g${coarseLat.toFixed(policy.coarseGridDecimals)}:${coarseLon.toFixed(policy.coarseGridDecimals)}`;
+  // The cell is ALWAYS server-derived from the coarsened point — a client
+  // `origin.cell` is NEVER trusted (review CELL-BYPASS). Trusting it would let
+  // a precise coordinate ride the cell string into the DB, the public browse
+  // projection, and the search index despite lat/lon being re-quantized. A
+  // client-supplied cell (if any) must exactly match the derived form or it is
+  // refused; a precise-shaped cell is refused outright.
+  const derivedCell = `g${coarseLat.toFixed(policy.coarseGridDecimals)}:${coarseLon.toFixed(policy.coarseGridDecimals)}`;
+  if ('cell' in origin) {
+    if (typeof origin.cell !== 'string') throw bad('origin.cell must be a string', 'omit cell; it is derived server-side');
+    if (COORDINATE_SHAPE.test(origin.cell)) throw preciseLocationRefused();
+    if (origin.cell && origin.cell !== derivedCell) throw bad('origin.cell does not match the coarse grid', 'omit cell; it is derived server-side from the coarse point');
+  }
+  const coarseCell = derivedCell;
 
   /* radius */
   let radiusKm: number = policy.defaultRadiusKm;
