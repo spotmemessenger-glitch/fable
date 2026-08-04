@@ -64,6 +64,11 @@ export const MOMENT_REPOSITORY_PORT = Symbol('MOMENT_REPOSITORY_PORT');
 export interface MomentRepositoryPort {
   createMoment(input: ValidatedMomentInput): Promise<MomentRow>;
   findById(id: string): Promise<MomentRow | null>;
+  /** Tier-aware direct-by-id access (review PRIVATE-INTERACT): returns the row
+   *  ONLY if the viewer may see it — private: author only; friends: author or
+   *  follower; nearby/public: any non-blocked viewer. Blocked (both
+   *  directions) and removed content returns null. ALL in SQL. */
+  findViewable(viewerId: string, id: string): Promise<MomentRow | null>;
   deleteOwn(authorId: string, id: string, expectedVersion: number): Promise<boolean>;
   /** Every exclusion IN SQL: private, blocked (both directions), removed,
    *  deleted, tier-inapplicable rows are never fetched. */

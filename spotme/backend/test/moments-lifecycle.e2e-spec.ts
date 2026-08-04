@@ -175,6 +175,28 @@ describe('moments backend (real PostGIS)', () => {
     await expect(s.moderate('moment', p.id, 'removed', 'visible', null)).rejects.toMatchObject({ code: 'ILLEGAL_TRANSITION' });
   });
 
+  it('PRIVATE-INTERACT: direct-by-id interaction runs the full tier + block gate (review fix)', async () => {
+    const s = svc();
+    // A stranger holding a PRIVATE post's id cannot comment/react/list — uniform NOT_FOUND.
+    const priv = await s.createMoment(friend, post({ visibility: 'private', location: undefined }));
+    await expect(s.addComment(stranger, priv.id, 'hi', null)).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    await expect(s.react(stranger, priv.id, 'like')).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    await expect(s.comments(stranger, priv.id)).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    // The author interacts with their own private post normally.
+    await expect(s.addComment(friend, priv.id, 'note to self', null)).resolves.toBeTruthy();
+
+    // A FRIENDS post: a follower may interact; a non-follower gets NOT_FOUND.
+    const fr = await s.createMoment(friend, post({ visibility: 'friends', location: undefined }));
+    await expect(s.react(stranger, fr.id, 'like')).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    await s.react(me, fr.id, 'like'); // `me` follows `friend` from the earlier test
+
+    // A PUBLIC post: fine for a stranger — but NOT for a blocked viewer.
+    const pub = await s.createMoment(friend, post({ visibility: 'public' }));
+    await s.react(stranger, pub.id, 'wow');
+    await s.block(friend, blocked);
+    await expect(s.react(blocked, pub.id, 'like')).rejects.toMatchObject({ code: 'NOT_FOUND' });
+  });
+
   it('keyset pagination is stable and non-overlapping across the nearby feed', async () => {
     const s = svc();
     for (let i = 0; i < 5; i++) await s.createMoment(stranger, post({ text: `pg-${i}` }));

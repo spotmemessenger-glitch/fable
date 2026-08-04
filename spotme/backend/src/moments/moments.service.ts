@@ -126,7 +126,9 @@ export class MomentsService {
 
   async addComment(authorId: string, momentId: string, text: unknown, parentId: string | null): Promise<{ id: string }> {
     const t = validateCommentText(text);
-    const moment = await this.repo.findById(momentId);
+    // Review PRIVATE-INTERACT: direct-by-id interaction runs the FULL tier +
+    // block gate; an unviewable moment reads as uniform NOT_FOUND.
+    const moment = await this.repo.findViewable(authorId, momentId);
     if (!moment) throw notFound();
     if (parentId) {
       const siblings = await this.repo.comments(momentId, authorId, 500);
@@ -142,6 +144,8 @@ export class MomentsService {
   }
 
   async comments(viewerId: string, momentId: string) {
+    const moment = await this.repo.findViewable(viewerId, momentId); // PRIVATE-INTERACT gate
+    if (!moment) throw notFound();
     return this.repo.comments(momentId, viewerId, 200);
   }
 
@@ -149,7 +153,7 @@ export class MomentsService {
 
   async react(userId: string, momentId: string, reaction: string): Promise<void> {
     assertReaction(reaction);
-    const moment = await this.repo.findById(momentId);
+    const moment = await this.repo.findViewable(userId, momentId); // PRIVATE-INTERACT gate
     if (!moment) throw notFound();
     await this.repo.setReaction(momentId, userId, reaction);
     await this.realtime.publish({ kind: 'reaction', targetUserId: moment.authorId, refId: momentId, actorId: userId });
