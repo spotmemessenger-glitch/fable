@@ -1,6 +1,8 @@
 # Platform Phase 6 — AI Interactive Map (dark foundation)
 
-> **Status: Implemented (Draft PR — DARK), in progress.** Phase 6 builds the
+> **Status: Implemented (Merged — DARK).** The Phase 6 chain #103–#107 landed
+> on `master` 2026-08-04 (`0470217`…`629a4f1`) under the delegated review-and-
+> merge authority. Phase 6 built the
 > dark foundation for the **AI Interactive Map assistant** — the fifth and
 > FINAL layer of the Discovery programme (X12): after it comes Infrastructure
 > & Controlled Activation, not another feature build. Executed under the
@@ -47,8 +49,39 @@ branches · gender/age (A3) · payments/ads · deletions.
 
 | Group | PR | State | Evidence |
 |---|---|---|---|
-| 6A | #103 | **Draft PR — DARK** | `assistant.ts` v1 + negative/usage compile-time fences + threat model (T-AS-1..12); contracts typecheck + build + boundary fence 6/6 |
-| 6B | #104 | **Draft PR — DARK** | dark AssistantModule (unimported): X7 ports, live darkness registry (all domains implemented-dark), deterministic intent + template composer, evidence mint boundary (license THROW / forbidden-field THROW / X3 category match / X4 freshness gate), QueryHandle + closed-code errors (X9), [PROPOSED] sensitive copy; 49 tests green (incl. F2-F4 regressions) |
-| 6C | #105 | **Draft PR — DARK** | X5 review-facet engine (closed facet registry, mixed keeps both sides, no rating key anywhere, honest insufficient-evidence rows) + route phase-1 (X6: origin/destination QUANTIZED to the public grid, F1-corrected from the exact-grid throw; attributed provider passthrough with CURRENT route-leg citations; labeled straight-line with no duration field; road-reports named as a future Moments seam, not built); 25 tests green (incl. F1/F4 regressions) |
-| 6D | #106 | **Draft PR — DARK** | inert web-next conversational surface: query bar + honestly-disabled VoicePort mic seam, cited answer cards (labels from normalized records, unresolved renders as explicit failure, stale disclosure), honest state cards, mixed-facet review panel (no stars), route cards (attributed passthrough / verbatim straight-line label / honest unavailable), digit-free sensitive notice, privacy-mutation battery incl. query-text scan; App unchanged |
-| 6E | — | In progress | X10 fence battery (16 assertions, tamper-checked non-vacuous) + citation-integrity invariants (frozen records, evidence-removal invalidation, no cross-envelope citation, no uncited source rides along) + closed metrics (query text can never be a label — refused by key name AND enum membership) + runbooks (provider outage, evidence integrity, privacy incident, dark rollback) + owner-gated activation checklist + docs 02/03; validates the full chain post-repair (backend 146, contracts fence 6/6, web-next 105) |
+| 6A | #103 | **Merged — DARK** (`0470217`) | `assistant.ts` v1 + negative/usage compile-time fences + threat model (T-AS-1..12); contracts typecheck + build + boundary fence 6/6 |
+| 6B | #104 | **Merged — DARK** (`75815a5`) | dark AssistantModule (unimported): X7 ports, live darkness registry (all domains implemented-dark), deterministic intent + template composer, evidence mint boundary (license THROW / forbidden-field THROW / X3 category match / X4 freshness gate), QueryHandle + closed-code errors (X9), [PROPOSED] sensitive copy; 49 tests green (incl. F2-F4 regressions) |
+| 6C | #105 | **Merged — DARK** (`9276c87`) | X5 review-facet engine (closed facet registry, mixed keeps both sides, no rating key anywhere, honest insufficient-evidence rows) + route phase-1 (X6: origin/destination QUANTIZED to the public grid, F1-corrected from the exact-grid throw; attributed provider passthrough with CURRENT route-leg citations; labeled straight-line with no duration field; road-reports named as a future Moments seam, not built); 25 tests green (incl. F1/F4 regressions) |
+| 6D | #106 | **Merged — DARK** (`5cacb17`) | inert web-next conversational surface: query bar + honestly-disabled VoicePort mic seam, cited answer cards (labels from normalized records, unresolved renders as explicit failure, stale disclosure), honest state cards, mixed-facet review panel (no stars), route cards (attributed passthrough / verbatim straight-line label / honest unavailable), digit-free sensitive notice, privacy-mutation battery incl. query-text scan; App unchanged |
+| 6E | #107 | **Merged — DARK** (`629a4f1`) | X10 fence battery (16 assertions, tamper-checked non-vacuous) + citation-integrity invariants (frozen records, evidence-removal invalidation, no cross-envelope citation, no uncited source rides along) + closed metrics (query text can never be a label — refused by key name AND enum membership) + runbooks (provider outage, evidence integrity, privacy incident, dark rollback) + owner-gated activation checklist + docs 02/03; validates the full chain post-repair (backend 146, contracts fence 6/6, web-next 105) |
+
+## Landing (2026-08-04, delegated approval)
+
+The Phase 6 chain (6A→6E) landed on `master` via a five-commit merge train
+(`master` `d0fc160` → `629a4f1`): #103 `0470217` → #104 `75815a5` → #105
+`9276c87` → #106 `5cacb17` → #107 `629a4f1`. Each PR was marked Ready for
+Review, verified against its expected head (the X11 repair descendants
+`bd7150c`/`1336b90`/`245ecbf`/`eae7cb9` were the documented heads),
+scope-inspected, retargeted to master stepwise, and merged with a merge
+commit — no squash/rebase/force-push; no GitHub refusal, so the base-advance
+precedent was not needed.
+
+**Post-landing verification on `629a4f1`:** backend 52/52 suites (517 tests;
+the only 5 skipped suites are the documented env-gated opt-ins — four
+`*-benchmark.e2e-spec.ts` + `s3-integration.spec.ts`); all five programme
+dark fences run by filename (`discovery|exchange|events|moments|assistant-
+dark-fences.spec.ts` + `assistant-citation-observability.spec.ts`, 72 green);
+legacy web 1017/1017 (incl. `signing-not-shipped`, `e2e-v3-not-shipped`,
+`ai-gateway-not-shipped`); contracts fence 6/6 + build; web-next 105 +
+isolation fence 6/6 + build. Environment-free startup (DB + JWT secret only):
+`/api/v1/{assistant,moments,discovery,exchange,events}/...` all **404**,
+real routes live (`/api/auth/guest` 400, `/api/users/lookup` 401), zero
+assistant mentions in the boot log. Secret scan over all 44 landed files
+clean. `AppModule` and `App.tsx` untouched; protected heads (#60 `3e2c709`,
+#61 `a6baf31`, camera `c7c8020`, multi-device `fc26de4`) byte-identical;
+crypto conditions false.
+
+Owner-retained, unchanged by landing: activation/flags · provider
+licensing/spend · LLM provider choice (through the AI Gateway, deterministic
+baseline as mandatory fallback) · sensitive-copy ratification · per-domain
+activation order.
