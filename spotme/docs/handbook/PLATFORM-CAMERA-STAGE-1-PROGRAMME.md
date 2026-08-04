@@ -51,8 +51,8 @@ WebXR engines · D6/A5/D5 policy · Wave 0 artifacts (paused, untouched).
 
 | Group | PR | State | Evidence |
 |---|---|---|---|
-| C1 | — | In progress | `camera.ts` v1 + negative/usage compile-time fences + ADR-029 + DECISIONS record + threat model (T-CA-1..8); contracts fence 6/6 + typecheck + build |
-| C2 | — | Pending | — |
+| C1 | #109 | **Draft PR — DARK** | `camera.ts` v1 + negative/usage compile-time fences + ADR-029 + DECISIONS record + threat model (T-CA-1..8); contracts fence 6/6 + typecheck + build |
+| C2 | — | In progress | CAM-1 core ported to web-next TS (`web-next/src/camera/`): imagemath/FFT/phase-correlation align (texture gate + trust floor, measured constants carried over)/Mertens fusion/night stacking/EIS-basic — formula-for-formula, golden suite migrated (25→32 assertions incl. sign-convention pin, √N law, motion rejection); engine facade with the release guarantee + closed refusals (fake HDR/slow-mo refused); recorder layer (negotiated mime, honest caps, timelapse LABELED realtime-recorder path — the CAM-1 WebCodecs/EBML offline path documented as a later port); Moments CameraPort adapter + UnavailableCameraPort dark default; 44 tests green |
 | C3 | — | Pending | — |
 | C4 | — | Pending | — |
 | C5 | — | Pending | — |
