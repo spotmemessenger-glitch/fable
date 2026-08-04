@@ -96,4 +96,4 @@ no cache exists for this module — there is nothing else to unwind.
   `OPENAI_API_KEY` read + `fetch` to the subtree fails 2 fences).
 - Citation invariants + metrics fence:
   `backend/test/assistant-citation-observability.spec.ts`.
-- Full assistant suite: 91 backend tests + 21 web-next tests green at 6E.
+- Full assistant suite post-repair: 99 backend tests + 21 web-next tests green at 6E (F1-F4 regressions included).

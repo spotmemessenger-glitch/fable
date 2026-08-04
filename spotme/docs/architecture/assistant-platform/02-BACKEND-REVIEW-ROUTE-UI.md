@@ -43,10 +43,20 @@ output (fence-scanned). Nothing derives from record counts.
 
 ## 3. Routes phase-1 (6C, `assistant.route.ts`, X6)
 
-Origins: the coarse public grid (3-decimal) or a user-chosen place-ref — a
-device-precision coordinate THROWS `precise-route-origin` (never silently
-rounded; coarsening is device-local). Provider legs are attributed
-passthrough citing CURRENT `route-leg` evidence; absent numbers stay null.
+Origins: the coarse public grid (3-decimal) or a user-chosen place-ref.
+**Corrected by review repair F1:** the boundary QUANTIZES coordinates to the
+public grid (the events venue-coarsening precedent) rather than throwing on
+off-grid values — exact-grid detection falsely rejected ~1.6% of legitimate
+grid values (float representation) and 100% of the client's own jittered
+`coarsenForPublic` output, while a raw device fix deviates at most 0.0005°
+from the grid (less than the jitter envelope), so server-side "precise"
+detection cannot exist numerically. The guarantee is structural: nothing
+finer than cell resolution reaches an adapter or estimate by construction;
+the primary X6 boundary remains the client's branded type + device-local
+coarsening. `precise-route-origin` stays reserved in the closed error
+registry for an activation-time origin-provenance model. Provider legs are
+attributed passthrough citing CURRENT `route-leg` evidence; absent numbers
+stay null.
 The fallback is the fixed-label `straight-line estimate` with distance only —
 the shape has no duration field. Community road-reports are NAMED as a future
 Moments content-type seam; nothing is built (owner-gated).

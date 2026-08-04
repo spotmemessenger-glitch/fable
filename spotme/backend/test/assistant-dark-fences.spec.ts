@@ -236,8 +236,10 @@ describe('assistant — X10 behavioral re-proofs at fence level', () => {
     })).toThrow(/unknown-facet/);
   });
 
-  it('no precise origin in route paths: device precision throws at the boundary', () => {
-    expect(() => validateRouteOrigin({ kind: 'coarse', origin: { lat: 12.9716123, lon: 77.5946098 } }))
-      .toThrow(/precise-route-origin/);
+  it('no precise origin in route paths: the boundary quantizes to the public grid (F1)', () => {
+    const checked = validateRouteOrigin({ kind: 'coarse', origin: { lat: 12.9716123, lon: 77.5946098 } });
+    if (checked.kind !== 'coarse') throw new Error('expected coarse');
+    expect(checked.origin).toEqual({ lat: 12.972, lon: 77.595 });
+    expect(JSON.stringify(checked)).not.toContain('9716123');
   });
 });
