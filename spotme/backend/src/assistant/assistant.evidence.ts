@@ -152,7 +152,9 @@ export function validateEnvelope(summary: CitedSummary): void {
  * Confidence from the X5 basis: source DIVERSITY (distinct sourceIds) +
  * worst-case FRESHNESS + citation DENSITY — never a bare record count.
  */
-export function confidenceFor(records: readonly EvidenceRecord[]): ClaimConfidence {
+export function confidenceFor(input: readonly EvidenceRecord[]): ClaimConfidence {
+  // Defence in depth vs density inflation (F3): the same record counted once.
+  const records = [...new Map(input.map((r) => [r.id, r])).values()];
   if (!records.length) throw new AssistantError('uncited-claim');
   const diversity = new Set(records.map((r) => r.sourceId)).size;
   const rank: Record<FreshnessState, number> = { current: 3, stale: 2, unknown: 1, superseded: 0 };

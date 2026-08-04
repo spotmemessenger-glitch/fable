@@ -180,3 +180,55 @@ describe('licensed-only review source fixture (X5 seam for 6C)', () => {
     }
   });
 });
+
+describe('X11 review repairs — regression battery (6B scope)', () => {
+  it('F3: duplicated citation ids cannot inflate the confidence density basis', async () => {
+    const bundle = await new FixturePlaceEvidence().gather({ domain: 'places' }, 'x');
+    const hoursRecord = bundle.records.find((r) => r.id === 'ev:place:cafe-azul:hours')!;
+    const inflated = {
+      records: bundle.records,
+      statements: [{ id: 'dup', category: 'place-hours' as const, templateKey: 'place-hours',
+        params: { name: 'Cafe Azul', hours: '09:00-17:00' },
+        citationIds: [hoursRecord.id, hoursRecord.id, hoursRecord.id, hoursRecord.id] }],
+    };
+    const summary = composer.compose(inflated)!;
+    const claim = summary.claims[0];
+    expect(claim.citationIds.length).toBe(1); // collapsed
+    expect(claim.confidence.basis.density).toBe(1);
+    expect(claim.confidence.level).toBe('medium'); // not inflated to anything
+  });
+
+  it('F4: current-state LANGUAGE in a non-current-state category yields NO claim', async () => {
+    const bundle = await new FixturePlaceEvidence().gather({ domain: 'places' }, 'x');
+    const nameRecord = bundle.records[0];
+    const sneaky = {
+      records: bundle.records,
+      statements: [{ id: 'lang', category: 'place-name' as const, templateKey: 'place-exists',
+        params: { name: 'Cafe Azul (open right now)', area: 'town' },
+        citationIds: [nameRecord.id] }],
+    };
+    expect(composer.compose(sneaky)).toBeNull(); // the only statement died
+  });
+
+  it('F4 control: the same language SURVIVES as a current-state claim on current evidence', async () => {
+    const bundle = await new FixturePlaceEvidence().gather({ domain: 'places' }, 'x');
+    const hoursRecord = bundle.records.find((r) => r.id === 'ev:place:cafe-azul:hours')!;
+    const legit = {
+      records: bundle.records,
+      statements: [{ id: 'ok', category: 'place-hours' as const, templateKey: 'place-hours',
+        params: { name: 'Cafe Azul', hours: '09:00-17:00 (open right now)' },
+        citationIds: [hoursRecord.id] }],
+    };
+    const summary = composer.compose(legit)!;
+    expect(summary.claims.length).toBe(1);
+  });
+
+  it('F2: a sensitive query keeps its category and notice on the unavailable path', async () => {
+    const svc = service({ registry: new FixtureDomainDarknessAdapter(['places']) });
+    // places is activated but bound to the UNAVAILABLE adapter here.
+    const res = await svc.answer('clinic for my symptoms please');
+    expect(res.answer).toEqual({ kind: 'unavailable', reason: 'provider-unconfigured' });
+    expect(res.sensitiveCategory).toBe('health');
+    expect(res.sensitiveNotice).toMatch(/healthcare professional/);
+  });
+});
