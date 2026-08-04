@@ -107,6 +107,34 @@ describe('exchange lifecycle engine (real PostGIS)', () => {
     }
   });
 
+  it('MODERATION: a restricted or pending-review intent is NOT discoverable', async () => {
+    const svc = service();
+    const restricted = await svc.createDraft(other, body({ idempotencyKey: `mod-${RUN}`, category: 'mod/test' }));
+    await svc.activate(other, restricted.id, restricted.version.seq);
+    // A moderator marks it restricted (state whose purpose is to limit reach).
+    await prisma.exchangeIntent.update({ where: { id: restricted.id }, data: { moderationState: 'restricted' } });
+    const clear = await svc.createDraft(other, body({ idempotencyKey: `mod2-${RUN}`, category: 'mod/test' }));
+    await svc.activate(other, clear.id, clear.version.seq);
+    const page = await svc.browse(me, { kind: 'offer', category: 'mod/test' });
+    const ids = page.results.map((r) => r.id);
+    expect(ids).toContain(clear.id);
+    expect(ids).not.toContain(restricted.id); // restricted is filtered in SQL
+  });
+
+  it('IDEMPOTENCY is race-safe: a concurrent duplicate key returns the winner, not a 500', async () => {
+    const svc = service();
+    const key = `race-${RUN}`;
+    // Fire two creates with the same key concurrently — the unique constraint
+    // rejects the loser with P2002, which the repository catches and replays.
+    const [a, b] = await Promise.all([
+      svc.createDraft(me, body({ idempotencyKey: key })),
+      svc.createDraft(me, body({ idempotencyKey: key })),
+    ]);
+    expect(a.id).toBe(b.id);
+    const count = await prisma.exchangeIntent.count({ where: { ownerId: me, idempotencyKey: key } });
+    expect(count).toBe(1);
+  });
+
   it('keyset pagination is stable and non-overlapping', async () => {
     const svc = service();
     // Seed 5 discoverable offers by `other`.

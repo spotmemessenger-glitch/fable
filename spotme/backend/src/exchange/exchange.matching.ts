@@ -4,18 +4,19 @@
  * Mirrors the discovery ranking discipline: a CLOSED signal registry (no
  * popularity / sponsored / engagement path — supplying one THROWS), safety as
  * a HARD GATE before scoring, unknown evidence contributes ZERO (never an
- * invented benefit), and proximity is weighted so it materially dominates —
- * a closer viable counterpart beats a popular-but-distant one. Every match
- * carries a full ExchangeMatchExplanation. Weights are [PROPOSED] config
- * defaults (PRD §4.4); the SHAPE is contract.
+ * invented benefit), and proximity is a first-class signal so a closer viable
+ * counterpart is materially favoured over a distant one. Every match carries a
+ * full ExchangeMatchExplanation. Weights are [PROPOSED] config defaults
+ * (PRD §4.4); the SHAPE is contract.
  */
 
 export const EXCHANGE_MATCH_SIGNALS = ['intentFit', 'proximity', 'availability', 'trust', 'freshness'] as const;
 export type ExchangeMatchSignal = (typeof EXCHANGE_MATCH_SIGNALS)[number];
 
-/** [PROPOSED] defaults (PRD §4.4). Proximity is weighted so its span dominates
- *  any single non-proximity signal — proximity-outranks-popularity is a
- *  validated invariant, and there is no popularity signal to begin with. */
+/** [PROPOSED] defaults (PRD §4.4): intentFit leads, proximity second, and no
+ *  popularity/sponsored signal exists at all — so proximity-outranks-popularity
+ *  holds vacuously (there is nothing for a distant-but-popular row to win on).
+ *  These are owner-owned config values (A5); only the SHAPE is fixed here. */
 export const EXCHANGE_MATCH_WEIGHTS: Record<ExchangeMatchSignal, number> = {
   intentFit: 0.35,
   proximity: 0.25,

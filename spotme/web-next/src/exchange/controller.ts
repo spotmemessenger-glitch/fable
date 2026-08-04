@@ -30,6 +30,7 @@ export type ExchangeState =
   | { kind: 'submitting' }
   | { kind: 'published'; intent: ExchangeIntentView }
   | { kind: 'browsing'; page: ExchangePage<ExchangeIntentView> }
+  | { kind: 'mine'; page: ExchangePage<ExchangeIntentView> }
   | { kind: 'matches'; intentId: string; page: ExchangePage<ExchangeMatchView> }
   | { kind: 'empty' }
   | { kind: 'unavailable' }
@@ -95,6 +96,17 @@ export class ExchangeController {
       if (page.state === 'unavailable') return this.set({ kind: 'unavailable' });
       if (page.results.length === 0) return this.set({ kind: 'empty' });
       this.set({ kind: 'browsing', page });
+    } catch (e) { this.set(this.normalizeError(e)); }
+  }
+
+  /** The principal's own intents (any status but removed). Server-scoped to the
+   *  authenticated owner; this phase reads the fixture adapter. */
+  async listMine(): Promise<void> {
+    try {
+      const page = await this.deps.api.listMine(null);
+      if (page.state === 'unavailable') return this.set({ kind: 'unavailable' });
+      if (page.results.length === 0) return this.set({ kind: 'empty' });
+      this.set({ kind: 'mine', page });
     } catch (e) { this.set(this.normalizeError(e)); }
   }
 

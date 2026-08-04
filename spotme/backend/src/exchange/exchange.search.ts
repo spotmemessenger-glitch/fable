@@ -56,7 +56,10 @@ export function toSearchProjection(row: ExchangeIntentRow, intentLabels: string[
   return {
     id: row.id,
     kind: row.kind as ExchangeSearchDoc['kind'],
-    category: row.category,
+    // Category is free-form per policy, so a coordinate could be embedded — strip
+    // it here too (review INDEX-CATEGORY). coarseCell is server-derived (3B), so
+    // it is coarse by construction.
+    category: stripCoordinateTokens(row.category),
     title: stripCoordinateTokens(row.title),
     normalizedText: stripCoordinateTokens(normalizeExchangeText([row.title, row.text, ...row.tags].join(' '))),
     intentLabels: intentLabels.map((l) => String(coordinateSafe(l))).filter((l) => l !== ''),

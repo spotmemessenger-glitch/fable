@@ -29,7 +29,9 @@ export function IntentComposer(props: {
     >
       <fieldset>
         <legend>What are you posting?</legend>
-        <div role="radiogroup" aria-label="Kind" className="ex-kinds">
+        {/* A toggle-button group (aria-pressed), NOT an ARIA radiogroup — a
+            radiogroup requires role=radio children with aria-checked. */}
+        <div role="group" aria-label="Kind" className="ex-kinds">
           {KINDS.map((k) => (
             <button
               key={k}
@@ -60,7 +62,7 @@ export function IntentComposer(props: {
       </label>
 
       <label>Approximate price (optional)
-        <input aria-label="Informational price" value={d.informationalPrice ?? ''} onChange={(e) => props.onChange({ informationalPrice: e.target.value })} />
+        <input aria-label="Informational price" aria-describedby="ex-price-note" value={d.informationalPrice ?? ''} onChange={(e) => props.onChange({ informationalPrice: e.target.value })} />
       </label>
       <p className="ex-note" id="ex-price-note">
         Informational only — SpotMe does not process payments. Arrange anything off-platform at your own discretion.
