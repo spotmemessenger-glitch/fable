@@ -107,6 +107,36 @@ describe('events lifecycle (real PostGIS)', () => {
     expect(await prisma.event.findUnique({ where: { id: `fixture:${RUN}-old` } })).toBeNull();
   });
 
+  it('keyset pagination reaches NULL-start (tbd/postponed) events across page boundaries (KEYSET-NULL)', async () => {
+    const now = Date.now();
+    // Two dated + two NULL-start (postponed) events in the same coarse area.
+    // Distinct titles so none dedup-merge — this test is about pagination.
+    const cands = [
+      cand({ providerEventId: `${RUN}-pg-d1`, title: 'Dated One', category: 'education', startUTC: now + 3_600_000, endUTC: now + 7_200_000 }),
+      cand({ providerEventId: `${RUN}-pg-d2`, title: 'Dated Two', category: 'education', startUTC: now + 1_800_000, endUTC: now + 5_400_000 }),
+      cand({ providerEventId: `${RUN}-pg-n1`, title: 'Tbd One', category: 'education', lifecycle: 'postponed', startUTC: undefined, endUTC: undefined }),
+      cand({ providerEventId: `${RUN}-pg-n2`, title: 'Tbd Two', category: 'education', lifecycle: 'postponed', startUTC: undefined, endUTC: undefined }),
+    ];
+    const svc = service([new FixtureEventProvider(cands)]);
+    await svc.ingestNearby({ origin, category: 'education' }, { now });
+    // Page with limit 1 so a boundary falls between a dated and a NULL-start row.
+    const repo = new PrismaEventsRepository(svcPrisma);
+    const seen = new Set<string>();
+    let cursor: string | null = null;
+    const { decodeCursor } = await import('../src/events/events.cursor');
+    for (let p = 0; p < 20; p++) {
+      const rows = await repo.findNearby({ origin, radiusKm: 25, category: 'education', now, limit: 1, cursor: cursor ? decodeCursor(cursor) : null });
+      if (rows.length === 0) break;
+      for (const r of rows) { expect(seen.has(r.id)).toBe(false); seen.add(r.id); }
+      // Rebuild the signed cursor exactly as the service does.
+      const { encodeCursor } = await import('../src/events/events.cursor');
+      const last = rows[rows.length - 1];
+      cursor = encodeCursor({ t: last.startUTC ?? 0, i: last.id, depth: p + 1 });
+    }
+    // All four — including both NULL-start events — are reachable.
+    for (const c of cands) expect(seen.has(`fixture:${c.providerEventId}`)).toBe(true);
+  });
+
   it('retention sweep deletes a stored event once its retention window passes', async () => {
     const now = Date.now();
     // A just-ended event is within retention → stored with a future expiresAt.
