@@ -62,6 +62,33 @@ export type {
   ExchangeContactCapability,
 } from './exchange.ts';
 
+// Platform Phase 4 — versioned Live Nearby Events contracts (DARK).
+export { EVENTS_CONTRACTS_VERSION } from './events.ts';
+export type {
+  EventsContractsVersion,
+  EventCategory,
+  EventSourceLifecycle,
+  EventState,
+  EventPopularity,
+  EventTime,
+  EventStateProvenance,
+  EventSource,
+  EventPublic,
+  EventRankingSignal,
+  EventRankingComponent,
+  EventRankingBreakdown,
+  RankedEventPublic,
+  EventDedupBasis,
+  EventDedupEvidence,
+  EventDedupDecision,
+  EventSearchState,
+  EventTimeWindow,
+  EventSearchQuery,
+  EventCursor,
+  EventPage,
+  EventCapabilities,
+} from './events.ts';
+
 export { DISCOVERY_CONTRACTS_VERSION } from './discovery.ts';
 export type {
   DiscoveryContractsVersion,
