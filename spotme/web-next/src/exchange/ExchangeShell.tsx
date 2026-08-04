@@ -3,6 +3,7 @@
  * components. Inert: fixtures only, no routing/auth/backend. NOT deployed.
  */
 
+import { useEffect } from 'react';
 import type { ComposeIntentInput } from './ports';
 import type { ExchangeController, ExchangeState } from './controller';
 import { CategoryPicker, IntentCard, IntentComposer, MatchCard, ModeTabs } from './components';
@@ -18,6 +19,14 @@ export function ExchangeShell(p: {
 }) {
   const c = p.controller;
   const busy = p.state.kind === 'submitting' || p.state.kind === 'locating';
+
+  // Entering the "mine" tab loads the principal's own posts (fixture-backed this
+  // phase) so the tab is never blank. Runs only on a genuine transition into the
+  // tab, not on every render.
+  useEffect(() => {
+    if (p.mode === 'mine' && p.state.kind !== 'mine') void c.listMine();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [p.mode]);
 
   return (
     <main className="ex-shell" aria-label="SpotMe Exchange">
@@ -57,6 +66,21 @@ export function ExchangeShell(p: {
             <IntentCard key={i.id} intent={i} onReport={() => void c.report(i.id, 'inappropriate')} onBlock={() => void c.block(i.id)} onMatches={() => void c.openMatches(i.id)} />
           ))}
         </>
+      )}
+
+      {p.mode === 'mine' && p.state.kind === 'mine' && (
+        <section aria-label="My posts">
+          {p.state.page.results.map((i) => (
+            <IntentCard
+              key={i.id}
+              intent={i}
+              onMatches={() => void c.openMatches(i.id)}
+              onPause={i.status === 'active' ? () => void c.transition(i.id, i.version.seq, 'paused').then(p.rerender) : undefined}
+              onFulfilled={i.status === 'active' || i.status === 'paused' ? () => void c.transition(i.id, i.version.seq, 'fulfilled').then(p.rerender) : undefined}
+              onWithdraw={() => void c.transition(i.id, i.version.seq, 'withdrawn').then(p.rerender)}
+            />
+          ))}
+        </section>
       )}
 
       {p.state.kind === 'matches' && (

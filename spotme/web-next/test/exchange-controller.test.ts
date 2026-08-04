@@ -77,6 +77,15 @@ describe('exchange controller', () => {
     expect(t.payload).toMatchObject({ id: 'fx-intent-1', version: 1, to: 'withdrawn' });
   });
 
+  it('listMine loads the principal\'s own posts into a mine state (tab is not blank)', async () => {
+    const { api, controller } = make();
+    await controller.listMine();
+    const s = controller.getState();
+    expect(s.kind).toBe('mine');
+    expect(s.kind === 'mine' && s.page.results.length).toBeGreaterThan(0);
+    expect(api.outbound.map((o) => JSON.parse(o)).some((o) => o.op === 'listMine')).toBe(true);
+  });
+
   it('browse maps unavailable and empty states honestly', async () => {
     const un = make(); un.api.unavailable = true;
     await un.controller.browse();
