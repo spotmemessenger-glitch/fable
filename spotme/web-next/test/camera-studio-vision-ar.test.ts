@@ -8,7 +8,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   createDocument, curveLut, deserializeDocument, evaluateDocument, pushOp,
-  serializeDocument, undo,
+  serializeDocument, unappliedOps, undo,
 } from '../src/camera/studio';
 import { createScanner, createTesseractRecognizer, noTextRecognizer } from '../src/camera/vision';
 import {
@@ -229,6 +229,7 @@ describe('face tracking', () => {
     const second = await tracker.track(scene64());
     if (first.state !== 'tracked' || second.state !== 'tracked') throw new Error('expected tracks');
     expect(first.faces[0].source).toBe('platform-shape-detection');
+    expect(first.faces[0].confidence).toBe(0); // F-CAM-2: never invented
     expect(first.faces[0].x).toBeCloseTo(0.25, 5);
     // EMA: the second frame's jump to 0.5 is smoothed toward the first.
     expect(second.faces[0].x).toBeGreaterThan(0.25);
@@ -245,7 +246,7 @@ describe('face tracking', () => {
 
   it('EMA smoother resets when the face count changes', () => {
     const smooth = createBoxSmoother(0.5);
-    const box = (x: number) => ({ x, y: 0, width: 0.1, height: 0.1, confidence: 0.5, source: 'platform-shape-detection' as const });
+    const box = (x: number) => ({ x, y: 0, width: 0.1, height: 0.1, confidence: 0, source: 'platform-shape-detection' as const });
     smooth([box(0.2)]);
     expect(smooth([])).toEqual([]); // count changed: passthrough, no stale ghosts
   });
@@ -297,5 +298,38 @@ describe('asset integrity loader (ADR-029 §4)', () => {
       expect(await loadVerifiedAsset('face-landmarker', deps('abc'), [{ ...record, path }]))
         .toEqual({ state: 'unavailable', reason: 'not-same-origin' });
     }
+  });
+});
+
+describe('Stage 1 review repairs — regression battery', () => {
+  it('F-CAM-1: future-granted consent is refused as stale — the clock cannot be gamed', () => {
+    expect(() => assertConsent(consent({ grantedAtUTC: 5000 }), 2000)).toThrow(/stale/);
+  });
+
+  it('F-CAM-3: vignette/sharpen/clarity/grain REALLY apply — no silent no-op op', () => {
+    const base = scene64();
+    for (const op of [
+      { kind: 'vignette' as const, value: 0.8 },
+      { kind: 'sharpen' as const, value: 0.8 },
+      { kind: 'clarity' as const, value: 0.8 },
+      { kind: 'grain' as const, value: 0.8 },
+    ]) {
+      const out = evaluateDocument(base, pushOp(createDocument('m'), op));
+      expect([...out.data].join(',')).not.toBe([...base.data].join(','));
+    }
+    // Vignette darkens corners more than the centre.
+    const vig = evaluateDocument(base, pushOp(createDocument('m'), { kind: 'vignette', value: 1 }));
+    const corner = vig.data[0] / Math.max(1, base.data[0]);
+    const centreIdx = (32 * 64 + 32) * 4;
+    const centre = vig.data[centreIdx] / Math.max(1, base.data[centreIdx]);
+    expect(corner).toBeLessThan(centre);
+  });
+
+  it('F-CAM-3: unappliedOps discloses exactly the stored-unrasterized straighten', () => {
+    let doc = createDocument('m');
+    doc = pushOp(doc, { kind: 'straighten', degrees: 2 });
+    doc = pushOp(doc, { kind: 'exposure', value: 0.2 });
+    expect(unappliedOps(doc)).toEqual(['straighten']);
+    expect(unappliedOps(createDocument('m'))).toEqual([]);
   });
 });

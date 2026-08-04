@@ -122,9 +122,7 @@ function applyScalar(image: RgbaImage, kind: string, value: number): RgbaImage {
       case 'tint': { g += 0.1 * v; break; }
       case 'highlights': { const w = clamp01((luma - 0.5) * 2); const k = 1 + v * w * 0.6; r *= k; g *= k; b *= k; break; }
       case 'shadows': { const w = clamp01((0.5 - luma) * 2); const k = 1 + v * w * 0.6; r *= k; g *= k; b *= k; break; }
-      case 'vignette': break; // handled spatially below
-      case 'sharpen': case 'clarity': case 'grain': break; // spatial ops: pass-through in the scalar path
-      default: break;
+      default: break; // vignette/sharpen/clarity/grain are SPATIAL — applied in their own kernels (F-CAM-3)
     }
     out[i] = clamp255(r * 255); out[i + 1] = clamp255(g * 255); out[i + 2] = clamp255(b * 255); out[i + 3] = src[i + 3];
   }
@@ -196,6 +194,88 @@ function applyLook(image: RgbaImage, look: LookId, strength: number): RgbaImage 
   return { data: out, width: image.width, height: image.height };
 }
 
+/* ---------------- spatial kernels (review repair F-CAM-3: a stored op
+ * that silently did nothing was a lie — these four now really apply) ----- */
+
+function boxBlurRgba(image: RgbaImage, radius: number): RgbaImage {
+  const { data, width, height } = image;
+  const out = new Uint8ClampedArray(data.length);
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      let r = 0; let g = 0; let b = 0; let n = 0;
+      for (let ky = -radius; ky <= radius; ky++) {
+        for (let kx = -radius; kx <= radius; kx++) {
+          const yy = y + ky; const xx = x + kx;
+          if (xx < 0 || xx >= width || yy < 0 || yy >= height) continue;
+          const s = (yy * width + xx) * 4;
+          r += data[s]; g += data[s + 1]; b += data[s + 2]; n++;
+        }
+      }
+      const d = (y * width + x) * 4;
+      out[d] = r / n; out[d + 1] = g / n; out[d + 2] = b / n; out[d + 3] = data[d + 3];
+    }
+  }
+  return { data: out, width, height };
+}
+
+/** Unsharp mask: out = src + amount·(src − blur). Sharpen uses a tight
+ *  radius; clarity the same mechanism at a wider radius, lower gain. */
+function applyUnsharp(image: RgbaImage, amount: number, radius: number, gain: number): RgbaImage {
+  const v = Math.max(-1, Math.min(1, amount)) * gain;
+  const blur = boxBlurRgba(image, radius);
+  const out = new Uint8ClampedArray(image.data.length);
+  const src = image.data;
+  for (let i = 0; i < src.length; i += 4) {
+    for (let c = 0; c < 3; c++) out[i + c] = clamp255(src[i + c] + v * (src[i + c] - blur.data[i + c]));
+    out[i + 3] = src[i + 3];
+  }
+  return { data: out, width: image.width, height: image.height };
+}
+
+/** Radial darkening toward the corners, strength 0..1. */
+function applyVignette(image: RgbaImage, value: number): RgbaImage {
+  const v = clamp01(Math.abs(value)) * 0.6;
+  const { data, width, height } = image;
+  const out = new Uint8ClampedArray(data.length);
+  const cx = (width - 1) / 2; const cy = (height - 1) / 2;
+  const maxDist = Math.hypot(cx, cy) || 1;
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const i = (y * width + x) * 4;
+      const fall = 1 - v * Math.pow(Math.hypot(x - cx, y - cy) / maxDist, 2);
+      out[i] = data[i] * fall; out[i + 1] = data[i + 1] * fall; out[i + 2] = data[i + 2] * fall; out[i + 3] = data[i + 3];
+    }
+  }
+  return { data: out, width, height };
+}
+
+/** Deterministic film grain — seeded PRNG, replayable (no ambient time). */
+function applyGrain(image: RgbaImage, value: number): RgbaImage {
+  const v = clamp01(Math.abs(value)) * 24;
+  let seed = 0x9e3779b9;
+  const rand = () => {
+    seed |= 0; seed = (seed + 0x6D2B79F5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+  const { data, width, height } = image;
+  const out = new Uint8ClampedArray(data.length);
+  for (let i = 0; i < data.length; i += 4) {
+    const n = (rand() - 0.5) * 2 * v;
+    out[i] = clamp255(data[i] + n); out[i + 1] = clamp255(data[i + 1] + n); out[i + 2] = clamp255(data[i + 2] + n);
+    out[i + 3] = data[i + 3];
+  }
+  return { data: out, width, height };
+}
+
+/** Ops the jsdom evaluator stores but does NOT rasterize — the honest
+ *  disclosure surface (F-CAM-3). Exactly ['straighten'] this stage: its
+ *  sub-degree resample is the Stage 2 GL path. */
+export function unappliedOps(doc: EditDocument): EditOp['kind'][] {
+  return [...new Set(doc.ops.filter((op) => op.kind === 'straighten').map((op) => op.kind))];
+}
+
 /** Evaluate a document against its base image — pure, in op order. */
 export function evaluateDocument(base: RgbaImage, doc: EditDocument): RgbaImage {
   let current: RgbaImage = { data: new Uint8ClampedArray(base.data), width: base.width, height: base.height };
@@ -204,8 +284,12 @@ export function evaluateDocument(base: RgbaImage, doc: EditDocument): RgbaImage 
       case 'curves': current = applyCurves(current, op.points); break;
       case 'crop': current = applyCrop(current, op.x, op.y, op.width, op.height); break;
       case 'rotate': current = applyRotate(current, op.quarterTurns); break;
-      case 'straighten': break; // spatial resample: Stage 2 (GL path) — the op is stored, honestly not rasterized in jsdom
+      case 'straighten': break; // stored, honestly not rasterized in jsdom — see unappliedOps()
       case 'look': current = applyLook(current, op.look, op.strength); break;
+      case 'vignette': current = applyVignette(current, op.value); break;
+      case 'sharpen': current = applyUnsharp(current, op.value, 1, 1.0); break;
+      case 'clarity': current = applyUnsharp(current, op.value, 3, 0.5); break;
+      case 'grain': current = applyGrain(current, op.value); break;
       default: current = applyScalar(current, op.kind, op.value); break;
     }
   }
