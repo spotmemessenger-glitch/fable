@@ -4,6 +4,9 @@ import { fileURLToPath } from 'node:url';
 
 export default defineConfig({
   plugins: [react()],
+  define: {
+    __TILES_URL__: JSON.stringify(process.env.TILES_URL ?? ''),
+  },
   resolve: {
     alias: {
       '@spotme/contracts': fileURLToPath(new URL('../packages/contracts/src/index.ts', import.meta.url)),
