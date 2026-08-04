@@ -1,6 +1,7 @@
-import { Module } from '@nestjs/common';
+import { MiddlewareConsumer, Module, NestModule, RequestMethod } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
+import { createTurnstileGate } from '../middleware/turnstile';
 import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
 import { UsernameController } from './username.controller';
@@ -29,4 +30,20 @@ import { UserJwtStrategy, EmployeeJwtStrategy } from './strategies/jwt.strategie
   ],
   exports: [AuthService],
 })
-export class AuthModule {}
+export class AuthModule implements NestModule {
+  /**
+   * Turnstile in front of the account-creation surface only (ADR-032):
+   * signup, guest signup, and both OTP legs. Structurally bypassed while
+   * TURNSTILE_SECRET_KEY is unset — the middleware next()s untouched, so
+   * nothing changes until the owner adds keys. Refresh and employee login
+   * are deliberately not challenged: both already require a credential.
+   */
+  configure(consumer: MiddlewareConsumer): void {
+    consumer.apply(createTurnstileGate()).forRoutes(
+      { path: 'auth/signup', method: RequestMethod.POST },
+      { path: 'auth/guest', method: RequestMethod.POST },
+      { path: 'auth/otp/request', method: RequestMethod.POST },
+      { path: 'auth/otp/verify', method: RequestMethod.POST },
+    );
+  }
+}

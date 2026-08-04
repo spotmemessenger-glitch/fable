@@ -23,6 +23,13 @@ export default defineConfig(({ command }) => {
     )
   }
   return {
+    // Turnstile site key (ADR-032) — env NAME only; value owner-set. Empty
+    // (the default everywhere today) keeps the widget code a no-op and adds
+    // no script tag: bot protection activates only when the owner creates the
+    // Turnstile site and sets BOTH keys (site key here, secret on the server).
+    define: {
+      __TURNSTILE_SITE_KEY__: JSON.stringify(process.env.TURNSTILE_SITE_KEY || '')
+    },
     // Vercel serves `dist/` as a static site — there is no server side to this
     // app at all. Peer discovery rides public infrastructure and messages go
     // directly between browsers.
