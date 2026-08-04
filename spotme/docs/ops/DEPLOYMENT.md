@@ -66,6 +66,23 @@ The Dockerfile is two-stage (`node:22-slim`). Order:
 > ```bash
 > npm run deploy      # = predeploy staging + railway up --detach
 > ```
+>
+> **CLI-deploy build-context finding (Wave 0).** `railway up` invoked from an
+> external agent container **uploads the git repository root**, and the service's
+> dashboard-configured root directory (`spotme/backend`) is **not applied to CLI
+> uploads** — so the build fails with `couldn't locate the dockerfile at path
+> Dockerfile in code archive`. This is why the Wave-0 deploy could not complete
+> from the agent environment. **Owner deploy path** (either works):
+> 1. **GitHub-integration deploy** — merge `feat/activation-wave-0` into the
+>    branch the `api` service watches (or point the service at the branch); the
+>    Railway GitHub builder applies the `spotme/backend` root directory correctly.
+> 2. **From your own checkout** with a Railway CLI whose service link resolves the
+>    root directory: `cd spotme/backend && npm run deploy`.
+>
+> The health gate is `spotme/backend/railway.json` → `healthcheckPath:/health`.
+> `/health` was verified to return `200` on the built `dist/` artifact (local
+> boot); if a deploy's `/health` gate ever fails, Railway safely **keeps the
+> current instance** (no outage) — no schema change means nothing to roll back.
 
 ---
 
