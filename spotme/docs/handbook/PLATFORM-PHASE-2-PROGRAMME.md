@@ -70,7 +70,7 @@ before continuing."
 | 2C | #82 (draft) | Pushed, green | 6 (Typesense SearchPort, live-verified) + 7 (place/directions ports) |
 | 2D | #83 (draft) | Pushed, green | 8 (intent + closed-registry ranking) + 9 (realtime contract) |
 | 2E | #84 (draft) | Pushed, green | 10 (Discovery UI) + 11 (client application layer + privacy mutation battery) |
-| 2F | draft PR from `feat/platform-phase-2f-fences-perf-ops-docs` | Pushed, green | 12 (dark fences) + 13 (benchmarks — 1M achieved) + 14 (instrumentation + runbooks) + 15 (docs/governance) + final validation |
+| 2F | #85 (draft) | Pushed, green | 12 (dark fences) + 13 (benchmarks — 1M achieved) + 14 (instrumentation + runbooks) + 15 (docs/governance) + final validation |
 
 Landing order (owner-retained): 2A → 2B → 2C → 2D → 2E → 2F, strictly in
 order, retargeting each next PR to master as its parent merges. Nothing in
