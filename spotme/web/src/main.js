@@ -147,15 +147,18 @@ export async function refreshFlaggedTabs () {
   let on = false
   try { on = await momentsAvailable() } catch { on = false }
   if (on) enabledFlags.add('moments'); else enabledFlags.delete('moments')
-  console.warn('SPOTME_TABDBG on=' + on + ' navEl=' + !!navEl + ' flags=' + [...enabledFlags].join('|'))
   if (!navEl) return
   const desired = navItems().map((i) => i.path).join(',')
   const current = [...navEl.querySelectorAll('.nv')].map((b) => b.dataset.path).join(',')
-  console.warn('SPOTME_TABDBG desired=' + desired + ' current=' + current)
   if (desired !== current) {
-    const fresh = buildNav()
-    navEl.replaceWith(fresh)
-    navEl = fresh
+    // buildNav() REASSIGNS the module-level navEl as a side effect, so the old
+    // element must be captured FIRST — otherwise `navEl.replaceWith(navEl)` is
+    // a no-op and the stale nav stays in the DOM while the fresh (correct) one
+    // is never inserted. That was the bug the runtime logs exposed: the
+    // reconcile "succeeded" against a detached node while the bar never moved.
+    const old = navEl
+    buildNav()
+    old.replaceWith(navEl)
     updateNav(ACTIVE_TAB[window.location.hash] || '#/chat')
   }
 }
