@@ -36,9 +36,29 @@ FROM node:22-slim
 # M3: ffmpeg/ffprobe are the {moment-media} transcode worker. Without them the
 # worker fails every job and a feed serves raw phone video (HEVC, trailing
 # moov) that Android Chrome often cannot play at all.
+#
+# iPhone media (normalize.ts) makes both of these HARD runtime requirements of
+# the UPLOAD path, not just of the background worker:
+#
+#   ffmpeg           — `.mov` → faststart MP4 with `-map_metadata -1`. This is
+#                      what removes the QuickTime GPS atom, and it runs BEFORE
+#                      the bytes are stored.
+#   libheif-examples — provides `heif-convert`, the HEIC → JPEG decode. It
+#                      pulls libheif1 + libde265 (the HEVC DECODER); no x265
+#                      encoder is needed, because the server only ever reads
+#                      HEIC and writes JPEG.
+#
+# Verified in this exact base image: ffmpeg 5.1.9, libheif 1.15.1, libde265
+# 1.0.11 — a GPS-tagged HEIC decodes and a GPS-tagged .mov remuxes.
+#
+# If either binary is missing, `ingest()` REFUSES the upload with
+# `transcode-unavailable` (HTTP 503) rather than storing an unnormalised
+# original — so a broken image degrades to "iPhone uploads rejected", never to
+# "iPhone uploads stored with their GPS coordinates".
 WORKDIR /app
 ENV NODE_ENV=production
-RUN apt-get update -y && apt-get install -y --no-install-recommends openssl ca-certificates ffmpeg \
+RUN apt-get update -y && apt-get install -y --no-install-recommends \
+      openssl ca-certificates ffmpeg libheif-examples \
   && rm -rf /var/lib/apt/lists/*
 COPY --from=build /app/dist ./dist
 COPY --from=build /app/node_modules ./node_modules
