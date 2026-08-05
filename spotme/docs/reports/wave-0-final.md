@@ -37,8 +37,8 @@ or declare parked).
 |---|---|---|---|---|
 | **R2 / storage** | — | ✅ **PASS** (after owner var fix) | PUT 200 ~1.93 s · GET 200 ~0.56 s · DELETE ~0.25 s | Real `S3StorageAdapter` port. **`STORAGE_PROVIDER=s3` in effect (no silent local fallback).** Full round-trip verified: presigned PUT → GET, **byte-integrity sha256 in==out ✅**, delete confirmed (post-delete GET `404`). EXIF sentinel **survived** the round trip — expected/correct: the port is a forbidden-to-inspect pass-through (never strips/transcodes); EXIF protection is client-side sealing, not storage. Wave 0 surfaced **three layered misconfigs**, all owner-corrected: `S3_ACCESS_KEY_ID` held a 64-char secret (needs the 32-char ID); `S3_BUCKET` held a wrong 32-char value, then the name with trailing whitespace — fixed to `spot-media-staging`. |
 | **Postgres / PostGIS** | PostgreSQL **16** / PostGIS **3.4** (`postgis/postgis:16-3.4`) | ✅ **Phase-1A gate = PASS** | migrate from zero clean | **Resolved:** original `postgres-ssl:18` could **not** enable PostGIS (`enable_postgis` failed → `P3009`) = Phase-1A BLOCKED on that image. A **new PostGIS service was provisioned** (owner-authorized) and `api` repointed to it. On the fresh DB, boot `prisma migrate deploy` applied **all 17 migrations from zero incl. `enable_postgis` + `discovery_postgis`** → *"All migrations have been successfully applied."* **ADDENDA #3 (ST_DWithin/GiST) CONFIRMED:** `discovery_postgis` created `geog geography(Point,4326)` + `CREATE INDEX … USING GIST (geog)` and applied cleanly — a GiST-on-geography index cannot build without the PostGIS GiST operator classes, so Discovery's radius-query dependency **functions on this image.** DB is brand-new → user-data check safe by construction (0 rows). *Disposition: default Railway PostgreSQL image = **BLOCKED**; resolved by provisioning a PostGIS-capable service.* Formal harness `--legs=postgres` numbers (explicit `ST_DWithin` planner proof + latencies) need in-network exec — see §7. |
-| **Dragonfly / Redis** | — | ⛔ **BLOCKED — endpoint unconfigured** | — | `REDIS_URL` is **not a valid URL** (len 100, no `:`/`@` — an unresolved reference/placeholder) and **no Dragonfly/Redis service exists** in the project. Live `/ready` confirms `redis: down`. The leg cannot connect. Owner action: provision Dragonfly (or a Redis) and set a valid `REDIS_URL`; then the wave0 BullMQ enqueue→process→ack leg runs. |
-| **Typesense** | — | ⛔ **BLOCKED — endpoint unconfigured** | — | `TYPESENSE_URL` is **not a valid URL** (len 36, no `:` — unresolved/placeholder) and **no Typesense service exists** in the project. The leg cannot connect. Owner action: provision/point Typesense with a valid `TYPESENSE_URL`/`TYPESENSE_API_KEY`; then the connectivity smoke runs. Benchmark = **INCOMPARABLE** regardless (see §3). |
+| **Dragonfly / Redis** | Dragonfly Cloud (external, Hyderabad) | ⛔ **BLOCKED — wrong `REDIS_URL` value** | — | Not a missing service — Dragonfly is an external cloud DB. But `REDIS_URL`'s **value is wrong**: shape is a 100-char key-like token with **no scheme, no `:`, no `@`, no host** — i.e. *not a `rediss://` connection string at all* (looks like a bare password/token was pasted). Not structurally repairable. Live `/ready` shows `redis: down`. **Owner action:** copy the full **connection URI** (`rediss://default:<pw>@<host>.dragonflydb.cloud:<port>`) from the Dragonfly Cloud dashboard into `REDIS_URL`. Then `/ready` confirms connectivity in-network; the enqueue→process→ack leg needs an in-network run (ssh/boot-runner). |
+| **Typesense** | Typesense Cloud **v30.2** (external, Hyderabad) | ✅ **PASS** (after structural fix) | health ~1.9 s · index 500 docs ~0.8 s · warm q p50/p95 ~269/273 ms (cross-region) | `TYPESENSE_URL` was **missing its scheme** (host-only) — structurally repaired by prepending `https://` (never-echo). Leg then connected to **Typesense Cloud v30.2**: health OK, 500-doc `wave0_smoke` create→index→query (50 warm, **0 errors**)→drop (cleaned up). Latencies are cross-region from the agent container (connectivity evidence, not cluster perf). Benchmark = **INCOMPARABLE** (§3): in-image smoke ≠ committed 20k harness; **v30.2 vs 27.1** major-version gap. `TYPESENSE_API_KEY` shape valid (32-char alphanumeric). |
 
 Note: the harness itself is verified — it compiles (`nest build` clean), enforces
 the designated-target gate, and executed end-to-end for the reachable (R2) leg.
@@ -143,14 +143,16 @@ agent-local test scaffolding was deleted.
    (`postgis/postgis:16-3.4`) + volume provisioned, `api` repointed, deployed;
    all 17 migrations applied from zero, Phase-1A gate **PASS**, `/health` `200`.
    Original `Postgres` untouched (fallback).
-3. **⚠️ PROVISION DRAGONFLY/REDIS.** `REDIS_URL` is not a valid endpoint and no
-   Redis/Dragonfly service exists (§2). Add a Dragonfly (or Redis) service and set
-   `REDIS_URL` to a valid connection string. Then the Redis leg can run.
-4. **⚠️ PROVISION/POINT TYPESENSE.** `TYPESENSE_URL` is not a valid endpoint and
-   no Typesense service exists (§2). Point `TYPESENSE_URL`/`TYPESENSE_API_KEY` at
-   a real Typesense (v30.x), then run the connectivity smoke and the **20k
-   `@spotme/search-bench`** benchmark in-network (`DEPLOYMENT.md §5`) for the
-   INCOMPARABLE-rule verdict.
+3. **⚠️ FIX `REDIS_URL` VALUE (Dragonfly Cloud).** The current value is a
+   100-char key/token, **not** a connection string. Copy the full **connection
+   URI** from the Dragonfly Cloud dashboard — `rediss://default:<pw>@<host>.dragonflydb.cloud:<port>`
+   — into `REDIS_URL` (owner-only; I won't reconstruct a credential). Then `/ready`
+   flips `redis` to `up`; the enqueue→process→ack leg runs in-network.
+4. ~~**Typesense endpoint**~~ ✅ **DONE** — `TYPESENSE_URL` was missing its scheme;
+   repaired (prepended `https://`). Leg re-run **PASS** against Typesense Cloud
+   **v30.2**. *Remaining:* run the committed **20k `@spotme/search-bench`**
+   benchmark in-network for the INCOMPARABLE-rule verdict (owner action;
+   `DEPLOYMENT.md §5`).
 5. **Formal `--legs=postgres` numbers (optional).** The gate + ST_DWithin/GiST
    capability are already proven (§2). For explicit runtime `ST_DWithin` planner
    proof + latencies, run the harness in-network — either via your own
@@ -176,10 +178,12 @@ agent-local test scaffolding was deleted.
   real user data (user-data safety satisfied by construction).
 - **Railway settings changed (all owner-authorized):** created service `postgis`
   (+ volume); on `postgis` set `POSTGRES_*`/`PGDATA`/`DATABASE_URL`; repointed
-  **`api.DATABASE_URL` → `${{postgis.DATABASE_URL}}`** (the single variable the
-  owner exempted); earlier, `api`'s deploy source/branch/root-directory (then
-  disconnected). No other service's variables or settings were touched; nothing
-  was deleted. R2 wrote only the wave0 smoke object, which was deleted.
+  **`api.DATABASE_URL` → `${{postgis.DATABASE_URL}}`**; structurally repaired
+  **`api.TYPESENSE_URL`** (prepended missing `https://` scheme — value never
+  echoed); earlier, `api`'s deploy source/branch/root-directory (then
+  disconnected). `REDIS_URL` was **not** touched (wrong value, owner to fix). No
+  other service's variables or settings were touched; nothing was deleted. R2
+  wrote only the wave0 smoke object, which was deleted.
 - **No credential value** was printed or persisted anywhere (output, logs,
   commits, PR, this report).
 - **Only mission-created / agent-local test resources were deleted.**
