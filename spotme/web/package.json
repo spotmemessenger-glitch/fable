@@ -8,7 +8,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "prebuild": "node -e \"const{cpSync,rmSync}=require('fs');rmSync('vendor/spotme-core/core',{recursive:true,force:true});cpSync('../core','vendor/spotme-core/core',{recursive:true});console.log('vendored ../core')\"",
+    "prebuild": "node -e \"const{cpSync,rmSync,existsSync}=require('fs');if(existsSync('../core')){rmSync('vendor/spotme-core/core',{recursive:true,force:true});cpSync('../core','vendor/spotme-core/core',{recursive:true});console.log('vendored ../core')}else{console.log('../core absent - using committed vendor copy')}\"",
     "lint": "eslint ."
   },
   "keywords": [],
