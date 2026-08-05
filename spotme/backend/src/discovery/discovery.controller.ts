@@ -7,12 +7,13 @@
  * owner-authorized activation change wires the module in (fence: C12).
  */
 
-import { Body, Controller, Get, Post, Put, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Post, Put, UseFilters, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { CurrentUser, AuthenticatedPrincipal } from '../common/decorators/current-user.decorator';
 import { DiscoveryService } from './discovery.service';
 import { DiscoveryError } from './discovery.errors';
 import { DomainGate } from '../flags/domain-gate.guard';
+import { DiscoveryErrorFilter } from './discovery-error.filter';
 
 /**
  * GUARD ORDER IS LOAD-BEARING (Wave 1C, C3):
@@ -25,6 +26,7 @@ import { DomainGate } from '../flags/domain-gate.guard';
  *      zero rows — activation is the Stage-A allowlist (C7), never this mount.
  */
 @UseGuards(JwtAuthGuard, DomainGate('discovery', { requireAdult: true }))
+@UseFilters(DiscoveryErrorFilter) // C6: 5xx on live Discovery routes → the discovery_5xx alert key
 @Controller('v2/discovery')
 export class DiscoveryController {
   constructor(private readonly discovery: DiscoveryService) {}
