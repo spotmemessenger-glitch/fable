@@ -1112,3 +1112,14 @@ model MomentModerationEvent {
 
   @@index([targetId, createdAt])
 }
+
+/// WAVE-1A R7 — the activation kill-switch registry. One row per dark domain
+/// (discovery, exchange, events, moments, assistant). MISSING ROW == DISABLED:
+/// the gate fails dark, so a domain that was never flipped on cannot answer.
+/// Flipping is ONE row UPDATE — no migration, no redeploy, no restart — and the
+/// gate's short cache makes rollback-to-dark propagate in seconds (R7 bar: <60s).
+model RuntimeFlag {
+  key       String   @id
+  enabled   Boolean  @default(false)
+  updatedAt DateTime @default(now()) @updatedAt
+}

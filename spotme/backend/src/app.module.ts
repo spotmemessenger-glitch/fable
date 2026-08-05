@@ -16,6 +16,7 @@ import { StorageModule } from './storage/storage.module';
 import { ScheduleModule } from '@nestjs/schedule';
 import { PushModule } from './push/push.module';
 import { HealthModule } from './health/health.module';
+import { FlagsModule } from './flags/flags.module';
 
 @Module({
   imports: [
@@ -40,6 +41,9 @@ import { HealthModule } from './health/health.module';
     RoomsModule,
     RealtimeModule,
     HealthModule,
+    // Wave 1A R7: the activation kill-switch registry + its internal probe.
+    // Every real domain flag defaults dark (missing row == disabled).
+    FlagsModule,
   ],
 })
 export class AppModule {}
