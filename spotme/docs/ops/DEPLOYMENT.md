@@ -167,3 +167,24 @@ roll back:
 Because Wave 0 added only `/health`, `/ready`, the env-gated harness, and this
 config, rolling it back **restores the exact prior dark posture** — there is no
 activated surface to unwind.
+
+---
+
+## 8. Wave 1A addenda (2026-08-05)
+
+- **Region:** the `api` service now deploys to **Southeast Asia**
+  (`multiRegionConfig: asia-southeast1-eqsg3a`, set via Railway
+  `serviceInstanceUpdate`). The `postgis` DB is still in SFO — co-locating it
+  (provision new + dump/restore + repoint, SFO kept as fallback) is an open
+  owner action; until then DB round-trips pay a cross-Pacific tax.
+- **Kill-switch (R7):** dark domains gate on the `RuntimeFlag` table
+  (migration `20260805120000_runtime_flags`). A missing row is DISABLED
+  (fail-dark). Flip = one row `UPDATE`/`INSERT`; propagation ≤ ~5 s (the flag
+  cache TTL), measured rollback-to-dark 4,994 ms, no restart/redeploy. The
+  internal probe `/api/internal/wave1a/gate-probe` (pseudo-key `wave1a-probe`)
+  exercises the switch end-to-end; it 404s while dark.
+- **Queue acceptance (R2):** `dist/scripts/wave1a/run.js` runs the Dragonfly
+  topology probe + the 8-item BullMQ acceptance for standalone and cluster
+  clients. Current Dragonfly (cluster mode) caps at 4/8 — a **non-cluster
+  endpoint is required** before any queue worker activates; re-run this suite
+  after the owner switches the endpoint and require **8/8**.
