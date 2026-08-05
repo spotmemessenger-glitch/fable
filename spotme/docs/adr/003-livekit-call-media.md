@@ -1,6 +1,11 @@
 # ADR-003 — Call media moves to LiveKit; messaging does not
 
-**Status:** accepted, shipped dark (flag default OFF)
+**Status:** SUPERSEDED IN PART by [ADR-004](004-delete-p2p-calls.md) (2026-08-05).
+Every statement below that describes peer-to-peer calls as a live path, a
+fallback, or something both sides must agree to is no longer true: that code is
+deleted. The SFU rationale, the TURN ordering, the cost model and the privacy
+consequence all still stand — ADR-004 records only the removal and what it
+changed. Originally: accepted, shipped dark (flag default OFF).
 **Date:** 2026-08-05
 **Supersedes nothing. Adjacent to:** ADR-002 (realtime transport abstraction)
 

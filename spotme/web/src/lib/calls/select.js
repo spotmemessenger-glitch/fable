@@ -1,10 +1,10 @@
 /**
- * Spot Me — which media path a call uses. ADR-003.
+ * Spot Me — is this device allowed to place calls at all? ADR-004.
  *
- * DEFAULT OFF. With no flag set, `livekitCalls()` is false, nothing else in
- * this folder is ever imported, and calls run exactly the WebRTC path they ran
- * before: peer connections built in socket-transport.js (or Trystero when
- * `spotme.transport` says p2p). That is the rollback — clear the key.
+ * DEFAULT OFF, and off now means CALLS ARE UNAVAILABLE, not "calls fall back to
+ * something older". The peer-to-peer path was deleted; there is nothing behind
+ * this switch but the SFU. `rooms.js` refuses a call with a readable message
+ * rather than starting one that cannot connect.
  *
  * A SEPARATE FLAG FROM `spotme.transport` ON PURPOSE. That one chooses who
  * carries MESSAGES; this one chooses who carries CALL MEDIA. They are different
@@ -12,8 +12,8 @@
  * testing LiveKit calls forced a messaging transport change at the same time —
  * two variables, one knob, no way to attribute a regression.
  *
- *   localStorage['spotme.calls'] = 'livekit'   media via the LiveKit SFU
- *   localStorage.removeItem('spotme.calls')    back to peer-to-peer WebRTC
+ *   localStorage['spotme.calls'] = 'livekit'   calls enabled, via the SFU
+ *   localStorage.removeItem('spotme.calls')    calls unavailable on this device
  *
  * Read through a function rather than captured at module load: the flag is
  * flipped from devtools during testing, and a cached value would mean a reload
@@ -30,37 +30,4 @@ export function livekitCalls () {
     // answer: the legacy path works everywhere this one might not.
     return false
   }
-}
-
-/**
- * Which media path two devices can BOTH use.
- *
- * Pure, and exported, because this is the decision that fails silently. Media
- * only flows if the two ends meet in the same place: if one publishes to the
- * SFU while the other adds tracks to a peer connection, both sit in a
- * connected-looking call hearing nothing. Every indicator says the call is up.
- *
- * So the answer is livekit ONLY when both sides say so. `theirs` comes off the
- * wire, which means it can be undefined (a client built before this existed),
- * a stale value, or anything at all — and every one of those must resolve to
- * the path that works everywhere.
- *
- * @param {boolean} mineIsLivekit  this device's flag
- * @param {*}       theirs         whatever the peer put in the call payload
- */
-export function agreeCallMedia (mineIsLivekit, theirs) {
-  return mineIsLivekit && theirs === 'livekit' ? 'livekit' : 'p2p'
-}
-
-/** What the last call actually used, and why it may differ from the flag. */
-let report = { requested: null, actual: null, reason: null }
-
-/** Record the resolved path. A non-null `reason` means it was a fallback. */
-export function noteCallPath (requested, actual, reason = null) {
-  report = { requested, actual, reason }
-  if (reason) console.warn(`spotme calls: ${reason}`)
-}
-
-export function activeCallPath () {
-  return { ...report }
 }

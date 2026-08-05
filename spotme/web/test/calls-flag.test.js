@@ -1,18 +1,21 @@
 /**
- * The call-media switch, pinned. ADR-003.
+ * The call switch, pinned. ADR-004.
  *
- * TWO THINGS ARE UNDER TEST, and both are failures that would ship quietly.
+ * DEFAULT OFF, and off now means calls are UNAVAILABLE — the peer-to-peer path
+ * this used to fall back to has been deleted. So the stakes of this one boolean
+ * changed: a wrong `true` no longer merely picks a different media path, it
+ * offers a feature the deployment may not be able to serve.
  *
- * 1. DEFAULT OFF. The whole mission is "dark": a device that has not opted in
- *    must place calls exactly the way it did before. A regression here is not
- *    a broken build — it is every user silently moved onto a new media path.
+ * The value is read from localStorage, which means it can be anything a user or
+ * a stale build put there. Only the exact string enables calls; everything else,
+ * including a localStorage that throws, must read as off.
  *
- * 2. THE NEGOTIATION. Media only flows if both ends land in the same place. One
- *    side on the SFU and the other on a peer connection produces a call that
- *    connects, rings, shows "active", and carries nothing. There is no error to
- *    notice; the users just say "I couldn't hear you". `theirs` arrives off the
- *    wire, so `undefined` (an older client), a stale value and outright garbage
- *    all have to resolve to the path that works everywhere.
+ * WHAT WAS REMOVED FROM THIS FILE, and why: it used to also pin
+ * `agreeCallMedia()`, the rule that both devices had to agree before media went
+ * to the SFU. That rule existed because one side could be on peer-to-peer while
+ * the other was on LiveKit. With only one media path left there is nothing to
+ * disagree about, the function is gone, and a test asserting its behaviour would
+ * be testing code that no longer exists.
  *
  * Node's test runner, no framework, matching the rest of web/test.
  */
@@ -58,25 +61,4 @@ test('a localStorage that throws reads as OFF, not as a crash', async () => {
   }
   const { livekitCalls } = await load()
   assert.equal(livekitCalls(), false)
-})
-
-test('livekit is agreed ONLY when both sides say so', async () => {
-  const { agreeCallMedia } = await load()
-
-  assert.equal(agreeCallMedia(true, 'livekit'), 'livekit')
-
-  // Every asymmetric case must fall back, or the call is silently one-way.
-  assert.equal(agreeCallMedia(false, 'livekit'), 'p2p')
-  assert.equal(agreeCallMedia(true, 'p2p'), 'p2p')
-  assert.equal(agreeCallMedia(false, 'p2p'), 'p2p')
-})
-
-test('a peer that never heard of this feature negotiates the legacy path', async () => {
-  const { agreeCallMedia } = await load()
-
-  // An older client omits the field entirely — the single most likely case
-  // during a staged rollout, and the one that must not break.
-  for (const theirs of [undefined, null, '', 0, false, {}, 'LIVEKIT', 'sfu']) {
-    assert.equal(agreeCallMedia(true, theirs), 'p2p', `${JSON.stringify(theirs)} must mean p2p`)
-  }
 })

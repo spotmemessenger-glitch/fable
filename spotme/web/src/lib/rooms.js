@@ -30,7 +30,7 @@ import { E2E_V2 } from './crypto/e2e-v2.js'
  * nothing else — the LiveKit SDK and its adapter are behind a dynamic import
  * that never runs unless a device has opted in, so with the flag off this
  * costs one localStorage lookup per call and changes no behaviour. */
-import { livekitCalls, agreeCallMedia } from './calls/select.js'
+import { livekitCalls } from './calls/select.js'
 
 /** Attachments bigger than this never ride the history backlog — the bytes
  * are lazily fetched on demand instead, so reconnects stay instant. */
@@ -109,7 +109,6 @@ function inertNet () {
     sendBinary: () => Promise.resolve(),
     sendBinAck: noop,
     fetchFrom: () => Promise.resolve(null),
-    addStream: noop, removeStream: noop, replaceTrack: noop,
     peerIds: () => [], peerCount: () => 0, livePeerIds: () => [], leave: noop
   }
 }
@@ -180,7 +179,9 @@ function createConnection (convo) {
     openingByPeer,
     // `media` is which path carries audio/video: 'p2p' (peer connections, the
     // default everywhere) or 'livekit' (SFU), agreed per call. ADR-003.
-    call: { state: 'idle', video: false, local: null, remote: null, media: 'p2p' },
+    // `remotes` is a Map of participant identity -> MediaStream: one entry per
+    // person on the call, which is what lets the same code carry 1:1 and group.
+    call: { state: 'idle', video: false, local: null, remotes: new Map() },
     on (fn) { listeners.add(fn); return () => listeners.delete(fn) }
   }
 
@@ -500,30 +501,29 @@ function createConnection (convo) {
       else store.patch(payload.id, { lat: payload.lat, lon: payload.lon })
       emit({ type: 'locup', id: payload.id })
     },
+    /**
+     * RINGING. Not media — see the call section below.
+     *
+     * `offer` no longer negotiates a media path: there is one, the SFU. What it
+     * still does is decide whether we are free to take the call, which is the
+     * part that has to stay whatever the media layer is.
+     */
     onCall (payload) {
       const call = conn.call
       switch (payload?.type) {
         case 'offer':
           if (call.state !== 'idle') { conn.net.sendCall({ type: 'decline', busy: true }); return }
-          conn.call = {
-            state: 'ringing-in',
-            video: Boolean(payload.video),
-            local: null,
-            remote: null,
-            // Settled here, not at accept: the answer must be the same one we
-            // send back, and by accept time the offer is gone.
-            media: agreedCallMedia(payload.media)
-          }
+          conn.call = newCallState({ state: 'ringing-in', video: Boolean(payload.video) })
           emit({ type: 'call' })
           break
         case 'accept':
           if (call.state === 'ringing-out' && call.local) {
-            // Their answer decides it — we offered a path, they may only have
-            // been able to take the legacy one.
-            call.media = agreedCallMedia(payload.media)
-            attachCallMedia(call.local).then(() => {
-              call.state = call.remote ? 'active' : 'connecting'
+            joinCallRoom().then(() => {
+              call.state = call.remotes.size > 0 ? 'active' : 'connecting'
               emit({ type: 'call' })
+            }).catch((error) => {
+              teardownCall(true)
+              emit({ type: 'call', failed: error?.message || 'The call could not connect' })
             })
           }
           break
@@ -532,15 +532,16 @@ function createConnection (convo) {
           emit({ type: 'call', declined: true, busy: Boolean(payload.busy) })
           break
         case 'end':
-          teardownCall(false)
-          emit({ type: 'call', ended: true })
+          /* In a GROUP call one person hanging up is not the end of the call.
+           * Only tear down when they were the last one left with us; otherwise
+           * their departure arrives as a LiveKit participant-left event and the
+           * tile simply disappears. */
+          if (conn.call.state !== 'idle' && conn.call.remotes.size <= 1) {
+            teardownCall(false)
+            emit({ type: 'call', ended: true })
+          }
           break
       }
-    },
-    onStream (stream) {
-      conn.call.remote = stream
-      if (conn.call.local) conn.call.state = 'active'
-      emit({ type: 'call' })
     }
   }
 
@@ -661,54 +662,86 @@ function createConnection (convo) {
     onProgress?.(1)
   }
 
-  /* -- call media: peer-to-peer by default, LiveKit when BOTH sides opt in --
+  /* -- call media: the LiveKit SFU, and nothing else ----------------------
    *
-   * WHY THE PATH IS NEGOTIATED RATHER THAN CHOSEN. Media only flows if the two
-   * devices meet in the same place. If this device published to the SFU while
-   * the other added its tracks to a peer connection, both would sit in a
-   * connected-looking call hearing nothing — a silent failure, and the worst
-   * kind, because every indicator says the call is up.
+   * The peer-to-peer path is GONE (ADR-004). There is no fallback, no second
+   * branch and no negotiation, because there is no longer a second answer:
+   * every participant publishes to the same server room and subscribes to
+   * everyone else in it.
    *
-   * So the existing signalling carries the answer: the offer says which path
-   * the caller can use, the accept says what the callee agreed to, and LiveKit
-   * happens only when both say `livekit`. An older client omits the field
-   * entirely, which reads as 'p2p' — so a device that has never heard of this
-   * feature negotiates the legacy path by construction rather than by luck.
+   * That deletion is what makes group calls a small change rather than a
+   * rewrite. A mesh needed N-1 peer connections per phone and a decision about
+   * who offers to whom; an SFU needs one connection and a map.
+   *
+   * WHAT "FLAG OFF" MEANS NOW: calls are UNAVAILABLE, not degraded. There is
+   * nothing left to degrade to, and a button that silently does nothing is
+   * worse than one that explains itself.
    */
 
-  /** Handle for the current LiveKit call; null whenever media is peer-to-peer. */
+  /** Handle for the live LiveKit room; null when no call is up. */
   let callMedia = null
 
-  /** What this device is willing to use, given the flag. */
-  const preferredCallMedia = () => (livekitCalls() ? 'livekit' : 'p2p')
+  /**
+   * Fresh call state. `remotes` is a Map keyed by participant identity — one
+   * entry per person we can see or hear, which is the whole of what makes a
+   * group call a group call.
+   */
+  const newCallState = (over = {}) => ({
+    state: 'idle',
+    video: false,
+    local: null,
+    remotes: new Map(),
+    ...over
+  })
 
-  /** Both sides must say livekit; anything else, including absence, is p2p. */
-  const agreedCallMedia = (theirs) => agreeCallMedia(livekitCalls(), theirs)
+  /** Refuse early and legibly rather than failing halfway into a call. */
+  function assertCallsAvailable () {
+    if (!livekitCalls()) {
+      throw new Error('Calls are not enabled on this device yet')
+    }
+    if (!navigator.mediaDevices?.getUserMedia) {
+      throw new Error('Calls need HTTPS (use the vercel.app address)')
+    }
+  }
 
   /**
-   * Put the local stream where the agreed path expects it.
+   * Join the SFU room and publish. Throws if it cannot — the caller surfaces
+   * that, ends the call and tells the other side.
    *
-   * A LiveKit failure falls through to `conn.net.addStream` — the call still
-   * connects the way it always did, and `activeCallPath()` records why. The one
-   * thing that must not happen is a call that fails BECAUSE the new path was
-   * tried.
+   * A failure here used to fall back to peer-to-peer. It cannot now, and
+   * pretending otherwise would leave a call "connecting" forever.
    */
-  async function attachCallMedia (local) {
-    if (conn.call.media === 'livekit') {
-      const { connectCallMedia } = await import('./calls/livekit-media.js')
-      callMedia = await connectCallMedia({
-        roomId: convo.roomId,
-        localStream: local,
-        onRemoteStream: (stream) => handlers.onStream(stream),
-        onParticipantLeft: () => { if (conn.call.state !== 'idle') conn.endCall() },
-        onFailed: () => { if (conn.call.state !== 'idle') conn.endCall() }
-      })
-      if (callMedia) return
-      // connectCallMedia already recorded the reason; fall through so the call
-      // still has a media path rather than being dropped.
-      conn.call.media = 'p2p'
-    }
-    conn.net.addStream(local)
+  async function joinCallRoom () {
+    const { joinCallMedia } = await import('./calls/livekit-media.js')
+    callMedia = await joinCallMedia({
+      roomId: convo.roomId,
+      localStream: conn.call.local,
+      onRemoteStream: (stream, identity) => {
+        // Same stream object each time for a given person (the adapter keeps
+        // one per identity), so re-setting it is idempotent.
+        conn.call.remotes.set(identity, stream)
+        if (conn.call.state !== 'idle') conn.call.state = 'active'
+        emit({ type: 'call' })
+      },
+      onParticipantLeft: (identity) => {
+        conn.call.remotes.delete(identity)
+        /* THE LAST PERSON LEAVING ENDS THE CALL; anyone else leaving does not.
+         * In a 1:1 call those are the same event, which is exactly why this was
+         * easy to get wrong: hanging up on the first departure would drop a
+         * group call the moment one person's phone died. */
+        if (conn.call.remotes.size === 0 && conn.call.state === 'active') {
+          teardownCall(false)
+          emit({ type: 'call', ended: true })
+          return
+        }
+        emit({ type: 'call' })
+      },
+      onFailed: (error) => {
+        if (conn.call.state === 'idle') return
+        teardownCall(true)
+        emit({ type: 'call', failed: error?.message || 'The call dropped' })
+      }
+    })
   }
 
   function teardownCall (notifyPeer = true) {
@@ -720,36 +753,37 @@ function createConnection (convo) {
       // disconnect that is slow or already-done must not hold up the UI.
       handle.disconnect()
     }
-    if (local) {
-      try { conn.net.removeStream(local) } catch { /* not added yet */ }
-      local.getTracks().forEach((t) => t.stop())
-    }
+    if (local) local.getTracks().forEach((t) => t.stop())
     if (notifyPeer && state !== 'idle') conn.net.sendCall({ type: 'end' })
-    conn.call = { state: 'idle', video: false, local: null, remote: null, media: 'p2p' }
+    conn.call = newCallState()
   }
 
-  /** Ring the peer. Media is only attached once they accept. */
+  /** Ring them. We do not join the SFU until somebody answers. */
   conn.startCall = async function (video) {
     if (conn.call.state !== 'idle') return
-    if (!navigator.mediaDevices?.getUserMedia) throw new Error('Calls need HTTPS (use the vercel.app address)')
+    assertCallsAvailable()
     const local = await navigator.mediaDevices.getUserMedia({ audio: true, video })
-    const media = preferredCallMedia()
-    conn.call = { state: 'ringing-out', video, local, remote: null, media }
-    conn.net.sendCall({ type: 'offer', video, media })
+    conn.call = newCallState({ state: 'ringing-out', video, local })
+    conn.net.sendCall({ type: 'offer', video })
     emit({ type: 'call' })
   }
 
   conn.acceptCall = async function () {
     if (conn.call.state !== 'ringing-in') return
-    if (!navigator.mediaDevices?.getUserMedia) throw new Error('Calls need HTTPS (use the vercel.app address)')
+    assertCallsAvailable()
     const local = await navigator.mediaDevices.getUserMedia({ audio: true, video: conn.call.video })
     conn.call.local = local
-    // Tell them what we agreed to BEFORE attaching: the caller needs to know
-    // which path to put its own stream on, and it has been waiting since the
-    // offer. `conn.call.media` was fixed when their offer arrived.
-    conn.net.sendCall({ type: 'accept', video: conn.call.video, media: conn.call.media })
-    await attachCallMedia(local)
-    conn.call.state = conn.call.remote ? 'active' : 'connecting'
+    // Answer FIRST: they have been waiting since the offer, and joining the SFU
+    // takes a round trip they should not sit through wondering.
+    conn.net.sendCall({ type: 'accept', video: conn.call.video })
+    try {
+      await joinCallRoom()
+    } catch (error) {
+      teardownCall(true)
+      emit({ type: 'call', failed: error?.message || 'The call could not connect' })
+      throw error
+    }
+    conn.call.state = conn.call.remotes.size > 0 ? 'active' : 'connecting'
     emit({ type: 'call' })
   }
 

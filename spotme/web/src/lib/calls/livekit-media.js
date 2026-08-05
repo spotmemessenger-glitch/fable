@@ -1,54 +1,45 @@
 /**
- * Spot Me — call media over LiveKit. ADR-003.
+ * Spot Me — call media. There is no other kind. ADR-004.
  *
- * WHAT THIS REPLACES, AND WHAT IT DELIBERATELY DOES NOT.
+ * A call has two halves. RINGING — offer, accept, decline, end — is four tiny
+ * JSON messages carried by the room transport, sealed like every other action.
+ * MEDIA is everything else, and all of it is here.
  *
- * A call has two halves. SIGNALLING — ring, accept, decline, hang up — is four
- * tiny JSON messages already carried by the room transport, sealed like every
- * other action, and it works. MEDIA is the half that breaks: two phones behind
- * Indian carrier NAT frequently cannot form a peer connection at all.
- *
- * Only the media half moves here. `rooms.js` still sends and receives the same
- * call actions in the same order; when this path is active, the step that used
- * to be `conn.net.addStream(local)` becomes "join a LiveKit room and publish",
- * and the remote stream arrives through the same `onStream` handler as before.
- * The state machine, the UI and the signalling are untouched.
- *
- * That boundary is the entire reason this is a small file. Moving signalling
- * here too would mean a second implementation of ring/accept/busy semantics
- * that has to agree with the first — the "second implementation becomes an
- * emulator of the first" failure ADR-002 named for transports.
+ * The peer-to-peer path this file once sat beside has been DELETED, not
+ * disabled. There is no fallback, so every failure below is fatal to the call
+ * and is reported rather than absorbed: a call that cannot reach the SFU is a
+ * call that does not happen, and saying so beats a "Connecting…" that never
+ * resolves.
  *
  * ---------------------------------------------------------------------------
- * WHY THE SFU AT ALL — the honest trade
+ * WHY THE SFU — and what it costs
  *
- * A peer-to-peer call is private in a way this is not: with LiveKit, media is
- * decrypted at the SFU. Frames are TLS-protected in transit and LiveKit does
- * not store them, but the server can see them, which the P2P path made
- * impossible. That is a real reduction and ADR-003 states it plainly rather
- * than burying it. It buys calls that connect on networks where P2P cannot,
- * and it is the precondition for group calls, which a P2P mesh cannot carry
- * past three or four participants on a phone.
+ * Two phones behind Indian carrier NAT frequently cannot form a peer connection
+ * at all. Every client can reach a public server. That is the whole argument,
+ * and it is also what makes group calls possible: a mesh needs N-1 uplinks per
+ * phone, an SFU needs one.
  *
- * End-to-end encrypted media is possible here later (LiveKit supports
- * insertable streams with an external key), and ADR-003 records it as the
- * upgrade path. It is NOT wired now, and nothing in this file should be read as
- * claiming otherwise.
+ * THE COST, STATED PLAINLY: LiveKit decrypts call media at the SFU. Frames are
+ * TLS-protected in transit and LiveKit does not store them, but the server can
+ * see them, which the peer-to-peer path made impossible. CALLS ARE NOT
+ * END-TO-END ENCRYPTED. Messages still are, and that distinction must survive
+ * every future edit to this file and to any copy describing it.
+ *
+ * The documented upgrade path is LiveKit's insertable-streams E2EE, where the
+ * key is agreed between participants and never held by the server. It is NOT
+ * wired. Until it is, nothing may describe calls as end-to-end encrypted.
  *
  * ---------------------------------------------------------------------------
  * GROUP CALLS
  *
- * The abstraction is already a room with N participants: `onRemoteStream` is
- * called with `(stream, identity)` for every remote publisher, and
- * `onParticipantLeft` for every departure. An SFU does not care whether that N
- * is one or eight. What is missing for group is not in this file — it is the
- * caller: `rooms.js` keeps a single `call.remote`, and the UI renders one
- * remote video. See ADR-003 §Group for the short list.
+ * This layer has always been N-participant and still is: `onRemoteStream` fires
+ * with `(stream, identity)` for every remote publisher and `onParticipantLeft`
+ * for every departure. `rooms.js` now keeps a Map of them and the overlay
+ * renders a tile each, so group is the same code path with a longer map.
  */
 
 import { API_BASE } from '../api.js'
 import { authHeaders } from '../auth-headers.js'
-import { noteCallPath } from './select.js'
 
 /** How long we wait for the SFU before declaring the call unconnectable. */
 const CONNECT_TIMEOUT_MS = 15_000
@@ -173,10 +164,9 @@ export async function joinCallMedia ({
    * ONE MediaStream per remote participant, carrying all of their tracks.
    *
    * LiveKit subscribes each track separately and hands each one its own
-   * MediaStream — audio arrives in one event, video in another. The caller
-   * (`rooms.js`) keeps a single `call.remote` and assigns whatever it is given,
-   * so emitting two different streams means the second silently replaces the
-   * first: attach the video-only stream and the call goes mute, attach the
+   * MediaStream — audio arrives in one event, video in another. A caller that
+   * stores one stream per participant would have the second silently replace
+   * the first: keep the video-only stream and the call goes mute, keep the
    * audio-only one and the picture never appears.
    *
    * The two-browser harness caught exactly this — it reported `remote tracks:
@@ -221,7 +211,8 @@ export async function joinCallMedia ({
     }
   })
 
-  await mark('connectMs', () => room.connect(url, token, { autoSubscribe: true, maxRetries: 2 }))
+  await mark('connectMs', () => withTimeout(
+    room.connect(url, token, { autoSubscribe: true, maxRetries: 2 }), CONNECT_TIMEOUT_MS))
 
   // Publish what the caller already captured rather than asking LiveKit to open
   // the devices itself. `rooms.js` acquired this stream before ringing, the UI
@@ -306,34 +297,6 @@ export async function joinCallMedia ({
         // that handles a call the other side already ended.
       }
     }
-  }
-}
-
-/**
- * Connect media for a call, falling back to the peer-to-peer path if LiveKit
- * cannot serve it.
- *
- * Returns a handle, or null meaning "use the legacy path". Null is not an
- * error state — it is the default for every device without the flag — but when
- * it follows a REQUEST for LiveKit the reason is recorded and logged, because
- * a silent downgrade is how someone comes to believe they tested this.
- */
-export async function connectCallMedia (options) {
-  if (!(await livekitAvailable())) {
-    noteCallPath('livekit', 'webrtc-p2p',
-      'livekit is not configured on this deployment (LIVEKIT_URL / LIVEKIT_API_KEY / ' +
-      'LIVEKIT_API_SECRET unset); this call used the peer-to-peer path')
-    return null
-  }
-
-  try {
-    const handle = await withTimeout(joinCallMedia(options), CONNECT_TIMEOUT_MS)
-    noteCallPath('livekit', 'livekit')
-    return handle
-  } catch (error) {
-    noteCallPath('livekit', 'webrtc-p2p',
-      `livekit media failed (${error?.message || error}); this call used the peer-to-peer path`)
-    return null
   }
 }
 

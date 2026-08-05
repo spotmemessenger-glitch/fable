@@ -17,7 +17,6 @@
   "dependencies": {
     "@capacitor/push-notifications": "^8.1.2",
     "@trystero-p2p/torrent": "^0.25.3",
-    "centrifuge": "^5.7.0",
     "livekit-client": "^2.21.0",
     "socket.io-client": "^4.8.3",
     "spotme-core": "file:vendor/spotme-core",

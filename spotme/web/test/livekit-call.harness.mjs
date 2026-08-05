@@ -1,5 +1,5 @@
 /**
- * Spot Me — place a REAL call through LiveKit and measure it. ADR-003, L4.
+ * Spot Me — place a REAL call through LiveKit and measure it. ADR-004.
  *
  * NOT part of `npm test`. It needs Docker, a browser and about a minute, and a
  * suite that cannot run on a laptop with no daemon is a suite people stop
@@ -13,14 +13,22 @@
  * ---------------------------------------------------------------------------
  * WHAT THIS PROVES, AND WHAT IT CANNOT
  *
- * PROVES: two independent browsers, each with its own camera and microphone,
- * join the same room through `src/lib/calls/livekit-media.js` — the real
- * adapter, not a reimplementation — publish audio and video, subscribe to each
- * other, and DECODE FRAMES AND SAMPLES IN BOTH DIRECTIONS. The assertion is
+ * PROVES: N independent browsers, each with its own camera and microphone, join
+ * the same room through `src/lib/calls/livekit-media.js` — the real adapter, not
+ * a reimplementation — publish audio and video, subscribe to EVERY other
+ * participant, and DECODE FRAMES AND SAMPLES FROM ALL OF THEM. The assertion is
  * `framesDecoded > 0` and audio bytes received on each side, because "a track
  * object arrived" is not media; a track that never decodes a frame produces
  * exactly the black rectangle users report as "the call connected but I can't
  * see anything".
+ *
+ * Run with three participants (the default) and it is a GROUP call: each side
+ * must end up with two remote streams, which is the claim `rooms.js` makes when
+ * it keeps a Map instead of a single remote. Two participants is the 1:1 case
+ * and the same code path.
+ *
+ *   node test/livekit-call.harness.mjs        # 3 participants (group)
+ *   node test/livekit-call.harness.mjs 2      # 1:1
  *
  * CANNOT PROVE: behaviour on a real mobile network. Both browsers are on this
  * machine, so ICE resolves to host candidates and the path is local. Carrier
@@ -41,6 +49,7 @@ const LIVEKIT_URL = process.env.HARNESS_LIVEKIT_URL || 'ws://localhost:7880'
 const LIVEKIT_KEY = process.env.HARNESS_LIVEKIT_KEY || 'devkey'
 const LIVEKIT_SECRET = process.env.HARNESS_LIVEKIT_SECRET || 'secretdevsecretdevsecretdevsecret32'
 const ROOM_ID = `harness-${Date.now()}`
+const PARTICIPANTS = Number(process.argv[2]) || 3
 const HARNESS_PORT = 5199
 const HARNESS_ORIGIN = `http://localhost:${HARNESS_PORT}`
 
@@ -157,6 +166,7 @@ async function joinAs (browser, identity) {
     const localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true })
 
     const startedAt = performance.now()
+    window.__remotes = new Map()
     window.__remote = null
     window.__connectedAt = null
 
@@ -164,8 +174,11 @@ async function joinAs (browser, identity) {
       roomId,
       localStream,
       onRemoteStream: (stream, who) => {
-        window.__remote = { who, id: stream.id, tracks: stream.getTracks().map((t) => t.kind) }
-        window.__connectedAt = performance.now() - startedAt
+        // A Map, exactly as rooms.js keeps one: same stream object per person,
+        // so a second track from someone already seen updates rather than adds.
+        window.__remotes.set(who, { who, id: stream.id, tracks: stream.getTracks().map((t) => t.kind) })
+        window.__remote = window.__remotes.get(who)
+        if (window.__connectedAt === null) window.__connectedAt = performance.now() - startedAt
         // Attach to a real element: a track nobody plays may never be decoded,
         // and "framesDecoded" would then be measuring the harness, not the call.
         const video = document.createElement('video')
@@ -198,6 +211,7 @@ async function joinAs (browser, identity) {
 async function inboundStats (page) {
   return page.evaluate(async () => ({
     remote: window.__remote,
+    remotes: [...window.__remotes.values()],
     connectedMs: window.__connectedAt,
     timings: window.__handle.timings,
     path: await window.__handle.stats()
@@ -218,24 +232,28 @@ async function main () {
   })
 
   let failed = false
+  const expectedRemotes = PARTICIPANTS - 1
   try {
-    console.log('caller joining…')
-    const caller = await joinAs(browser, 'harness-caller')
-    console.log(`  published: ${caller.result.published.join(', ')}`)
-
-    console.log('callee joining…')
-    const callee = await joinAs(browser, 'harness-callee')
-    console.log(`  published: ${callee.result.published.join(', ')}`)
+    const sides = []
+    for (let i = 0; i < PARTICIPANTS; i++) {
+      const name = `harness-${i + 1}`
+      console.log(`${name} joining…`)
+      const side = await joinAs(browser, name)
+      console.log(`  published: ${side.result.published.join(', ')}`)
+      sides.push({ name, ...side })
+    }
 
     // Media needs a moment to flow — this measures a call in progress, not a
-    // handshake.
-    await sleep(6000)
+    // handshake. The later joiners also need time to be subscribed to by those
+    // already in the room.
+    await sleep(7000)
 
-    for (const [name, side] of [['caller', caller], ['callee', callee]]) {
+    for (const side of sides) {
       const stats = await inboundStats(side.page)
-      console.log(`\n${name}:`)
-      console.log(`  remote participant : ${stats.remote?.who ?? 'NONE'}`)
-      console.log(`  remote tracks      : ${stats.remote?.tracks?.join(', ') ?? 'none'}`)
+      const seen = stats.remotes ?? []
+      console.log(`\n${side.name}:`)
+      console.log(`  remote participants: ${seen.length} (${seen.map((r) => r.who).join(', ') || 'NONE'})`)
+      console.log(`  tracks per remote  : ${seen.map((r) => `${r.who}=[${r.tracks.join('+')}]`).join('  ') || 'none'}`)
       console.log(`  time to media (ms) : ${Math.round(stats.connectedMs ?? -1)}  (from this side's join)`)
       console.log(`  breakdown (ms)     : sdk ${stats.timings?.sdkMs}  token+ice ${stats.timings?.tokenMs}  connect ${stats.timings?.connectMs}  publish ${stats.timings?.publishMs}`)
       console.log(`  frames decoded     : ${stats.path?.framesDecoded}`)
@@ -245,13 +263,25 @@ async function main () {
       console.log(`  relayed (TURN)     : ${stats.path?.relay}`)
 
       // The assertions. Anything less and this is a connection test, not a call.
-      if (!stats.remote) { console.log(`  FAIL: ${name} never received a remote stream`); failed = true }
-      if (!(stats.path?.framesDecoded > 0)) { console.log(`  FAIL: ${name} decoded no video frames`); failed = true }
-      if (!(stats.path?.audioBytes > 0)) { console.log(`  FAIL: ${name} received no audio bytes`); failed = true }
+      if (seen.length !== expectedRemotes) {
+        console.log(`  FAIL: ${side.name} sees ${seen.length} remotes, expected ${expectedRemotes}`)
+        failed = true
+      }
+      // Every remote must carry BOTH kinds in ONE stream — the bug that shipped
+      // audio and video as separate MediaStreams looked exactly like success
+      // until you counted the tracks.
+      for (const r of seen) {
+        if (!(r.tracks.includes('audio') && r.tracks.includes('video'))) {
+          console.log(`  FAIL: ${side.name} sees ${r.who} with tracks [${r.tracks.join('+')}], expected audio+video`)
+          failed = true
+        }
+      }
+      if (!(stats.path?.framesDecoded > 0)) { console.log(`  FAIL: ${side.name} decoded no video frames`); failed = true }
+      if (!(stats.path?.audioBytes > 0)) { console.log(`  FAIL: ${side.name} received no audio bytes`); failed = true }
     }
 
     console.log('\nhanging up…')
-    for (const side of [caller, callee]) {
+    for (const side of sides) {
       await side.page.evaluate(() => window.__handle.disconnect())
       await side.context.close()
     }
@@ -261,8 +291,8 @@ async function main () {
   }
 
   console.log(failed
-    ? '\nRESULT: FAILED — media did not flow both ways'
-    : '\nRESULT: PASSED — audio and video decoded in BOTH directions')
+    ? `\nRESULT: FAILED — ${PARTICIPANTS}-way call did not carry media to everyone`
+    : `\nRESULT: PASSED — ${PARTICIPANTS} participants, audio and video decoded by all`)
   process.exit(failed ? 1 : 0)
 }
 

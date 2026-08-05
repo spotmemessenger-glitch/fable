@@ -66,8 +66,10 @@ const fakeRoom = {
     return a
   },
   getPeers: () => livePeers,
-  addStream: () => {}, removeStream: () => {}, replaceTrack: () => {},
-  onPeerJoin: null, onPeerLeave: null, onPeerStream: null,
+  // No addStream/removeStream/replaceTrack/onPeerStream: those were the
+  // peer-to-peer CALL surface and the transport no longer has them (ADR-004).
+  // These suites cover attachments and view-once, which are unaffected.
+  onPeerJoin: null, onPeerLeave: null,
   leave: () => {}
 }
 

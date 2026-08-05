@@ -15,6 +15,7 @@ import { compressImage, fileToDataURL, recordVoice, currentLocation, mapLink, fi
 import { openPhotoEditor, closePhotoEditor } from '../lib/photoedit.js'
 import { el, clear, avatar, fmtTime, fmtDay, actionSheet } from '../lib/ui.js'
 import { isPlainEnglish } from '../lib/english.js'
+import { livekitCalls } from '../lib/calls/select.js'
 import { transliterate, supportedScripts } from 'spotme-core/core/translit.js'
 
 const LONG_PRESS_MS = 420
@@ -2096,7 +2097,10 @@ export function render (root, ctx, roomId) {
   function sysLine () {
     return el('div', { class: 'sys', html: IC.spark }, [
       convo?.e2eVersion === 'e2e_v2'
-        ? 'Encrypted with keys made on your devices. Translation runs on-device when possible.'
+        /* "Messages", not a bare "Encrypted": this line sits in a chat that also
+         * offers a call button, and calls are NOT end-to-end encrypted (ADR-004).
+         * An unqualified claim here would be read as covering them. */
+        ? 'Messages are encrypted with keys made on your devices. Translation runs on-device when possible.'
         : 'Older chat — its key came from both account IDs, so the server could read it.'
     ])
   }
@@ -2774,9 +2778,19 @@ export function render (root, ctx, roomId) {
       el('p', {
         class: 'cp-enc',
         text: convo.e2eVersion === 'e2e_v2'
-          ? '🔒 Encrypted with keys created on your device and your contact\'s. The server carries the messages but holds no key to them.'
+          ? '🔒 Your messages are encrypted with keys created on your device and your contact\'s. The server carries them but holds no key to them.'
           : '⚠️ This is an older chat. Its key was derived from both account IDs, so the server could read it. Start a new chat for device-held keys.'
-      })
+      }),
+      /* CALLS ARE NOT COVERED BY THE LINE ABOVE, and a privacy panel that
+       * mentions only the good half is the kind of omission people are right to
+       * be angry about. Shown only where calls can actually be placed — with the
+       * flag off there are no calls to make a claim about. */
+      livekitCalls()
+        ? el('p', {
+          class: 'cp-enc warn',
+          text: 'Calls are not end-to-end encrypted. Audio and video pass through a media server, which can see them, so that calls connect on mobile networks.'
+        })
+        : null
     ]))
     root.appendChild(back)
   }
@@ -4195,11 +4209,28 @@ export function render (root, ctx, roomId) {
     const kind = call.video ? 'Video call' : 'Voice call'
     const parts = []
 
-    if (call.state === 'active' && call.remote) {
+    /* ONE TILE PER REMOTE PARTICIPANT.
+     *
+     * `call.remotes` is a Map of identity -> MediaStream, so 1:1 and group are
+     * the same code path with a different count — a group call is not a mode
+     * here, it is a longer map. The grid class carries the count so CSS can lay
+     * out two people differently from six without this knowing how.
+     *
+     * A <video> element plays its own audio track, so video tiles deliberately
+     * get no companion <audio>: that would play the same samples twice. */
+    const remotes = [...(call.remotes?.entries() ?? [])]
+    if (call.state === 'active' && remotes.length > 0) {
       if (call.video) {
-        const remote = el('video', { class: 'callremote', autoplay: '', playsinline: '' })
-        remote.srcObject = call.remote
-        parts.push(remote)
+        const grid = el('div', { class: `callgrid n${Math.min(remotes.length, 6)}` })
+        for (const [identity, stream] of remotes) {
+          const tile = el('video', { class: 'callremote', autoplay: '', playsinline: '' })
+          tile.srcObject = stream
+          // Identity is the sender's user id; it is what the SFU knows them by
+          // and the only stable handle we have for a tile.
+          tile.dataset.identity = identity
+          grid.appendChild(tile)
+        }
+        parts.push(grid)
         if (call.local) {
           const localV = el('video', { class: 'callpip', autoplay: '', playsinline: '', muted: '' })
           localV.muted = true
@@ -4207,9 +4238,12 @@ export function render (root, ctx, roomId) {
           parts.push(localV)
         }
       } else {
-        const remoteA = el('audio', { autoplay: '' })
-        remoteA.srcObject = call.remote
-        parts.push(remoteA)
+        for (const [identity, stream] of remotes) {
+          const remoteA = el('audio', { autoplay: '' })
+          remoteA.srcObject = stream
+          remoteA.dataset.identity = identity
+          parts.push(remoteA)
+        }
       }
     }
 
@@ -4348,6 +4382,10 @@ export function render (root, ctx, roomId) {
       case 'call':
         if (event.declined) ctx.toast(event.busy ? 'They are on another call' : 'Call declined')
         if (event.ended) ctx.toast('Call ended')
+        // There is no peer-to-peer path left to quietly fall back to, so a
+        // media failure has to be said out loud rather than left as a call that
+        // never leaves "Connecting…".
+        if (event.failed) ctx.toast(event.failed)
         if (conn.call.state === 'idle') callStartedAt = 0
         renderCall()
         break
