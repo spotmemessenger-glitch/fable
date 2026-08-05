@@ -5,6 +5,7 @@
  */
 
 import { Inject, Injectable, Optional } from '@nestjs/common';
+import { ModerationSink } from '../moment-media/moderation.sink';
 import { randomUUID } from 'node:crypto';
 import {
   MOMENT_REPOSITORY_PORT, MomentRepositoryPort, MomentRow, FeedQuery, MomentFeedMode,
@@ -38,6 +39,9 @@ export class MomentsService {
     @Inject(MOMENT_REPOSITORY_PORT) private readonly repo: MomentRepositoryPort,
     @Optional() private readonly media: MomentMediaService | null,
     @Optional() @Inject(MOMENT_REALTIME_PORT) private readonly realtime: MomentRealtimePort = new DisabledMomentRealtime(),
+    /* D7: where a report actually GOES. Optional so the service still
+     * constructs in unit tests that do not build the media module. */
+    @Optional() private readonly moderationSink: ModerationSink | null = null,
   ) {}
 
   /* ------------------------------------------------------------ lifecycle */
@@ -213,7 +217,18 @@ export class MomentsService {
       name: 'moderation', reportId: id, reason: input.reason,
       priority: input.reason === 'child-safety' ? 'child-safety' : 'standard',
     };
-    await this.workers.process(job);
+    await this.workers.process(job);   // contract record (fences read this)
+    /* AND THE PART THAT WAS MISSING (D7). The fixture worker above records the
+     * job shape and nothing more; until this line a report reached no durable
+     * delivery marker and raised no alert, which is why the report button was
+     * telling people something would happen when nothing would. Never allowed
+     * to fail the caller's request: the report ROW is already written, and a
+     * sink outage must not turn a successful report into an error. */
+    if (this.moderationSink) {
+      await this.moderationSink
+        .accept({ reportId: id, targetKind: input.targetKind, targetId: input.targetId, reason: input.reason })
+        .catch(() => undefined);
+    }
     // A first report moves visible → reported (closed table; audit appended).
     if (input.targetKind !== 'story') {
       const target = input.targetKind === 'moment' ? await this.repo.findById(input.targetId) : null;

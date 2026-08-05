@@ -140,12 +140,26 @@ describe('Moments — dark integration fences', () => {
       ...walk(join(WEBNEXT, 'src/moments'), ['.ts', '.tsx']),
     ];
     expect(files.length).toBeGreaterThan(10); // non-vacuous
+    /* M3 NARROWED THE BULLMQ RULE, IT DID NOT DROP IT.
+     *
+     * The dark phase forbade bullmq everywhere because nothing was allowed to
+     * connect. The authorised activation gives the transcode worker a real
+     * queue — so exactly ONE file may import bullmq, and the prohibition still
+     * holds for every other file. That keeps the property the fence was
+     * protecting: the media SERVICE must not quietly become a queue client,
+     * and a controller must never reach a queue at all. The camera-branch and
+     * S3-SDK prohibitions are unchanged. */
+    const QUEUE_OWNER = 'moment-media/transcode.worker.ts';
     for (const f of files) {
       const s = stripComments(read(f));
       expect(s).not.toMatch(/lib\/camera|camera-engine|createCameraEngine/);
-      expect(s).not.toMatch(/from\s+['"]bullmq['"]/);
+      if (!f.endsWith(QUEUE_OWNER)) expect(s).not.toMatch(/from\s+['"]bullmq['"]/);
       expect(s).not.toMatch(/@aws-sdk|aws-sdk/); // storage ONLY via the seam
     }
+    // …and the one owner really is the worker, so the exemption cannot rot
+    // into "whichever file happens to import it".
+    expect(files.filter((f) => /from\s+['"]bullmq['"]/.test(stripComments(read(f))))
+      .map((f) => f.split('/').slice(-2).join('/'))).toEqual(['moment-media/transcode.worker.ts']);
     // The storage seam is the ONLY storage import in the media pipeline.
     const media = walk(join(BACKEND, 'src/moment-media'), ['.ts']).map(read).join('\n');
     expect(media).toContain("from '../storage/storage.interface'");

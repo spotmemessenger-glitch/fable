@@ -20,6 +20,7 @@ import {
 } from './media.ports';
 import { stripImageMetadata, UnsupportedImageError } from './exif-strip';
 import { FixtureMomentWorkers, TranscodeJob, ThumbnailJob } from './media.queues';
+import type { TranscodeQueue, TranscodeIO, TranscodeResult } from './transcode.worker';
 
 const MAX_UPLOAD_BYTES = 50 * 1024 * 1024; // [PROPOSED] ceiling
 const ALLOWED_MIME = new Set(['image/jpeg', 'image/png', 'video/mp4', 'video/webm']);
@@ -101,10 +102,46 @@ export class MomentMediaService implements MomentMediaPort, MediaUploadPort, Med
     return { state: 'stored', mediaId, contentHash, deduplicated: false };
   }
 
+  /** Set by MediaModule at init; absent means "no queue", never "pretend". */
+  private transcodeQueue: TranscodeQueue | null = null;
+  attachTranscodeQueue(q: TranscodeQueue): void { this.transcodeQueue = q; }
+
+  /**
+   * The IO the transcode worker needs. Handed over as a narrow object rather
+   * than the whole service, so the worker cannot reach anything else.
+   */
+  transcodeIO(): TranscodeIO {
+    return {
+      readOriginal: async (mediaId) => {
+        const asset = await this.prisma.momentMediaAsset.findUnique({ where: { id: mediaId } });
+        if (!asset || !this.storage) return null;
+        // The adapter serves URLs, not bytes — fetch through the presigned GET
+        // so this path works identically against R2, MinIO and the local disk.
+        const url = await this.storage.getDownloadUrl(asset.storageKey).catch(() => null);
+        if (!url) return null;
+        const res = await fetch(url);
+        if (!res.ok) return null;
+        return { bytes: Buffer.from(await res.arrayBuffer()), mimeType: asset.mimeType };
+      },
+      writeDerived: async (mediaId, name, bytes, contentType) => {
+        const key = `moments/derived/${mediaId}-${name}`;
+        if (this.storage) await this.storage.putObject(key, bytes, contentType);
+        return key;
+      },
+      recordVariants: async (mediaId, result: TranscodeResult) => {
+        await this.prisma.momentMediaAsset.updateMany({
+          where: { id: mediaId },
+          data: { variants: JSON.stringify(result.variants), posterKey: result.posterKey, durationSeconds: result.durationSeconds },
+        });
+      },
+    };
+  }
+
   async enqueueTransform(spec: MediaTransformSpec): Promise<{ enqueued: boolean }> {
     const job: TranscodeJob = { name: 'transcode', ...spec };
-    await this.workers.process(job);
-    return { enqueued: true };
+    await this.workers.process(job);   // keep the contract record for the fences
+    if (this.transcodeQueue) return this.transcodeQueue.enqueue(spec.mediaId);
+    return { enqueued: false };
   }
 
   async enqueueThumbnail(spec: ThumbnailSpec): Promise<{ enqueued: boolean }> {
