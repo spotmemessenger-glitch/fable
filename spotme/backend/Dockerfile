@@ -33,9 +33,12 @@ RUN npx prisma generate
 RUN npm run build
 
 FROM node:22-slim
+# M3: ffmpeg/ffprobe are the {moment-media} transcode worker. Without them the
+# worker fails every job and a feed serves raw phone video (HEVC, trailing
+# moov) that Android Chrome often cannot play at all.
 WORKDIR /app
 ENV NODE_ENV=production
-RUN apt-get update -y && apt-get install -y --no-install-recommends openssl ca-certificates \
+RUN apt-get update -y && apt-get install -y --no-install-recommends openssl ca-certificates ffmpeg \
   && rm -rf /var/lib/apt/lists/*
 COPY --from=build /app/dist ./dist
 COPY --from=build /app/node_modules ./node_modules

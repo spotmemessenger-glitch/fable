@@ -346,6 +346,39 @@ export class AuthService {
     return { ...tokens, userId: user.id, username: user.username, ageVerificationRequired: false };
   }
 
+  /**
+   * Fix-the-Foundation F1 — sign back in after local state loss.
+   *
+   * A guest identity used to live ONLY in device storage: lose the storage
+   * (in-app browser, cleared site data) and the account was unreachable
+   * forever — the user re-registered under a new name every time. Knowing the
+   * claim secret proves the same thing here it proves on re-auth: this caller
+   * held the device that claimed the name. The new device ADOPTS the account's
+   * id (the id is the account; the device never gets to rename it).
+   *
+   * NON-ENUMERABLE: unknown username, wrong secret, an account with no secret,
+   * and a deleted account all answer the same 401 — a caller learns nothing
+   * about which part failed.
+   */
+  async recoverGuest(username: string, secret: string) {
+    const user = await this.prisma.user.findUnique({ where: { username } });
+    const secretMatches = user?.claimSecretHash != null && user.claimSecretHash === hash(secret);
+    if (!user || !secretMatches || isDeletedAccount(user)) {
+      throw new UnauthorizedException('invalid username or recovery code');
+    }
+    const tokens = await this.issueTokens(user.id, user.role, undefined);
+    return {
+      ...tokens,
+      userId: user.id,
+      username: user.username,
+      name: user.name,
+      ageVerificationRequired: !user.ageVerified,
+      // Same contract as guest re-auth: a frozen account recovers its READ
+      // access and is told why everything else is refused (D6 addendum).
+      ...(user.accountStatus === ACCOUNT_FROZEN_MINOR ? { accountFrozen: true, notice: FREEZE_NOTICE } : {}),
+    };
+  }
+
   async usernameCheck(username: string) {
     // Users and groups share ONE namespace. Checking only User would let a
     // group claim a name a person already holds (and vice versa), so @name

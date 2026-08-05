@@ -41,7 +41,8 @@ export class UsernameController {
   @Post()
   @HttpCode(200)
   async claimOrRelease(
-    @Body() body: { op?: string; username?: string; id?: string; name?: string; secret?: string },
+    @Body()
+    body: { op?: string; username?: string; id?: string; name?: string; secret?: string; birthYearMonth?: string },
   ) {
     const username = normalize(body.username);
     if (!USERNAME_RE.test(username)) throw new BadRequestException('invalid username');
@@ -54,7 +55,19 @@ export class UsernameController {
     if (!body.id || !/^[a-f0-9]{8,64}$/i.test(body.id)) {
       throw new BadRequestException('invalid id');
     }
-    await this.auth.guestAuth(body.id, username, body.name, body.secret);
+    // Wave 1B/1C: a claim IS a guest signup, so the 18+ declaration rides the
+    // same call — guestAuth validates it (a new id with no valid adult
+    // declaration is refused there; this route adds no second policy).
+    await this.auth.guestAuth(
+      body.id,
+      username,
+      body.name,
+      body.secret,
+      undefined,
+      undefined,
+      undefined,
+      typeof body.birthYearMonth === 'string' ? body.birthYearMonth : undefined,
+    );
     return { ok: true };
   }
 }

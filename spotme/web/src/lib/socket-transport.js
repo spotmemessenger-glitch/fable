@@ -383,7 +383,12 @@ async function guestAuth () {
     // answer — which is exactly where we were. Capacitor reports 'android' or
     // 'ios' inside the packaged app and 'web' in a browser tab.
     platform: globalThis.Capacitor?.getPlatform?.() || 'web',
-    appVersion: APP_VERSION
+    appVersion: APP_VERSION,
+    // 18+ gate: a NEW identity is an account creation, which the server
+    // refuses without an adult declaration. Onboarding stored the year-month
+    // on this device; older installs that predate the field simply omit it
+    // (their account already exists, so re-auth needs no declaration).
+    birthYearMonth: me.birthYearMonth || undefined
   }
   let res = await fetch(`${SERVER}/api/auth/guest`, {
     method: 'POST',
@@ -418,6 +423,30 @@ async function guestAuth () {
       dead.terminal = true
       dead.code = 'deleted_account'
       throw dead
+    }
+  }
+  /* An age refusal is TERMINAL, like a deleted account: the server will refuse
+   * this identity's creation on every retry, so the 2s retry loops must stop
+   * rather than spin silently forever (which is exactly what a plain 400 did
+   * to every pre-gate install). */
+  if (res.status === 400) {
+    let msg = null
+    try { msg = (await res.clone().json())?.message } catch { /* non-JSON body */ }
+    const text = Array.isArray(msg) ? msg.join(' ') : String(msg || '')
+    if (text.includes('18 and over')) {
+      const refused = new Error('Spot Me is for people 18 and over.')
+      refused.terminal = true
+      refused.code = 'age_requirement'
+      throw refused
+    }
+    /* A device from before the gate: its profile has no stored declaration, so
+     * account creation is refused until one is made. Terminal here, and the
+     * shell routes it back through onboarding to collect the birth month. */
+    if (text.includes('birthYearMonth') && !me.birthYearMonth) {
+      const need = new Error('Spot Me is 18+ now — confirm your birth month to continue.')
+      need.terminal = true
+      need.code = 'age_declaration_required'
+      throw need
     }
   }
   if (!res.ok) throw new Error(`guest auth failed (${res.status})`)

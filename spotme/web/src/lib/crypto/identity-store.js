@@ -303,7 +303,8 @@ export const PUBLISH = Object.freeze({
    *  failure to be retried — a deliberate, recoverable refusal the user has to
    *  be told about, because only they can fix it (leave private browsing, free
    *  up storage, use a different device). */
-  REFUSED_EPHEMERAL: 'refused-ephemeral',
+  // 'refused-ephemeral' retired in F2: the record now always states the key
+  // actually in use; peers adopt changes through the proof-driven self-heal.
   FAILED: 'failed',
 })
 
@@ -322,39 +323,23 @@ export async function publishIdentity (fetchToken) {
   }
   if (!accessToken) return pub(PUBLISH.NO_TOKEN)
 
-  /* NEVER OVERWRITE A GOOD RECORD WITH AN EPHEMERAL KEY.
+  /* ALWAYS PUBLISH THE KEY THIS SESSION ACTUALLY ENCRYPTS WITH.
    *
-   * If this device could not persist its identity, the key in hand lives only
-   * until the tab closes. Publishing it replaces whatever peers are already
-   * deriving against, so every existing conversation goes silent — and does so
-   * again on the next launch, and the next. One device that cannot write to
-   * IndexedDB takes down every chat it is part of, in both directions.
-   *
-   * Better to leave the previous public key standing and let this session fail
-   * to decrypt than to break the other side too. If nothing is published yet
-   * there is nothing to protect, so a first publish still goes ahead. */
+   * This used to refuse when the identity could not be persisted (the old A3
+   * rule: protect the published record from ephemeral churn). Measured on real
+   * handsets, that refusal was the WORSE failure: the transport encrypts with
+   * the in-hand key regardless, so peers self-healing against the server
+   * record fetched a key this session does not hold — wrong-key in both
+   * directions, permanently, with no user-visible cause (Fix-the-Foundation
+   * F2). Owner decision: a re-key heals automatically — peers re-fetch on
+   * decrypt failure and adopt (roomKeyForConvo), with the change recorded in
+   * the trust store and surfaced in Verify. An unpublishable truth is the one
+   * thing this record must never hold. */
   if (id.persisted === false) {
-    /* Our own id, taken from the token's `sub` rather than from db.profile() —
-     * this module is imported BY the room layer, so reaching back for db would
-     * close an import cycle, and `sub` is the authenticated principal anyway. */
-    const selfId = (() => {
-      try { return JSON.parse(atob(String(accessToken).split('.')[1] || ''))?.sub || null } catch { return null }
-    })()
-    const existing = selfId ? await fetchPeerKey(selfId, accessToken).catch(() => null) : null
-    if (existing?.publicKey && existing.publicKey !== id.publicKeyB64) {
-      /* A DEFINED, RECOVERABLE REFUSAL — not a silent reset, and not a bare
-       * `false` the caller cannot tell from a dropped connection. This is the
-       * A3 requirement: the one routine cause of honest key churn is a device
-       * that cannot persist its identity and republishes a new one every
-       * launch. Stopping that is what makes A2's refusal to adopt a changed key
-       * safe, because after this a key change is rare and suspicious rather
-       * than a Tuesday. */
-      console.warn(
-        'spotme identity: NOT republishing — this device cannot persist its key, ' +
-        'and overwriting the published one would silently break every existing chat.'
-      )
-      return pub(PUBLISH.REFUSED_EPHEMERAL)
-    }
+    console.warn(
+      'spotme identity: publishing an EPHEMERAL key — this window cannot persist ' +
+      'storage, so peers will see a key change on every launch (they self-heal).'
+    )
   }
 
   try {
@@ -468,20 +453,32 @@ export async function roomKeyForConvo (convo, fetchToken, opts = {}) {
     }
   }
 
-  /* A DIFFERENT KEY IS A PROPOSAL, NOT AN ADOPTION.
+  /* A DIFFERENT KEY: ADOPT WHEN FRAMES PROVED THE PIN DEAD, PROPOSE OTHERWISE.
    *
-   * This is the behaviour change. Previously the fetched key was used AND
-   * persisted over the stored one, so a server able to provoke a decrypt
-   * failure — which is what drives `forceRefetch` — could rotate the key it
-   * hands out and have every client adopt it silently and permanently.
+   * Fix-the-Foundation F2 (owner decision) rebalanced this. The pure
+   * proposal-only rule protected the pin from a server able to provoke a
+   * decrypt failure — but its price, measured on real handsets, was that every
+   * HONEST re-key (a device that lost its storage and recovered its account)
+   * turned the conversation permanently unreadable in both directions, with
+   * the UI telling both people to delete the chat.
    *
-   * Now the pinned key is what gets used, and the differing key is reported so
-   * the user can decide. Enforcement is still ADVISORY in this step: nothing is
-   * blocked, and a peer who legitimately rotated will fail to decrypt until the
-   * change is accepted. That availability cost is the reason A3 ships in the
-   * same change — it removes the one routine cause of honest key churn. */
+   * The rule now: on `forceRefetch` — which only the transport's self-heal
+   * sets, and only after a frame actually failed to open against the pinned
+   * key — the fetched key is ADOPTED so the conversation continues. The
+   * adoption is loud, not silent: `observePeerKey` above has already recorded
+   * the changed key with 'server-refetch' provenance (the trust store marks
+   * the peer Changed, which Verify surfaces), and `onPeerKeyAdopted` lets the
+   * room layer persist the new pin and log it. On every OTHER path — boot,
+   * first derive — a differing key remains a proposal and the pin is
+   * untouched: nothing may rotate a pin except proof the old one stopped
+   * working. */
   if (fetched && trusted && fetched !== trusted) {
-    opts.onPeerKeyProposed?.({ proposed: fetched, pinned: trusted, peerId })
+    if (opts.forceRefetch) {
+      opts.onPeerKeyAdopted?.({ adopted: fetched, previous: trusted, peerId })
+      trusted = fetched
+    } else {
+      opts.onPeerKeyProposed?.({ proposed: fetched, pinned: trusted, peerId })
+    }
   } else if (fetched && !stored) {
     /* First key this conversation has ever had. Nothing is being replaced, so
      * there is nothing to protect and it is safe to cache locally. */

@@ -49,17 +49,51 @@ function gpsJpeg(): Buffer {
 }
 
 describe('Moments — dark integration fences', () => {
-  it('AppModule imports NEITHER MomentsModule/MediaModule NOR their subtrees', () => {
+  /* WAVE 1D (M1) CHANGED THIS INVARIANT, DELIBERATELY.
+   *
+   * Moments is now MOUNTED. "Dark" no longer means "absent from the DI graph";
+   * it means every route answers 404 unless the `moments` domain is enabled
+   * for the caller. The fence therefore asserts the GATE rather than the
+   * absence — an unmounted module and a gated one are indistinguishable from
+   * outside, which is the property that actually matters, and the runtime
+   * proof lives in moments-gate-runtime.spec.ts. Asserting absence here would
+   * now forbid the activation the owner authorised. */
+  it('AppModule mounts MomentsModule (activation) — and nothing else changed', () => {
     const src = read(join(BACKEND, 'src/app.module.ts'));
-    for (const banned of ['MomentsModule', 'MediaModule', './moments', './moment-media']) {
+    expect(src).toContain('MomentsModule');
+    // The dark domains stay OUT of the graph entirely.
+    for (const banned of ['ExchangeModule', 'EventsModule', 'AssistantModule']) {
       expect(src).not.toContain(banned);
     }
   });
 
-  it('no backend module OUTSIDE the moments subtrees imports them (static or dynamic)', () => {
-    const files = walk(join(BACKEND, 'src'), ['.ts']).filter((f) => !f.includes('/moments/') && !f.includes('/moment-media/'));
+  it('EVERY moments controller sits behind DomainGate(\'moments\') + requireAdult', () => {
+    const controllers = walk(join(BACKEND, 'src/moments'), ['.ts']).filter((f) => f.endsWith('.controller.ts'));
+    expect(controllers.length).toBeGreaterThan(0);
+    for (const file of controllers) {
+      const src = read(file);
+      expect(src).toMatch(/DomainGate\('moments'/);
+      expect(src).toMatch(/requireAdult:\s*true/);
+    }
+  });
+
+  it('no backend module OUTSIDE the moments subtrees reaches into them, except the mount', () => {
+    const files = walk(join(BACKEND, 'src'), ['.ts'])
+      .filter((f) => !f.includes('/moments/') && !f.includes('/moment-media/'))
+      .filter((f) => !f.endsWith('app.module.ts'))   // the mount itself
+      .filter((f) => !f.endsWith('main.ts'));        // the upload body-parser path
     expect(files.filter((f) => MOMENTS_REACH.test(read(f)))).toEqual([]);
-    expect(read(join(BACKEND, 'src/main.ts'))).not.toMatch(/\bmoments\b/i);
+  });
+
+  it('main.ts names the upload ROUTE only — it never imports the moments subtree', () => {
+    /* The raw-body parser has to know the path (Express runs middleware in
+     * registration order, so a later parser never sees the request). Knowing a
+     * URL string is not reaching into the module: an import would put moments
+     * code on the boot path even with the gate closed. */
+    const src = read(join(BACKEND, 'src/main.ts'));
+    expect(src).toContain('/api/v1/moments/media');
+    expect(src).not.toMatch(/from\s+['"]\.\/moments/);
+    expect(src).not.toMatch(/from\s+['"]\.\/moment-media/);
   });
 
   it('the web-next entry (App/main) mounts NEITHER MomentsShell NOR the moments subtree', () => {
@@ -106,12 +140,26 @@ describe('Moments — dark integration fences', () => {
       ...walk(join(WEBNEXT, 'src/moments'), ['.ts', '.tsx']),
     ];
     expect(files.length).toBeGreaterThan(10); // non-vacuous
+    /* M3 NARROWED THE BULLMQ RULE, IT DID NOT DROP IT.
+     *
+     * The dark phase forbade bullmq everywhere because nothing was allowed to
+     * connect. The authorised activation gives the transcode worker a real
+     * queue — so exactly ONE file may import bullmq, and the prohibition still
+     * holds for every other file. That keeps the property the fence was
+     * protecting: the media SERVICE must not quietly become a queue client,
+     * and a controller must never reach a queue at all. The camera-branch and
+     * S3-SDK prohibitions are unchanged. */
+    const QUEUE_OWNER = 'moment-media/transcode.worker.ts';
     for (const f of files) {
       const s = stripComments(read(f));
       expect(s).not.toMatch(/lib\/camera|camera-engine|createCameraEngine/);
-      expect(s).not.toMatch(/from\s+['"]bullmq['"]/);
+      if (!f.endsWith(QUEUE_OWNER)) expect(s).not.toMatch(/from\s+['"]bullmq['"]/);
       expect(s).not.toMatch(/@aws-sdk|aws-sdk/); // storage ONLY via the seam
     }
+    // …and the one owner really is the worker, so the exemption cannot rot
+    // into "whichever file happens to import it".
+    expect(files.filter((f) => /from\s+['"]bullmq['"]/.test(stripComments(read(f))))
+      .map((f) => f.split('/').slice(-2).join('/'))).toEqual(['moment-media/transcode.worker.ts']);
     // The storage seam is the ONLY storage import in the media pipeline.
     const media = walk(join(BACKEND, 'src/moment-media'), ['.ts']).map(read).join('\n');
     expect(media).toContain("from '../storage/storage.interface'");

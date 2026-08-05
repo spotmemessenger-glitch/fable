@@ -168,34 +168,32 @@ room.onUndecryptable = (info) => { alerts.push(info) }
 
 const provider = (opts) => roomKeyForConvo(convo, async () => ({ accessToken: 'tok' }), {
   ...opts,
-  onPeerKeyChanged: (peerKey) => { convo.peerKey = peerKey; db.upsertConvo({ roomId: ROOM, peerKey }) }
+  onPeerKeyChanged: (peerKey) => { convo.peerKey = peerKey; db.upsertConvo({ roomId: ROOM, peerKey }) },
+  onPeerKeyAdopted: ({ adopted }) => { convo.peerKey = adopted; db.upsertConvo({ roomId: ROOM, peerKey: adopted }) }
 })
 
 /* ========== 1. the repair still works, and stays SILENT when it does ======= */
 
-await checkAsync('a peer publishing a DIFFERENT key is not silently adopted — the room reports instead', async () => {
-  /* REWRITTEN IN A2, and the old assertion is worth stating because it was the
-   * opposite. This used to read "a room the self-heal REPAIRS raises no alarm —
-   * the message just arrives", and it passed: the transport force-refetched,
-   * took whatever key the server returned, wrote it over `convo.peerKey`, and
-   * the frame opened.
+await checkAsync('a peer whose key legitimately moved is HEALED — the message arrives, pin updated', async () => {
+  /* REWRITTEN IN F2 (owner decision), reverting A2's availability trade on
+   * this one path. A2 kept the frame shut so that server-driven substitution
+   * and honest recovery were indistinguishable-but-refused; the measured
+   * price, once account recovery exists, was that ordinary re-keys bricked
+   * conversations and the UI told both people to delete the chat.
    *
-   * That is the vulnerability. The server chooses what `peerKeyOnServer` is, and
-   * the server can provoke the decrypt failure that triggers the refetch — so
-   * the old behaviour let it rotate a peer's key and have every client adopt it
-   * with no trace. Silently repairing and silently being MITM'd were the same
-   * code path.
-   *
-   * Now the pin holds, the frame stays unreadable, and the room SAYS SO. That is
-   * a real availability cost, accepted deliberately: A3 removes the one routine
-   * cause of honest key churn, so a change here is now rare and suspicious. */
+   * The rule now: adoption requires PROOF the pin is dead (a frame that
+   * failed against it — the only thing that sets forceRefetch), and every
+   * adoption is recorded in the trust store with server-refetch provenance
+   * and surfaced in Verify. Availability with an audit trail, rather than a
+   * dead room. Routine derives still refuse substitution (a5-matrix,
+   * identity-substitution). */
   peerKeyOnServer = bobNewPub
-  convo.peerKey = bobOldPub                     // the pin the server must not override
+  convo.peerKey = bobOldPub                     // the dead pin the heal must replace
   clearRoomKey(ROOM); setRoomKeyProvider(ROOM, provider)
   alerts = []; received = null
   room.onFrame({ roomId: ROOM, from: BOB, type: 'msg', seq: 1, payload: await sealWith(trueKey, 'you can hear me now') })
-  for (let i = 0; i < 40 && !alerts.length; i++) await tick()
-  return received === null && alerts.length >= 1 && convo.peerKey === bobOldPub
+  for (let i = 0; i < 40 && !received; i++) await tick()
+  return received?.text === 'you can hear me now' && convo.peerKey === bobNewPub
 })
 
 /* ========== 2. a room nothing can repair DOES raise it ===================== */

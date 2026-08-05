@@ -91,6 +91,37 @@ export function parseObjectKey(objectKey: string): ObjectKeyParts | null {
 }
 
 /**
+ * Moments object keys — `moments/<ownerId>/<mediaId>`.
+ *
+ * A SEPARATE namespace from `rooms/`, and separately parsed, so the two kinds
+ * of object can never be confused for one another: a room key is E2EE
+ * ciphertext whose access model is room membership, a moments key is plaintext
+ * social media whose access model is the Moments policy. `parseObjectKey`
+ * deliberately still rejects these — the chat download route must not serve a
+ * moments object, and vice versa.
+ */
+export function buildMomentObjectKey(ownerId: string, mediaId: string): string {
+  if (!isSafeSegment(ownerId)) throw new Error('invalid ownerId for moment object key');
+  if (!isSafeSegment(mediaId)) throw new Error('invalid mediaId for moment object key');
+  return `moments/${ownerId}/${mediaId}`;
+}
+
+/** Parse a moments key back, or null if it is not one we issued. */
+export function parseMomentObjectKey(objectKey: string): { ownerId: string; mediaId: string } | null {
+  if (typeof objectKey !== 'string' || objectKey.length > 512) return null;
+  const parts = objectKey.split('/');
+  if (parts.length !== 3 || parts[0] !== 'moments') return null;
+  const [, ownerId, mediaId] = parts;
+  if (!isSafeSegment(ownerId) || !isSafeSegment(mediaId)) return null;
+  return { ownerId, mediaId };
+}
+
+/** Either namespace — for the methods both kinds of object legitimately share. */
+export function isKnownObjectKey(objectKey: string): boolean {
+  return parseObjectKey(objectKey) != null || parseMomentObjectKey(objectKey) != null;
+}
+
+/**
  * What every storage backend must provide.
  *
  * Four methods, no more — the narrowness is the same design choice as
@@ -106,6 +137,25 @@ export interface IStorageAdapter {
 
   /** A short-lived URL the client may GET ciphertext from. */
   getDownloadUrl(objectKey: string): Promise<string>;
+
+  /**
+   * Write bytes the SERVER already holds. Moments only (M1 activation).
+   *
+   * WHY THIS DOES NOT BREAK THE RULE ABOVE. Chat attachments are ciphertext
+   * sealed on the device, so the server has no plaintext to write and this
+   * method is never used for them — they keep the presigned-PUT path, and the
+   * adapter still cannot decrypt, thumbnail, transcode or inspect anything
+   * (FORBIDDEN_STORAGE_SURFACE is unchanged).
+   *
+   * Moments media is the opposite kind of object BY DESIGN: public social
+   * content, not end-to-end encrypted. The server MUST hold its plaintext for
+   * one reason — stripping EXIF/GPS before anything is persisted — and a
+   * presigned direct-to-bucket upload would put the ORIGINAL, location-bearing
+   * file in the bucket untouched. So the bytes travel through the server, get
+   * stripped, and are written here. Storing an unstripped original is the
+   * failure this method exists to prevent.
+   */
+  putObject(objectKey: string, bytes: Buffer, contentType: string): Promise<boolean>;
 
   /** Destroy one object. Idempotent: deleting what is not there is success. */
   deleteObject(objectKey: string): Promise<boolean>;

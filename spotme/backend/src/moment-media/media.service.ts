@@ -13,13 +13,14 @@
 import { Inject, Injectable, Optional } from '@nestjs/common';
 import { createHash, randomUUID } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service';
-import { IStorageAdapter, STORAGE_ADAPTER } from '../storage/storage.interface';
+import { IStorageAdapter, STORAGE_ADAPTER, buildMomentObjectKey } from '../storage/storage.interface';
 import {
   IngestResult, MediaUploadIntentInput, MediaUploadSlot, MediaTransformSpec, ThumbnailSpec,
   MediaUploadPort, MediaTransformPort, ThumbnailPort, StoryMediaPort, MomentMediaPort,
 } from './media.ports';
 import { stripImageMetadata, UnsupportedImageError } from './exif-strip';
 import { FixtureMomentWorkers, TranscodeJob, ThumbnailJob } from './media.queues';
+import type { TranscodeQueue, TranscodeIO, TranscodeResult } from './transcode.worker';
 
 const MAX_UPLOAD_BYTES = 50 * 1024 * 1024; // [PROPOSED] ceiling
 const ALLOWED_MIME = new Set(['image/jpeg', 'image/png', 'video/mp4', 'video/webm']);
@@ -51,7 +52,7 @@ export class MomentMediaService implements MomentMediaPort, MediaUploadPort, Med
     return { mediaId, uploadUrl, headers: { 'content-type': input.mimeType }, expiresAtUTC: Date.now() + SLOT_TTL_MS };
   }
 
-  async ingest(mediaId: string, bytes: Buffer, mimeType: string): Promise<IngestResult> {
+  async ingest(mediaId: string, bytes: Buffer, mimeType: string, ownerId = 'assets'): Promise<IngestResult> {
     if (!ALLOWED_MIME.has(mimeType)) return { state: 'refused', reason: 'bad-mime' };
     if (bytes.length > MAX_UPLOAD_BYTES) return { state: 'refused', reason: 'too-large' };
 
@@ -77,8 +78,21 @@ export class MomentMediaService implements MomentMediaPort, MediaUploadPort, Med
       return { state: 'deduplicated', mediaId, contentHash, deduplicated: true, canonicalMediaId: existing.id };
     }
     const kind = mimeType.startsWith('video/') ? 'video' : 'image';
+    /* WRITE THE STRIPPED BYTES, AND ONLY THE STRIPPED BYTES (M1 activation).
+     *
+     * The dark phase recorded an asset row and stored nothing, which was fine
+     * while nothing rendered. Now that a feed displays these, the object has to
+     * exist — and the object that exists must be `clean`, never `bytes`. The
+     * original, with its GPS tags, is never written anywhere and is dropped
+     * with this stack frame. A storage failure REFUSES the ingest rather than
+     * leaving a row pointing at an object that was never written. */
+    const storageKey = buildMomentObjectKey(ownerId, mediaId);
+    if (this.storage) {
+      const stored = await this.storage.putObject(storageKey, clean, mimeType);
+      if (!stored) return { state: 'refused', reason: 'storage-unavailable' };
+    }
     await this.prisma.momentMediaAsset.create({
-      data: { id: mediaId, kind, mimeType, sizeBytes: clean.length, contentHash, storageKey: `moments/assets/${mediaId}`, exifStripped: true },
+      data: { id: mediaId, kind, mimeType, sizeBytes: clean.length, contentHash, storageKey, exifStripped: true },
     });
     // Enqueue the processing CONTRACTS (fixture record — nothing connects).
     if (kind === 'video') {
@@ -88,16 +102,58 @@ export class MomentMediaService implements MomentMediaPort, MediaUploadPort, Med
     return { state: 'stored', mediaId, contentHash, deduplicated: false };
   }
 
+  /** Set by MediaModule at init; absent means "no queue", never "pretend". */
+  private transcodeQueue: TranscodeQueue | null = null;
+  attachTranscodeQueue(q: TranscodeQueue): void { this.transcodeQueue = q; }
+
+  /**
+   * The IO the transcode worker needs. Handed over as a narrow object rather
+   * than the whole service, so the worker cannot reach anything else.
+   */
+  transcodeIO(): TranscodeIO {
+    return {
+      readOriginal: async (mediaId) => {
+        const asset = await this.prisma.momentMediaAsset.findUnique({ where: { id: mediaId } });
+        if (!asset || !this.storage) return null;
+        // The adapter serves URLs, not bytes — fetch through the presigned GET
+        // so this path works identically against R2, MinIO and the local disk.
+        const url = await this.storage.getDownloadUrl(asset.storageKey).catch(() => null);
+        if (!url) return null;
+        const res = await fetch(url);
+        if (!res.ok) return null;
+        return { bytes: Buffer.from(await res.arrayBuffer()), mimeType: asset.mimeType };
+      },
+      writeDerived: async (mediaId, name, bytes, contentType) => {
+        const key = `moments/derived/${mediaId}-${name}`;
+        if (this.storage) await this.storage.putObject(key, bytes, contentType);
+        return key;
+      },
+      recordVariants: async (mediaId, result: TranscodeResult) => {
+        await this.prisma.momentMediaAsset.updateMany({
+          where: { id: mediaId },
+          data: { variants: JSON.stringify(result.variants), posterKey: result.posterKey, durationSeconds: result.durationSeconds },
+        });
+      },
+    };
+  }
+
   async enqueueTransform(spec: MediaTransformSpec): Promise<{ enqueued: boolean }> {
     const job: TranscodeJob = { name: 'transcode', ...spec };
-    await this.workers.process(job);
-    return { enqueued: true };
+    await this.workers.process(job);   // keep the contract record for the fences
+    if (this.transcodeQueue) return this.transcodeQueue.enqueue(spec.mediaId);
+    return { enqueued: false };
   }
 
   async enqueueThumbnail(spec: ThumbnailSpec): Promise<{ enqueued: boolean }> {
     const job: ThumbnailJob = { name: 'thumbnail', ...spec };
     await this.workers.process(job);
     return { enqueued: true };
+  }
+
+  /** A short-lived URL for a stored asset, or null with no storage configured. */
+  async downloadUrl(storageKey: string): Promise<string | null> {
+    if (!this.storage) return null;
+    try { return await this.storage.getDownloadUrl(storageKey); } catch { return null; }
   }
 
   async stampStoryRetention(mediaId: string, expiresAtUTC: number): Promise<void> {

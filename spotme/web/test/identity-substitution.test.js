@@ -122,30 +122,45 @@ await checkAsync('a forced re-fetch returning a DIFFERENT key does not overwrite
   return convo.peerKey === bobReal && persisted === null
 })
 
-await checkAsync('…and the key it DERIVES with is the pinned one, not the served one', async () => {
+await checkAsync('…on forceRefetch the served key IS adopted for derivation (F2), loudly', async () => {
+  /* REWRITTEN IN F2 (owner decision). This asserted derive-against-the-pin,
+   * always — and the measured price was that every honest re-key bricked the
+   * conversation permanently, with delete-this-chat advice on both phones.
+   * `forceRefetch` fires only after a frame failed against the pin; on that
+   * proof the served key is adopted so the chat continues. The adoption is
+   * NEVER silent: `observePeerKey` has recorded the change with
+   * server-refetch provenance (the trust store marks the peer Changed, which
+   * Verify surfaces), and `onPeerKeyAdopted` names both sides for the room
+   * layer's log and pin update. */
   const convo = convoWith(bobReal)
   peerKeyOnServer = bobEvil
-  const substituted = await roomKeyForConvo(convo, tok, { forceRefetch: true })
-  const honest = await roomKeyForConvo(convoWith(bobReal), tok, {})
+  let adoption = null
+  const substituted = await roomKeyForConvo(convo, tok, { forceRefetch: true, onPeerKeyAdopted: (a) => { adoption = a } })
+  const served = await roomKeyForConvo(convoWith(bobEvil), tok, {})
 
-  /* Proven BY USE, not by comparing bytes: the derived key is deliberately
-   * non-extractable (ADR-001), so `exportKey` throws — and a test that reached
-   * for the raw bytes would be asserting against a property the design
-   * specifically forbids. Sealing with one and opening with the other proves
-   * they are the same key without ever extracting either. */
+  /* Proven BY USE, not by comparing bytes (the key is non-extractable). */
+  const iv = crypto.getRandomValues(new Uint8Array(12))
+  const ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, served,
+    new TextEncoder().encode('derived from the served key'))
+  const out = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, substituted, ct)
+  return new TextDecoder().decode(out) === 'derived from the served key' &&
+    adoption?.adopted === bobEvil && adoption?.previous === bobReal && adoption?.peerId === BOB
+})
+
+await checkAsync('…WITHOUT forceRefetch a differing key is never adopted — the pin derives', async () => {
+  /* The substitution defense that remains: no path except proof-of-dead-pin
+   * (a decrypt failure driving forceRefetch) may rotate the pin. A routine
+   * derive with a hostile record served underneath still uses the pin. */
+  const convo = convoWith(bobReal)
+  peerKeyOnServer = bobEvil
+  let adoption = null
+  const routine = await roomKeyForConvo(convo, tok, { onPeerKeyAdopted: (a) => { adoption = a } })
+  const honest = await roomKeyForConvo(convoWith(bobReal), tok, {})
   const iv = crypto.getRandomValues(new Uint8Array(12))
   const ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, honest,
     new TextEncoder().encode('derived from the pin'))
-  const out = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, substituted, ct)
-  return new TextDecoder().decode(out) === 'derived from the pin'
-})
-
-await checkAsync('…and the differing key is reported as a PROPOSAL, with both sides named', async () => {
-  const convo = convoWith(bobReal)
-  peerKeyOnServer = bobEvil
-  let proposal = null
-  await roomKeyForConvo(convo, tok, { forceRefetch: true, onPeerKeyProposed: (p) => { proposal = p } })
-  return proposal?.proposed === bobEvil && proposal?.pinned === bobReal && proposal?.peerId === BOB
+  const out = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, routine, ct)
+  return new TextDecoder().decode(out) === 'derived from the pin' && adoption === null
 })
 
 await checkAsync('an UNCHANGED key is not reported as a proposal — no crying wolf', async () => {
@@ -188,11 +203,16 @@ await checkAsync('an offline re-fetch falls back to the pin rather than going da
 
 /* ================= C. A3: the honest cause of key churn is stopped ======== */
 
-await checkAsync('a device that CANNOT persist its key refuses to republish over a good record', async () => {
-  /* Measured in production and recorded in identity-store.js: @vijay22's
-   * published key moved three times in one session because the device could
-   * not persist it, and every peer went dark. That is the routine key churn
-   * A2's refusal would otherwise trip over constantly. */
+await checkAsync('a device that CANNOT persist its key still publishes the key it USES (F2)', async () => {
+  /* REWRITTEN IN F2 (owner decision). The A3 refusal protected the published
+   * record from ephemeral churn — but the transport encrypts with the in-hand
+   * key regardless, so the refusal made the session unhealable: peers
+   * re-fetching the record got a key this session does not hold, and the chat
+   * died in both directions with delete-this-chat advice. The record now
+   * always states the key actually in use; peers adopt it through the
+   * proof-driven self-heal, and the churn stays visible (identityStatus
+   * 'ephemeral' warns on-device; every adoption is logged and Verify shows
+   * the change). */
   const { forgetIdentity } = await import('../src/lib/crypto/identity-store.js')
   forgetIdentity()
   globalThis.indexedDB = {
@@ -219,14 +239,13 @@ await checkAsync('a device that CANNOT persist its key refuses to republish over
     // `sub` is read from the token to identify self without importing db.
     accessToken: `x.${Buffer.from(JSON.stringify({ sub: 'alice' })).toString('base64url')}.y`
   }))
-  return out.ok === false && out.reason === PUBLISH.REFUSED_EPHEMERAL && posted.length === 0
+  return out.ok === true && posted.length === 1
 })
 
-await checkAsync('the refusal is a DEFINED reason, distinguishable from a network failure', async () => {
-  // A bare `false` for both is what made this invisible: a caller could not
-  // tell "this device is broken and only the user can fix it" from "retry".
-  return PUBLISH.REFUSED_EPHEMERAL !== PUBLISH.FAILED &&
-    typeof PUBLISH.REFUSED_EPHEMERAL === 'string'
+await checkAsync('publish outcomes remain DEFINED states, distinguishable from each other', async () => {
+  // A bare `false` for every failure is what made faults invisible: a caller
+  // could not tell "this device is broken" from "retry in a moment".
+  return PUBLISH.OK !== PUBLISH.FAILED && typeof PUBLISH.FAILED === 'string'
 })
 
 await checkAsync('the result is an OBJECT, so no caller is inverted by a truthy failure string', async () => {

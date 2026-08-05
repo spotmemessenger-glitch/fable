@@ -35,6 +35,8 @@ import * as groupManage from './views/group-manage.js'
 import * as verify from './views/verify.js'
 import * as notifications from './views/notifications.js'
 import * as stories from './views/stories.js'
+import * as moments from './views/moments.js'
+import { momentsAvailable } from './lib/moments-api.js'
 
 const app = document.getElementById('app')
 
@@ -60,15 +62,26 @@ const resetOrdered = () => {
 
 const RESETTING = new URL(window.location.href).searchParams.has('fresh') || resetOrdered()
 
+/* F1: ask the browser to mark this origin's storage durable, so the identity
+ * key and profile survive storage pressure. Best-effort — denial changes
+ * nothing about how the app behaves, it only leaves eviction possible. */
+if (!RESETTING) { try { navigator.storage?.persist?.().catch(() => {}) } catch { /* older engines */ } }
+
 /* ------------------------------------------------- locked bottom bar (5) */
 
 const NAV_ITEMS = [
   {
-    // Home left the bar (owner call): the chat list is the landing screen and
-    // the Stories screen carries the way back. This slot is Stories now — the
-    // rings moved off Home entirely.
-    path: '#/stories', label: 'Stories',
-    icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="8.4" stroke-dasharray="4.6 3.1"/><circle cx="12" cy="12" r="3.4"/></svg>'
+    /* M6: POSTS replaces Stories in the bar. Stories are not a destination —
+     * they are the ring row at the top of the Posts feed, the way Instagram
+     * and Messenger do it, so the bar stays at five slots and the rings sit
+     * where people already look for them. #/stories still routes (old links
+     * keep working); it simply has no tab.
+     *
+     * `flag: 'moments'` means this item is DROPPED from the bar unless the
+     * server serves Moments to this account — in production the bar is
+     * byte-identical to what it was before this change. */
+    path: '#/posts', label: 'Posts', flag: 'moments',
+    icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><rect x="3.4" y="3.4" width="17.2" height="17.2" rx="4.6"/><circle cx="12" cy="12" r="3.6"/><circle cx="17" cy="7" r="1.1" fill="currentColor" stroke="none"/></svg>'
   },
   {
     path: '#/discovery', label: 'Discovery',
@@ -98,14 +111,24 @@ const ACTIVE_TAB = {
   '#/bluetooth': '#/chat',      // a Home tab now, so Chats stays lit
   '#/chat': '#/chat',
   '#/settings': null,           // reached via the profile pic
-  '#/stories': '#/stories',
+  '#/stories': null,            // still routable by link; no tab of its own
+  '#/posts': '#/posts',
   '#/notifications': '#/notifications'
 }
 
 let navEl = null
 
+/* Which flagged tabs the SERVER is currently serving. Empty until the probe
+ * answers, so the bar renders in its production shape first and gains a tab
+ * only if Moments is genuinely available — never the other way round. */
+const enabledFlags = new Set()
+
+function navItems () {
+  return NAV_ITEMS.filter((item) => !item.flag || enabledFlags.has(item.flag))
+}
+
 function buildNav () {
-  navEl = el('nav', { class: 'nav' }, NAV_ITEMS.map((item) =>
+  navEl = el('nav', { class: 'nav' }, navItems().map((item) =>
     el('button', {
       class: 'nv', type: 'button', 'data-path': item.path,
       html: item.icon,
@@ -113,6 +136,20 @@ function buildNav () {
     }, [item.label])
   ))
   return navEl
+}
+
+/** Re-ask the server which flagged surfaces exist, and rebuild the bar. */
+export async function refreshFlaggedTabs () {
+  let on = false
+  try { on = await momentsAvailable() } catch { on = false }
+  const had = enabledFlags.has('moments')
+  if (on) enabledFlags.add('moments'); else enabledFlags.delete('moments')
+  if (on !== had && navEl) {
+    const fresh = buildNav()
+    navEl.replaceWith(fresh)
+    navEl = fresh
+    updateNav(ACTIVE_TAB[window.location.hash] || '#/chat')
+  }
 }
 
 function updateNav (route) {
@@ -154,6 +191,7 @@ const ROUTES = {
   '#/settings': profile,
   '#/notifications': notifications,
   '#/stories': stories,
+  '#/posts': moments,
   '#/bluetooth': bluetooth
 }
 
@@ -233,6 +271,37 @@ const REGISTRY_API = API_BASE
 const USERNAME_RE = /^[a-z0-9_]{3,16}$/
 const CHECK_DEBOUNCE_MS = 400
 
+/* 18+ gate (owner decision D6). Year-month only — never a full birthday — and
+ * the same CONSERVATIVE month rule the server enforces: eligible only once the
+ * 18th-birthday month has fully passed in UTC. This check is a courtesy so the
+ * refusal is instant and clearly worded; the server refuses independently, so
+ * bypassing this buys nothing. */
+/* Fix-the-Foundation F1: this account lives in this browser's storage, and
+ * in-app browser views (links opened inside WhatsApp, Instagram, chat apps…)
+ * often keep a SEPARATE, throwaway copy of that storage — which is exactly
+ * "I have to sign up again every time I reopen". The app cannot stop a host
+ * app from discarding its webview storage; what it can do is ask for durable
+ * storage, say out loud when the window looks throwaway, and (the real fix)
+ * let the same @username sign back in with a recovery code. */
+const IN_APP_BROWSER_RE = /\bwv\b|FBAN|FBAV|FB_IAB|Instagram|Line\/|MicroMessenger|Snapchat|GSA\/|TikTok|Twitter/i
+function looksInApp () {
+  const ua = navigator.userAgent || ''
+  if (IN_APP_BROWSER_RE.test(ua)) return true
+  // iOS webviews ship AppleWebKit without the trailing "Safari" token.
+  return /iPhone|iPad/.test(ua) && /AppleWebKit/.test(ua) && !/Safari\//.test(ua)
+}
+
+const BIRTH_YM_RE = /^\d{4}-(0[1-9]|1[0-2])$/
+const AGE_REFUSAL = 'Spot Me is for people 18 and over. We are not able to offer you an account yet.'
+function isAdultYM (ym) {
+  if (!BIRTH_YM_RE.test(ym)) return false
+  const now = new Date()
+  const eighteenthYear = Number(ym.slice(0, 4)) + 18
+  const month = Number(ym.slice(5, 7))
+  const curY = now.getUTCFullYear()
+  return curY > eighteenthYear || (curY === eighteenthYear && now.getUTCMonth() + 1 > month)
+}
+
 function renderOnboarding () {
   clear(app)
   viewContainer = null
@@ -285,6 +354,13 @@ function renderOnboarding () {
     checkTimer = setTimeout(() => checkAvailability(cleaned), CHECK_DEBOUNCE_MS)
   })
 
+  /* Birth year-month for the 18+ gate. type="month" gets a native picker on
+   * phones and degrades to text elsewhere — the placeholder covers that. */
+  const birthYM = el('input', {
+    class: 'ob-name', type: 'month', placeholder: 'YYYY-MM',
+    autocomplete: 'bday', max: new Date().toISOString().slice(0, 7)
+  })
+
   const avatarSlot = el('button', {
     class: 'ob-avatar', type: 'button', 'aria-label': 'Add a photo',
     onclick: () => filePick.click()
@@ -315,19 +391,41 @@ function renderOnboarding () {
       return
     }
     if (usernameState === 'taken') { toast('That username is taken'); username.focus(); return }
+    const ym = birthYM.value.trim()
+    if (!BIRTH_YM_RE.test(ym)) {
+      toast('Enter your birth month — Spot Me is 18+')
+      birthYM.focus()
+      return
+    }
+    if (!isAdultYM(ym)) { toast(AGE_REFUSAL); return }
 
     starting = true
     goBtn.disabled = true
     // Mint the profile id first — the claim record binds username -> id.
-    const me = db.setProfile({ name: chosen, lang: 'en', avatar: avatarData })
+    // birthYearMonth stays on-device too: every later guest re-auth (fresh
+    // install token fetch) sends it so the account is created age-verified.
+    const me = db.setProfile({ name: chosen, lang: db.profile()?.lang || 'en', avatar: avatarData, birthYearMonth: ym })
     let claimed = false
     let reachable = true
     try {
       const res = await fetch(`${REGISTRY_API}/api/username`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ username: handle, id: me.id, name: chosen, secret: me.claimSecret })
+        body: JSON.stringify({ username: handle, id: me.id, name: chosen, secret: me.claimSecret, birthYearMonth: ym })
       })
+      if (res.status === 400) {
+        // The server's own 18+ refusal (it re-checks; the client check above is
+        // only a courtesy). Terminal for this attempt — no account was created.
+        let msg = null
+        try { msg = (await res.clone().json())?.message } catch { /* non-JSON */ }
+        const text = Array.isArray(msg) ? msg.join(' ') : String(msg || '')
+        if (text.includes('18 and over')) {
+          toast(AGE_REFUSAL)
+          starting = false
+          goBtn.disabled = false
+          return
+        }
+      }
       if (res.status === 409) {
         setUsernameState('taken')
         toast('That username was just taken — try another')
@@ -360,6 +458,17 @@ function renderOnboarding () {
 
   const goBtn = el('button', { class: 'pill ok ob-go', type: 'button', text: 'Start', onclick: start })
 
+  /* A pre-gate device arriving back here (age_declaration_required) keeps its
+   * identity: prefill so "confirm your birth month" is one field, not a redo. */
+  const existing = db.profile()
+  if (existing?.name) name.value = existing.name
+  if (existing?.username) { username.value = existing.username; setUsernameState('idle') }
+  if (existing?.avatar) {
+    avatarData = existing.avatar
+    clear(avatarSlot)
+    avatarSlot.appendChild(avatar({ avatar: existing.avatar }, 84))
+  }
+
   app.appendChild(el('div', { class: 'onboard scroll-y' }, [
     el('div', { class: 'ob-inner' }, [
       el('h1', { text: 'Spot Me' }),
@@ -381,11 +490,80 @@ function renderOnboarding () {
         usernameStatus
       ]),
       el('p', { class: 'ob-uhint', text: '3–16 letters, numbers, underscores' }),
+      el('label', { text: 'Birth month' }),
+      birthYM,
+      el('p', { class: 'ob-uhint', text: 'Spot Me is 18+. Only the year and month — never your full birthday.' }),
       goBtn,
-      el('p', { class: 'ob-fine', text: 'No password, no phone number. Your profile lives on this device.' })
+      el('p', { class: 'ob-fine', text: 'No password, no phone number. Your profile lives on this device.' }),
+      looksInApp()
+        ? el('p', { class: 'ob-fine', style: 'color:#b45309', text: 'You seem to be inside another app’s browser — it may forget you when it closes. Open spotme-web-v2.vercel.app in Chrome or Safari and use “Add to Home Screen”.' })
+        : null,
+      el('button', {
+        class: 'linkbtn', type: 'button', text: 'Been here before? Sign back in',
+        onclick: renderRecovery
+      })
     ])
   ]))
   name.focus()
+}
+
+/* Fix-the-Foundation F1: sign back in as an existing @username with the
+ * recovery code (shown in Profile after signup). The device ADOPTS the
+ * account's id — chats stored on other devices stay theirs; this device
+ * starts with the account, not with its history (messages are device-local). */
+function renderRecovery () {
+  clear(app)
+  viewContainer = null
+  navEl = null
+  const user = el('input', {
+    class: 'ob-name ob-uinput', type: 'text', placeholder: 'username', maxlength: '16',
+    autocomplete: 'off', autocapitalize: 'none', spellcheck: 'false'
+  })
+  const code = el('input', {
+    class: 'ob-name', type: 'text', placeholder: 'recovery code',
+    autocomplete: 'off', autocapitalize: 'none', spellcheck: 'false'
+  })
+  let busy = false
+  const go = async () => {
+    if (busy) return
+    const uname = user.value.trim().toLowerCase().replace(/^@/, '')
+    const secret = code.value.trim()
+    if (!/^[a-z0-9_]{3,16}$/.test(uname)) { toast('Enter your @username'); user.focus(); return }
+    if (secret.length < 8) { toast('Enter your recovery code'); code.focus(); return }
+    busy = true; goBtn.disabled = true
+    try {
+      const res = await fetch(`${REGISTRY_API}/api/auth/guest/recover`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ username: uname, secret })
+      })
+      if (!res.ok) { toast('That username and code don’t match.'); busy = false; goBtn.disabled = false; return }
+      const acct = await res.json()
+      // Adopt the account: its id IS the identity every room and lookup keys on.
+      db.setProfile({ id: acct.userId, username: acct.username, name: acct.name || acct.username, claimSecret: secret })
+      if (acct.accountFrozen && acct.notice) toast(acct.notice)
+      boot()
+      offerNotifications()
+      navigate('#/chat')
+    } catch {
+      toast('Could not reach the server — try again.')
+      busy = false; goBtn.disabled = false
+    }
+  }
+  const goBtn = el('button', { class: 'pill ok ob-go', type: 'button', text: 'Sign back in', onclick: go })
+  app.appendChild(el('div', { class: 'onboard scroll-y' }, [
+    el('div', { class: 'ob-inner' }, [
+      el('h1', { text: 'Sign back in' }),
+      el('p', { class: 'ob-lede', text: 'Your @username plus the recovery code from your Profile screen. Messages stay on the devices that hold them.' }),
+      el('label', { text: 'Username' }),
+      el('div', { class: 'ob-username' }, [el('span', { class: 'ob-uat', text: '@' }), user]),
+      el('label', { text: 'Recovery code' }),
+      code,
+      goBtn,
+      el('button', { class: 'linkbtn', type: 'button', text: 'Back', onclick: renderOnboarding })
+    ])
+  ]))
+  user.focus()
 }
 
 /* ------------------------------------------------------------------ boot */
@@ -534,7 +712,15 @@ function boot () {
    * working, and that ambiguity is the exact shape of every bug found here
    * tonight. The transport reports the fact; this is what turns it into
    * something the person holding the phone can read. */
-  setTerminalAuthHandler(({ message }) => {
+  setTerminalAuthHandler(({ code, message }) => {
+    if (code === 'age_declaration_required') {
+      // A pre-gate install: the device has a profile but no declaration, and
+      // the server now refuses to (re)create its account without one. Back
+      // through onboarding — it prefills, and chats stay in local storage.
+      toast(message || 'Spot Me is 18+ now — confirm your birth month to continue.')
+      renderOnboarding()
+      return
+    }
     toast(message || 'This account has been deleted. Start a new one to keep chatting.')
   })
 
@@ -568,6 +754,12 @@ function boot () {
     lobby.start()
     reach.joinInbox()
   })
+
+  /* M6: ask the server whether Moments is served to THIS account, and add the
+   * Posts tab only if it is. Fire-and-forget — the bar is already painted in
+   * its production shape, so a slow or failed probe simply leaves it that way
+   * rather than blocking the first frame. */
+  refreshFlaggedTabs().catch(() => {})
 }
 
 db.subscribe(() => {

@@ -68,6 +68,6 @@ export interface MomentMediaPort {
 export type IngestResult =
   | { state: 'stored'; mediaId: string; contentHash: string; deduplicated: false }
   | { state: 'deduplicated'; mediaId: string; contentHash: string; deduplicated: true; canonicalMediaId: string }
-  | { state: 'refused'; reason: 'unsupported-format' | 'too-large' | 'bad-mime' };
+  | { state: 'refused'; reason: 'unsupported-format' | 'too-large' | 'bad-mime' | 'storage-unavailable' };
 
 export const MOMENT_MEDIA_PORT = Symbol('MOMENT_MEDIA_PORT');

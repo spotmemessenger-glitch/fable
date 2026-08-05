@@ -984,6 +984,12 @@ model MomentMediaAsset {
   createdAt    DateTime  @default(now())
   /// Story retention stamp (24h [PROPOSED]); null for regular post media.
   expiresAt    DateTime?
+  /// M3 transcode output. `variants` is a JSON array of {name,bytes,storageKey};
+  /// posterKey is the first-frame image; durationSeconds drives the HLS
+  /// boundary decision. All nullable: an asset is usable before the worker runs.
+  variants        String?
+  posterKey       String?
+  durationSeconds Float?
 }
 
 /// ─────────────────────────────────────────────────────────────────────────
@@ -1107,6 +1113,10 @@ model MomentReport {
   /// open | actioned | dismissed
   status     String   @default("open")
   createdAt  DateTime @default(now())
+  /// D7: when the report was handed to the moderation sink (durable delivery
+  /// marker). NULL means the report exists but no delivery was recorded —
+  /// which is exactly the state the fixture-only queue used to leave behind.
+  queuedAt   DateTime?
 
   @@index([targetKind, targetId])
   @@index([reason, status])
