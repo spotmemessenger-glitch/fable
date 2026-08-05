@@ -138,13 +138,19 @@ function buildNav () {
   return navEl
 }
 
-/** Re-ask the server which flagged surfaces exist, and rebuild the bar. */
+/** Re-ask the server which flagged surfaces exist, and rebuild the bar.
+ *  Idempotent: reconciles against the ACTUAL DOM, not a boolean, so it does
+ *  the right thing no matter which of the (boot / first-render) callers wins
+ *  the race — the earlier `on !== had` guard skipped the rebuild when the flag
+ *  was set before navEl existed, leaving the tab permanently absent. */
 export async function refreshFlaggedTabs () {
   let on = false
   try { on = await momentsAvailable() } catch { on = false }
-  const had = enabledFlags.has('moments')
   if (on) enabledFlags.add('moments'); else enabledFlags.delete('moments')
-  if (on !== had && navEl) {
+  if (!navEl) return
+  const desired = navItems().map((i) => i.path).join(',')
+  const current = [...navEl.querySelectorAll('.nv')].map((b) => b.dataset.path).join(',')
+  if (desired !== current) {
     const fresh = buildNav()
     navEl.replaceWith(fresh)
     navEl = fresh
