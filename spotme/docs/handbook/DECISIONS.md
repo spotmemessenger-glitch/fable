@@ -298,3 +298,36 @@ is the support path.
   support path only.
 - **Enforcement evidence:** `test/account-freeze.spec.ts` (16 tests, real PG);
   Stage-A report `docs/reports/wave-1c-stage-a.md` (C2).
+
+## D7 — Moments public availability is GATED on child-safety infrastructure — DECIDED 2026-08-05
+
+**Owner decision (Wave 1D mission, accepting the M5 moderation reality check):
+Moments must NOT become publicly reachable — no open signup into it — until
+image hash-matching and a real NCMEC reporting path exist.** Private testing
+with people the owner knows is explicitly fine.
+
+**Why this is a launch gate and not a backlog item.** What is active today:
+
+- **Report path — real, but nothing consumes it.** A report writes a row, moves
+  the target `visible → reported` through a guarded state machine, and appends
+  an audit event. It also enqueues a `{moderation}` job into a FIXTURE
+  recorder. No human or automated reviewer ever sees it; content stays visible
+  unless someone changes state directly.
+- **Automated image screening — none.** No classifier, no perceptual or
+  cryptographic hash matching, no CSAM detection anywhere in the pipeline.
+  Uploads are EXIF-stripped and stored, and that is the whole of it.
+- **NCMEC seam — absent.** No credentials, no reporting client, no
+  preservation/retention path. Open since Wave 0.
+
+The 18+ gate (D6) reduces but does not remove this exposure: adults upload
+illegal material too, and an account-level age policy is not a content control.
+
+**What a PUBLIC launch requires, at minimum:** (1) image hash-matching against
+a known-CSAM list at ingest, before an object is durably stored or served;
+(2) a real NCMEC reporting path with credentials, preservation and retention;
+(3) a moderation queue an actual reviewer consumes, with a documented response
+time. Until all three exist, Moments stays invite-only behind the domain gate.
+
+**Enforcement today:** `DomainGate('moments')` — production keeps the
+RuntimeFlag row absent and the allowlist empty, so every route 404s
+(`test/moments-gate-runtime.spec.ts` proves the posture against real HTTP).
