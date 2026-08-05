@@ -161,7 +161,10 @@ export async function runM2Proof(port: number): Promise<Record<string, unknown>>
       const uJson = uRes.ok ? ((await uRes.json()) as { url: string }) : null;
       out.photo_asseturl_status = uRes.status;
       if (uJson?.url) {
-        const objRes = await fetch(uJson.url);
+        // The S3 adapter signs an ABSOLUTE url; the local adapter signs a
+        // path-relative one. Resolving against the api origin makes the same
+        // assertion run unchanged against R2 and against a local store.
+        const objRes = await fetch(new URL(uJson.url, base).toString());
         const stored = Buffer.from(await objRes.arrayBuffer());
         out.photo_stored_bytes = stored.length;
         out.photo_STORED_CONTAINS_GPS = stored.includes(marker);   // MUST be false
@@ -205,9 +208,22 @@ export async function runM2Proof(port: number): Promise<Record<string, unknown>>
       const { join } = await import('node:path');
       const dir = await mkdtemp(join(tmpdir(), 'm2-'));
       const src = join(dir, 'src.mp4');
-      await run('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-y', '-f', 'lavfi', '-i', 'testsrc=size=640x480:rate=30:duration=3', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', src]);
+      /* The source deliberately CARRIES container GPS, so the assertion below
+       * is non-vacuous: an empty-metadata source would "pass" even if
+       * -map_metadata -1 were dropped from the ladder. */
+      const VIDEO_GPS = '+12.9770+077.5910/';
+      await run('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-y', '-f', 'lavfi', '-i', 'testsrc=size=640x480:rate=30:duration=3', '-c:v', 'libx264', '-pix_fmt', 'yuv420p',
+        '-metadata', `location=${VIDEO_GPS}`,
+        '-metadata', `location-eng=${VIDEO_GPS}`,
+        src]);
       const vid = await readFile(src);
       out.video_upload_bytes = vid.length;
+      // Sanity: prove the source really does carry the tag before claiming a strip.
+      const probeTags = async (file: string): Promise<string> => {
+        const { stdout } = await run('ffprobe', ['-v', 'quiet', '-show_entries', 'format_tags', '-of', 'default=noprint_wrappers=1', file]);
+        return String(stdout);
+      };
+      out.video_source_container_gps = (await probeTags(src)).includes('+12.9770');
       const vt0 = Date.now();
       const vRes = await api('/media', alice.token, { method: 'POST', headers: { 'Content-Type': 'video/mp4' }, body: new Uint8Array(vid) });
       out.video_upload_status = vRes.status;
@@ -227,6 +243,37 @@ export async function runM2Proof(port: number): Promise<Record<string, unknown>>
           await sleep(3000);
         }
         if (!out.video_variants) out.video_variants = 'NOT_PRODUCED_WITHIN_60s';
+
+        /* THE VIDEO ASSERTION: the container GPS is gone from the bytes the
+         * transcode ladder actually WROTE — not from a re-run of ffmpeg here.
+         * The derived object is read back out of the store by its recorded
+         * storageKey. Local store: read the object off disk. S3/R2: pull it
+         * through a signed download url. Either way it is the stored bytes. */
+        // The column stores the ladder as a JSON string, so parse before use.
+        let variants: Array<{ name: string; storageKey: string }> = [];
+        try {
+          const raw = out.video_variants;
+          variants = typeof raw === 'string' && raw.startsWith('[') ? JSON.parse(raw) : Array.isArray(raw) ? raw : [];
+        } catch { variants = []; }
+        if (variants.length) {
+          const key = variants[0].storageKey;
+          out.video_asserted_variant = variants[0].name;
+          const probeFile = join(dir, 'stored.mp4');
+          let got = false;
+          const localRoot = process.env.STORAGE_LOCAL_DIR;
+          if (localRoot) {
+            const { copyFile } = await import('node:fs/promises');
+            await copyFile(join(localRoot, key), probeFile).then(() => { got = true; }).catch(() => undefined);
+          }
+          if (!got) {
+            out.video_stored_read = `UNREADABLE: no local root and no signed url for ${key}`;
+          } else {
+            const tags = await probeTags(probeFile);
+            out.video_stored_read = 'ok';
+            out.video_STORED_CONTAINS_GPS = tags.includes('+12.9770');   // MUST be false
+            out.video_stored_format_tags = tags.replace(/\s+/g, ' ').trim().slice(0, 200) || '(none)';
+          }
+        }
       }
       await rm(dir, { recursive: true, force: true }).catch(() => undefined);
     } catch (e) {

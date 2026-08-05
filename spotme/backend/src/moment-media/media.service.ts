@@ -119,7 +119,15 @@ export class MomentMediaService implements MomentMediaPort, MediaUploadPort, Med
         // so this path works identically against R2, MinIO and the local disk.
         const url = await this.storage.getDownloadUrl(asset.storageKey).catch(() => null);
         if (!url) return null;
-        const res = await fetch(url);
+        /* S3/R2 sign an absolute url; the LOCAL adapter signs a path-relative
+         * one, and fetch() rejects a relative input outright — which made every
+         * transcode fail with "Failed to parse URL from /api/v2/media/local?…"
+         * on a local store, i.e. the identical-path claim above was false.
+         * Resolve against this process's own origin to make it true. */
+        const absolute = /^https?:\/\//i.test(url)
+          ? url
+          : new URL(url, process.env.PUBLIC_API_ORIGIN || `http://127.0.0.1:${process.env.PORT || 4000}`).toString();
+        const res = await fetch(absolute);
         if (!res.ok) return null;
         return { bytes: Buffer.from(await res.arrayBuffer()), mimeType: asset.mimeType };
       },
