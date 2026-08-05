@@ -53,7 +53,7 @@ describe('RoomsGateway wire protocol', () => {
     const res = await fetch(`${url}/api/auth/guest`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id, username: 't_' + id.slice(0, 10), name: 'Test', secret: 'testsecret1' }),
+      body: JSON.stringify({ id, username: 't_' + id.slice(0, 10), name: 'Test', secret: 'testsecret1', birthYearMonth: '1990-01' }),
     });
     expect(res.status).toBe(201);
     const { accessToken } = (await res.json()) as { accessToken: string };

@@ -170,7 +170,7 @@ describe('admin user deletion — and the auth teeth that make it real', () => {
     const liveId = hex(16);
     const liveName = `live_${hex(4)}`;
     try {
-      const out = await auth.guestAuth(liveId, liveName, 'Live', `anon_${liveId}`);
+      const out = await auth.guestAuth(liveId, liveName, 'Live', `anon_${liveId}`, undefined, undefined, undefined, '1990-01');
       expect(out.userId).toBe(liveId);
       expect(out.accessToken).toBeTruthy();
     } finally {

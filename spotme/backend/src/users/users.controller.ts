@@ -3,6 +3,7 @@ import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { CurrentUser, AuthenticatedPrincipal } from '../common/decorators/current-user.decorator';
 import { UsersService } from './users.service';
 import { UpdateProfileDto, UpdatePresenceDto } from './dto/update-profile.dto';
+import { DeclareAgeDto } from './dto/declare-age.dto';
 
 @UseGuards(JwtAuthGuard)
 @Controller('users/me')
@@ -17,6 +18,17 @@ export class UsersController {
   @Patch()
   update(@CurrentUser() principal: AuthenticatedPrincipal, @Body() dto: UpdateProfileDto) {
     return this.users.updateProfile(principal.id, dto);
+  }
+
+  /**
+   * Wave 1B, B2: the one-time age declaration for accounts that predate the
+   * gate. Immutable once recorded — a second call answers 409 regardless of
+   * payload; changing a declaration is a documented SUPPORT path, not an API.
+   * The response carries only the `ageVerified` boolean, never the declaration.
+   */
+  @Post('age')
+  declareAge(@CurrentUser() principal: AuthenticatedPrincipal, @Body() dto: DeclareAgeDto) {
+    return this.users.declareAge(principal.id, dto.birthYearMonth);
   }
 
   @Post('presence')

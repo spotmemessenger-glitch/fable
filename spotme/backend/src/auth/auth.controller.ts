@@ -8,7 +8,7 @@ export class AuthController {
 
   @Post('signup')
   signup(@Body() dto: SignupDto) {
-    return this.auth.signup(dto.username, dto.email, dto.name);
+    return this.auth.signup(dto.username, dto.email, dto.birthYearMonth, dto.name);
   }
 
   /** No-account identity for the web client: create-or-reauth in one call. */
@@ -22,6 +22,7 @@ export class AuthController {
       dto.publicKey,
       dto.platform,
       dto.appVersion,
+      dto.birthYearMonth,
     );
   }
 

@@ -48,7 +48,7 @@ describe('X3DH prekeys', () => {
     const res = await fetch(`${url}/api/auth/guest`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id, username: 'pk_' + id.slice(0, 10), name: 'PK', secret: 'pksecret123' }),
+      body: JSON.stringify({ id, username: 'pk_' + id.slice(0, 10), name: 'PK', secret: 'pksecret123', birthYearMonth: '1990-01' }),
     });
     const { accessToken, user } = (await res.json()) as { accessToken: string; user?: { id: string } };
     return { token: accessToken, id: user?.id ?? id };

@@ -1,8 +1,9 @@
-import { Injectable, UnauthorizedException, ForbiddenException, ConflictException } from '@nestjs/common';
+import { Injectable, UnauthorizedException, ForbiddenException, ConflictException, BadRequestException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as argon2 from 'argon2';
 import * as crypto from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
+import { AGE_POLICY_VERSION, AGE_REFUSAL_MESSAGE, isAdultYearMonth, isValidBirthYearMonth } from '../policy/age';
 import { Role } from '../common/enums/role.enum';
 
 const OTP_TTL_MS = 10 * 60 * 1000; // 10 minutes
@@ -46,10 +47,53 @@ export class AuthService {
     private jwt: JwtService,
   ) {}
 
-  async signup(username: string, email: string, name?: string) {
+  /**
+   * Wave 1B (D6): the age decision runs FIRST — before any DB query — so an
+   * under-18 refusal costs the same work and returns the same 400 SHAPE as any
+   * other validation failure (non-enumerable), and no account row ever exists.
+   */
+  async signup(username: string, email: string, birthYearMonth: string, name?: string) {
+    this.assertAdultDeclaration(birthYearMonth);
     const existing = await this.prisma.user.findFirst({ where: { OR: [{ username }, { email }] } });
     if (existing) throw new ConflictException('username or email already taken');
-    return this.prisma.user.create({ data: { username, email, name, role: Role.USER } });
+    // B5: the response is a safe subset — never the raw row (which now carries
+    // the declaration; it also carries credential hashes).
+    return this.prisma.user.create({
+      data: {
+        username,
+        email,
+        name,
+        role: Role.USER,
+        birthYearMonth,
+        ageVerified: true,
+        ageVerifiedAt: new Date(),
+        agePolicyVersion: AGE_POLICY_VERSION,
+      },
+      select: { id: true, username: true, email: true, name: true, ageVerified: true, createdAt: true },
+    });
+  }
+
+  /**
+   * Refuse a missing/invalid/under-18 declaration with the SAME status and
+   * body shape the global ValidationPipe produces (statusCode/message[]/error),
+   * so the age refusal is not enumerable apart from other 400s. The copy is
+   * deliberately clear and non-punitive.
+   */
+  private assertAdultDeclaration(birthYearMonth: string | undefined): asserts birthYearMonth is string {
+    if (!isValidBirthYearMonth(birthYearMonth)) {
+      throw new BadRequestException({
+        statusCode: 400,
+        message: ['birthYearMonth must be a valid year-month (YYYY-MM)'],
+        error: 'Bad Request',
+      });
+    }
+    if (!isAdultYearMonth(birthYearMonth)) {
+      throw new BadRequestException({
+        statusCode: 400,
+        message: [AGE_REFUSAL_MESSAGE],
+        error: 'Bad Request',
+      });
+    }
   }
 
   /** Returns the plaintext OTP only so the caller can send it — never persisted in the clear. */
@@ -89,7 +133,10 @@ export class AuthService {
       });
     }
 
-    return this.issueTokens(user.id, user.role, deviceId);
+    const tokens = await this.issueTokens(user.id, user.role, deviceId);
+    // Wave 1B, B2: existing accounts learn on login that the declaration is
+    // still owed; nothing about the session itself is withheld.
+    return { ...tokens, ageVerificationRequired: !user.ageVerified };
   }
 
   async refresh(refreshToken: string) {
@@ -191,6 +238,7 @@ export class AuthService {
     publicKey?: string,
     platform?: string,
     appVersion?: string,
+    birthYearMonth?: string,
   ) {
     const secretHash = secret ? hash(secret) : null;
     const existing = await this.prisma.user.findUnique({ where: { id } });
@@ -236,18 +284,58 @@ export class AuthService {
       if (Object.keys(updates).length) {
         await this.prisma.user.update({ where: { id }, data: updates });
       }
+      /* Wave 1B (D6), B2: declare-on-login for accounts that predate the gate.
+       * FIRST declaration sticks — if the row already holds one, a re-auth
+       * payload can never rewrite it (immutability; support path only). An
+       * under-18 declaration is RECORDED (so it cannot be retried next launch
+       * with a different year) but never verifies; the session still works —
+       * existing chat is not taken away (B2) — while every NEW surface stays
+       * behind the B3 gate. */
+      let ageVerified = existing.ageVerified;
+      if (!existing.birthYearMonth && isValidBirthYearMonth(birthYearMonth)) {
+        const adult = isAdultYearMonth(birthYearMonth);
+        await this.prisma.user.update({
+          where: { id },
+          data: {
+            birthYearMonth,
+            agePolicyVersion: AGE_POLICY_VERSION,
+            ...(adult ? { ageVerified: true, ageVerifiedAt: new Date() } : {}),
+          },
+        });
+        ageVerified = adult || ageVerified;
+      }
       const tokens = await this.issueTokens(existing.id, existing.role, undefined);
       await this.trackDevice(existing.id, platform, appVersion);
-      return { ...tokens, userId: existing.id, username: updates.username || existing.username };
+      return {
+        ...tokens,
+        userId: existing.id,
+        username: updates.username || existing.username,
+        ageVerificationRequired: !ageVerified,
+      };
     }
+    /* Wave 1B (D6): a NEW guest identity is an account creation, so the gate
+     * runs here exactly as on /signup — server-side, before the uniqueness
+     * check, refusal creates no row and shares the validation-failure shape. */
+    this.assertAdultDeclaration(birthYearMonth);
     const taken = await this.prisma.user.findUnique({ where: { username } });
     if (taken) throw new ConflictException('username taken');
     const user = await this.prisma.user.create({
-      data: { id, username, name, claimSecretHash: secretHash, publicKey, role: Role.USER },
+      data: {
+        id,
+        username,
+        name,
+        claimSecretHash: secretHash,
+        publicKey,
+        role: Role.USER,
+        birthYearMonth,
+        ageVerified: true,
+        ageVerifiedAt: new Date(),
+        agePolicyVersion: AGE_POLICY_VERSION,
+      },
     });
     const tokens = await this.issueTokens(user.id, user.role, undefined);
     await this.trackDevice(user.id, platform, appVersion);
-    return { ...tokens, userId: user.id, username: user.username };
+    return { ...tokens, userId: user.id, username: user.username, ageVerificationRequired: false };
   }
 
   async usernameCheck(username: string) {

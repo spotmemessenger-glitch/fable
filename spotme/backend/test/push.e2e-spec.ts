@@ -51,7 +51,7 @@ describe('push routing', () => {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        id, username: 'p_' + id.slice(0, 10), name: 'Push', secret: 'pushsecret1',
+        id, username: 'p_' + id.slice(0, 10), name: 'Push', secret: 'pushsecret1', birthYearMonth: '1990-01',
       }),
     });
     const { accessToken } = (await res.json()) as { accessToken: string };

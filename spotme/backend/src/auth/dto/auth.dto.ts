@@ -1,4 +1,5 @@
 import { IsEmail, IsIn, IsOptional, IsString, Length, Matches } from 'class-validator';
+import { BIRTH_YEAR_MONTH_RE } from '../../policy/age';
 
 // Names deliberately mirror what the current spotme/web onboarding already
 // validates (src/main.js's username regex) so the client-side UX carries over.
@@ -6,6 +7,12 @@ export class SignupDto {
   @IsString()
   @Matches(/^[a-z0-9_]{3,16}$/)
   username!: string;
+
+  // Wave 1B (D6): self-declared birth YEAR-MONTH — never a full DOB. Format
+  // only here; ELIGIBILITY is decided in the service (server-side, always).
+  @IsString()
+  @Matches(BIRTH_YEAR_MONTH_RE)
+  birthYearMonth!: string;
 
   @IsEmail()
   email!: string;
@@ -51,6 +58,15 @@ export class GuestAuthDto {
   @IsString()
   @Length(1, 32)
   appVersion?: string;
+
+  // Wave 1B (D6). OPTIONAL at the DTO layer because guest auth is
+  // create-or-reauth in one call: existing devices re-authing predate the gate
+  // and must keep reaching their messages (B2). The CREATE branch in the
+  // service REQUIRES it — a new identity without a declaration is refused.
+  @IsOptional()
+  @IsString()
+  @Matches(BIRTH_YEAR_MONTH_RE)
+  birthYearMonth?: string;
 }
 
 export class RequestOtpDto {

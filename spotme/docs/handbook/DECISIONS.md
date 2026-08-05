@@ -253,3 +253,24 @@ Platform Phase 3B–3E as dark draft PRs**. Recorded here per the mission.
   with documented defaults, never approved product decisions.
 - **Phase 3 does NOT merge this mission** — 3A (#86) and 3B–3E stay draft;
   Phase 3 landing is a later owner mission.
+
+## D6 — Age policy: 18+ at launch, account-level — DECIDED 2026-08-05
+
+**Owner decision (Wave 1B mission): Spot Me is 18+ at launch, enforced at the
+ACCOUNT level.** No minor holds an account, therefore no minor can ever be
+discoverable, matchable, or messageable — the gate does not need per-surface
+carve-outs because there is no under-18 cohort to carve around.
+
+- **Enforcement:** server-side at every account-creation path (signup + guest
+  create — refusal creates NO row), declare-on-login for accounts predating the
+  gate (B2; existing chat keeps working), and a second independent check at
+  Discovery's door (`DomainGate(…, { requireAdult: true })`) so even a future
+  activation mistake cannot expose an ungated account (B3).
+- **What is stored:** self-declared birth YEAR-MONTH only (never a full DOB —
+  data minimization), plus declaration timestamp and policy-text version.
+  Immutable once recorded; corrections are a support path, not an API.
+- **Decision rule:** conservative UTC month rule — eligible only once the
+  18th-birthday month has fully passed; "turns 18 this month" is refused by
+  design, which erases timezone and leap-day edges.
+- **Full rationale:** ADR-029; enforcement evidence:
+  `docs/reports/wave-1b-final.md`.

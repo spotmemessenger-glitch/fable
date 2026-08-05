@@ -65,6 +65,7 @@ describe('signing-key lifecycle', () => {
         username: 'sk_' + id.slice(0, 10),
         name: 'Signing',
         secret: 'signsecret1',
+        birthYearMonth: '1990-01',
       }),
     });
     const { accessToken, user } = (await res.json()) as {

@@ -101,6 +101,14 @@ model User {
   ageVerified   Boolean  @default(false)
   ageVerifiedAt DateTime?
   ageVerifyRef  String? // third-party verification provider's reference id only
+  // Wave 1B (owner decision D6): the self-declared birth YEAR-MONTH ('YYYY-MM')
+  // behind the 18+ gate — deliberately never a full date of birth (data
+  // minimization; see src/policy/age.ts). Immutable once set except via the
+  // documented support path. NEVER selected into any API response or log; the
+  // only age fact a client sees is the `ageVerified` boolean.
+  birthYearMonth   String?
+  // Version of the policy text shown when the declaration was made (B2).
+  agePolicyVersion String?
 
   passwordHash  String? // unset when the account only ever used OTP
   // SHA-256 of the device-held claim secret for guest (no-account) identities —
