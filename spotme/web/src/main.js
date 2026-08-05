@@ -229,6 +229,11 @@ function render () {
     // Pull down anywhere to hard-refresh: phones otherwise sit on an old
     // bundle until someone remembers the browser's own gesture.
     attachPullRefresh(app)
+    // M6: boot()'s probe can fire BEFORE this first nav exists (it runs before
+    // the first render), so the flagged-tab rebuild there no-ops on a null
+    // navEl. Re-run it now that navEl is real — momentsAvailable() is cached,
+    // so this is just the DOM rebuild the earlier call could not do.
+    refreshFlaggedTabs().catch(() => {})
   }
   clear(viewContainer)
 

@@ -272,7 +272,9 @@ export function render (root, ctx) {
     const mine = m.author?.userId === db.profile()?.id
     const media = (m.media || [])[0]
 
-    const mediaSlot = el('div', { class: 'mo-media' })
+    // A TEXT post has no media, so it must have no media slot — otherwise the
+    // empty 4:5 black box renders as a huge void above the text (real drive).
+    const mediaSlot = media ? el('div', { class: 'mo-media' }) : null
     if (media) {
       if (media.kind === 'video') {
         // Poster first, player on demand: a feed of autoplaying videos is the
@@ -329,7 +331,7 @@ export function render (root, ctx) {
         ])
       ]),
       mediaSlot,
-      m.text ? el('p', { class: 'mo-text', text: m.text }) : null,
+      m.text ? el('p', { class: `mo-text${media ? '' : ' only'}`, text: m.text }) : null,
       acts
     ].filter(Boolean))
   }
