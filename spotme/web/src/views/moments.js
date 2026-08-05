@@ -106,7 +106,12 @@ function perfHarness (root) {
   }
 }
 
-export function render (root, ctx) {
+export function render (root, ctx, params) {
+  /* `#/posts?m=<id>` — the link the Share button on a post produces. With an
+   * id present this screen shows THAT post rather than a feed, because the
+   * whole reason to send someone a link is that the post is not necessarily
+   * in the feed they would otherwise get. */
+  let focusId = (params && params.get('m')) || null
   let mode = 'nearby'
   let items = []
   let stories = []
@@ -143,7 +148,34 @@ export function render (root, ctx) {
 
   /* ---------------------------------------------------------------- load */
 
+  /**
+   * A shared link resolves against the by-id route, NOT against a feed page.
+   * Filtering the feed client-side would only ever find posts the viewer was
+   * already going to be shown, which is precisely the case where a link is not
+   * needed. The server applies the same tier rules either way, so this grants
+   * no extra access — a post the viewer may not see 404s and says so.
+   */
+  async function loadFocused () {
+    state = 'loading'; cursor = null; items = []; draw()
+    try {
+      const view = await M.momentById(focusId)
+      items = view ? [view] : []
+      state = items.length ? 'ok' : 'notfound'
+    } catch (e) {
+      if (e instanceof M.MomentNotFoundError) state = 'notfound'
+      else if (e instanceof M.MomentsDisabledError) state = 'unavailable'
+      else if (e instanceof M.MomentsForbiddenError) { state = 'forbidden'; detail = e.message } else { state = 'failed'; detail = e.message }
+    }
+    draw()
+  }
+
+  /** Leave the single-post view. Navigating rather than mutating state drops
+   *  the `?m=` from the URL too, so a reload or a Back press lands on the feed
+   *  instead of silently re-opening the post. */
+  function clearFocus () { ctx.nav('#/posts') }
+
   async function load (reset = true) {
+    if (focusId) return loadFocused()
     if (reset) { state = 'loading'; cursor = null; draw() }
     try {
       // Location is attached ONLY for the nearby feed, and only coarsely —
@@ -190,6 +222,18 @@ export function render (root, ctx) {
 
   function drawHead () {
     clear(head)
+    /* Single-post view: a back affordance instead of the feed tabs. Leaving
+     * the tabs visible would offer a "Nearby / Following" choice that this
+     * screen cannot honour — one post has no feed mode. */
+    if (focusId) {
+      head.appendChild(el('button', {
+        // NOT `mo-back` — that class is the sheet backdrop (fixed, inset 0).
+        class: 'mo-backbtn', type: 'button', 'aria-label': 'Back to posts', text: '‹',
+        onclick: clearFocus
+      }))
+      head.appendChild(el('h1', { class: 'mo-title', text: 'Post' }))
+      return
+    }
     head.appendChild(el('h1', { class: 'mo-title', text: 'Posts' }))
     const tabs = el('div', { class: 'mo-tabs' })
     for (const m of FEED_MODES) {
@@ -207,6 +251,8 @@ export function render (root, ctx) {
 
   function drawRail () {
     clear(railWrap)
+    // The stories ring row belongs to the feed, not to one linked post.
+    if (focusId) return
     if (state === 'unavailable' || state === 'forbidden') return
     const me = db.profile()
     // "Your story" always leads, so adding one is one tap from the feed.
@@ -250,6 +296,17 @@ export function render (root, ctx) {
       ]))
       return
     }
+    /* A link to a post that was deleted, or that this account may not see.
+     * Deliberately one message for both: the server answers 404 either way, so
+     * saying which it was would leak whether the id exists. */
+    if (state === 'notfound') {
+      list.appendChild(el('div', { class: 'mo-note' }, [
+        el('b', { text: 'This post isn’t available' }),
+        el('p', { text: 'It may have been deleted, or it isn’t shared with your account.' }),
+        el('button', { class: 'pill', type: 'button', text: 'Go to Posts', onclick: clearFocus })
+      ]))
+      return
+    }
     if (state === 'empty') {
       list.appendChild(el('div', { class: 'mo-note' }, [
         el('b', { text: 'Nothing here yet' }),
@@ -259,6 +316,13 @@ export function render (root, ctx) {
       return
     }
     for (const m of items) list.appendChild(card(m))
+    // One post from a link: offer the feed rather than a dead end.
+    if (focusId) {
+      list.appendChild(el('button', {
+        class: 'pill mo-more', type: 'button', text: 'See more posts', onclick: clearFocus
+      }))
+      return
+    }
     if (cursor) {
       list.appendChild(el('button', {
         class: 'pill mo-more', type: 'button', text: 'Load more', onclick: () => load(false)

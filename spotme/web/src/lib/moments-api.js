@@ -94,6 +94,36 @@ export const feed = ({ mode = 'friends', origin = null, cursor = null, order } =
   return call(`/feed?${q}`)
 }
 
+/** A shared link pointed at a post that is gone, or that this account may not
+ *  see. Distinct from MomentsDisabledError so the view can say "this post is
+ *  no longer available" instead of "Posts is not switched on for you". */
+export class MomentNotFoundError extends Error {
+  constructor () { super('post unavailable'); this.name = 'MomentNotFoundError' }
+}
+
+/**
+ * One post by id — what a `#/posts?m=<id>` share link opens.
+ *
+ * The 404 is ambiguous on the wire: the domain gate 404s when Moments is off
+ * for this account, and the route 404s when the post is missing or not
+ * viewable. `call()` maps every 404 to MomentsDisabledError, which would tell
+ * a perfectly enabled user their Posts feature is switched off. So when the
+ * availability probe says the domain IS on, re-label it as what it actually
+ * is: that post, not that feature.
+ */
+export const momentById = async (id) => {
+  try {
+    return await call(`/${encodeURIComponent(id)}`)
+  } catch (e) {
+    if (e instanceof MomentsDisabledError) {
+      let on = false
+      try { on = await momentsAvailable() } catch { on = false }
+      if (on) throw new MomentNotFoundError()
+    }
+    throw e
+  }
+}
+
 export const storiesRail = () => call('/stories/rail')
 export const comments = (momentId) => call(`/${encodeURIComponent(momentId)}/comments`)
 export const assetUrl = (mediaId) => call(`/media/${encodeURIComponent(mediaId)}/url`)

@@ -116,6 +116,14 @@ const ACTIVE_TAB = {
   '#/notifications': '#/notifications'
 }
 
+/** The route part of a hash, without its query string: `#/posts?m=abc` →
+ *  `#/posts`. Share links are the only routes that carry params today. */
+function routePath (hash) {
+  const h = hash || '#/chat'
+  const i = h.indexOf('?')
+  return i === -1 ? h : h.slice(0, i)
+}
+
 let navEl = null
 
 /* Which flagged tabs the SERVER is currently serving. Empty until the probe
@@ -159,7 +167,9 @@ export async function refreshFlaggedTabs () {
     const old = navEl
     buildNav()
     old.replaceWith(navEl)
-    updateNav(ACTIVE_TAB[window.location.hash] || '#/chat')
+    // Strip any `?m=…` before the tab lookup, for the same reason the router
+    // does: `#/posts?m=x` is the Posts tab, not an unknown route.
+    updateNav(routePath(window.location.hash))
   }
 }
 
@@ -273,10 +283,20 @@ function render () {
     return
   }
 
+  /* A route may carry a query string — `#/posts?m=<id>` is the share link a
+   * post's own Share button produces. The lookup below used to be a plain
+   * `ROUTES[hash]`, so the whole `#/posts?m=…` string missed every key and
+   * fell through to the `|| inbox` default: every shared post link opened the
+   * chat list. Split the path from its params and route on the path, then hand
+   * the params to the view so it can honour them. */
+  const qIndex = hash.indexOf('?')
+  const path = routePath(hash)
+  const params = new URLSearchParams(qIndex === -1 ? '' : hash.slice(qIndex + 1))
+
   navEl.style.display = ''
-  const view = ROUTES[hash] || inbox
-  updateNav(hash in ROUTES ? hash : '#/chat')
-  currentCleanup = view.render(viewContainer, ctx)
+  const view = ROUTES[path] || inbox
+  updateNav(path in ROUTES ? path : '#/chat')
+  currentCleanup = view.render(viewContainer, ctx, params)
 }
 
 /* ------------------------------------------------------------ onboarding */
