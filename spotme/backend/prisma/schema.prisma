@@ -109,6 +109,12 @@ model User {
   birthYearMonth   String?
   // Version of the policy text shown when the declaration was made (B2).
   agePolicyVersion String?
+  // Wave 1C (owner decision, D6 addendum): EXPLICIT account status — never a
+  // side-effect of other fields. 'active' | 'frozen_minor'. A frozen account
+  // keeps its data (read-only wind-down: can read existing conversations and
+  // the policy notice; cannot start conversations, send, be messaged anew, or
+  // reach any new surface). Reversal is the documented support path only.
+  accountStatus    String  @default("active")
 
   passwordHash  String? // unset when the account only ever used OTP
   // SHA-256 of the device-held claim secret for guest (no-account) identities —

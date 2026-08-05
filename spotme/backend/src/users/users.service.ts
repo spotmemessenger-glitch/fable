@@ -2,7 +2,7 @@ import { ConflictException, ForbiddenException, Injectable } from '@nestjs/commo
 import { PrismaService } from '../prisma/prisma.service';
 import { Sex } from '@prisma/client';
 import { SELF_USER } from '../common/prisma/public-user';
-import { AGE_POLICY_VERSION, AGE_REFUSAL_MESSAGE, isAdultYearMonth } from '../policy/age';
+import { ACCOUNT_FROZEN_MINOR, AGE_POLICY_VERSION, FREEZE_NOTICE, isAdultYearMonth } from '../policy/age';
 
 export interface UpdateProfileInput {
   name?: string;
@@ -56,11 +56,15 @@ export class UsersService {
       data: {
         birthYearMonth,
         agePolicyVersion: AGE_POLICY_VERSION,
-        ...(adult ? { ageVerified: true, ageVerifiedAt: new Date() } : {}),
+        ...(adult
+          ? { ageVerified: true, ageVerifiedAt: new Date() }
+          : // Wave 1C (D6 addendum): under-18 declaration by an existing
+            // account FREEZES it — explicit status, data retained.
+            { accountStatus: ACCOUNT_FROZEN_MINOR }),
       },
     });
     if (!adult) {
-      throw new ForbiddenException({ error: 'age_requirement', message: AGE_REFUSAL_MESSAGE });
+      throw new ForbiddenException({ error: 'account_frozen', message: FREEZE_NOTICE });
     }
     return { ageVerified: true };
   }

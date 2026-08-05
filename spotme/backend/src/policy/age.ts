@@ -68,3 +68,17 @@ export function isAdultYearMonth(ym: string, now: Date = new Date()): boolean {
   // Eligible strictly AFTER the month they turn 18 — never during it.
   return nowYear > adultYear || (nowYear === adultYear && nowMonth > birthMonth);
 }
+
+/* ------------------------------------------------------------------------- *
+ * Wave 1C — the under-18 freeze (owner decision, D6 addendum).
+ * An EXISTING account that declares under-18 is FROZEN, not deleted: explicit
+ * `accountStatus = 'frozen_minor'`, data retained, reversal only via the
+ * documented support path. Behaviour contract lives in ADR-029 + DECISIONS.md.
+ * ------------------------------------------------------------------------- */
+
+export const ACCOUNT_ACTIVE = 'active';
+export const ACCOUNT_FROZEN_MINOR = 'frozen_minor';
+
+/** The policy notice a frozen account CAN receive (the one guaranteed surface). */
+export const FREEZE_NOTICE =
+  'Spot Me is for people 18 and over. Your account has been frozen: you can still read your existing conversations, but new activity is disabled. If this is a mistake, contact support to correct your declaration.';

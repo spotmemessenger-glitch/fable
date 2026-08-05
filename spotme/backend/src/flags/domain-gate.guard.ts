@@ -24,7 +24,7 @@
 import { CanActivate, ExecutionContext, ForbiddenException, Injectable, mixin, NotFoundException, Type } from '@nestjs/common';
 import { RuntimeFlagService } from './runtime-flag.service';
 import { PrismaService } from '../prisma/prisma.service';
-import { AGE_REFUSAL_MESSAGE } from '../policy/age';
+import { ACCOUNT_ACTIVE, AGE_REFUSAL_MESSAGE } from '../policy/age';
 
 export interface DomainGateOptions {
   /** Require the authenticated account's ageVerified=true (D6). Discovery: always true. */
@@ -54,10 +54,13 @@ export function DomainGate(key: string, opts: DomainGateOptions = {}): Type<CanA
         const userId = req.user?.id;
         const row = userId
           ? await this.prisma.user
-              .findUnique({ where: { id: userId }, select: { ageVerified: true } })
+              .findUnique({ where: { id: userId }, select: { ageVerified: true, accountStatus: true } })
               .catch(() => null)
           : null;
-        if (row?.ageVerified !== true) {
+        // Wave 1C (D6 addendum): the frozen check is EXPLICIT — a frozen
+        // account is refused even if ageVerified were somehow true, so the
+        // freeze is a status, never a side-effect of the age fields.
+        if (row?.ageVerified !== true || row.accountStatus !== ACCOUNT_ACTIVE) {
           throw new ForbiddenException({ error: 'age_requirement', message: AGE_REFUSAL_MESSAGE });
         }
       }
