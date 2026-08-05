@@ -35,7 +35,7 @@ or declare parked).
 
 | Dependency | Version | Result | Latency | Notes |
 |---|---|---|---|---|
-| **R2 / storage** | — | ⛔ **BLOCKED (owner: credential value)** | PUT ~360 ms → 400 | Ran from here via the real `S3StorageAdapter`. **Verified `STORAGE_PROVIDER=s3` takes effect (no silent local fallback).** Presigned PUT rejected: `InvalidArgument: Credential access key has length 64, should be 32`. `S3_ACCESS_KEY_ID`/`S3_SECRET_ACCESS_KEY` appear **swapped** (R2 IDs are 32 chars, secrets 64). Byte-integrity/EXIF unreached (blocked at upload). |
+| **R2 / storage** | — | ✅ **PASS** (after owner var fix) | PUT 200 ~1.93 s · GET 200 ~0.56 s · DELETE ~0.25 s | Real `S3StorageAdapter` port. **`STORAGE_PROVIDER=s3` in effect (no silent local fallback).** Full round-trip verified: presigned PUT → GET, **byte-integrity sha256 in==out ✅**, delete confirmed (post-delete GET `404`). EXIF sentinel **survived** the round trip — expected/correct: the port is a forbidden-to-inspect pass-through (never strips/transcodes); EXIF protection is client-side sealing, not storage. Wave 0 surfaced **three layered misconfigs**, all owner-corrected: `S3_ACCESS_KEY_ID` held a 64-char secret (needs the 32-char ID); `S3_BUCKET` held a wrong 32-char value, then the name with trailing whitespace — fixed to `spot-media-staging`. |
 | **Postgres / PostGIS** | (in-network) | ⛔ **BLOCKED — MUST RUN IN-NETWORK** | — | `DATABASE_URL` is Railway-private (`ENOTFOUND` externally) + this container's egress proxy blocks raw-TCP DBs. Phase-1A PostGIS gate answered by the in-network harness run. **No mutation/migration/PostGIS-install performed externally; user-data safety check unrun from here.** |
 | **Dragonfly / Redis** | (in-network) | ⛔ **BLOCKED — MUST RUN IN-NETWORK** | — | Private-network. Harness ready: PING + version + wave0 BullMQ enqueue→process→ack via the app's `createRedisConnection`. |
 | **Typesense** | (in-network) | ⛔ **BLOCKED — MUST RUN IN-NETWORK** | — | Private-network. Harness does a `wave0_smoke` create→index→query→drop; the authoritative 20k re-benchmark is a `@spotme/search-bench` run (below). |
@@ -119,8 +119,11 @@ agent-local test scaffolding was deleted.
 
 ## 7. Owner actions (open)
 
-1. **Fix R2 credentials** — `S3_ACCESS_KEY_ID` (32 chars) / `S3_SECRET_ACCESS_KEY`
-   (64 chars) on `api`; they appear swapped. Re-run the storage leg after.
+1. ~~**Fix R2 credentials + bucket**~~ ✅ **DONE** — owner corrected
+   `S3_ACCESS_KEY_ID` (→ 32-char ID), `S3_SECRET_ACCESS_KEY` (64), and
+   `S3_BUCKET` (→ `spot-media-staging`, whitespace removed); storage leg re-run
+   **PASS**. *(Optional hardening: `s3-storage.adapter.ts:48` reads `S3_BUCKET`
+   raw — a `.trim()` there would tolerate stray whitespace. Separate follow-up.)*
 2. **Deploy `feat/activation-wave-0`** via the GitHub-integration path (or from a
    correctly-linked checkout) — `DEPLOYMENT.md §3`.
 3. **Run the in-network legs** (Postgres/PostGIS incl. the Phase-1A gate, Redis,

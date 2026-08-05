@@ -60,7 +60,15 @@ Only `S3_ENDPOINT` (external HTTPS R2) is reachable from here. Therefore:
 
 ## 3. Per-dependency results
 
-### 3.1 R2 / object storage — **BLOCKED (owner remedy: credential value)**
+### 3.1 R2 / object storage — **PASS** (after owner corrected the variables)
+
+> **Update:** initially BLOCKED — the harness surfaced three layered variable
+> misconfigs (`S3_ACCESS_KEY_ID` held a 64-char secret; `S3_BUCKET` held a wrong
+> 32-char value, then the name with trailing whitespace). Owner corrected all
+> three (ID → 32 chars, `S3_BUCKET` → `spot-media-staging`). Re-run result:
+> **PASS** — presigned PUT `200` (~1.93 s) → GET `200` (~0.56 s), byte-integrity
+> sha256 in==out, EXIF sentinel survived (pass-through, expected), DELETE
+> confirmed (~0.25 s, post-delete GET `404`). Test object cleaned up.
 
 Executed from here via the **real storage port** (`S3StorageAdapter`, the class
 the app injects as `STORAGE_ADAPTER`).
