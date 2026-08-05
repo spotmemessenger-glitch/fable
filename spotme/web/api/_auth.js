@@ -75,6 +75,7 @@ export function verifyAccessToken (token, now = Date.now()) {
  *  build needs those three entries or in-app translation dies silently. */
 const KNOWN_ORIGINS = [
   'https://spotme-messenger.vercel.app',
+  'https://spotme-web-v2.vercel.app',
   'http://localhost:5173', 'http://localhost:5174',
   'http://127.0.0.1:5173', 'http://127.0.0.1:5174',
   'capacitor://localhost', 'ionic://localhost',

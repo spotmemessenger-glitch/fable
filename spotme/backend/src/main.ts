@@ -78,22 +78,21 @@ async function mountWebApiBridge(app: INestApplication) {
       // registration order — so without this the handlers see req.body
       // undefined and answer "need q" to a request that plainly had one.
       const guards = GATED.has(name) ? [jsonBody, gate] : [jsonBody];
-      express.all(`/api/${name}`, ...guards, (req: unknown, res: BridgeResponse) => {
+      /* CORS preflights carry no Authorization BY DESIGN, so a gated route's
+       * OPTIONS must not sit behind the token gate — the gate's 401 on the
+       * preflight is what the browser reports as "blocked by CORS policy",
+       * for every origin. The handlers answer their own OPTIONS (204 + their
+       * CORS headers); registered first, so it wins the Express route order. */
+      const invoke = (req: unknown, res: BridgeResponse) => {
         Promise.resolve((handler as (rq: unknown, rs: unknown) => unknown)(req, res)).catch((e: unknown) => {
-          // Log the detail, return none of it. This used to answer 500 with the
-          // raw error message, which for a vendor proxy names the vendor, the
-          // model and often the pricing tier — the exact thing translate.js
-          // takes care never to relay from its own catch block. The handlers
-          // answer their own errors; anything reaching here is a bug in ours.
           // eslint-disable-next-line no-console
           console.error(`api bridge: /api/${name} threw:`, e);
-          // A handler that already answered (or double-sent) leaves headers
-          // flushed; writing again throws ERR_HTTP_HEADERS_SENT and turns a
-          // handled failure into an unhandled rejection.
           if (res.headersSent) return;
           res.status(500).json({ error: 'service unavailable' });
         });
-      });
+      };
+      if (GATED.has(name)) express.options(`/api/${name}`, invoke);
+      express.all(`/api/${name}`, ...guards, invoke);
     } catch (e) {
       // eslint-disable-next-line no-console
       console.warn(`web api bridge: ${name} not mounted:`, e instanceof Error ? e.message : String(e));
