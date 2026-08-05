@@ -200,6 +200,16 @@ async function bootstrap() {
   await app.listen(port);
   // eslint-disable-next-line no-console
   console.log(`Spot Me backend listening on :${port}`);
+
+  // ---- TEMPORARY: Wave 1D M2 re-run (reverted after capture). ----
+  try {
+    const { runM2Proof } = await import('./scripts/wave1d/m2-media-proof');
+    // eslint-disable-next-line no-console
+    console.log('M2_PROOF_RESULT ' + JSON.stringify(await runM2Proof(port)));
+  } catch (e) {
+    // eslint-disable-next-line no-console
+    console.error('M2_PROOF_RESULT ' + JSON.stringify({ error: (e as Error).message }));
+  }
 }
 // A bare `bootstrap()` meant any failure to start — Postgres unreachable, port
 // taken, the assertion above — died as an unhandled rejection with no usable

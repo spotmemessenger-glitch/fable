@@ -69,9 +69,11 @@ export async function momentsAvailable () {
     await call('/feed?mode=friends')
     availability = true
   } catch (e) {
-    // Forbidden means the surface EXISTS — the tab should show and explain,
-    // rather than vanish as though the feature were not there at all.
-    availability = e instanceof MomentsForbiddenError
+    // Forbidden means the surface EXISTS — cache true. A 404 (disabled) is a
+    // real, cacheable "off". Anything else (network, 5xx) is TRANSIENT: do not
+    // poison the whole session — leave availability null so the next check
+    // re-asks. Previously any transient failure hid the tab until reload.
+    if (e instanceof MomentsForbiddenError) { availability = true } else if (e instanceof MomentsDisabledError) { availability = false } else { availability = null; return false }
   }
   return availability
 }
@@ -148,8 +150,8 @@ export const unreact = (id) =>
 export const follow = (targetId) => call(`/follow/${encodeURIComponent(targetId)}`, { method: 'POST' })
 export const block = (blockedId) => call(`/block/${encodeURIComponent(blockedId)}`, { method: 'POST' })
 
-export const createStory = ({ mediaId, caption }) =>
-  call('/stories', { method: 'POST', body: { mediaId, ...(caption ? { caption } : {}) } })
+export const createStory = ({ mediaId, visibility = 'friends' }) =>
+  call('/stories', { method: 'POST', body: { mediaId, visibility } })
 
 export const report = ({ targetKind, targetId, reason, note }) =>
   call('/reports', { method: 'POST', body: { targetKind, targetId, reason, ...(note ? { note } : {}) } })

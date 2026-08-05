@@ -164,3 +164,41 @@ describe('Moments — mounted, and dark at runtime', () => {
     expect((await upload(adultTok)).status).toBe(404);
   }, 20_000);
 });
+
+describe('M2 — the serialized contract the web client reads', () => {
+  it('feed items are FLAT with author.displayName, media[].kind, and version', async () => {
+    await prisma.runtimeFlag.upsert({ where: { key: 'moments' }, update: { enabled: true }, create: { key: 'moments', enabled: true } });
+    await new Promise((r) => setTimeout(r, 5500));
+    const mk = await fetch(`${url}/api/v1/moments`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${adultTok}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ kind: 'text', text: `shape ${RUN}`, mediaIds: [], visibility: 'friends' }),
+    });
+    const made = (await mk.json()) as Record<string, unknown>;
+    // create response is already the serialized view
+    expect(made.id).toBeTruthy();
+    expect((made.author as { displayName?: string })?.displayName).toBeTruthy();
+    expect(Array.isArray(made.media)).toBe(true);
+    expect(typeof made.version).toBe('number');
+    expect('versionSeq' in made).toBe(false);   // internal name never leaks
+    expect('authorId' in made).toBe(false);
+    await prisma.moment.deleteMany({ where: { id: made.id as string } }).catch(() => {});
+    await prisma.runtimeFlag.deleteMany({ where: { key: 'moments' } });
+  }, 20_000);
+
+  it('a version conflict on delete is 409, not 500', async () => {
+    await prisma.runtimeFlag.upsert({ where: { key: 'moments' }, update: { enabled: true }, create: { key: 'moments', enabled: true } });
+    await new Promise((r) => setTimeout(r, 5500));
+    const mk = await fetch(`${url}/api/v1/moments`, {
+      method: 'POST', headers: { Authorization: `Bearer ${adultTok}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ kind: 'text', text: `conflict ${RUN}`, mediaIds: [], visibility: 'friends' }),
+    });
+    const made = (await mk.json()) as { id: string };
+    const del = await fetch(`${url}/api/v1/moments/${made.id}?version=999`, {
+      method: 'DELETE', headers: { Authorization: `Bearer ${adultTok}` },
+    });
+    expect(del.status).toBe(409);   // MomentsError VERSION_CONFLICT, mapped
+    await prisma.moment.deleteMany({ where: { id: made.id } }).catch(() => {});
+    await prisma.runtimeFlag.deleteMany({ where: { key: 'moments' } });
+  }, 20_000);
+});
