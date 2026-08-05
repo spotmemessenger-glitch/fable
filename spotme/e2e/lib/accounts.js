@@ -38,7 +38,9 @@ export function account (role) {
 export async function signUp (request, api, role) {
   const who = account(role)
   const res = await request.post(`${api}/api/auth/guest`, {
-    data: { id: who.id, username: who.username, secret: who.secret, name: who.name },
+    // Wave 1B (D6): account creation requires the 18+ declaration; the e2e
+    // fixtures are adults, like every fixture in the backend suites.
+    data: { id: who.id, username: who.username, secret: who.secret, name: who.name, birthYearMonth: '1990-01' },
   })
   if (!res.ok()) {
     throw new Error(`could not create the ${role} account: ${res.status()} ${await res.text()}`)
