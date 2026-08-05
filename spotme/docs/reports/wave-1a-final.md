@@ -14,7 +14,7 @@ change; ends at a STOP.** Target: Railway `spotme-backend` / `production` /
 | Rung | Outcome |
 |---|---|
 | R1 Land Wave 0 | ✅ **MERGED** — merge SHA `ac7f8816` |
-| R2 Dragonfly queue | ⚠️ **BLOCKED ON OWNER (hard stop for activation)** — evidence complete: cluster-mode Dragonfly cannot run BullMQ (4/8 best case); a **non-cluster/single-shard endpoint** is required (§R2, exact steps) |
+| R2 Dragonfly queue | ⚠️ **STILL BLOCKED after endpoint switch** — the new `asia-southeast1` datastore reaches 47.95 ms PING (latency goal met) but **still reports `redis_mode: cluster`** → acceptance **0/8**. Precondition: INFO must read `redis_mode: standalone` (§R2 re-run: fix the datastore's cluster setting, or use an in-project Railway Valkey for the queue) |
 | R3 Dependencies | ✅ **0 high / 0 critical** (was 5 high); 15 moderates documented |
 | R4 #115 CI failure | ✅ **REAL, root-caused, fixed** — CI now applies migrations (prod parity); master green |
 | R5 Region | ✅ **MOVED to Southeast Asia** — before/after per dependency (§R5); **postgis co-location is the follow-up** |
@@ -90,6 +90,45 @@ the code path: the queue integration spec passes there).
 
 **Constraint honoured:** production `createRedisConnection` was **not** changed
 in this wave — under remedy (b) it is already correct.
+
+### R2 re-run (2026-08-05, after the owner's endpoint switch) — **NOT 8/8: still 0/8; the NEW datastore also runs cluster mode**
+
+The owner provisioned a new Dragonfly Cloud datastore (GCP `asia-southeast1`,
+intended cluster-mode OFF, TLS) and repointed `api.REDIS_URL`. The committed
+acceptance suite re-ran in-network (boot-runner, reverted after):
+
+| Evidence | Value |
+|---|---|
+| Variable switch took effect | ✅ **yes** — in-network PING from the Singapore api is now **47.95 ms** (the old Iowa datastore measured 468–1,087 ms from the same vantage points). `REDIS_URL` parses clean (`rediss://`, credential present). |
+| Runtime mode reported by the NEW datastore | ❌ **`redis_mode: cluster`** (INFO, in-network; `CLUSTER SLOTS` answers with 1 range / 1 node advertising a non-public address) |
+| Acceptance | ❌ **0/8** — check 1 (enqueue→process→ack) fails immediately with the same class of error as before: BullMQ Lua rejected by strict cluster-mode key enforcement (`script tried accessing undeclared key, key: bull:{wave1a-rt}:1`); the wave0 leg confirms enqueue succeeds and the Worker consume path never completes (12 s timeout). |
+
+**Conclusion: the "cluster mode OFF" setting did not take effect on the new
+datastore** — the runtime still answers as an (emulated) cluster, and BullMQ
+cannot pass acceptance against any runtime that reports `redis_mode: cluster`.
+The latency goal of the move was achieved (47.95 ms, ~10–20× better); the mode
+goal was not.
+
+**Owner options, in order of recommendation:**
+
+1. **(b′) Make the new datastore actually non-cluster.** In Dragonfly Cloud,
+   open the new datastore's configuration and verify its cluster-mode setting;
+   if the console shows it off yet the runtime still reports cluster, that is a
+   Dragonfly Cloud provisioning question — ask their support for a datastore
+   whose `INFO` reports **`redis_mode: standalone`**. That single line is the
+   acceptance precondition; the suite re-runs unchanged once it reads
+   standalone.
+2. **(c) Provision the queue runtime in-project instead:** a Railway
+   **Valkey 8** service in this project/environment (standalone by definition,
+   private-network, sub-ms from the api, no egress). CI already proves the
+   exact production queue code green against standalone Valkey 8 — this is the
+   zero-unknowns path, and Dragonfly Cloud can stay for any future cache use.
+   This follows the Wave-0 postgis playbook (new service + `api.REDIS_URL`
+   repoint via reference; the Dragonfly datastores stay parked as fallback).
+
+**Wave 1A therefore remains open on R2 only.** Everything else in the wave is
+closed; no queue-backed activation may proceed until the acceptance suite
+reports **8/8** against a runtime whose INFO says `redis_mode: standalone`.
 
 ## R3 — Dependency remediation — 0 high / 0 critical
 
@@ -251,9 +290,13 @@ surface, and each is posture-neutral by construction.
 
 ## Open owner actions
 
-1. **R2 (blocking Wave 1B/1C):** switch Dragonfly to a **non-cluster /
-   single-shard endpoint** (exact steps in §R2), then say the word — the
-   committed acceptance suite re-runs and all 8 must pass.
+1. **R2 (blocking Wave 1B/1C) — UPDATED after the re-run:** the new
+   `asia-southeast1` datastore is reachable and fast (47.95 ms) but still
+   reports `redis_mode: cluster`, so acceptance is 0/8. Either get the
+   datastore to report **`redis_mode: standalone`** (Dragonfly Cloud config /
+   support), or provision an in-project **Railway Valkey 8** service for the
+   queue (recommended zero-unknowns path; CI proves the code against it). Then
+   say the word — the committed suite re-runs and all 8 must pass.
 2. **R5 follow-up (before Wave 1C):** migrate the `postgis` DB to
    `asia-southeast1` (playbook in §R5) so the api and its DB are co-located
    again; SFO instance stays as fallback.
