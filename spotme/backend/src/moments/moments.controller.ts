@@ -12,7 +12,14 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { MomentsService } from './moments.service';
 import type { MomentFeedMode } from './moments.ports';
 
-interface Principal { sub: string }
+/* The principal the app's JWT strategy actually provides ({ id, role, kind } —
+ * see jwt.strategies.ts). The dark phase wrote these controllers against a
+ * `sub` field that never existed on the request object; every authorId reached
+ * Prisma as undefined and every create 500ed the first time real HTTP hit it,
+ * while the service-level e2e suite (which passes authorId strings directly)
+ * stayed green. The regression test in moments-gate-runtime.spec.ts drives the
+ * real strategy so this class of mismatch cannot ship silently again. */
+interface Principal { id: string }
 
 /* ACTIVATION (M1): mounted, and DARK until the `moments` flag or a per-account
  * allowlist entry says otherwise — 404 for everyone else, exactly like an
@@ -24,12 +31,12 @@ export class MomentsController {
 
   @Post()
   create(@CurrentUser() u: Principal, @Body() body: Record<string, unknown>) {
-    return this.moments.createMoment(u.sub, body);
+    return this.moments.createMoment(u.id, body);
   }
 
   @Delete(':id')
   remove(@CurrentUser() u: Principal, @Param('id') id: string, @Query('version') version: string) {
-    return this.moments.deleteMoment(u.sub, id, Number(version));
+    return this.moments.deleteMoment(u.id, id, Number(version));
   }
 
   @Get('feed')
@@ -42,51 +49,51 @@ export class MomentsController {
     @Query('order') order?: 'chronological' | 'ranked',
   ) {
     const origin = lat != null && lon != null ? { lat: Number(lat), lon: Number(lon) } : null;
-    return this.moments.feed(u.sub, mode, { origin, cursor: cursor ?? null, order });
+    return this.moments.feed(u.id, mode, { origin, cursor: cursor ?? null, order });
   }
 
   @Post(':id/comments')
   comment(@CurrentUser() u: Principal, @Param('id') id: string, @Body() body: { text?: string; parentId?: string }) {
-    return this.moments.addComment(u.sub, id, body.text, body.parentId ?? null);
+    return this.moments.addComment(u.id, id, body.text, body.parentId ?? null);
   }
 
   @Get(':id/comments')
   comments(@CurrentUser() u: Principal, @Param('id') id: string) {
-    return this.moments.comments(u.sub, id);
+    return this.moments.comments(u.id, id);
   }
 
   @Post(':id/reactions')
   react(@CurrentUser() u: Principal, @Param('id') id: string, @Body() body: { reaction: string }) {
-    return this.moments.react(u.sub, id, body.reaction);
+    return this.moments.react(u.id, id, body.reaction);
   }
 
   @Delete(':id/reactions')
   unreact(@CurrentUser() u: Principal, @Param('id') id: string) {
-    return this.moments.unreact(u.sub, id);
+    return this.moments.unreact(u.id, id);
   }
 
   @Post('follow/:targetId')
   follow(@CurrentUser() u: Principal, @Param('targetId') t: string) {
-    return this.moments.follow(u.sub, t);
+    return this.moments.follow(u.id, t);
   }
 
   @Post('block/:blockedId')
   block(@CurrentUser() u: Principal, @Param('blockedId') b: string) {
-    return this.moments.block(u.sub, b);
+    return this.moments.block(u.id, b);
   }
 
   @Post('stories')
   story(@CurrentUser() u: Principal, @Body() body: { mediaId: string; visibility: 'friends' | 'nearby' | 'public' }) {
-    return this.moments.createStory(u.sub, body.mediaId, body.visibility);
+    return this.moments.createStory(u.id, body.mediaId, body.visibility);
   }
 
   @Get('stories/rail')
   rail(@CurrentUser() u: Principal) {
-    return this.moments.storyRail(u.sub);
+    return this.moments.storyRail(u.id);
   }
 
   @Post('reports')
   report(@CurrentUser() u: Principal, @Body() body: { targetKind: 'moment' | 'comment' | 'story'; targetId: string; reason: string; note?: string }) {
-    return this.moments.report(u.sub, body);
+    return this.moments.report(u.id, body);
   }
 }

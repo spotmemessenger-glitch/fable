@@ -115,6 +115,42 @@ describe('Moments — mounted, and dark at runtime', () => {
     expect(await until(async () => (await feed(adultTok)).status, 200)).toBe(200);
   }, 20_000);
 
+  it('M2 REGRESSION: creating a text moment over REAL HTTP works (principal shape)', async () => {
+    /* This is the test that would have caught the production 500. The
+     * lifecycle e2e drives MomentsService directly with authorId strings, so
+     * it can never notice the controller reading a principal field the JWT
+     * strategy does not provide — u.sub was undefined, authorId reached
+     * Prisma as undefined, and every create 500ed in production while the
+     * suite stayed green. Only a request through the real strategy sees it. */
+    const res = await fetch(`${url}/api/v1/moments`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${adultTok}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ kind: 'text', text: `gate-runtime ${RUN}`, mediaIds: [], visibility: 'friends' }),
+    });
+    expect(res.status).toBeLessThan(300);
+    const made = (await res.json()) as { id?: string; authorId?: string };
+    expect(made.id).toBeTruthy();
+    // The author must be the AUTHENTICATED account, not undefined-coerced.
+    if (made.authorId) expect(made.authorId.length).toBeGreaterThan(0);
+    await prisma.moment.deleteMany({ where: { id: made.id } }).catch(() => {});
+  }, 20_000);
+
+  it('M2 REGRESSION: filing a report over REAL HTTP works and records delivery (D7)', async () => {
+    const res = await fetch(`${url}/api/v1/moments/reports`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${adultTok}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ targetKind: 'moment', targetId: 'mo-gate-runtime', reason: 'Spam or scam' }),
+    });
+    expect(res.status).toBeLessThan(300);
+    const rep = (await res.json()) as { reportId?: string };
+    expect(rep.reportId).toBeTruthy();
+    const row = await prisma.momentReport.findUnique({ where: { id: rep.reportId! } });
+    expect(row).toBeTruthy();
+    expect(row!.reporterId).toBeTruthy();          // not undefined-coerced
+    expect(row!.queuedAt).toBeTruthy();            // the D7 delivery marker
+    await prisma.momentReport.deleteMany({ where: { id: rep.reportId } }).catch(() => {});
+  }, 20_000);
+
   it('the age gate still applies with the flag ON: unverified and frozen get 403', async () => {
     const unv = await tokenFor(await mk('u1', 'unverified'));
     const frz = await tokenFor(await mk('z1', 'frozen'));

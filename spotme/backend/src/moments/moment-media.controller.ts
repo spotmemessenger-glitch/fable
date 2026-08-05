@@ -28,7 +28,14 @@ import { MomentMediaService } from '../moment-media/media.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { randomUUID } from 'node:crypto';
 
-interface Principal { sub: string }
+/* The principal the app's JWT strategy actually provides ({ id, role, kind } —
+ * see jwt.strategies.ts). The dark phase wrote these controllers against a
+ * `sub` field that never existed on the request object; every authorId reached
+ * Prisma as undefined and every create 500ed the first time real HTTP hit it,
+ * while the service-level e2e suite (which passes authorId strings directly)
+ * stayed green. The regression test in moments-gate-runtime.spec.ts drives the
+ * real strategy so this class of mismatch cannot ship silently again. */
+interface Principal { id: string }
 /** The slice of the Express request this controller reads. */
 interface RawRequest { body?: unknown }
 
@@ -56,7 +63,7 @@ export class MomentMediaController {
     }
     const mime = String(contentType || '').split(';')[0].trim();
     const mediaId = `mm-${randomUUID()}`;
-    const result = await this.media.ingest(mediaId, bytes, mime, u.sub);
+    const result = await this.media.ingest(mediaId, bytes, mime, u.id);
     if (result.state === 'refused') {
       // The reason is safe to relay: it describes the CALLER's input, never
       // anything about storage internals or another user's data.

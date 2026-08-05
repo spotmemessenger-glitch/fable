@@ -72,6 +72,42 @@ export async function runM2Proof(port: number): Promise<Record<string, unknown>>
     });
 
   try {
+    // ---------- 0a. MIGRATIONS DIFF (owner asked): repo vs _prisma_migrations.
+    // The repo's migration folders ship in the image (Dockerfile copies
+    // /app/prisma), so the comparison is local-dir vs live-table.
+    try {
+      const { readdir } = await import('node:fs/promises');
+      const repoMigs = (await readdir('prisma/migrations', { withFileTypes: true }))
+        .filter((d) => d.isDirectory()).map((d) => d.name).sort();
+      const dbMigs = await prisma.$queryRawUnsafe<Array<{ migration_name: string; finished_at: Date | null; rolled_back_at: Date | null }>>(
+        'SELECT migration_name, finished_at, rolled_back_at FROM "_prisma_migrations" ORDER BY migration_name',
+      );
+      const dbNames = dbMigs.map((m) => m.migration_name);
+      out.migrations_repo_count = repoMigs.length;
+      out.migrations_db_count = dbNames.length;
+      out.migrations_missing_in_db = repoMigs.filter((m) => !dbNames.includes(m));
+      out.migrations_extra_in_db = dbNames.filter((m) => !repoMigs.includes(m));
+      out.migrations_unfinished = dbMigs.filter((m) => !m.finished_at || m.rolled_back_at).map((m) => m.migration_name);
+    } catch (e) {
+      out.migrations_diff_error = (e as Error).message.slice(0, 160);
+    }
+
+    // ---------- 0b. persistent BROWSER PROBE grants -------------------------
+    // Two accounts created from outside with known recovery secrets; the
+    // browser adopts them via Sign-back-in and lands allowlisted. NOT cleaned
+    // up: they are the preview-drive accounts, noted and revocable.
+    for (const uname of ['mbrowsera', 'mbrowserb']) {
+      const u = await prisma.user.findUnique({ where: { username: uname }, select: { id: true } });
+      if (u) {
+        await prisma.domainAllowlist.upsert({
+          where: { domain_userId: { domain: 'moments', userId: u.id } },
+          update: { note: 'M1b browser probe (revocable)' },
+          create: { domain: 'moments', userId: u.id, note: 'M1b browser probe (revocable)' },
+        });
+      }
+      out[`browser_probe_${uname}`] = Boolean(u);
+    }
+
     // ---------- 0. flag/allowlist row counts (owner asked to see these) -----
     out.runtimeFlag_rows_total = await prisma.runtimeFlag.count();
     out.runtimeFlag_rows_moments = await prisma.runtimeFlag.count({ where: { key: 'moments' } });
@@ -216,11 +252,11 @@ export async function runM2Proof(port: number): Promise<Record<string, unknown>>
     out.error = (e as Error).message;
   } finally {
     // ---------- cleanup: production ends dark, zero rows -------------------
-    await prisma.domainAllowlist.deleteMany({ where: { domain: 'moments' } }).catch(() => undefined);
+    await prisma.domainAllowlist.deleteMany({ where: { domain: 'moments', note: `M2 proof ${RUN}` } }).catch(() => undefined);
     await prisma.momentMediaAsset.deleteMany({ where: { id: { in: madeMedia } } }).catch(() => undefined);
     await prisma.refreshToken.deleteMany({ where: { userId: { in: ids } } }).catch(() => undefined);
     await prisma.user.deleteMany({ where: { id: { in: ids } } }).catch(() => undefined);
-    out.cleanup_allowlist_moments_remaining = await prisma.domainAllowlist.count({ where: { domain: 'moments' } }).catch(() => -1);
+    out.cleanup_allowlist_moments_remaining = await prisma.domainAllowlist.count({ where: { domain: 'moments' } }).catch(() => -1); // 2 browser probes expected
     out.cleanup_runtimeFlag_total = await prisma.runtimeFlag.count().catch(() => -1);
     out.cleanup_domainAllowlist_total = await prisma.domainAllowlist.count().catch(() => -1);
     await prisma.$disconnect().catch(() => undefined);
