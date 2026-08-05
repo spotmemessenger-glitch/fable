@@ -36,7 +36,7 @@ or declare parked).
 | Dependency | Version | Result | Latency | Notes |
 |---|---|---|---|---|
 | **R2 / storage** | — | ✅ **PASS** (after owner var fix) | PUT 200 ~1.93 s · GET 200 ~0.56 s · DELETE ~0.25 s | Real `S3StorageAdapter` port. **`STORAGE_PROVIDER=s3` in effect (no silent local fallback).** Full round-trip verified: presigned PUT → GET, **byte-integrity sha256 in==out ✅**, delete confirmed (post-delete GET `404`). EXIF sentinel **survived** the round trip — expected/correct: the port is a forbidden-to-inspect pass-through (never strips/transcodes); EXIF protection is client-side sealing, not storage. Wave 0 surfaced **three layered misconfigs**, all owner-corrected: `S3_ACCESS_KEY_ID` held a 64-char secret (needs the 32-char ID); `S3_BUCKET` held a wrong 32-char value, then the name with trailing whitespace — fixed to `spot-media-staging`. |
-| **Postgres / PostGIS** | (in-network) | ⛔ **BLOCKED — MUST RUN IN-NETWORK** | — | `DATABASE_URL` is Railway-private (`ENOTFOUND` externally) + this container's egress proxy blocks raw-TCP DBs. Phase-1A PostGIS gate answered by the in-network harness run. **No mutation/migration/PostGIS-install performed externally; user-data safety check unrun from here.** |
+| **Postgres / PostGIS** | Postgres on `postgres-ssl:18` | ⛔ **Phase-1A gate = BLOCKED** | — | **Answered by the deploy's boot migration.** `npx prisma migrate deploy` at boot ran `20260803120000_enable_postgis` (`CREATE EXTENSION postgis`) against `postgres.railway.internal` and it **FAILED** — PostGIS is not installable on this image / the app role lacks the privilege (exactly the production-permission gate the migration's own header warns about). The DB is now in `P3009` (failed-migration) state, which blocks `migrate deploy` and therefore all deploys. **Do NOT substitute** — owner remedy below. The harness `--legs=postgres` (user-data check + geospatial smoke) will run once PostGIS is provisioned and the deploy boots. |
 | **Dragonfly / Redis** | (in-network) | ⛔ **BLOCKED — MUST RUN IN-NETWORK** | — | Private-network. Harness ready: PING + version + wave0 BullMQ enqueue→process→ack via the app's `createRedisConnection`. |
 | **Typesense** | (in-network) | ⛔ **BLOCKED — MUST RUN IN-NETWORK** | — | Private-network. Harness does a `wave0_smoke` create→index→query→drop; the authoritative 20k re-benchmark is a `@spotme/search-bench` run (below). |
 
@@ -62,12 +62,28 @@ Command (owner, in-network): see `docs/ops/DEPLOYMENT.md §5`.
 
 ## 4. Deployment, health & routes
 
-**Railway deploy: ⛔ BLOCKED (owner action).** `railway up` from the agent
-container uploads the git root and does not apply the service's dashboard root
-directory (`spotme/backend`), so the build fails with `couldn't locate the
-dockerfile at path Dockerfile`. Three attempts failed at build; **the known-good
-deployment kept serving throughout — no outage, no user-facing change.** Owner
-deploy path in `DEPLOYMENT.md §3`.
+**Railway deploy: ⛔ BLOCKED on the PostGIS migration (owner action).** Timeline:
+1. The service's deploy source was **misconfigured** — no GitHub repo connected,
+   and the root-directory field held a stray branch name (`feat/activation-wave-0`).
+   With owner authorization, this was corrected (repo `spotmemessenger-glitch/fable`,
+   branch `feat/activation-wave-0`, **root directory `spotme/backend`**; nothing
+   else changed). That root-directory fix is also what made `railway up` /
+   `npm run deploy` resolve the Dockerfile — the earlier "Dockerfile not found"
+   failures were caused by the stray root-directory value, not a CLI limitation.
+2. `npm run deploy` then **built successfully** (Dockerfile found, `deploy-api`
+   staged, assert passed) and the container **booted**.
+3. Boot ran `npx prisma migrate deploy`, which **failed** on
+   `20260803120000_enable_postgis` (`CREATE EXTENSION postgis`) — PostGIS is not
+   installable on the `postgres-ssl:18` image / the app role lacks the privilege.
+   `migrate deploy` aborted, `main.js` never started, and the `/health` gate
+   timed out (~5 min) → deployment FAILED. The DB is left in `P3009`.
+
+**Note (GitHub source):** the connected GitHub source is redundant — `npm run
+deploy` works now — and its builds fail at the `deploy-api/translate.js` assert
+(`deploy-api` is untracked, staged only by `npm run deploy`, so GitHub-source
+builds never have it). Recommend disconnecting it: `railway service source
+disconnect --service api`. **The known-good instance served throughout — no
+outage, no user-facing change.**
 
 **Health/route behaviour verified on the built `dist/` artifact (local boot with
 a DB), substituting for the blocked Railway verification:**
@@ -124,13 +140,21 @@ agent-local test scaffolding was deleted.
    `S3_BUCKET` (→ `spot-media-staging`, whitespace removed); storage leg re-run
    **PASS**. *(Optional hardening: `s3-storage.adapter.ts:48` reads `S3_BUCKET`
    raw — a `.trim()` there would tolerate stray whitespace. Separate follow-up.)*
-2. **Deploy `feat/activation-wave-0`** via the GitHub-integration path (or from a
-   correctly-linked checkout) — `DEPLOYMENT.md §3`.
-3. **Run the in-network legs** (Postgres/PostGIS incl. the Phase-1A gate, Redis,
-   Typesense) and the **20k Typesense re-benchmark** — `DEPLOYMENT.md §5`. Fold
-   real results back into this report.
-4. **If PostGIS is unavailable on the Postgres image** — switch to a
-   PostGIS-capable image; do not substitute.
+2. **⚠️ PROVISION POSTGIS (the deploy blocker).** The `Postgres` service image
+   (`postgres-ssl:18`) cannot run `CREATE EXTENSION postgis`. Switch it to a
+   PostGIS-capable image (e.g. `ghcr.io/railwayapp-templates/postgres-postgis`,
+   or a `postgis/postgis:16` image), or make the `postgis` extension available
+   and grant the app DB role `CREATE EXTENSION` privilege. **Do not substitute
+   anything else.**
+3. **Clear the failed migration** so `migrate deploy` can proceed:
+   `npx prisma migrate resolve --rolled-back 20260803120000_enable_postgis`
+   (run against the staging DB), then redeploy — the migration re-applies and
+   succeeds once PostGIS is available.
+4. **Redeploy** (`npm run deploy` from `spotme/backend` — works now that
+   root-directory is `spotme/backend`). On green boot the harness lands; then the
+   **Redis, Typesense, and Postgres legs** + the **20k Typesense re-benchmark**
+   run in-network (`DEPLOYMENT.md §5`) and fold into this report. Optionally
+   `railway service source disconnect --service api` first (redundant source).
 5. **Resolve `s3_bucket` orphan** (delete or declare parked).
 6. **Docs follow-up:** prune stale `JWT_REFRESH_SECRET`/`JWT_REFRESH_TTL` from
    `spotme/backend/.env.example` (read by no code).
@@ -142,8 +166,15 @@ agent-local test scaffolding was deleted.
 
 - **Nothing user-facing was activated.** No dark module imported, no shell mount,
   no flag flip. Dark routes enumerated return `404`; crypto conditions false.
-- **No production resource was touched.** Postgres never connected; no migration,
-  no PostGIS install, no variable added/renamed/edited; R2 wrote nothing.
+- **Postgres:** not touched from the agent container. The **owner-authorized
+  deploy's boot** ran `prisma migrate deploy` in-network (the app's normal boot
+  step) using only **existing committed migrations** — no new/edited migration,
+  no schema beyond what's in the repo. `20260803120000_enable_postgis` failed
+  (PostGIS unavailable), leaving a `P3009` state to be resolved (action #3). No
+  data was read or written; the user-data safety check has not run.
+- **Railway settings:** only the deploy **source / branch / root-directory** were
+  changed (owner-authorized, one-time) — no variables, no other settings, no
+  deletions. R2 wrote only the wave0 smoke object, which was deleted.
 - **No credential value** was printed or persisted anywhere (output, logs,
   commits, PR, this report).
 - **Only mission-created / agent-local test resources were deleted.**
