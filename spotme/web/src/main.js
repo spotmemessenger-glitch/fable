@@ -147,9 +147,11 @@ export async function refreshFlaggedTabs () {
   let on = false
   try { on = await momentsAvailable() } catch { on = false }
   if (on) enabledFlags.add('moments'); else enabledFlags.delete('moments')
+  console.warn('SPOTME_TABDBG on=' + on + ' navEl=' + !!navEl + ' flags=' + [...enabledFlags].join('|'))
   if (!navEl) return
   const desired = navItems().map((i) => i.path).join(',')
   const current = [...navEl.querySelectorAll('.nv')].map((b) => b.dataset.path).join(',')
+  console.warn('SPOTME_TABDBG desired=' + desired + ' current=' + current)
   if (desired !== current) {
     const fresh = buildNav()
     navEl.replaceWith(fresh)
