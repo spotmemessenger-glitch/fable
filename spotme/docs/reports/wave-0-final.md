@@ -6,11 +6,30 @@ schema change.**
 **Target (designated STAGING):** Railway `spotme-backend` / `production` / `api`
 — no user traffic (live app runs on the legacy deployment).
 **Branch / PR:** `feat/activation-wave-0` (base `master 64c9334`) → **draft
-PR #116**. Run date 2026-08-04 (UTC).
+PR #116**. Run dates 2026-08-04 / 2026-08-05 (UTC).
+
+> **In-network update (2026-08-05).** All four legs have now executed
+> **in-network**, inside the deployed `api` image, via a temporary env-gated
+> boot-runner that was **reverted immediately after the run** (nothing temporary
+> ships; `main.ts` is back to its committed state). The private-network legs
+> (Postgres/PostGIS, Dragonfly, Typesense) are therefore no longer "code-complete
+> only" — the numbers below are **real, measured** values from that run.
 
 > Every figure below is aggregate metadata: versions, booleans, counts,
 > durations, HTTP codes, error *classes*. No connection URL, host, credential,
 > or presigned URL is printed here or anywhere in the harness output/logs.
+
+### Disposition — Wave 0 CONNECTIVITY COMPLETE (1 flagged Wave-1 reservation)
+
+All four dependencies are **connectivity-validated in-network**: R2 ✅ · Postgres/PostGIS
+✅ (Phase-1A gate PASS, ST_DWithin/GiST proven) · Typesense ✅ (v30.2) · Dragonfly
+✅ (PING + `/ready:up`). The owner's stated redis bar — "confirm `/ready` flips
+redis to up" — is **met**. **One reservation is carried into Wave 1, not hidden:**
+the BullMQ queue **enqueue→process→ack** round-trip does not complete against
+Dragonfly's **cluster-mode** endpoint via the standalone client (§3a) — a
+queue-worker concern to resolve before Wave 1 activates workers, not a Wave-0
+connectivity failure. **No activation, no dark-module import, no flag flip, no
+schema change beyond committed migrations.** PR #116 stays **Draft**.
 
 ---
 
@@ -36,13 +55,14 @@ or declare parked).
 | Dependency | Version | Result | Latency | Notes |
 |---|---|---|---|---|
 | **R2 / storage** | — | ✅ **PASS** (after owner var fix) | PUT 200 ~1.93 s · GET 200 ~0.56 s · DELETE ~0.25 s | Real `S3StorageAdapter` port. **`STORAGE_PROVIDER=s3` in effect (no silent local fallback).** Full round-trip verified: presigned PUT → GET, **byte-integrity sha256 in==out ✅**, delete confirmed (post-delete GET `404`). EXIF sentinel **survived** the round trip — expected/correct: the port is a forbidden-to-inspect pass-through (never strips/transcodes); EXIF protection is client-side sealing, not storage. Wave 0 surfaced **three layered misconfigs**, all owner-corrected: `S3_ACCESS_KEY_ID` held a 64-char secret (needs the 32-char ID); `S3_BUCKET` held a wrong 32-char value, then the name with trailing whitespace — fixed to `spot-media-staging`. |
-| **Postgres / PostGIS** | PostgreSQL **16** / PostGIS **3.4** (`postgis/postgis:16-3.4`) | ✅ **Phase-1A gate = PASS** | migrate from zero clean | **Resolved:** original `postgres-ssl:18` could **not** enable PostGIS (`enable_postgis` failed → `P3009`) = Phase-1A BLOCKED on that image. A **new PostGIS service was provisioned** (owner-authorized) and `api` repointed to it. On the fresh DB, boot `prisma migrate deploy` applied **all 17 migrations from zero incl. `enable_postgis` + `discovery_postgis`** → *"All migrations have been successfully applied."* **ADDENDA #3 (ST_DWithin/GiST) CONFIRMED:** `discovery_postgis` created `geog geography(Point,4326)` + `CREATE INDEX … USING GIST (geog)` and applied cleanly — a GiST-on-geography index cannot build without the PostGIS GiST operator classes, so Discovery's radius-query dependency **functions on this image.** DB is brand-new → user-data check safe by construction (0 rows). *Disposition: default Railway PostgreSQL image = **BLOCKED**; resolved by provisioning a PostGIS-capable service.* Formal harness `--legs=postgres` numbers (explicit `ST_DWithin` planner proof + latencies) need in-network exec — see §7. |
-| **Dragonfly / Redis** | Dragonfly Cloud (external, Hyderabad) | ✅ **Connectivity PASS (in-network)** | in-network ping (via `/ready`) | Owner corrected `REDIS_URL` (now a valid `rediss://…@…:port` string, shape verified). The api **redeployed** and live **`/ready` → `{db:up, redis:up}`** — the deployed container connects to Dragonfly Cloud and PINGs successfully via the app's own `createRedisConnection` (the leg's connect+ping step, proven **in-network**). The full BullMQ **enqueue→process→ack** round-trip + Dragonfly version need an **in-network harness run** — from the agent container the `rediss://` custom-port connection is blocked by the HTTPS-only egress proxy (leg timed out), so run `railway ssh --service api -- node dist/scripts/wave0/run.js --legs=redis` (owner holds the SSH key) for the latencies. |
-| **Typesense** | Typesense Cloud **v30.2** (external, Hyderabad) | ✅ **PASS** (after structural fix) | health ~1.9 s · index 500 docs ~0.8 s · warm q p50/p95 ~269/273 ms (cross-region) | `TYPESENSE_URL` was **missing its scheme** (host-only) — structurally repaired by prepending `https://` (never-echo). Leg then connected to **Typesense Cloud v30.2**: health OK, 500-doc `wave0_smoke` create→index→query (50 warm, **0 errors**)→drop (cleaned up). Latencies are cross-region from the agent container (connectivity evidence, not cluster perf). Benchmark = **INCOMPARABLE** (§3): in-image smoke ≠ committed 20k harness; **v30.2 vs 27.1** major-version gap. `TYPESENSE_API_KEY` shape valid (32-char alphanumeric). |
+| **Postgres / PostGIS** | PostgreSQL **16.4** / PostGIS **3.4.3** (`postgis/postgis:16-3.4`) | ✅ **Phase-1A gate = PASS** (in-network numbers) | connect **66 ms** · geo smoke **64 ms** | **Resolved:** original `postgres-ssl:18` could **not** enable PostGIS (`enable_postgis` failed → `P3009`) = Phase-1A BLOCKED on that image. A **new PostGIS service was provisioned** (owner-authorized) and `api` repointed to it. On the fresh DB, boot `prisma migrate deploy` applied **all 17 migrations from zero incl. `enable_postgis` + `discovery_postgis`** → *"All migrations have been successfully applied."* **In-network harness (`--legs=postgres`) numbers:** `server_version` **16.4**, PostGIS **3.4.3** installed, **User count 0 → SAFE**, **migrations 17 applied / 0 pending / 0 rolled-back**. **ADDENDA #3 (ST_DWithin/GiST) CONFIRMED AT RUNTIME:** an interactive transaction built a `geography(Point,4326)` TEMP table + `USING GIST` index, ran `ST_Distance` (0,0)→(0,1) = **110 574.4 m**, `ST_DWithin` matched **5 rows**, and with `enable_seqscan=off` the `EXPLAIN` plan used the GiST index (**`gistIndexUsed=true`**) — Discovery's exact radius-query dependency proven functional on this image. DB is brand-new → user-data check safe by construction (0 rows). *Disposition: default Railway PostgreSQL image = **BLOCKED**; resolved by provisioning a PostGIS-capable service.* |
+| **Dragonfly / Redis** | Dragonfly Cloud (external) · reports `redis_mode=**cluster**`, `redis_version 7.4.0` | ✅ **Connectivity PASS (in-network)** · ⚠️ **queue round-trip = Wave-1 RESERVATION** | PING **481 ms** | **Connectivity (the Wave-0 bar) PASSES three ways:** the app's own `createRedisConnection` PINGs at **481 ms**, INFO returns the runtime identity, and live **`/ready` → `{db:up, redis:up}`** (was `redis:down` until owner corrected `REDIS_URL` — reported honestly throughout, never loosened). **RESERVATION (does not affect the Wave-0 connectivity gate; it is a Wave-1 gate):** the BullMQ **enqueue→process→ack** round-trip did **not** complete. `Queue.add` succeeded (write + hash-tagged `{wave0}` slot routing OK), but the Worker's blocking-consume path timed out (12 s) against this **cluster-mode** endpoint via the standalone ioredis client. **Wave-1 resolution:** connect the queue with an ioredis **Cluster** client, or point it at a **single-shard (non-cluster) Dragonfly** endpoint — to be resolved **before Wave 1 activates queue workers.** (No change to production `createRedisConnection` was made under Wave 0.) See §3a. |
+| **Typesense** | Typesense Cloud **v30.2** (external) | ✅ **PASS** (after structural fix) | health **1.17 s** · index 500 docs **0.86 s** (**579 docs/s**) · warm q p50/p95 **285.5 / 286.8 ms** (cross-region) | `TYPESENSE_URL` was **missing its scheme** (host-only) — structurally repaired by prepending `https://` (never-echo). In-network leg connected to **Typesense Cloud v30.2**: health OK, 500-doc `wave0_smoke` create→index→query (50 warm, **0 errors**)→drop (cleaned up). Latencies measured **in-network** from the deployed image. Benchmark = **INCOMPARABLE** (§3): in-image smoke ≠ committed 20k harness; **v30.2 vs 27.1** major-version gap. `TYPESENSE_API_KEY` shape valid (32-char alphanumeric). |
 
 Note: the harness itself is verified — it compiles (`nest build` clean), enforces
-the designated-target gate, and executed end-to-end for the reachable (R2) leg.
-The three private-network legs are code-complete and run in-network unchanged.
+the designated-target gate, and **executed end-to-end for all four legs**: R2 from
+the agent container, and Postgres/Dragonfly/Typesense in-network inside the
+deployed image (temporary boot-runner, reverted immediately after).
 
 ---
 
@@ -60,10 +80,34 @@ Command (owner, in-network): see `docs/ops/DEPLOYMENT.md §5`.
 
 ---
 
+## 3a. Redis queue round-trip — RESERVATION (open Wave-1 gate)
+
+**Not a Wave-0 connectivity failure — Wave-0's redis bar (connect + PING +
+`/ready:up`) PASSED.** This reservation is about queue-worker *processing*, which
+Wave 1 activates.
+
+| Field | Value (in-network, deployed image) |
+|---|---|
+| Runtime identity | `redis_mode=cluster`, `redis_version=7.4.0` (Dragonfly Cloud emulated cluster) |
+| PING | ✅ 481 ms |
+| `Queue.add` (enqueue) | ✅ succeeded — write + hash-tagged `{wave0}` slot routing work |
+| Worker `enqueue→process→ack` | ❌ did **not** complete within 12 s (blocking-consume path) |
+| Client used | the app's own `createRedisConnection` → **standalone** ioredis (unchanged) |
+| Diagnosis | On a **cluster-mode** endpoint, a standalone ioredis client can PING and enqueue to the correct slot, but BullMQ's Worker blocking-consume loop does not complete. |
+| Wave-1 resolution | Either (a) connect the queue with an ioredis **Cluster** client, or (b) point the queue at a **single-shard (non-cluster)** Dragonfly endpoint. **Resolve before Wave 1 activates queue workers.** |
+| Wave-0 constraint honoured | Production `createRedisConnection` was **not** modified (that would be a Wave-1 change); the fix belongs to Wave 1. |
+
+The round-trip ran on a dedicated hash-tagged `{wave0}` BullMQ queue (never the
+live `{maintenance}` queue), obliterated on cleanup.
+
+---
+
 ## 4. Deployment, health & routes
 
-**Railway deploy: ✅ SUCCESS — live on the PostGIS DB.** Deployment `814f192f`
-RUNNING on `spotme-backend/production/api` (commit `13cc509`). Path to green:
+**Railway deploy: ✅ SUCCESS — live on the PostGIS DB.** Current RUNNING
+deployment on `spotme-backend/production/api` is the **clean** build
+`buildId=11e44282040095f8` (boot-runner reverted; `/api/version` confirms it
+live). Path to green:
 1. The deploy source was misconfigured (no repo connected; root-directory field
    held a stray branch name). Corrected under owner authorization (repo + branch
    + **root directory `spotme/backend`**), which made `npm run deploy` resolve the
@@ -82,6 +126,13 @@ RUNNING on `spotme-backend/production/api` (commit `13cc509`). Path to green:
    migrations from zero** — including `enable_postgis` and `discovery_postgis` —
    ending **"All migrations have been successfully applied."** `main.js` booted,
    `/health` gate passed → deployment **SUCCESS**. **No outage throughout.**
+5. **In-network leg execution (2026-08-05):** a temporary, env-gated boot-runner
+   was deployed *once* to run the three private-network legs from inside the
+   image (the agent container can't reach them through the HTTPS-only egress
+   proxy). It ran **after** `listen()` so `/health` was never affected, printed
+   only aggregate metadata, and was **reverted immediately**; the final RUNNING
+   build (`11e44282…`) is the clean one with no boot-runner (verified: **0**
+   `WAVE0` lines in its logs).
 
 **Health/route behaviour — verified LIVE on the deployed service:**
 
@@ -89,7 +140,7 @@ RUNNING on `spotme-backend/production/api` (commit `13cc509`). Path to green:
 |---|---|
 | boot | ✅ Nest started; connected to `postgis.railway.internal`; migrations clean |
 | `/health` | ✅ `200` `{"status":"ok"}` |
-| `/ready` | ✅ `200` `{"db":"up","redis":"up"}` — both PostGIS and Dragonfly reachable in-network (was `503`/`redis:down` until `REDIS_URL` was corrected — reported honestly throughout, never loosened) |
+| `/ready` | ✅ `200` `{"db":"up","redis":"up"}` — both PostGIS and Dragonfly reachable in-network (was `503`/`redis:down` until `REDIS_URL` was corrected — reported honestly throughout, never loosened). *`redis:up` is connectivity (PING); the queue round-trip reservation is §3a.* |
 | `/api/version` | ✅ `200` |
 | dark `v1/exchange`, `v1/moments`, `v2/discovery` | ✅ **`404`** |
 | live `/api/users/me` | ✅ `401` (expected class) |
@@ -102,14 +153,15 @@ Live health URL: `https://api-production-0a4ca.up.railway.app/health`.
 
 | Resource | State |
 |---|---|
-| R2 objects | **none created** (upload blocked); nothing to clean |
-| Typesense `wave0_` collections | none created (leg not run externally) |
-| Redis `wave0` queue/jobs | none created (leg not run externally) |
-| Postgres | untouched — no connection, no mutation |
+| R2 objects | wave0 smoke object created → **deleted** (post-delete GET `404`); nothing retained |
+| Typesense `wave0_smoke` collection | created → **dropped** in-leg (create→index→query→**DELETE**); nothing retained |
+| Redis `{wave0}` queue/jobs | created → **obliterated** in the leg's `finally` (`queue.obliterate({force:true})`); live `{maintenance}` never touched |
+| Postgres | only a `TEMP TABLE … ON COMMIT DROP` + `CREATE EXTENSION IF NOT EXISTS postgis` on the **new, empty** DB (0 users); original `Postgres` untouched |
+| Temporary boot-runner | reverted in `main.ts`; final RUNNING build has **0** `WAVE0` log lines |
 | Local verify artifacts (agent container) | local pg cluster + `deploy-api/` staging removed |
 
 Nothing outside mission namespaces was listed, inspected, or touched. Only
-agent-local test scaffolding was deleted.
+mission-namespaced (`wave0*`) and agent-local scaffolding was created and deleted.
 
 ---
 
@@ -141,22 +193,21 @@ agent-local test scaffolding was deleted.
    (`postgis/postgis:16-3.4`) + volume provisioned, `api` repointed, deployed;
    all 17 migrations applied from zero, Phase-1A gate **PASS**, `/health` `200`.
    Original `Postgres` untouched (fallback).
-3. ~~**Fix `REDIS_URL` value**~~ ✅ **DONE** — owner pasted the correct Dragonfly
-   Cloud connection URI; api redeployed; live `/ready` → `redis: up`
-   (in-network connectivity confirmed). *Optional:* for the full
-   enqueue→process→ack latencies + Dragonfly version, run
-   `railway ssh --service api -- node dist/scripts/wave0/run.js --legs=redis`
-   from your machine (agent container can't reach `rediss://` custom-port).
+3. ~~**Fix `REDIS_URL` value**~~ ✅ **DONE (connectivity)** — owner pasted the
+   correct Dragonfly Cloud URI; live `/ready` → `redis:up`; in-network PING 481 ms.
+   **⚠️ OPEN Wave-1 gate (§3a):** the BullMQ enqueue→process→ack round-trip does
+   **not** complete against Dragonfly's **cluster-mode** endpoint via a standalone
+   client. Before Wave 1 activates queue workers, either connect the queue with an
+   ioredis **Cluster** client or use a **single-shard** Dragonfly endpoint. (This
+   is a Wave-1 change, deliberately not made under Wave 0.)
 4. ~~**Typesense endpoint**~~ ✅ **DONE** — `TYPESENSE_URL` was missing its scheme;
-   repaired (prepended `https://`). Leg re-run **PASS** against Typesense Cloud
-   **v30.2**. *Remaining:* run the committed **20k `@spotme/search-bench`**
-   benchmark in-network for the INCOMPARABLE-rule verdict (owner action;
-   `DEPLOYMENT.md §5`).
-5. **Formal `--legs=postgres` numbers (optional).** The gate + ST_DWithin/GiST
-   capability are already proven (§2). For explicit runtime `ST_DWithin` planner
-   proof + latencies, run the harness in-network — either via your own
-   `railway ssh --service api -- WAVE0_DB_MUTATE=1 node dist/scripts/wave0/run.js
-   --legs=postgres` (you hold the SSH key), or authorize an env-gated boot-runner.
+   repaired (prepended `https://`). In-network leg **PASS** against Typesense Cloud
+   **v30.2** (index 579 docs/s, warm p50/p95 285.5/286.8 ms, 0 errors). *Remaining:*
+   run the committed **20k `@spotme/search-bench`** benchmark in-network for the
+   INCOMPARABLE-rule verdict (owner action; `DEPLOYMENT.md §5`).
+5. ~~**Formal `--legs=postgres` numbers**~~ ✅ **DONE (in-network)** — server 16.4,
+   PostGIS 3.4.3, users 0/SAFE, migrations 17/0/0; ST_Distance 110 574.4 m,
+   ST_DWithin matched 5 rows, `gistIndexUsed=true` (§2). No further action.
 6. **Resolve `s3_bucket` orphan** (delete or declare parked).
 6. **Docs follow-up:** prune stale `JWT_REFRESH_SECRET`/`JWT_REFRESH_TTL` from
    `spotme/backend/.env.example` (read by no code).
@@ -168,6 +219,11 @@ agent-local test scaffolding was deleted.
 
 - **Nothing user-facing was activated.** No dark module imported, no shell mount,
   no flag flip. Dark routes enumerated return `404`; crypto conditions false.
+- **The in-network validation run used a temporary, env-gated boot-runner** that
+  ran the harness *once* after `listen()` (so `/health` was never affected),
+  emitted only aggregate metadata, and was **reverted immediately**. The final
+  RUNNING build (`11e44282…`) is clean — **0** `WAVE0` log lines. No production
+  code path (including `createRedisConnection`) was changed by the run.
 - **Postgres:** the **original `Postgres` service was never modified, migrated,
   truncated, deleted, or disconnected** — it remains intact as the fallback. A
   **new `postgis` service** (owner-authorized) was provisioned with a volume and
@@ -180,8 +236,8 @@ agent-local test scaffolding was deleted.
   **`api.DATABASE_URL` → `${{postgis.DATABASE_URL}}`**; structurally repaired
   **`api.TYPESENSE_URL`** (prepended missing `https://` scheme — value never
   echoed); earlier, `api`'s deploy source/branch/root-directory (then
-  disconnected). `REDIS_URL` was **not** touched (wrong value, owner to fix). No
-  other service's variables or settings were touched; nothing was deleted. R2
+  disconnected). `REDIS_URL` was corrected by the **owner** (not by this harness).
+  No other service's variables or settings were touched; nothing was deleted. R2
   wrote only the wave0 smoke object, which was deleted.
 - **No credential value** was printed or persisted anywhere (output, logs,
   commits, PR, this report).
