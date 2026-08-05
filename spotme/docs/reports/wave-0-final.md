@@ -36,9 +36,9 @@ or declare parked).
 | Dependency | Version | Result | Latency | Notes |
 |---|---|---|---|---|
 | **R2 / storage** | — | ✅ **PASS** (after owner var fix) | PUT 200 ~1.93 s · GET 200 ~0.56 s · DELETE ~0.25 s | Real `S3StorageAdapter` port. **`STORAGE_PROVIDER=s3` in effect (no silent local fallback).** Full round-trip verified: presigned PUT → GET, **byte-integrity sha256 in==out ✅**, delete confirmed (post-delete GET `404`). EXIF sentinel **survived** the round trip — expected/correct: the port is a forbidden-to-inspect pass-through (never strips/transcodes); EXIF protection is client-side sealing, not storage. Wave 0 surfaced **three layered misconfigs**, all owner-corrected: `S3_ACCESS_KEY_ID` held a 64-char secret (needs the 32-char ID); `S3_BUCKET` held a wrong 32-char value, then the name with trailing whitespace — fixed to `spot-media-staging`. |
-| **Postgres / PostGIS** | Postgres on `postgres-ssl:18` | ⛔ **Phase-1A gate = BLOCKED** | — | **Answered by the deploy's boot migration.** `npx prisma migrate deploy` at boot ran `20260803120000_enable_postgis` (`CREATE EXTENSION postgis`) against `postgres.railway.internal` and it **FAILED** — PostGIS is not installable on this image / the app role lacks the privilege (exactly the production-permission gate the migration's own header warns about). The DB is now in `P3009` (failed-migration) state, which blocks `migrate deploy` and therefore all deploys. **Do NOT substitute** — owner remedy below. The harness `--legs=postgres` (user-data check + geospatial smoke) will run once PostGIS is provisioned and the deploy boots. |
-| **Dragonfly / Redis** | (in-network) | ⛔ **BLOCKED — MUST RUN IN-NETWORK** | — | Private-network. Harness ready: PING + version + wave0 BullMQ enqueue→process→ack via the app's `createRedisConnection`. |
-| **Typesense** | (in-network) | ⛔ **BLOCKED — MUST RUN IN-NETWORK** | — | Private-network. Harness does a `wave0_smoke` create→index→query→drop; the authoritative 20k re-benchmark is a `@spotme/search-bench` run (below). |
+| **Postgres / PostGIS** | PostgreSQL **16** / PostGIS **3.4** (`postgis/postgis:16-3.4`) | ✅ **Phase-1A gate = PASS** | migrate from zero clean | **Resolved:** original `postgres-ssl:18` could **not** enable PostGIS (`enable_postgis` failed → `P3009`) = Phase-1A BLOCKED on that image. A **new PostGIS service was provisioned** (owner-authorized) and `api` repointed to it. On the fresh DB, boot `prisma migrate deploy` applied **all 17 migrations from zero incl. `enable_postgis` + `discovery_postgis`** → *"All migrations have been successfully applied."* **ADDENDA #3 (ST_DWithin/GiST) CONFIRMED:** `discovery_postgis` created `geog geography(Point,4326)` + `CREATE INDEX … USING GIST (geog)` and applied cleanly — a GiST-on-geography index cannot build without the PostGIS GiST operator classes, so Discovery's radius-query dependency **functions on this image.** DB is brand-new → user-data check safe by construction (0 rows). *Disposition: default Railway PostgreSQL image = **BLOCKED**; resolved by provisioning a PostGIS-capable service.* Formal harness `--legs=postgres` numbers (explicit `ST_DWithin` planner proof + latencies) need in-network exec — see §7. |
+| **Dragonfly / Redis** | — | ⛔ **BLOCKED — endpoint unconfigured** | — | `REDIS_URL` is **not a valid URL** (len 100, no `:`/`@` — an unresolved reference/placeholder) and **no Dragonfly/Redis service exists** in the project. Live `/ready` confirms `redis: down`. The leg cannot connect. Owner action: provision Dragonfly (or a Redis) and set a valid `REDIS_URL`; then the wave0 BullMQ enqueue→process→ack leg runs. |
+| **Typesense** | — | ⛔ **BLOCKED — endpoint unconfigured** | — | `TYPESENSE_URL` is **not a valid URL** (len 36, no `:` — unresolved/placeholder) and **no Typesense service exists** in the project. The leg cannot connect. Owner action: provision/point Typesense with a valid `TYPESENSE_URL`/`TYPESENSE_API_KEY`; then the connectivity smoke runs. Benchmark = **INCOMPARABLE** regardless (see §3). |
 
 Note: the harness itself is verified — it compiles (`nest build` clean), enforces
 the designated-target gate, and executed end-to-end for the reachable (R2) leg.
@@ -50,11 +50,11 @@ The three private-network legs are code-complete and run in-network unchanged.
 
 | Field | Value |
 |---|---|
-| Status | **DEFERRED to in-network owner run** (not simulated/estimated) |
+| Status | **INCOMPARABLE** (per ADDENDA #2 — not simulated/estimated) |
 | Tool | `@spotme/search-bench` (`node bench.mjs`, `CORPUS_SIZE=20000`) — committed, **not** in the backend image |
 | Recorded baseline (Typesense 27.1) | index **33,603 docs/s**; warm **p50/p95 3.60 / 5.05 ms**; typo 100%; RSS 223 MB |
-| Why deferred | Typesense is Railway-private and the bench package isn't deployed; must run from an in-network context that has the package |
-| Selection conclusion | **PENDING** the in-network run → then record CONFIRMS / CONFIRMS-WITH-RESERVATIONS / CHALLENGES vs 27.1 |
+| Why INCOMPARABLE | (a) the exact committed 20k harness isn't in the image, so it cannot run in-network here; the in-image smoke uses a different corpus/seed/schema/query-set/methodology — connectivity evidence only, never a verdict. (b) Typesense is also currently **unconfigured** (§2). (c) Cluster is **v30.x vs the 27.1 baseline** — a major-version gap to note in any eventual verdict. |
+| Selection conclusion | **NOT DRAWN** — requires the committed 20k `@spotme/search-bench` run against a validly-configured Typesense, in-network. Owner action. |
 
 Command (owner, in-network): see `docs/ops/DEPLOYMENT.md §5`.
 
@@ -62,42 +62,41 @@ Command (owner, in-network): see `docs/ops/DEPLOYMENT.md §5`.
 
 ## 4. Deployment, health & routes
 
-**Railway deploy: ⛔ BLOCKED on the PostGIS migration (owner action).** Timeline:
-1. The service's deploy source was **misconfigured** — no GitHub repo connected,
-   and the root-directory field held a stray branch name (`feat/activation-wave-0`).
-   With owner authorization, this was corrected (repo `spotmemessenger-glitch/fable`,
-   branch `feat/activation-wave-0`, **root directory `spotme/backend`**; nothing
-   else changed). That root-directory fix is also what made `railway up` /
-   `npm run deploy` resolve the Dockerfile — the earlier "Dockerfile not found"
-   failures were caused by the stray root-directory value, not a CLI limitation.
-2. `npm run deploy` then **built successfully** (Dockerfile found, `deploy-api`
-   staged, assert passed) and the container **booted**.
-3. Boot ran `npx prisma migrate deploy`, which **failed** on
-   `20260803120000_enable_postgis` (`CREATE EXTENSION postgis`) — PostGIS is not
-   installable on the `postgres-ssl:18` image / the app role lacks the privilege.
-   `migrate deploy` aborted, `main.js` never started, and the `/health` gate
-   timed out (~5 min) → deployment FAILED. The DB is left in `P3009`.
+**Railway deploy: ✅ SUCCESS — live on the PostGIS DB.** Deployment `814f192f`
+RUNNING on `spotme-backend/production/api` (commit `13cc509`). Path to green:
+1. The deploy source was misconfigured (no repo connected; root-directory field
+   held a stray branch name). Corrected under owner authorization (repo + branch
+   + **root directory `spotme/backend`**), which made `npm run deploy` resolve the
+   Dockerfile. Redundant GitHub source later disconnected (its builds fail the
+   untracked-`deploy-api` assert).
+2. The original `postgres-ssl:18` DB could not `CREATE EXTENSION postgis`
+   (`enable_postgis` migration failed → `P3009`) — Phase-1A gate BLOCKED.
+3. **Resolution (owner-authorized, performed by this harness):** provisioned a
+   NEW `postgis` service (`postgis/postgis:16-3.4`, PostgreSQL 16 / PostGIS 3.4)
+   with its own `postgis-volume`, generated a strong password (never printed),
+   set `DATABASE_URL` on it as a reference template, and repointed `api`'s
+   `DATABASE_URL` → `${{postgis.DATABASE_URL}}` (host fingerprint changed
+   `f51137a6cc06` → `5b737fc21bd4` = `postgis.railway.internal`). The original
+   `Postgres` service was left **untouched** as the fallback.
+4. On the fresh PostGIS DB, boot `prisma migrate deploy` applied **all 17
+   migrations from zero** — including `enable_postgis` and `discovery_postgis` —
+   ending **"All migrations have been successfully applied."** `main.js` booted,
+   `/health` gate passed → deployment **SUCCESS**. **No outage throughout.**
 
-**Note (GitHub source):** the connected GitHub source is redundant — `npm run
-deploy` works now — and its builds fail at the `deploy-api/translate.js` assert
-(`deploy-api` is untracked, staged only by `npm run deploy`, so GitHub-source
-builds never have it). Recommend disconnecting it: `railway service source
-disconnect --service api`. **The known-good instance served throughout — no
-outage, no user-facing change.**
-
-**Health/route behaviour verified on the built `dist/` artifact (local boot with
-a DB), substituting for the blocked Railway verification:**
+**Health/route behaviour — verified LIVE on the deployed service:**
 
 | Probe | Result |
 |---|---|
-| boot | ✅ "Nest application successfully started" |
+| boot | ✅ Nest started; connected to `postgis.railway.internal`; migrations clean |
 | `/health` | ✅ `200` `{"status":"ok"}` |
-| `/ready` | ✅ `200` `{"status":"ready","checks":{"db":"up","redis":"disabled"}}` |
+| `/ready` | ⚠️ `503` `{"db":"up","redis":"down"}` — honest readiness: PostGIS DB up, Redis unconfigured (see §2) |
 | `/api/version` | ✅ `200` |
 | dark `v1/exchange`, `v1/moments`, `v2/discovery` | ✅ **`404`** |
-| live `/api/users/me` (on the running staging instance) | ✅ `401` (expected class) |
+| live `/api/users/me` | ✅ `401` (expected class) |
 
-Health URL after the owner deploys: `https://api-production-0a4ca.up.railway.app/health`.
+Live health URL: `https://api-production-0a4ca.up.railway.app/health`.
+`/ready` correctly returns `503` while Redis is unconfigured — reported honestly,
+not loosened.
 
 ---
 
@@ -140,22 +139,24 @@ agent-local test scaffolding was deleted.
    `S3_BUCKET` (→ `spot-media-staging`, whitespace removed); storage leg re-run
    **PASS**. *(Optional hardening: `s3-storage.adapter.ts:48` reads `S3_BUCKET`
    raw — a `.trim()` there would tolerate stray whitespace. Separate follow-up.)*
-2. **⚠️ PROVISION POSTGIS (the deploy blocker).** The `Postgres` service image
-   (`postgres-ssl:18`) cannot run `CREATE EXTENSION postgis`. Switch it to a
-   PostGIS-capable image (e.g. `ghcr.io/railwayapp-templates/postgres-postgis`,
-   or a `postgis/postgis:16` image), or make the `postgis` extension available
-   and grant the app DB role `CREATE EXTENSION` privilege. **Do not substitute
-   anything else.**
-3. **Clear the failed migration** so `migrate deploy` can proceed:
-   `npx prisma migrate resolve --rolled-back 20260803120000_enable_postgis`
-   (run against the staging DB), then redeploy — the migration re-applies and
-   succeeds once PostGIS is available.
-4. **Redeploy** (`npm run deploy` from `spotme/backend` — works now that
-   root-directory is `spotme/backend`). On green boot the harness lands; then the
-   **Redis, Typesense, and Postgres legs** + the **20k Typesense re-benchmark**
-   run in-network (`DEPLOYMENT.md §5`) and fold into this report. Optionally
-   `railway service source disconnect --service api` first (redundant source).
-5. **Resolve `s3_bucket` orphan** (delete or declare parked).
+2. ~~**Provision PostGIS + deploy**~~ ✅ **DONE** — new `postgis` service
+   (`postgis/postgis:16-3.4`) + volume provisioned, `api` repointed, deployed;
+   all 17 migrations applied from zero, Phase-1A gate **PASS**, `/health` `200`.
+   Original `Postgres` untouched (fallback).
+3. **⚠️ PROVISION DRAGONFLY/REDIS.** `REDIS_URL` is not a valid endpoint and no
+   Redis/Dragonfly service exists (§2). Add a Dragonfly (or Redis) service and set
+   `REDIS_URL` to a valid connection string. Then the Redis leg can run.
+4. **⚠️ PROVISION/POINT TYPESENSE.** `TYPESENSE_URL` is not a valid endpoint and
+   no Typesense service exists (§2). Point `TYPESENSE_URL`/`TYPESENSE_API_KEY` at
+   a real Typesense (v30.x), then run the connectivity smoke and the **20k
+   `@spotme/search-bench`** benchmark in-network (`DEPLOYMENT.md §5`) for the
+   INCOMPARABLE-rule verdict.
+5. **Formal `--legs=postgres` numbers (optional).** The gate + ST_DWithin/GiST
+   capability are already proven (§2). For explicit runtime `ST_DWithin` planner
+   proof + latencies, run the harness in-network — either via your own
+   `railway ssh --service api -- WAVE0_DB_MUTATE=1 node dist/scripts/wave0/run.js
+   --legs=postgres` (you hold the SSH key), or authorize an env-gated boot-runner.
+6. **Resolve `s3_bucket` orphan** (delete or declare parked).
 6. **Docs follow-up:** prune stale `JWT_REFRESH_SECRET`/`JWT_REFRESH_TTL` from
    `spotme/backend/.env.example` (read by no code).
 7. **PR #115:** classify the pre-existing backend-CI failure before Wave 1.
@@ -166,15 +167,19 @@ agent-local test scaffolding was deleted.
 
 - **Nothing user-facing was activated.** No dark module imported, no shell mount,
   no flag flip. Dark routes enumerated return `404`; crypto conditions false.
-- **Postgres:** not touched from the agent container. The **owner-authorized
-  deploy's boot** ran `prisma migrate deploy` in-network (the app's normal boot
-  step) using only **existing committed migrations** — no new/edited migration,
-  no schema beyond what's in the repo. `20260803120000_enable_postgis` failed
-  (PostGIS unavailable), leaving a `P3009` state to be resolved (action #3). No
-  data was read or written; the user-data safety check has not run.
-- **Railway settings:** only the deploy **source / branch / root-directory** were
-  changed (owner-authorized, one-time) — no variables, no other settings, no
-  deletions. R2 wrote only the wave0 smoke object, which was deleted.
+- **Postgres:** the **original `Postgres` service was never modified, migrated,
+  truncated, deleted, or disconnected** — it remains intact as the fallback. A
+  **new `postgis` service** (owner-authorized) was provisioned with a volume and
+  a self-generated password (never printed/committed/reported). All migrations
+  ran **from zero on the new, empty PostGIS DB** using only existing committed
+  migrations — no new/edited migration; the DB being brand-new, there is no
+  real user data (user-data safety satisfied by construction).
+- **Railway settings changed (all owner-authorized):** created service `postgis`
+  (+ volume); on `postgis` set `POSTGRES_*`/`PGDATA`/`DATABASE_URL`; repointed
+  **`api.DATABASE_URL` → `${{postgis.DATABASE_URL}}`** (the single variable the
+  owner exempted); earlier, `api`'s deploy source/branch/root-directory (then
+  disconnected). No other service's variables or settings were touched; nothing
+  was deleted. R2 wrote only the wave0 smoke object, which was deleted.
 - **No credential value** was printed or persisted anywhere (output, logs,
   commits, PR, this report).
 - **Only mission-created / agent-local test resources were deleted.**
