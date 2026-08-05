@@ -37,7 +37,7 @@ or declare parked).
 |---|---|---|---|---|
 | **R2 / storage** | — | ✅ **PASS** (after owner var fix) | PUT 200 ~1.93 s · GET 200 ~0.56 s · DELETE ~0.25 s | Real `S3StorageAdapter` port. **`STORAGE_PROVIDER=s3` in effect (no silent local fallback).** Full round-trip verified: presigned PUT → GET, **byte-integrity sha256 in==out ✅**, delete confirmed (post-delete GET `404`). EXIF sentinel **survived** the round trip — expected/correct: the port is a forbidden-to-inspect pass-through (never strips/transcodes); EXIF protection is client-side sealing, not storage. Wave 0 surfaced **three layered misconfigs**, all owner-corrected: `S3_ACCESS_KEY_ID` held a 64-char secret (needs the 32-char ID); `S3_BUCKET` held a wrong 32-char value, then the name with trailing whitespace — fixed to `spot-media-staging`. |
 | **Postgres / PostGIS** | PostgreSQL **16** / PostGIS **3.4** (`postgis/postgis:16-3.4`) | ✅ **Phase-1A gate = PASS** | migrate from zero clean | **Resolved:** original `postgres-ssl:18` could **not** enable PostGIS (`enable_postgis` failed → `P3009`) = Phase-1A BLOCKED on that image. A **new PostGIS service was provisioned** (owner-authorized) and `api` repointed to it. On the fresh DB, boot `prisma migrate deploy` applied **all 17 migrations from zero incl. `enable_postgis` + `discovery_postgis`** → *"All migrations have been successfully applied."* **ADDENDA #3 (ST_DWithin/GiST) CONFIRMED:** `discovery_postgis` created `geog geography(Point,4326)` + `CREATE INDEX … USING GIST (geog)` and applied cleanly — a GiST-on-geography index cannot build without the PostGIS GiST operator classes, so Discovery's radius-query dependency **functions on this image.** DB is brand-new → user-data check safe by construction (0 rows). *Disposition: default Railway PostgreSQL image = **BLOCKED**; resolved by provisioning a PostGIS-capable service.* Formal harness `--legs=postgres` numbers (explicit `ST_DWithin` planner proof + latencies) need in-network exec — see §7. |
-| **Dragonfly / Redis** | Dragonfly Cloud (external, Hyderabad) | ⛔ **BLOCKED — wrong `REDIS_URL` value** | — | Not a missing service — Dragonfly is an external cloud DB. But `REDIS_URL`'s **value is wrong**: shape is a 100-char key-like token with **no scheme, no `:`, no `@`, no host** — i.e. *not a `rediss://` connection string at all* (looks like a bare password/token was pasted). Not structurally repairable. Live `/ready` shows `redis: down`. **Owner action:** copy the full **connection URI** (`rediss://default:<pw>@<host>.dragonflydb.cloud:<port>`) from the Dragonfly Cloud dashboard into `REDIS_URL`. Then `/ready` confirms connectivity in-network; the enqueue→process→ack leg needs an in-network run (ssh/boot-runner). |
+| **Dragonfly / Redis** | Dragonfly Cloud (external, Hyderabad) | ✅ **Connectivity PASS (in-network)** | in-network ping (via `/ready`) | Owner corrected `REDIS_URL` (now a valid `rediss://…@…:port` string, shape verified). The api **redeployed** and live **`/ready` → `{db:up, redis:up}`** — the deployed container connects to Dragonfly Cloud and PINGs successfully via the app's own `createRedisConnection` (the leg's connect+ping step, proven **in-network**). The full BullMQ **enqueue→process→ack** round-trip + Dragonfly version need an **in-network harness run** — from the agent container the `rediss://` custom-port connection is blocked by the HTTPS-only egress proxy (leg timed out), so run `railway ssh --service api -- node dist/scripts/wave0/run.js --legs=redis` (owner holds the SSH key) for the latencies. |
 | **Typesense** | Typesense Cloud **v30.2** (external, Hyderabad) | ✅ **PASS** (after structural fix) | health ~1.9 s · index 500 docs ~0.8 s · warm q p50/p95 ~269/273 ms (cross-region) | `TYPESENSE_URL` was **missing its scheme** (host-only) — structurally repaired by prepending `https://` (never-echo). Leg then connected to **Typesense Cloud v30.2**: health OK, 500-doc `wave0_smoke` create→index→query (50 warm, **0 errors**)→drop (cleaned up). Latencies are cross-region from the agent container (connectivity evidence, not cluster perf). Benchmark = **INCOMPARABLE** (§3): in-image smoke ≠ committed 20k harness; **v30.2 vs 27.1** major-version gap. `TYPESENSE_API_KEY` shape valid (32-char alphanumeric). |
 
 Note: the harness itself is verified — it compiles (`nest build` clean), enforces
@@ -89,14 +89,12 @@ RUNNING on `spotme-backend/production/api` (commit `13cc509`). Path to green:
 |---|---|
 | boot | ✅ Nest started; connected to `postgis.railway.internal`; migrations clean |
 | `/health` | ✅ `200` `{"status":"ok"}` |
-| `/ready` | ⚠️ `503` `{"db":"up","redis":"down"}` — honest readiness: PostGIS DB up, Redis unconfigured (see §2) |
+| `/ready` | ✅ `200` `{"db":"up","redis":"up"}` — both PostGIS and Dragonfly reachable in-network (was `503`/`redis:down` until `REDIS_URL` was corrected — reported honestly throughout, never loosened) |
 | `/api/version` | ✅ `200` |
 | dark `v1/exchange`, `v1/moments`, `v2/discovery` | ✅ **`404`** |
 | live `/api/users/me` | ✅ `401` (expected class) |
 
 Live health URL: `https://api-production-0a4ca.up.railway.app/health`.
-`/ready` correctly returns `503` while Redis is unconfigured — reported honestly,
-not loosened.
 
 ---
 
@@ -143,11 +141,12 @@ agent-local test scaffolding was deleted.
    (`postgis/postgis:16-3.4`) + volume provisioned, `api` repointed, deployed;
    all 17 migrations applied from zero, Phase-1A gate **PASS**, `/health` `200`.
    Original `Postgres` untouched (fallback).
-3. **⚠️ FIX `REDIS_URL` VALUE (Dragonfly Cloud).** The current value is a
-   100-char key/token, **not** a connection string. Copy the full **connection
-   URI** from the Dragonfly Cloud dashboard — `rediss://default:<pw>@<host>.dragonflydb.cloud:<port>`
-   — into `REDIS_URL` (owner-only; I won't reconstruct a credential). Then `/ready`
-   flips `redis` to `up`; the enqueue→process→ack leg runs in-network.
+3. ~~**Fix `REDIS_URL` value**~~ ✅ **DONE** — owner pasted the correct Dragonfly
+   Cloud connection URI; api redeployed; live `/ready` → `redis: up`
+   (in-network connectivity confirmed). *Optional:* for the full
+   enqueue→process→ack latencies + Dragonfly version, run
+   `railway ssh --service api -- node dist/scripts/wave0/run.js --legs=redis`
+   from your machine (agent container can't reach `rediss://` custom-port).
 4. ~~**Typesense endpoint**~~ ✅ **DONE** — `TYPESENSE_URL` was missing its scheme;
    repaired (prepended `https://`). Leg re-run **PASS** against Typesense Cloud
    **v30.2**. *Remaining:* run the committed **20k `@spotme/search-bench`**
