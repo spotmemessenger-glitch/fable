@@ -28,22 +28,37 @@ function walk(dir: string, exts: string[], out: string[] = []): string[] {
 const read = (p: string) => readFileSync(p, 'utf8');
 
 describe('C12 — dark integration fences', () => {
-  it('AppModule imports NONE of: DiscoveryModule, QueueModule, ObservabilityModule', () => {
+  // WAVE 1C, C3: the darkness MECHANISM changed. Discovery is now MOUNTED —
+  // its darkness is enforced at RUNTIME by DomainGate('discovery',
+  // { requireAdult: true }) over a RuntimeFlag that has zero rows in
+  // production — not by non-import. These fences assert the new, stronger
+  // invariant: the module mounts ONLY behind the gate, Queue/Observability
+  // keep their own posture, and a mounted route is still 404 with no flag row
+  // (proven at runtime in test/discovery-gate-runtime.spec.ts).
+  it('AppModule still imports NEITHER QueueModule NOR ObservabilityModule; Discovery is mounted ONLY as DiscoveryModule', () => {
     const src = read(join(BACKEND, 'src/app.module.ts'));
-    for (const banned of ['DiscoveryModule', 'QueueModule', 'ObservabilityModule', './discovery', './queue', './observability']) {
+    for (const banned of ['QueueModule', 'ObservabilityModule', './queue', './observability']) {
       expect(src).not.toContain(banned);
     }
+    // Discovery is imported — but exactly once, as the module (not a deep
+    // reach into internals), and the controller behind it carries the gate.
+    expect(src).toContain('DiscoveryModule');
+    const ctrl = read(join(BACKEND, 'src/discovery/discovery.controller.ts'));
+    expect(ctrl).toMatch(/DomainGate\(\s*['"]discovery['"]\s*,\s*\{\s*requireAdult:\s*true/);
   });
 
-  it('no backend module OUTSIDE src/discovery imports the discovery code — static OR dynamic (8.1)', () => {
-    const files = walk(join(BACKEND, 'src'), ['.ts']).filter((f) => !f.includes('/discovery/'));
-    // Catch `from '.../discovery/'`, a barrel `from '.../discovery'`, AND the
-    // dynamic forms the boot path actually uses — import('.../discovery/…'),
-    // require('.../discovery/…'), and any string literal naming the subtree.
+  it('the ONLY route into the discovery subtree is DiscoveryModule → DomainGate; no other module reaches in (8.1)', () => {
+    const files = walk(join(BACKEND, 'src'), ['.ts'])
+      .filter((f) => !f.includes('/discovery/'))
+      .filter((f) => !f.endsWith('app.module.ts')); // the one authorized mount
+    // No OTHER file may reach into the discovery subtree (static or dynamic).
     const REACH = /(from|import|require)\s*\(?['"][^'"]*\/discovery(\/|['"])|['"][^'"]*\/discovery\/[^'"]*['"]/;
-    const importers = files.filter((f) => REACH.test(read(f)));
-    expect(importers).toEqual([]);
-    // The boot path (main.ts) must not reference discovery at all.
+    expect(files.filter((f) => REACH.test(read(f)))).toEqual([]);
+    // app.module reaches it ONLY via the module barrel, never internals.
+    const app = read(join(BACKEND, 'src/app.module.ts'));
+    expect(app).toContain("from './discovery/discovery.module'");
+    expect(app).not.toMatch(/from '\.\/discovery\/(?!discovery\.module)/);
+    // The boot path (main.ts) still must not reference discovery at all.
     expect(read(join(BACKEND, 'src/main.ts'))).not.toMatch(/discovery/i);
   });
 

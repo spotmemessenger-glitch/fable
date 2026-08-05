@@ -23,8 +23,9 @@
 
 import { CanActivate, ExecutionContext, ForbiddenException, Injectable, mixin, NotFoundException, Type } from '@nestjs/common';
 import { RuntimeFlagService } from './runtime-flag.service';
+import { DomainAllowlistService } from './domain-allowlist.service';
 import { PrismaService } from '../prisma/prisma.service';
-import { AGE_REFUSAL_MESSAGE } from '../policy/age';
+import { ACCOUNT_ACTIVE, AGE_REFUSAL_MESSAGE } from '../policy/age';
 
 export interface DomainGateOptions {
   /** Require the authenticated account's ageVerified=true (D6). Discovery: always true. */
@@ -38,10 +39,18 @@ export function DomainGate(key: string, opts: DomainGateOptions = {}): Type<CanA
     constructor(
       readonly flags: RuntimeFlagService,
       readonly prisma: PrismaService,
+      readonly allowlist: DomainAllowlistService,
     ) {}
 
     async canActivate(ctx: ExecutionContext): Promise<boolean> {
-      if (!(await this.flags.isEnabled(key))) {
+      // EXISTENCE is granted by EITHER the domain-wide RuntimeFlag OR a per-user
+      // Stage-A allowlist entry (C7) — the two are independent. In production the
+      // RuntimeFlag has zero rows, so ONLY allowlisted accounts get past 404.
+      const req0 = ctx.switchToHttp().getRequest<{ user?: { id?: string } }>();
+      const uid0 = req0.user?.id;
+      const flagOn = await this.flags.isEnabled(key);
+      const allowlisted = uid0 ? await this.allowlist.isAllowed(key, uid0) : false;
+      if (!flagOn && !allowlisted) {
         // The same terminal state an unmounted module produces.
         throw new NotFoundException();
       }
@@ -54,10 +63,13 @@ export function DomainGate(key: string, opts: DomainGateOptions = {}): Type<CanA
         const userId = req.user?.id;
         const row = userId
           ? await this.prisma.user
-              .findUnique({ where: { id: userId }, select: { ageVerified: true } })
+              .findUnique({ where: { id: userId }, select: { ageVerified: true, accountStatus: true } })
               .catch(() => null)
           : null;
-        if (row?.ageVerified !== true) {
+        // Wave 1C (D6 addendum): the frozen check is EXPLICIT — a frozen
+        // account is refused even if ageVerified were somehow true, so the
+        // freeze is a status, never a side-effect of the age fields.
+        if (row?.ageVerified !== true || row.accountStatus !== ACCOUNT_ACTIVE) {
           throw new ForbiddenException({ error: 'age_requirement', message: AGE_REFUSAL_MESSAGE });
         }
       }

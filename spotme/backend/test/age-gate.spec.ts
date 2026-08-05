@@ -20,6 +20,7 @@ import { UsersService } from '../src/users/users.service';
 import { PrismaModule } from '../src/prisma/prisma.module';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { RuntimeFlagService } from '../src/flags/runtime-flag.service';
+import { DomainAllowlistService } from '../src/flags/domain-allowlist.service';
 import { DomainGate } from '../src/flags/domain-gate.guard';
 import { SignupDto, GuestAuthDto } from '../src/auth/dto/auth.dto';
 import { UpdateProfileDto } from '../src/users/dto/update-profile.dto';
@@ -228,7 +229,7 @@ describe('B3 — Discovery\'s door checks 18+ even with the flag ON (test DB onl
   const KEY = 'wave1b-test-discovery';
   const gate = () => {
     const GateClass = DomainGate(KEY, { requireAdult: true });
-    return new GateClass(new RuntimeFlagService(prisma as unknown as PrismaService), prisma as unknown as PrismaService);
+    return new GateClass(new RuntimeFlagService(prisma as unknown as PrismaService), prisma as unknown as PrismaService, new DomainAllowlistService(prisma as unknown as PrismaService));
   };
   const ctxFor = (userId?: string) => ({
     switchToHttp: () => ({ getRequest: () => ({ user: userId ? { id: userId } : undefined }) }),

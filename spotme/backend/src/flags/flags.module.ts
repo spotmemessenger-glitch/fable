@@ -7,11 +7,12 @@
 
 import { Module } from '@nestjs/common';
 import { RuntimeFlagService } from './runtime-flag.service';
+import { DomainAllowlistService } from './domain-allowlist.service';
 import { GateProbeController } from './gate-probe.controller';
 
 @Module({
-  providers: [RuntimeFlagService],
+  providers: [RuntimeFlagService, DomainAllowlistService],
   controllers: [GateProbeController],
-  exports: [RuntimeFlagService],
+  exports: [RuntimeFlagService, DomainAllowlistService],
 })
 export class FlagsModule {}

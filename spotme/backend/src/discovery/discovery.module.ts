@@ -14,6 +14,7 @@
 
 import { Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
+import { FlagsModule } from '../flags/flags.module';
 import { DiscoveryController } from './discovery.controller';
 import { DiscoveryService } from './discovery.service';
 import {
@@ -28,15 +29,19 @@ import { SEARCH_PORT } from './search/search.port';
 import { TypesenseSearchAdapter } from './search/typesense-search.adapter';
 
 @Module({
-  imports: [JwtModule.register({})],
+  // FlagsModule provides RuntimeFlagService for the DomainGate; PrismaModule is
+  // @Global. The DiscoveryController now mounts behind DomainGate (C3).
+  imports: [JwtModule.register({}), FlagsModule],
   controllers: [DiscoveryController],
   providers: [
     DiscoveryService,
     { provide: DISCOVERY_PEOPLE_REPOSITORY, useClass: PrismaDiscoveryPeopleRepository },
     { provide: DISCOVERY_VISIBILITY_REPOSITORY, useClass: PrismaDiscoveryVisibilityRepository },
-    // SearchPort: Typesense behind the port (P9); DISABLED without env config,
-    // and this whole module is dark regardless.
-    { provide: SEARCH_PORT, useClass: TypesenseSearchAdapter },
+    // SearchPort: Typesense behind the port (P9). useFactory (not useClass) so
+    // the adapter self-constructs with its own defaults — its constructor args
+    // are optional config, not Nest-injectable providers. Unconfigured without
+    // TYPESENSE_URL/KEY (the module is dark regardless).
+    { provide: SEARCH_PORT, useFactory: () => new TypesenseSearchAdapter() },
   ],
   exports: [DiscoveryService],
 })

@@ -109,6 +109,12 @@ model User {
   birthYearMonth   String?
   // Version of the policy text shown when the declaration was made (B2).
   agePolicyVersion String?
+  // Wave 1C (owner decision, D6 addendum): EXPLICIT account status — never a
+  // side-effect of other fields. 'active' | 'frozen_minor'. A frozen account
+  // keeps its data (read-only wind-down: can read existing conversations and
+  // the policy notice; cannot start conversations, send, be messaged anew, or
+  // reach any new surface). Reversal is the documented support path only.
+  accountStatus    String  @default("active")
 
   passwordHash  String? // unset when the account only ever used OTP
   // SHA-256 of the device-held claim secret for guest (no-account) identities —
@@ -1130,4 +1136,19 @@ model RuntimeFlag {
   key       String   @id
   enabled   Boolean  @default(false)
   updatedAt DateTime @default(now()) @updatedAt
+}
+
+/// WAVE-1C C7 — the Stage-A allowlist. INDEPENDENT of RuntimeFlag: a domain can
+/// be served to a specific, auditable set of accounts while its RuntimeFlag row
+/// stays absent (the production posture). Composite (domain,userId) is an EXACT
+/// match — no wildcards. `note` + `addedAt` make every entry auditable; deleting
+/// the row is the trivial removal. Empty table == nobody allowlisted.
+model DomainAllowlist {
+  domain  String
+  userId  String
+  note    String?
+  addedAt DateTime @default(now())
+
+  @@id([domain, userId])
+  @@index([domain])
 }

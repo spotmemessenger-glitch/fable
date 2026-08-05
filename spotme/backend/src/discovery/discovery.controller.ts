@@ -7,13 +7,26 @@
  * owner-authorized activation change wires the module in (fence: C12).
  */
 
-import { Body, Controller, Get, Post, Put, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Post, Put, UseFilters, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { CurrentUser, AuthenticatedPrincipal } from '../common/decorators/current-user.decorator';
 import { DiscoveryService } from './discovery.service';
 import { DiscoveryError } from './discovery.errors';
+import { DomainGate } from '../flags/domain-gate.guard';
+import { DiscoveryErrorFilter } from './discovery-error.filter';
 
-@UseGuards(JwtAuthGuard)
+/**
+ * GUARD ORDER IS LOAD-BEARING (Wave 1C, C3):
+ *   1. JwtAuthGuard authenticates and puts the principal on the request.
+ *   2. DomainGate('discovery', { requireAdult: true }) then decides existence
+ *      and eligibility: RuntimeFlag off → 404 (dark, indistinguishable from an
+ *      unmounted module); flag on but the account is unverified or FROZEN →
+ *      403 age_requirement (reading the CURRENT row). Even mounted, every route
+ *      here is 404 in production because the production `discovery` flag has
+ *      zero rows — activation is the Stage-A allowlist (C7), never this mount.
+ */
+@UseGuards(JwtAuthGuard, DomainGate('discovery', { requireAdult: true }))
+@UseFilters(DiscoveryErrorFilter) // C6: 5xx on live Discovery routes → the discovery_5xx alert key
 @Controller('v2/discovery')
 export class DiscoveryController {
   constructor(private readonly discovery: DiscoveryService) {}

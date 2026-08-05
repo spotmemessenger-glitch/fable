@@ -1,6 +1,7 @@
 import { Test } from '@nestjs/testing';
 import { GroupPolicy, GroupsService } from '../src/groups/groups.service';
 import { RoomsAuthService } from '../src/rooms/rooms-auth.service';
+import { PrismaService } from '../src/prisma/prisma.service';
 
 /**
  * The refusal rules, pinned where BOTH transports can be held to them.
@@ -40,7 +41,14 @@ describe('RoomsAuthService — one implementation, both transports', () => {
   beforeEach(async () => {
     policyFor = jest.fn().mockResolvedValue(null);
     const moduleRef = await Test.createTestingModule({
-      providers: [RoomsAuthService, { provide: GroupsService, useValue: { policyFor } }],
+      providers: [
+        RoomsAuthService,
+        { provide: GroupsService, useValue: { policyFor } },
+        // Wave 1C: the freeze check reads accountStatus; this unit test targets
+        // group-policy refusal, so a stub returning an ACTIVE account keeps the
+        // frozen path out of the way (the freeze path has its own spec).
+        { provide: PrismaService, useValue: { user: { findUnique: async () => ({ accountStatus: 'active' }) } } },
+      ],
     }).compile();
     auth = moduleRef.get(RoomsAuthService);
   });

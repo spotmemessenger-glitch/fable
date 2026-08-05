@@ -29,6 +29,9 @@ export const PUBLIC_USER = {
  */
 export const SELF_USER = {
   ...PUBLIC_USER,
+  // Wave 1C: your own account status ('active' | 'frozen_minor') — the client
+  // renders the freeze notice from this. Never in PUBLIC_USER.
+  accountStatus: true,
   email: true,
   phone: true,
   city: true,

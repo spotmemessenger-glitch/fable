@@ -3,7 +3,7 @@ import { JwtService } from '@nestjs/jwt';
 import * as argon2 from 'argon2';
 import * as crypto from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
-import { AGE_POLICY_VERSION, AGE_REFUSAL_MESSAGE, isAdultYearMonth, isValidBirthYearMonth } from '../policy/age';
+import { ACCOUNT_FROZEN_MINOR, AGE_POLICY_VERSION, AGE_REFUSAL_MESSAGE, FREEZE_NOTICE, isAdultYearMonth, isValidBirthYearMonth } from '../policy/age';
 import { Role } from '../common/enums/role.enum';
 
 const OTP_TTL_MS = 10 * 60 * 1000; // 10 minutes
@@ -292,6 +292,7 @@ export class AuthService {
        * existing chat is not taken away (B2) — while every NEW surface stays
        * behind the B3 gate. */
       let ageVerified = existing.ageVerified;
+      let accountStatus = existing.accountStatus;
       if (!existing.birthYearMonth && isValidBirthYearMonth(birthYearMonth)) {
         const adult = isAdultYearMonth(birthYearMonth);
         await this.prisma.user.update({
@@ -299,10 +300,15 @@ export class AuthService {
           data: {
             birthYearMonth,
             agePolicyVersion: AGE_POLICY_VERSION,
-            ...(adult ? { ageVerified: true, ageVerifiedAt: new Date() } : {}),
+            ...(adult
+              ? { ageVerified: true, ageVerifiedAt: new Date() }
+              : // Wave 1C (D6 addendum): an EXISTING account declaring under-18
+                // is FROZEN — explicit status, data retained, support-path only.
+                { accountStatus: ACCOUNT_FROZEN_MINOR }),
           },
         });
         ageVerified = adult || ageVerified;
+        if (!adult) accountStatus = ACCOUNT_FROZEN_MINOR;
       }
       const tokens = await this.issueTokens(existing.id, existing.role, undefined);
       await this.trackDevice(existing.id, platform, appVersion);
@@ -311,6 +317,8 @@ export class AuthService {
         userId: existing.id,
         username: updates.username || existing.username,
         ageVerificationRequired: !ageVerified,
+        // The one surface a frozen account is GUARANTEED: the policy notice.
+        ...(accountStatus === ACCOUNT_FROZEN_MINOR ? { accountFrozen: true, notice: FREEZE_NOTICE } : {}),
       };
     }
     /* Wave 1B (D6): a NEW guest identity is an account creation, so the gate

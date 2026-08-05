@@ -13,6 +13,7 @@
 import { NotFoundException } from '@nestjs/common';
 import { PrismaClient } from '@prisma/client';
 import { PrismaService } from '../src/prisma/prisma.service';
+import { DomainAllowlistService } from '../src/flags/domain-allowlist.service';
 import {
   DOMAIN_FLAGS,
   FLAG_CACHE_TTL_MS,
@@ -86,8 +87,11 @@ describe('RuntimeFlagService (R7 kill-switch)', () => {
 
   it('the HTTP gate answers 404 — the unmounted-module state — when dark', async () => {
     const GateClass = DomainGate('wave1a-test-gate');
-    const guard = new GateClass(svc());
-    await expect((guard as { canActivate: () => Promise<boolean> }).canActivate()).rejects.toThrow(
+    const guard = new GateClass(svc(), prisma as unknown as PrismaService, new DomainAllowlistService(prisma as unknown as PrismaService));
+    // The gate reads the request (for the allowlist userId) before deciding; a
+    // dark key with an anonymous request is the 404 (unmounted) state.
+    const ctx = { switchToHttp: () => ({ getRequest: () => ({ user: undefined }) }) } as never;
+    await expect((guard as { canActivate: (c: never) => Promise<boolean> }).canActivate(ctx)).rejects.toThrow(
       NotFoundException,
     );
   });
