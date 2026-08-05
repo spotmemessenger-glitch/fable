@@ -14,7 +14,7 @@ change; ends at a STOP.** Target: Railway `spotme-backend` / `production` /
 | Rung | Outcome |
 |---|---|
 | R1 Land Wave 0 | ✅ **MERGED** — merge SHA `ac7f8816` |
-| R2 Dragonfly queue | ⚠️ **STILL BLOCKED after endpoint switch** — the new `asia-southeast1` datastore reaches 47.95 ms PING (latency goal met) but **still reports `redis_mode: cluster`** → acceptance **0/8**. Precondition: INFO must read `redis_mode: standalone` (§R2 re-run: fix the datastore's cluster setting, or use an in-project Railway Valkey for the queue) |
+| R2 Queue runtime | ✅ **CLOSED — 8/8 PASS** (remedy (c), owner-directed): in-project **`valkey`** service (Valkey 8.1.9, `asia-southeast1`, AOF on volume, password-auth, private network); `api.REDIS_URL` → `${{valkey.REDIS_URL}}` reference; **`server_mode:standalone`** verified from INFO; the full unmodified acceptance suite passed **8/8** in-network (§R2 Resolution). Both Dragonfly datastores parked untouched. |
 | R3 Dependencies | ✅ **0 high / 0 critical** (was 5 high); 15 moderates documented |
 | R4 #115 CI failure | ✅ **REAL, root-caused, fixed** — CI now applies migrations (prod parity); master green |
 | R5 Region | ✅ **MOVED to Southeast Asia** — before/after per dependency (§R5); **postgis co-location is the follow-up** |
@@ -128,7 +128,60 @@ goal was not.
 
 **Wave 1A therefore remains open on R2 only.** Everything else in the wave is
 closed; no queue-backed activation may proceed until the acceptance suite
-reports **8/8** against a runtime whose INFO says `redis_mode: standalone`.
+reports **8/8** against a runtime whose INFO says the server runs standalone.
+
+### R2 RESOLUTION (2026-08-05, remedy (c) adopted by owner directive) — **8/8 PASS. Wave 1A fully closed.**
+
+Under the owner's narrow authorization, the queue runtime moved **in-project**:
+
+**Provisioning (the postgis playbook, applied to Valkey):**
+
+| Item | Value |
+|---|---|
+| Service | **`valkey`** — new service in `spotme-backend` / `production`, image `valkey/valkey:8` (runs **Valkey 8.1.9**) |
+| Region | `asia-southeast1` (same as `api`) |
+| Volume | `valkey-volume` mounted at `/data` |
+| Persistence | **AOF on** (`--appendonly yes --dir /data`; log-verified: AOF base+incr load on restart) |
+| Auth | `--requirepass` from a self-generated 43-char password stored only as a `valkey` service variable (**never printed/committed/reported**). One fix along the way: Railway does not shell-interpolate a bare start command, so the server briefly ran with a literal `$VALKEY_PASSWORD` (caught as `WRONGPASS` by the first acceptance attempt); wrapped in `sh -c '…'` and redeployed — the failure and fix are both recorded here deliberately. |
+| Wiring | `valkey.REDIS_URL` = `redis://default:${{VALKEY_PASSWORD}}@${{RAILWAY_PRIVATE_DOMAIN}}:6379`; **`api.REDIS_URL` = `${{valkey.REDIS_URL}}`** (variable **reference**, the authorized single-variable exemption — no literal credential ever entered the api config) |
+| Dragonfly datastores | **Both parked, untouched** — neither the Iowa cluster datastore nor the new asia-southeast1 datastore was modified, redeployed, renamed, or deleted; the only change on the api side was the `REDIS_URL` reference above. Instant rollback = point `REDIS_URL` back. |
+
+**Verification (all in-network, on the deployed api):**
+
+- **`/ready` → `200` `{db:up, redis:up}`** against the new endpoint.
+- **Active endpoint is the valkey service:** api's resolved `REDIS_URL` is a
+  `redis://…@….railway.internal:6379` reference (private network), and the
+  runtime identifies as Valkey — not Dragonfly.
+- **Standalone mode, verbatim INFO evidence:**
+  `valkey_version:8.1.9` · `redis_version:7.2.4` (compat) ·
+  **`server_mode:standalone`** (Valkey 8's name for the field `redis_mode`
+  carried in Redis; captured verbatim from full `INFO`). Corroborated by
+  `CLUSTER SLOTS` answering as a non-cluster runtime, and functionally by the
+  four previously-cluster-blocked checks passing below.
+
+**The 8-item acceptance — run in-network by the committed, unmodified suite
+(boot-runner pattern, reverted after; hash-tagged `{wave1a-*}` queues,
+obliterated on cleanup; the live `{maintenance}` path exercised via the real
+class):**
+
+| # | Acceptance check | Result | Latency (ms) | Evidence |
+|---|---|---|---|---|
+| 1 | enqueue → process → ack | ✅ PASS | 2,039 | round-trip completed |
+| 2 | real job via committed `MaintenanceQueue` path | ✅ PASS | 1,812 | enqueue ok, processed by the real class |
+| 3 | delayed job fires at its scheduled time | ✅ PASS | 5,305 | 3,000 ms delay → fired at 4,752 ms (≥ delay, never early) |
+| 4 | retry per backoff policy | ✅ PASS | 2,768 | failed attempt 1, completed on attempt 2 |
+| 5 | dead-letter: exhausted retries in failed set, inspectable | ✅ PASS | 2,956 | exhausted after 2 attempts; failedCount 1; `getFailed()` inspectable |
+| 6 | repeatable/scheduled fires ≥ twice | ✅ PASS | 3,553 | 2 fires (1 s scheduler) |
+| 7 | recovery after worker crash | ✅ PASS | 5,552 | 6/6 jobs; 2 pre-crash, force-killed worker, resumed; **0 lost** |
+| 8 | concurrency: two workers, no double-processing | ✅ PASS | 4,634 | 12/12 distinct; **0 double-processed** |
+
+**PLAIN FINAL STATUS: 8/8 PASS.** No check was weakened, skipped, replaced, or
+reinterpreted; the suite is byte-identical to the one that failed 0/8 and 4/8
+against the cluster-mode Dragonfly endpoints. The boot-runner was reverted and
+the final RUNNING deployment is the clean build (verified live by `/api/version`
+and 0 `WAVE1A` log lines).
+
+**R2 is closed. With it, every rung of Wave 1A is closed.**
 
 ## R3 — Dependency remediation — 0 high / 0 critical
 
@@ -290,13 +343,14 @@ surface, and each is posture-neutral by construction.
 
 ## Open owner actions
 
-1. **R2 (blocking Wave 1B/1C) — UPDATED after the re-run:** the new
-   `asia-southeast1` datastore is reachable and fast (47.95 ms) but still
-   reports `redis_mode: cluster`, so acceptance is 0/8. Either get the
-   datastore to report **`redis_mode: standalone`** (Dragonfly Cloud config /
-   support), or provision an in-project **Railway Valkey 8** service for the
-   queue (recommended zero-unknowns path; CI proves the code against it). Then
-   say the word — the committed suite re-runs and all 8 must pass.
+1. ~~**R2 (was blocking Wave 1B/1C)**~~ ✅ **CLOSED** — remedy (c) executed
+   under owner directive: in-project `valkey` service provisioned, `api`
+   repointed by reference, `server_mode:standalone` verified, **acceptance
+   8/8 PASS** (§R2 Resolution). *Optional housekeeping, owner's call:* the two
+   parked Dragonfly datastores can be decommissioned once Wave 1C is stable on
+   Valkey (they are the rollback path until then), and the stray lowercase
+   `redis` variable on `api` (structurally not a URL, read by no code) can be
+   deleted or declared parked.
 2. **R5 follow-up (before Wave 1C):** migrate the `postgis` DB to
    `asia-southeast1` (playbook in §R5) so the api and its DB are co-located
    again; SFO instance stays as fallback.
@@ -309,6 +363,8 @@ surface, and each is posture-neutral by construction.
 
 ---
 
-**STOP.** Wave 1A ends here. Wave 1B is not begun. No activation occurred; the
-one hard gate for the programme is R2's endpoint change (owner), after which the
-8-item acceptance must run green before any queue-backed activation.
+**STOP.** Wave 1A ends here, **fully closed — all seven rungs, including R2 at
+8/8.** Wave 1B is not begun. No activation occurred: no dark module mounted, no
+flag flipped (`RuntimeFlag` still has zero rows), dark routes 404, crypto
+conditions false. The queue runtime the Activation Programme will build on is
+the in-project Valkey, proven by the full acceptance suite.

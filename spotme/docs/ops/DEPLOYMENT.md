@@ -183,8 +183,15 @@ activated surface to unwind.
   cache TTL), measured rollback-to-dark 4,994 ms, no restart/redeploy. The
   internal probe `/api/internal/wave1a/gate-probe` (pseudo-key `wave1a-probe`)
   exercises the switch end-to-end; it 404s while dark.
-- **Queue acceptance (R2):** `dist/scripts/wave1a/run.js` runs the Dragonfly
-  topology probe + the 8-item BullMQ acceptance for standalone and cluster
-  clients. Current Dragonfly (cluster mode) caps at 4/8 — a **non-cluster
-  endpoint is required** before any queue worker activates; re-run this suite
-  after the owner switches the endpoint and require **8/8**.
+- **Queue runtime (R2, RESOLVED):** the queue runs on the in-project **`valkey`**
+  service (Valkey 8.1.9, `asia-southeast1`, AOF persistence on `valkey-volume`,
+  password-auth, private network). `api.REDIS_URL` is a **reference** to
+  `${{valkey.REDIS_URL}}` — never a literal credential. INFO reports
+  **`server_mode:standalone`** (Valkey 8's name for `redis_mode`). The committed
+  acceptance suite (`dist/scripts/wave1a/run.js`, `WAVE1A_MODES=standalone`)
+  passed **8/8 in-network** against it; re-run it after any queue-runtime change
+  and require 8/8. Both Dragonfly Cloud datastores (Iowa cluster + the
+  asia-southeast1 one) are **parked untouched** as rollback paths — cluster-mode
+  Dragonfly is BullMQ-incompatible (0/8–4/8; strict cluster Lua key
+  enforcement), so never point the queue back at a runtime whose INFO does not
+  say standalone.
