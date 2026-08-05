@@ -68,5 +68,10 @@
     "@prisma/engines@5.22.0": true,
     "argon2@0.41.1": true,
     "prisma@5.22.0": true
+  },
+  "overrides": {
+    "multer": "^2.2.0",
+    "lodash": "^4.18.1",
+    "glob@10": "^10.5.0"
   }
 }
