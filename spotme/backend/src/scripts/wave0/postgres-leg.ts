@@ -95,17 +95,47 @@ export async function runPostgresLeg(): Promise<LegResult> {
       notes.push('PHASE-1A GATE = PASS: PostGIS already present.');
     }
 
-    // --- geospatial smoke (table-free; needs PostGIS present) ---
-    if (detail.postgis && (await scalar(prisma, `SELECT extversion FROM pg_extension WHERE extname='postgis'`).catch(() => undefined))) {
-      const smoke = await timed(async () =>
-        scalar(
-          prisma,
-          // distance between two wave0 test coordinates, in metres, via geography
-          `SELECT round(ST_Distance(ST_MakePoint(0,0)::geography, ST_MakePoint(0,1)::geography)::numeric,1)`,
-        ),
+    // --- geospatial smoke: ST_Distance + ST_DWithin + GiST (Discovery's real deps) ---
+    // Discovery's Smart Nearby map does GiST-indexed ST_DWithin radius queries on a
+    // geography column, so proving the extension loads is not enough — this proves
+    // the index type + operator Wave 1 depends on actually function on the image.
+    const installedNow = await scalar(prisma, `SELECT extversion FROM pg_extension WHERE extname='postgis'`).catch(() => undefined);
+    if (installedNow) {
+      (detail.postgis as Record<string, unknown>).installedVersion = installedNow;
+      const geo = await timed(() =>
+        // One interactive transaction so the TEMP table lives on a single connection
+        // and auto-drops ON COMMIT (nothing wave0 persists).
+        prisma.$transaction(async (tx) => {
+          const dist = (await tx.$queryRawUnsafe(
+            `SELECT round(ST_Distance(ST_MakePoint(0,0)::geography, ST_MakePoint(0,1)::geography)::numeric,1) AS m`,
+          )) as Array<{ m: unknown }>;
+          await tx.$executeRawUnsafe(`CREATE TEMP TABLE wave0_geo (id int, geog geography(Point,4326)) ON COMMIT DROP`);
+          await tx.$executeRawUnsafe(`CREATE INDEX wave0_geo_gix ON wave0_geo USING GIST (geog)`);
+          await tx.$executeRawUnsafe(`INSERT INTO wave0_geo SELECT g, ST_MakePoint(0, g*0.0005)::geography FROM generate_series(1,500) g`);
+          await tx.$executeRawUnsafe(`ANALYZE wave0_geo`);
+          await tx.$executeRawUnsafe(`SET LOCAL enable_seqscan = off`);
+          const within = (await tx.$queryRawUnsafe(
+            `SELECT count(*)::int AS n FROM wave0_geo WHERE ST_DWithin(geog, ST_MakePoint(0,0)::geography, 300)`,
+          )) as Array<{ n: number }>;
+          const plan = (await tx.$queryRawUnsafe(
+            `EXPLAIN SELECT id FROM wave0_geo WHERE ST_DWithin(geog, ST_MakePoint(0,0)::geography, 300)`,
+          )) as Array<Record<string, string>>;
+          const planText = plan.map((r) => Object.values(r)[0]).join(' | ');
+          return {
+            distanceMeters: dist[0]?.m ?? null,
+            dWithinCount: within[0]?.n ?? null,
+            gistIndexUsed: /Index Scan|Index Only Scan|Bitmap Index Scan/i.test(planText),
+          };
+        }),
       );
-      detail.geoSmoke = { ms: round2(smoke.ms), meters: smoke.value ?? null, error: smoke.error ?? null };
-      if (!smoke.error) notes.push(`geospatial smoke OK: 0,0→0,1 = ${String(smoke.value)} m.`);
+      const g = (geo.value ?? {}) as { distanceMeters?: unknown; dWithinCount?: unknown; gistIndexUsed?: boolean };
+      detail.geoSmoke = { ms: round2(geo.ms), ...g, error: geo.error ?? null };
+      if (geo.error) {
+        notes.push(`geospatial smoke FAILED: ${geo.error}`);
+      } else {
+        notes.push(`geospatial: ST_Distance OK; ST_DWithin matched ${String(g.dWithinCount)} rows; GiST index used by planner=${g.gistIndexUsed}.`);
+        if (!g.gistIndexUsed) notes.push('WARN: ST_DWithin did not plan a GiST index scan — Discovery relies on GiST; investigate before Wave 1.');
+      }
     }
 
     // --- migration state ---

@@ -104,9 +104,16 @@ export async function runTypesenseLeg(): Promise<LegResult> {
     detail.query = { ...percentiles(samples), errors };
 
     detail.baseline = { engine: 'Typesense 27.1', corpus: 20000, indexDocsPerSec: 33603, warmP50: 3.6, warmP95: 5.05 };
-    detail.benchmarkConclusion = 'DEFERRED — smoke only; authoritative 20k re-benchmark runs via @spotme/search-bench (see DEPLOYMENT.md).';
-    notes.push(`Typesense ${detail.version ?? '?'} reachable; ${SMOKE_DOCS}-doc smoke indexed + ${samples.length} warm queries.`);
-    notes.push('Full re-benchmark (CONFIRMS/RESERVATIONS/CHALLENGES vs 27.1) is an in-network search-bench run — documented, not simulated here.');
+    // ADDENDA #2: this in-image smoke (500 docs, fetch-based, different corpus/seed/
+    // schema/query-set/methodology) is NOT the committed @spotme/search-bench 20k
+    // harness — which is not in the backend image. So the comparison is INCOMPARABLE;
+    // the smoke numbers are connectivity/functional evidence only, never a verdict.
+    detail.comparability = 'INCOMPARABLE';
+    detail.versionGap = `cluster ${detail.version ?? 'v30.x'} vs baseline 27.1 — major-version gap; note in any verdict`;
+    detail.benchmarkConclusion =
+      'INCOMPARABLE — the authoritative 20k re-benchmark (CONFIRMS/RESERVATIONS/CHALLENGES vs 27.1) must be run via the committed @spotme/search-bench in-network (owner action, see DEPLOYMENT.md §5). Not approximated here.';
+    notes.push(`Typesense ${detail.version ?? '?'} reachable; ${SMOKE_DOCS}-doc functional smoke + ${samples.length} warm queries (connectivity evidence ONLY).`);
+    notes.push('Benchmark comparison = INCOMPARABLE: in-image smoke != committed 20k harness; version gap v30.x vs 27.1.');
 
     return { leg: 'typesense', status: 'PASS', detail, notes };
   } catch (e) {
