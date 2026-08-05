@@ -152,6 +152,38 @@ export type {
   RouteAdvice,
 } from './assistant.ts';
 
+// Camera Stage 1 — versioned camera contracts (DARK).
+export { CAMERA_CONTRACTS_VERSION, CAPTURE_KINDS, CAPTURE_UNAVAILABLE_REASONS, EDIT_OP_KINDS, LOOK_IDS, SCAN_FORMATS } from './camera.ts';
+export type {
+  CameraContractsVersion,
+  CaptureKind,
+  CameraFacing,
+  CaptureUnavailableReason,
+  CaptureRequest,
+  CapturedMediaRef,
+  CaptureResult,
+  EditOpKind,
+  ScalarOpKind,
+  LookId,
+  CurvePoint,
+  EditOp,
+  EditDocument,
+  ScanFormat,
+  ScanDetection,
+  ScanResult,
+  TextRecognitionResult,
+  ApprovedLandmarkEngine,
+  FaceBox,
+  FaceLandmarks,
+  FaceTrackingResult,
+  BeautyTier0Params,
+  BeautyRequest,
+  CloudConsentContext,
+  CloudVisionOp,
+  CloudVisionResult,
+  ModelAssetRecord,
+} from './camera.ts';
+
 export { DISCOVERY_CONTRACTS_VERSION } from './discovery.ts';
 export type {
   DiscoveryContractsVersion,
