@@ -84,9 +84,11 @@ export function resetMomentsAvailability () { availability = null }
 
 export const feed = ({ mode = 'friends', origin = null, cursor = null, order } = {}) => {
   const q = new URLSearchParams({ mode })
-  // COARSE ONLY. The server bands distance; a precise fix must never be sent,
-  // and the caller is expected to have coarsened already (see discovery.js).
-  if (origin) { q.set('lat', String(origin.lat)); q.set('lon', String(origin.lon)) }
+  // COARSE ONLY. The server bands distance; a precise fix must never be sent.
+  // We round at the wire here as the enforceable backstop — callers are asked
+  // to coarsen too (coarseFix), but this boundary is what actually guarantees
+  // no precise device fix ever leaves, exactly as createMoment already does.
+  if (origin) { q.set('lat', String(round3(origin.lat))); q.set('lon', String(round3(origin.lon))) }
   if (cursor) q.set('cursor', cursor)
   if (order) q.set('order', order)
   return call(`/feed?${q}`)

@@ -171,12 +171,15 @@ export function render (root, ctx) {
     drawRail()
   }
 
-  /** A coarse fix, or null. Never the precise one — see discovery.js. */
+  /** A coarse fix (3-decimal grid ≈ 110 m), or null. Never the precise one:
+   *  the raw device fix is rounded HERE, and the API layer rounds again at the
+   *  wire as a backstop (moments-api feed()). See discovery.js. */
   function coarseFix () {
     return new Promise((resolve) => {
       if (!navigator.geolocation) return resolve(null)
+      const c3 = (n) => Math.round(n * 1000) / 1000
       navigator.geolocation.getCurrentPosition(
-        (pos) => resolve({ lat: pos.coords.latitude, lon: pos.coords.longitude }),
+        (pos) => resolve({ lat: c3(pos.coords.latitude), lon: c3(pos.coords.longitude) }),
         () => resolve(null),
         { timeout: 6000, maximumAge: 300000 }
       )
