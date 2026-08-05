@@ -22,6 +22,7 @@ import { RoomsAuthService } from '../src/rooms/rooms-auth.service';
 import { PrismaModule } from '../src/prisma/prisma.module';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { RuntimeFlagService } from '../src/flags/runtime-flag.service';
+import { DomainAllowlistService } from '../src/flags/domain-allowlist.service';
 import { DomainGate } from '../src/flags/domain-gate.guard';
 import { ACCOUNT_FROZEN_MINOR, AGE_POLICY_VERSION } from '../src/policy/age';
 
@@ -140,7 +141,7 @@ describe('CANNOT: Discovery or any newly introduced surface', () => {
   const KEY = 'wave1c-test-freeze-gate';
   const gate = () => {
     const GateClass = DomainGate(KEY, { requireAdult: true });
-    return new GateClass(new RuntimeFlagService(prisma as unknown as PrismaService), prisma as unknown as PrismaService);
+    return new GateClass(new RuntimeFlagService(prisma as unknown as PrismaService), prisma as unknown as PrismaService, new DomainAllowlistService(prisma as unknown as PrismaService));
   };
   const ctxFor = (userId?: string) => ({
     switchToHttp: () => ({ getRequest: () => ({ user: userId ? { id: userId } : undefined }) }),

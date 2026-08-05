@@ -1137,3 +1137,18 @@ model RuntimeFlag {
   enabled   Boolean  @default(false)
   updatedAt DateTime @default(now()) @updatedAt
 }
+
+/// WAVE-1C C7 — the Stage-A allowlist. INDEPENDENT of RuntimeFlag: a domain can
+/// be served to a specific, auditable set of accounts while its RuntimeFlag row
+/// stays absent (the production posture). Composite (domain,userId) is an EXACT
+/// match — no wildcards. `note` + `addedAt` make every entry auditable; deleting
+/// the row is the trivial removal. Empty table == nobody allowlisted.
+model DomainAllowlist {
+  domain  String
+  userId  String
+  note    String?
+  addedAt DateTime @default(now())
+
+  @@id([domain, userId])
+  @@index([domain])
+}
