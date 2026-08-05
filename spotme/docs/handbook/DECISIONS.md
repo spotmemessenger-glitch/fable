@@ -274,3 +274,27 @@ carve-outs because there is no under-18 cohort to carve around.
   design, which erases timezone and leap-day edges.
 - **Full rationale:** ADR-029; enforcement evidence:
   `docs/reports/wave-1b-final.md`.
+
+### D6 addendum — under-18 EXISTING accounts are FROZEN, not deleted — DECIDED 2026-08-05 (Wave 1C)
+
+**Owner decision (Wave 1C mission):** an account that predates the gate and then
+declares under-18 is **FROZEN**, not deleted. Data is retained; the only reversal
+is the support path.
+
+- **Explicit status, never a side-effect.** `User.accountStatus` is `active` |
+  `frozen_minor` (additive migration `20260805180000_account_status`, default
+  `active`). Freeze is assigned only by the two existing-account under-18
+  declaration paths (declare-on-login re-auth; `POST /users/me/age`); it is a
+  first-class status, not inferred from the age fields.
+- **A frozen account CAN:** read its existing conversations and message history,
+  and receive the policy notice (surfaced via `SELF_USER.accountStatus` and an
+  `accountFrozen`/notice payload on re-auth).
+- **A frozen account CANNOT:** start new conversations, be messaged anew (initiate
+  *toward* a frozen account returns the byte-identical block shape — non-enumerable),
+  send in existing rooms, reach Discovery or any new surface (`DomainGate` checks
+  `accountStatus` explicitly — refused even if `ageVerified` were true),
+  self-unfreeze / re-declare, or escape via a new client, re-auth, or direct API.
+- **Data retained** (row intact, `deletedAt` null); reversal is the documented
+  support path only.
+- **Enforcement evidence:** `test/account-freeze.spec.ts` (16 tests, real PG);
+  Stage-A report `docs/reports/wave-1c-stage-a.md` (C2).
