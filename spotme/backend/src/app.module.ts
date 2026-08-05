@@ -12,6 +12,7 @@ import { GroupsModule } from './groups/groups.module';
 import { StoriesModule } from './stories/stories.module';
 import { RoomsModule } from './rooms/rooms.module';
 import { RealtimeModule } from './realtime/realtime.module';
+import { CallsModule } from './calls/calls.module';
 import { StorageModule } from './storage/storage.module';
 import { ScheduleModule } from '@nestjs/schedule';
 import { PushModule } from './push/push.module';
@@ -38,6 +39,9 @@ import { PushModule } from './push/push.module';
     PushModule,
     RoomsModule,
     RealtimeModule,
+    // Call MEDIA only (ADR-003). Additive: with LIVEKIT_* unset it mounts
+    // routes that answer "not configured here" and nothing else changes.
+    CallsModule,
   ],
 })
 export class AppModule {}

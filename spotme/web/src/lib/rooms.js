@@ -26,6 +26,11 @@ import {
 } from './media-transfer.js'
 import { roomKeyForConvo } from './crypto/identity-store.js'
 import { E2E_V2 } from './crypto/e2e-v2.js'
+/* Call MEDIA path selection only (ADR-003). This import is the flag read and
+ * nothing else — the LiveKit SDK and its adapter are behind a dynamic import
+ * that never runs unless a device has opted in, so with the flag off this
+ * costs one localStorage lookup per call and changes no behaviour. */
+import { livekitCalls, agreeCallMedia } from './calls/select.js'
 
 /** Attachments bigger than this never ride the history backlog — the bytes
  * are lazily fetched on demand instead, so reconnects stay instant. */
@@ -173,7 +178,9 @@ function createConnection (convo) {
     readUpTo: 0,
     seenByPeer,
     openingByPeer,
-    call: { state: 'idle', video: false, local: null, remote: null },
+    // `media` is which path carries audio/video: 'p2p' (peer connections, the
+    // default everywhere) or 'livekit' (SFU), agreed per call. ADR-003.
+    call: { state: 'idle', video: false, local: null, remote: null, media: 'p2p' },
     on (fn) { listeners.add(fn); return () => listeners.delete(fn) }
   }
 
@@ -498,14 +505,26 @@ function createConnection (convo) {
       switch (payload?.type) {
         case 'offer':
           if (call.state !== 'idle') { conn.net.sendCall({ type: 'decline', busy: true }); return }
-          conn.call = { state: 'ringing-in', video: Boolean(payload.video), local: null, remote: null }
+          conn.call = {
+            state: 'ringing-in',
+            video: Boolean(payload.video),
+            local: null,
+            remote: null,
+            // Settled here, not at accept: the answer must be the same one we
+            // send back, and by accept time the offer is gone.
+            media: agreedCallMedia(payload.media)
+          }
           emit({ type: 'call' })
           break
         case 'accept':
           if (call.state === 'ringing-out' && call.local) {
-            conn.net.addStream(call.local)
-            call.state = call.remote ? 'active' : 'connecting'
-            emit({ type: 'call' })
+            // Their answer decides it — we offered a path, they may only have
+            // been able to take the legacy one.
+            call.media = agreedCallMedia(payload.media)
+            attachCallMedia(call.local).then(() => {
+              call.state = call.remote ? 'active' : 'connecting'
+              emit({ type: 'call' })
+            })
           }
           break
         case 'decline':
@@ -642,14 +661,71 @@ function createConnection (convo) {
     onProgress?.(1)
   }
 
+  /* -- call media: peer-to-peer by default, LiveKit when BOTH sides opt in --
+   *
+   * WHY THE PATH IS NEGOTIATED RATHER THAN CHOSEN. Media only flows if the two
+   * devices meet in the same place. If this device published to the SFU while
+   * the other added its tracks to a peer connection, both would sit in a
+   * connected-looking call hearing nothing — a silent failure, and the worst
+   * kind, because every indicator says the call is up.
+   *
+   * So the existing signalling carries the answer: the offer says which path
+   * the caller can use, the accept says what the callee agreed to, and LiveKit
+   * happens only when both say `livekit`. An older client omits the field
+   * entirely, which reads as 'p2p' — so a device that has never heard of this
+   * feature negotiates the legacy path by construction rather than by luck.
+   */
+
+  /** Handle for the current LiveKit call; null whenever media is peer-to-peer. */
+  let callMedia = null
+
+  /** What this device is willing to use, given the flag. */
+  const preferredCallMedia = () => (livekitCalls() ? 'livekit' : 'p2p')
+
+  /** Both sides must say livekit; anything else, including absence, is p2p. */
+  const agreedCallMedia = (theirs) => agreeCallMedia(livekitCalls(), theirs)
+
+  /**
+   * Put the local stream where the agreed path expects it.
+   *
+   * A LiveKit failure falls through to `conn.net.addStream` — the call still
+   * connects the way it always did, and `activeCallPath()` records why. The one
+   * thing that must not happen is a call that fails BECAUSE the new path was
+   * tried.
+   */
+  async function attachCallMedia (local) {
+    if (conn.call.media === 'livekit') {
+      const { connectCallMedia } = await import('./calls/livekit-media.js')
+      callMedia = await connectCallMedia({
+        roomId: convo.roomId,
+        localStream: local,
+        onRemoteStream: (stream) => handlers.onStream(stream),
+        onParticipantLeft: () => { if (conn.call.state !== 'idle') conn.endCall() },
+        onFailed: () => { if (conn.call.state !== 'idle') conn.endCall() }
+      })
+      if (callMedia) return
+      // connectCallMedia already recorded the reason; fall through so the call
+      // still has a media path rather than being dropped.
+      conn.call.media = 'p2p'
+    }
+    conn.net.addStream(local)
+  }
+
   function teardownCall (notifyPeer = true) {
     const { local, state } = conn.call
+    if (callMedia) {
+      const handle = callMedia
+      callMedia = null
+      // Not awaited: teardown must be synchronous for the caller, and a
+      // disconnect that is slow or already-done must not hold up the UI.
+      handle.disconnect()
+    }
     if (local) {
       try { conn.net.removeStream(local) } catch { /* not added yet */ }
       local.getTracks().forEach((t) => t.stop())
     }
     if (notifyPeer && state !== 'idle') conn.net.sendCall({ type: 'end' })
-    conn.call = { state: 'idle', video: false, local: null, remote: null }
+    conn.call = { state: 'idle', video: false, local: null, remote: null, media: 'p2p' }
   }
 
   /** Ring the peer. Media is only attached once they accept. */
@@ -657,8 +733,9 @@ function createConnection (convo) {
     if (conn.call.state !== 'idle') return
     if (!navigator.mediaDevices?.getUserMedia) throw new Error('Calls need HTTPS (use the vercel.app address)')
     const local = await navigator.mediaDevices.getUserMedia({ audio: true, video })
-    conn.call = { state: 'ringing-out', video, local, remote: null }
-    conn.net.sendCall({ type: 'offer', video })
+    const media = preferredCallMedia()
+    conn.call = { state: 'ringing-out', video, local, remote: null, media }
+    conn.net.sendCall({ type: 'offer', video, media })
     emit({ type: 'call' })
   }
 
@@ -667,8 +744,11 @@ function createConnection (convo) {
     if (!navigator.mediaDevices?.getUserMedia) throw new Error('Calls need HTTPS (use the vercel.app address)')
     const local = await navigator.mediaDevices.getUserMedia({ audio: true, video: conn.call.video })
     conn.call.local = local
-    conn.net.sendCall({ type: 'accept', video: conn.call.video })
-    conn.net.addStream(local)
+    // Tell them what we agreed to BEFORE attaching: the caller needs to know
+    // which path to put its own stream on, and it has been waiting since the
+    // offer. `conn.call.media` was fixed when their offer arrived.
+    conn.net.sendCall({ type: 'accept', video: conn.call.video, media: conn.call.media })
+    await attachCallMedia(local)
     conn.call.state = conn.call.remote ? 'active' : 'connecting'
     emit({ type: 'call' })
   }

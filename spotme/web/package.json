@@ -4,7 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "node --experimental-test-module-mocks --no-warnings test/requests.test.js && node --experimental-test-module-mocks --no-warnings test/media.test.js && node test/push.test.js && node test/groups-permissions.test.js && node test/member-search.test.js && node test/crypto.test.js && node test/e2e-v2-reload.test.js && node test/knock-relay.test.js && node test/transport.test.js && node --experimental-test-module-mocks --no-warnings test/transport-seam.test.js && node --experimental-test-module-mocks --no-warnings test/media-leakage.test.js && node test/blobstore.test.js && node --experimental-test-module-mocks --no-warnings test/media-transfer.test.js && node --experimental-test-module-mocks --no-warnings test/send-retry.test.js && node test/english-guard.test.js && node test/translit.test.js && node test/translate-guards.test.js && node test/api-auth.test.js && node test/wipe-device.test.js && node test/store-quota.test.js && node --experimental-test-module-mocks --no-warnings test/viewonce.test.js",
+    "test": "node --experimental-test-module-mocks --no-warnings test/requests.test.js && node --experimental-test-module-mocks --no-warnings test/media.test.js && node test/push.test.js && node test/groups-permissions.test.js && node test/member-search.test.js && node test/crypto.test.js && node test/e2e-v2-reload.test.js && node test/knock-relay.test.js && node test/transport.test.js && node --experimental-test-module-mocks --no-warnings test/transport-seam.test.js && node --experimental-test-module-mocks --no-warnings test/media-leakage.test.js && node test/blobstore.test.js && node --experimental-test-module-mocks --no-warnings test/media-transfer.test.js && node --experimental-test-module-mocks --no-warnings test/send-retry.test.js && node test/english-guard.test.js && node test/translit.test.js && node test/translate-guards.test.js && node test/api-auth.test.js && node test/wipe-device.test.js && node test/store-quota.test.js && node --experimental-test-module-mocks --no-warnings test/viewonce.test.js && node test/calls-flag.test.js",
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
@@ -17,9 +17,11 @@
   "dependencies": {
     "@capacitor/push-notifications": "^8.1.2",
     "@trystero-p2p/torrent": "^0.25.3",
+    "centrifuge": "^5.7.0",
+    "livekit-client": "^2.21.0",
     "socket.io-client": "^4.8.3",
-    "trystero": "^0.25.3",
-    "spotme-core": "file:vendor/spotme-core"
+    "spotme-core": "file:vendor/spotme-core",
+    "trystero": "^0.25.3"
   },
   "devDependencies": {
     "@capacitor/android": "^8.4.2",
