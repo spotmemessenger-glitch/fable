@@ -35,6 +35,8 @@ import * as groupManage from './views/group-manage.js'
 import * as verify from './views/verify.js'
 import * as notifications from './views/notifications.js'
 import * as stories from './views/stories.js'
+import * as moments from './views/moments.js'
+import { momentsAvailable } from './lib/moments-api.js'
 
 const app = document.getElementById('app')
 
@@ -69,11 +71,17 @@ if (!RESETTING) { try { navigator.storage?.persist?.().catch(() => {}) } catch {
 
 const NAV_ITEMS = [
   {
-    // Home left the bar (owner call): the chat list is the landing screen and
-    // the Stories screen carries the way back. This slot is Stories now — the
-    // rings moved off Home entirely.
-    path: '#/stories', label: 'Stories',
-    icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="8.4" stroke-dasharray="4.6 3.1"/><circle cx="12" cy="12" r="3.4"/></svg>'
+    /* M6: POSTS replaces Stories in the bar. Stories are not a destination —
+     * they are the ring row at the top of the Posts feed, the way Instagram
+     * and Messenger do it, so the bar stays at five slots and the rings sit
+     * where people already look for them. #/stories still routes (old links
+     * keep working); it simply has no tab.
+     *
+     * `flag: 'moments'` means this item is DROPPED from the bar unless the
+     * server serves Moments to this account — in production the bar is
+     * byte-identical to what it was before this change. */
+    path: '#/posts', label: 'Posts', flag: 'moments',
+    icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><rect x="3.4" y="3.4" width="17.2" height="17.2" rx="4.6"/><circle cx="12" cy="12" r="3.6"/><circle cx="17" cy="7" r="1.1" fill="currentColor" stroke="none"/></svg>'
   },
   {
     path: '#/discovery', label: 'Discovery',
@@ -103,14 +111,24 @@ const ACTIVE_TAB = {
   '#/bluetooth': '#/chat',      // a Home tab now, so Chats stays lit
   '#/chat': '#/chat',
   '#/settings': null,           // reached via the profile pic
-  '#/stories': '#/stories',
+  '#/stories': null,            // still routable by link; no tab of its own
+  '#/posts': '#/posts',
   '#/notifications': '#/notifications'
 }
 
 let navEl = null
 
+/* Which flagged tabs the SERVER is currently serving. Empty until the probe
+ * answers, so the bar renders in its production shape first and gains a tab
+ * only if Moments is genuinely available — never the other way round. */
+const enabledFlags = new Set()
+
+function navItems () {
+  return NAV_ITEMS.filter((item) => !item.flag || enabledFlags.has(item.flag))
+}
+
 function buildNav () {
-  navEl = el('nav', { class: 'nav' }, NAV_ITEMS.map((item) =>
+  navEl = el('nav', { class: 'nav' }, navItems().map((item) =>
     el('button', {
       class: 'nv', type: 'button', 'data-path': item.path,
       html: item.icon,
@@ -118,6 +136,20 @@ function buildNav () {
     }, [item.label])
   ))
   return navEl
+}
+
+/** Re-ask the server which flagged surfaces exist, and rebuild the bar. */
+export async function refreshFlaggedTabs () {
+  let on = false
+  try { on = await momentsAvailable() } catch { on = false }
+  const had = enabledFlags.has('moments')
+  if (on) enabledFlags.add('moments'); else enabledFlags.delete('moments')
+  if (on !== had && navEl) {
+    const fresh = buildNav()
+    navEl.replaceWith(fresh)
+    navEl = fresh
+    updateNav(ACTIVE_TAB[window.location.hash] || '#/chat')
+  }
 }
 
 function updateNav (route) {
@@ -159,6 +191,7 @@ const ROUTES = {
   '#/settings': profile,
   '#/notifications': notifications,
   '#/stories': stories,
+  '#/posts': moments,
   '#/bluetooth': bluetooth
 }
 
@@ -721,6 +754,12 @@ function boot () {
     lobby.start()
     reach.joinInbox()
   })
+
+  /* M6: ask the server whether Moments is served to THIS account, and add the
+   * Posts tab only if it is. Fire-and-forget — the bar is already painted in
+   * its production shape, so a slow or failed probe simply leaves it that way
+   * rather than blocking the first frame. */
+  refreshFlaggedTabs().catch(() => {})
 }
 
 db.subscribe(() => {
