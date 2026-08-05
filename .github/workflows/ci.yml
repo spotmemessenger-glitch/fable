@@ -29,9 +29,11 @@ jobs:
     services:
       postgres:
         # postgis/postgis (not plain postgres): the Phase 2 discovery schema
-        # declares a geography(Point,4326) column, and `prisma db push` cannot
-        # run CREATE EXTENSION itself — this image pre-enables PostGIS on
-        # POSTGRES_DB at init, so the push succeeds. Same major version.
+        # declares a geography(Point,4326) column, so the runtime and the tests
+        # need PostGIS present. This job applies the committed migrations
+        # (`prisma migrate deploy`, same as production boot), and the very first
+        # spatial migration runs `CREATE EXTENSION IF NOT EXISTS postgis` itself —
+        # idempotent, so it succeeds whether or not the image pre-enabled it.
         image: postgis/postgis:16-3.4
         env:
           POSTGRES_USER: postgres
@@ -133,8 +135,17 @@ jobs:
       - name: Create the test bucket
         run: node scripts/s3-ensure-bucket.mjs
 
-      - name: Apply the Prisma schema
-        run: npx prisma db push --skip-generate --accept-data-loss
+      # Apply the committed MIGRATIONS, not a schema push. `prisma db push` syncs
+      # only what schema.prisma can express, silently omitting raw-SQL-managed
+      # objects — the GiST index on the Unsupported geography column
+      # (DiscoveryVisibility_geog_idx) and the MomentReactionRow closed-registry
+      # CHECK. Those live only in migration SQL, so under db push the drift-guard
+      # specs (discovery-people, moments-lifecycle) correctly fail. Production
+      # boots via `migrate deploy`; testing the same way is prod parity and the
+      # only way these raw objects — and the ST_DWithin index plan that depends
+      # on them — are actually exercised.
+      - name: Apply migrations (prod parity — creates raw-SQL-managed objects)
+        run: npx prisma migrate deploy
 
       # Ordered cheapest-first so an obvious break fails in seconds.
       - name: Type-check
