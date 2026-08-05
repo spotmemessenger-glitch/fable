@@ -183,6 +183,16 @@ async function bootstrap() {
       '/api/v2/media/local',
       raw({ type: '*/*', limit: '16mb' }),
     );
+    /* Moments upload (M1). Same reasoning, different ceiling: these are photos
+     * and short videos the SERVER must read in order to strip EXIF/GPS before
+     * storing, so the bytes genuinely pass through here — unlike chat media,
+     * which is sealed on the device and goes straight to the bucket. 50 MB
+     * matches MAX_UPLOAD_BYTES in the media service; the route refuses larger
+     * with a typed reason rather than letting the parser truncate. */
+    app.getHttpAdapter().getInstance().use(
+      '/api/v1/moments/media',
+      raw({ type: '*/*', limit: '50mb' }),
+    );
   }
 
   await mountWebApiBridge(app);

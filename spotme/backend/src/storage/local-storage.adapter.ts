@@ -7,6 +7,7 @@ import {
   PRESIGN_TTL_SECONDS,
   isSafeSegment,
   parseObjectKey,
+  parseMomentObjectKey,
 } from './storage.interface';
 
 /**
@@ -87,7 +88,9 @@ export class LocalStorageAdapter implements IStorageAdapter {
   }
 
   async getDownloadUrl(objectKey: string): Promise<string> {
-    if (!parseObjectKey(objectKey)) throw new Error('invalid object key');
+    if (!parseObjectKey(objectKey) && !parseMomentObjectKey(objectKey)) {
+      throw new Error('invalid object key');
+    }
     return this.urlFor(objectKey, 'GET');
   }
 
@@ -101,10 +104,23 @@ export class LocalStorageAdapter implements IStorageAdapter {
    */
   private pathFor(objectKey: string): string | null {
     const parts = parseObjectKey(objectKey);
-    if (!parts) return null;
-    const full = path.resolve(this.root, 'rooms', parts.roomId, parts.attachId, String(parts.seq));
+    let full: string | null = null;
+    if (parts) {
+      full = path.resolve(this.root, 'rooms', parts.roomId, parts.attachId, String(parts.seq));
+    } else {
+      // Moments assets live in their own prefix, parsed by their own whitelist
+      // (see storage.interface.ts) — never through the rooms parser.
+      const m = parseMomentObjectKey(objectKey);
+      if (m) full = path.resolve(this.root, 'moments', m.ownerId, m.mediaId);
+    }
+    if (!full) return null;
     const within = path.resolve(this.root) + path.sep;
     return full.startsWith(within) ? full : null;
+  }
+
+  /** Server-held bytes (Moments only — see the interface for why). */
+  async putObject(objectKey: string, bytes: Buffer, _contentType: string): Promise<boolean> {
+    return this.write(objectKey, bytes);
   }
 
   /** Write bytes. Used by the local route, never by a remote caller. */

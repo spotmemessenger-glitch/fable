@@ -17,10 +17,12 @@ import { MOMENT_REPOSITORY_PORT, MOMENT_REALTIME_PORT, DisabledMomentRealtime } 
 import { PrismaMomentsRepository } from './moments.prisma.repository';
 import { MOMENT_SEARCH_PORT, UnconfiguredMomentSearchAdapter } from './moments.search';
 import { MediaModule } from '../moment-media/media.module';
+import { MomentMediaController } from './moment-media.controller';
+import { FlagsModule } from '../flags/flags.module';
 
 @Module({
-  imports: [JwtModule.register({}), MediaModule],
-  controllers: [MomentsController],
+  imports: [JwtModule.register({}), MediaModule, FlagsModule],
+  controllers: [MomentsController, MomentMediaController],
   providers: [
     MomentsService,
     { provide: MOMENT_REPOSITORY_PORT, useClass: PrismaMomentsRepository },

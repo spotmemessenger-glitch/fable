@@ -12,6 +12,7 @@ import {
   IStorageAdapter,
   PRESIGN_TTL_SECONDS,
   isSafeSegment,
+  isKnownObjectKey,
   parseObjectKey,
 } from './storage.interface';
 
@@ -88,13 +89,33 @@ export class S3StorageAdapter implements IStorageAdapter {
   }
 
   async getDownloadUrl(objectKey: string): Promise<string> {
-    if (!parseObjectKey(objectKey)) throw new Error('invalid object key');
+    // Both namespaces: a moments asset is fetched by the same presigned-GET
+    // mechanism, and the ROUTE that calls this is what enforces which kind of
+    // object the caller is entitled to (see moment-media.controller.ts).
+    if (!isKnownObjectKey(objectKey)) throw new Error('invalid object key');
     const command = new GetObjectCommand({ Bucket: this.bucket, Key: objectKey });
     return getSignedUrl(this.s3(), command, { expiresIn: PRESIGN_TTL_SECONDS });
   }
 
+  /** Server-held bytes (Moments only — see the interface for why). */
+  async putObject(objectKey: string, bytes: Buffer, contentType: string): Promise<boolean> {
+    if (!isKnownObjectKey(objectKey)) return false;
+    try {
+      await this.s3().send(new PutObjectCommand({
+        Bucket: this.bucket,
+        Key: objectKey,
+        Body: bytes,
+        ContentType: contentType || 'application/octet-stream',
+      }));
+      return true;
+    } catch (err) {
+      this.log.warn(`putObject failed for ${objectKey}: ${(err as Error).message}`);
+      return false;
+    }
+  }
+
   async deleteObject(objectKey: string): Promise<boolean> {
-    if (!parseObjectKey(objectKey)) return false;
+    if (!isKnownObjectKey(objectKey)) return false;
     try {
       await this.s3().send(new DeleteObjectCommand({ Bucket: this.bucket, Key: objectKey }));
       return true;

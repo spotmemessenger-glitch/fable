@@ -7,13 +7,17 @@
 
 import { Body, Controller, Delete, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
+import { DomainGate } from '../flags/domain-gate.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { MomentsService } from './moments.service';
 import type { MomentFeedMode } from './moments.ports';
 
 interface Principal { sub: string }
 
-@UseGuards(JwtAuthGuard)
+/* ACTIVATION (M1): mounted, and DARK until the `moments` flag or a per-account
+ * allowlist entry says otherwise — 404 for everyone else, exactly like an
+ * unmounted module. `requireAdult` is the second, independent check (D6). */
+@UseGuards(JwtAuthGuard, DomainGate('moments', { requireAdult: true }))
 @Controller('v1/moments')
 export class MomentsController {
   constructor(private readonly moments: MomentsService) {}

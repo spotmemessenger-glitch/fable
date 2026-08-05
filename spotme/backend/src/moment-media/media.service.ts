@@ -13,7 +13,7 @@
 import { Inject, Injectable, Optional } from '@nestjs/common';
 import { createHash, randomUUID } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service';
-import { IStorageAdapter, STORAGE_ADAPTER } from '../storage/storage.interface';
+import { IStorageAdapter, STORAGE_ADAPTER, buildMomentObjectKey } from '../storage/storage.interface';
 import {
   IngestResult, MediaUploadIntentInput, MediaUploadSlot, MediaTransformSpec, ThumbnailSpec,
   MediaUploadPort, MediaTransformPort, ThumbnailPort, StoryMediaPort, MomentMediaPort,
@@ -51,7 +51,7 @@ export class MomentMediaService implements MomentMediaPort, MediaUploadPort, Med
     return { mediaId, uploadUrl, headers: { 'content-type': input.mimeType }, expiresAtUTC: Date.now() + SLOT_TTL_MS };
   }
 
-  async ingest(mediaId: string, bytes: Buffer, mimeType: string): Promise<IngestResult> {
+  async ingest(mediaId: string, bytes: Buffer, mimeType: string, ownerId = 'assets'): Promise<IngestResult> {
     if (!ALLOWED_MIME.has(mimeType)) return { state: 'refused', reason: 'bad-mime' };
     if (bytes.length > MAX_UPLOAD_BYTES) return { state: 'refused', reason: 'too-large' };
 
@@ -77,8 +77,21 @@ export class MomentMediaService implements MomentMediaPort, MediaUploadPort, Med
       return { state: 'deduplicated', mediaId, contentHash, deduplicated: true, canonicalMediaId: existing.id };
     }
     const kind = mimeType.startsWith('video/') ? 'video' : 'image';
+    /* WRITE THE STRIPPED BYTES, AND ONLY THE STRIPPED BYTES (M1 activation).
+     *
+     * The dark phase recorded an asset row and stored nothing, which was fine
+     * while nothing rendered. Now that a feed displays these, the object has to
+     * exist — and the object that exists must be `clean`, never `bytes`. The
+     * original, with its GPS tags, is never written anywhere and is dropped
+     * with this stack frame. A storage failure REFUSES the ingest rather than
+     * leaving a row pointing at an object that was never written. */
+    const storageKey = buildMomentObjectKey(ownerId, mediaId);
+    if (this.storage) {
+      const stored = await this.storage.putObject(storageKey, clean, mimeType);
+      if (!stored) return { state: 'refused', reason: 'storage-unavailable' };
+    }
     await this.prisma.momentMediaAsset.create({
-      data: { id: mediaId, kind, mimeType, sizeBytes: clean.length, contentHash, storageKey: `moments/assets/${mediaId}`, exifStripped: true },
+      data: { id: mediaId, kind, mimeType, sizeBytes: clean.length, contentHash, storageKey, exifStripped: true },
     });
     // Enqueue the processing CONTRACTS (fixture record — nothing connects).
     if (kind === 'video') {
@@ -98,6 +111,12 @@ export class MomentMediaService implements MomentMediaPort, MediaUploadPort, Med
     const job: ThumbnailJob = { name: 'thumbnail', ...spec };
     await this.workers.process(job);
     return { enqueued: true };
+  }
+
+  /** A short-lived URL for a stored asset, or null with no storage configured. */
+  async downloadUrl(storageKey: string): Promise<string | null> {
+    if (!this.storage) return null;
+    try { return await this.storage.getDownloadUrl(storageKey); } catch { return null; }
   }
 
   async stampStoryRetention(mediaId: string, expiresAtUTC: number): Promise<void> {

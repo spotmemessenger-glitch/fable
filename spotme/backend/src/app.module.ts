@@ -18,6 +18,7 @@ import { PushModule } from './push/push.module';
 import { HealthModule } from './health/health.module';
 import { FlagsModule } from './flags/flags.module';
 import { DiscoveryModule } from './discovery/discovery.module';
+import { MomentsModule } from './moments/moments.module';
 
 @Module({
   imports: [
@@ -52,6 +53,10 @@ import { DiscoveryModule } from './discovery/discovery.module';
     // owner account only. Mounting-behind-the-gate is exactly what lets an
     // activation be one auditable change away from fully dark.
     DiscoveryModule,
+    /* Wave 1D (M1): Moments is MOUNTED but DARK — every route sits behind
+     * DomainGate('moments'), which 404s while the RuntimeFlag row is absent
+     * and no allowlist entry names the caller. Production keeps zero rows. */
+    MomentsModule,
   ],
 })
 export class AppModule {}
