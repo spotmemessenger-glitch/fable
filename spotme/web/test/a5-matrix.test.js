@@ -327,22 +327,41 @@ await checkAsync('OFFLINE STORE: a chat still opens when the pin store will not'
   return Boolean(key)
 })
 
-await checkAsync('…and the derivation still refuses a substituted key while the store is down', async () => {
+await checkAsync('…and a ROUTINE derive still refuses a substituted key while the store is down', async () => {
+  /* F2 narrowed adoption to the proof-driven path (forceRefetch, set only
+   * after a frame failed against the pin). Every OTHER derive still refuses a
+   * substituted key, and that refusal is pure logic over a key already in
+   * hand — so it does not depend on the audit store being reachable. That is
+   * why best-effort recording is safe here. */
   freshDevice()
   boot({ failOpen: PIN_DB })
   peerKeyOnServer = K2
   const convo = convoWith(K1)
   let persisted = null
-  let proposed = null
+  let adopted = null
   const key = await roomKeyForConvo(convo, tok, {
-    forceRefetch: true,
     onPeerKeyChanged: (k) => { persisted = k },
-    onPeerKeyProposed: (p) => { proposed = p },
+    onPeerKeyAdopted: (a) => { adopted = a },
   })
   const honest = await roomKeyForConvo(convoWith(K1), tok, {})
-  // The refusal is pure logic over a key already in hand, so it does not depend
-  // on the audit store being reachable. That is why best-effort is safe here.
-  return persisted === null && proposed?.proposed === K2 && await sameKey(key, honest)
+  return persisted === null && adopted === null && await sameKey(key, honest)
+})
+
+await checkAsync('…while a PROVEN re-key still heals with the store down (availability holds)', async () => {
+  /* The heal must not depend on the audit store either: a wedged origin must
+   * not be able to keep a conversation dead. The record is best-effort; the
+   * repair is not. */
+  freshDevice()
+  boot({ failOpen: PIN_DB })
+  peerKeyOnServer = K2
+  const convo = convoWith(K1)
+  let adopted = null
+  const key = await roomKeyForConvo(convo, tok, {
+    forceRefetch: true,
+    onPeerKeyAdopted: (a) => { adopted = a },
+  })
+  const served = await roomKeyForConvo(convoWith(K2), tok, {})
+  return adopted?.adopted === K2 && adopted?.previous === K1 && await sameKey(key, served)
 })
 
 await checkAsync('…but nothing is recorded, which is the cost', async () => {

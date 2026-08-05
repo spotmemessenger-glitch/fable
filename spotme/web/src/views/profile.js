@@ -241,6 +241,25 @@ export function render (root, ctx) {
       open: () => openUsernameSheet()
     },
     {
+      /* Fix-the-Foundation F1: the way back in. This device's claim secret IS
+       * the recovery code — with it plus the @username, any browser can sign
+       * back in to this account after storage loss (the endless re-signup bug).
+       * Shown masked; tapping copies. It never leaves the device except to the
+       * recovery endpoint, which compares only its hash. */
+      key: 'recovery',
+      label: 'Recovery code',
+      value: () => (db.profile().claimSecret ? '••••  tap to copy' : ''),
+      empty: '—',
+      open: async () => {
+        const secret = db.profile().claimSecret
+        if (!secret) { ctx.toast('No recovery code on this device'); return }
+        try {
+          await navigator.clipboard.writeText(secret)
+          ctx.toast('Recovery code copied — save it somewhere safe. It signs you back in if this device forgets you.')
+        } catch { ctx.toast('Could not copy the code') }
+      }
+    },
+    {
       key: 'phone',
       label: 'Phone number',
       value: () => db.profile().phone,

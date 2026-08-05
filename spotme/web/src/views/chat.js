@@ -2186,19 +2186,18 @@ export function render (root, ctx, roomId) {
      * statement: it is not a risk, it is a measurement — frames arrived, the
      * transport tried to re-agree, and they still would not open. */
     if (roomUndecryptable) {
-      /* The advice differs because the FAULTS differ, and one of them is
-       * destructive. 'wrong-key' means re-agreement ran and failed — the keys
-       * genuinely disagree and only recreating the chat clears it. 'no-key'
-       * means we never got a key at all, which a flat network or a slow key
-       * lookup produces just as easily as a real fault; telling someone to
-       * delete a working conversation over a dropped request would be a bug
-       * dressed as help. */
-      const worthDeleting = roomUndecryptableReason === 'wrong-key'
+      /* F2 (owner decision): NEVER tell someone to delete a conversation.
+       * 'wrong-key' now heals itself — the transport re-fetches the peer's
+       * current key on decrypt failure and adopts it (roomKeyForConvo), so
+       * this line is a status report about a repair in progress, rate-limited
+       * by the self-heal cooldown, not a verdict. It clears the moment a
+       * frame opens. */
+      const rekeyed = roomUndecryptableReason === 'wrong-key'
       return el('div', { class: 'sys warn', html: IC.spark }, [
-        worthDeleting
-          ? 'Messages are arriving but can’t be read — this chat’s key no longer matches ' +
-            (convo?.peer?.name || 'the other person') + '’s. ' +
-            'Trying again won’t help. Delete this chat on both phones and start it again.'
+        rekeyed
+          ? (convo?.peer?.name || 'The other person') + '’s security key changed — ' +
+            'reconnecting automatically. New messages will open in a moment; ' +
+            'you can check the connection under Verify.'
           : 'Messages are arriving but this device can’t unlock them yet. ' +
             'Check your connection and reopen the chat — it often clears on its own.'
       ])

@@ -247,7 +247,10 @@ function createDb () {
         name: '',
         lang: 'en',
         avatar: null,
-        translit: true,
+        // OFF by default (owner decision, Fix-the-Foundation F3): the 文A chat
+        // toggle reads this only for chats never toggled; a per-chat choice
+        // (convo.xlit) always wins and persists.
+        translit: false,
         autoTranslate: true,
         // Proof this device owns its username claim. Local-only: it is never
         // put in an announcement or a request (both list their fields

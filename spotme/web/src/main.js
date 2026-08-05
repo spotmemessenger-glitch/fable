@@ -60,6 +60,11 @@ const resetOrdered = () => {
 
 const RESETTING = new URL(window.location.href).searchParams.has('fresh') || resetOrdered()
 
+/* F1: ask the browser to mark this origin's storage durable, so the identity
+ * key and profile survive storage pressure. Best-effort — denial changes
+ * nothing about how the app behaves, it only leaves eviction possible. */
+if (!RESETTING) { try { navigator.storage?.persist?.().catch(() => {}) } catch { /* older engines */ } }
+
 /* ------------------------------------------------- locked bottom bar (5) */
 
 const NAV_ITEMS = [
@@ -238,6 +243,21 @@ const CHECK_DEBOUNCE_MS = 400
  * 18th-birthday month has fully passed in UTC. This check is a courtesy so the
  * refusal is instant and clearly worded; the server refuses independently, so
  * bypassing this buys nothing. */
+/* Fix-the-Foundation F1: this account lives in this browser's storage, and
+ * in-app browser views (links opened inside WhatsApp, Instagram, chat apps…)
+ * often keep a SEPARATE, throwaway copy of that storage — which is exactly
+ * "I have to sign up again every time I reopen". The app cannot stop a host
+ * app from discarding its webview storage; what it can do is ask for durable
+ * storage, say out loud when the window looks throwaway, and (the real fix)
+ * let the same @username sign back in with a recovery code. */
+const IN_APP_BROWSER_RE = /\bwv\b|FBAN|FBAV|FB_IAB|Instagram|Line\/|MicroMessenger|Snapchat|GSA\/|TikTok|Twitter/i
+function looksInApp () {
+  const ua = navigator.userAgent || ''
+  if (IN_APP_BROWSER_RE.test(ua)) return true
+  // iOS webviews ship AppleWebKit without the trailing "Safari" token.
+  return /iPhone|iPad/.test(ua) && /AppleWebKit/.test(ua) && !/Safari\//.test(ua)
+}
+
 const BIRTH_YM_RE = /^\d{4}-(0[1-9]|1[0-2])$/
 const AGE_REFUSAL = 'Spot Me is for people 18 and over. We are not able to offer you an account yet.'
 function isAdultYM (ym) {
@@ -441,10 +461,76 @@ function renderOnboarding () {
       birthYM,
       el('p', { class: 'ob-uhint', text: 'Spot Me is 18+. Only the year and month — never your full birthday.' }),
       goBtn,
-      el('p', { class: 'ob-fine', text: 'No password, no phone number. Your profile lives on this device.' })
+      el('p', { class: 'ob-fine', text: 'No password, no phone number. Your profile lives on this device.' }),
+      looksInApp()
+        ? el('p', { class: 'ob-fine', style: 'color:#b45309', text: 'You seem to be inside another app’s browser — it may forget you when it closes. Open spotme-web-v2.vercel.app in Chrome or Safari and use “Add to Home Screen”.' })
+        : null,
+      el('button', {
+        class: 'linkbtn', type: 'button', text: 'Been here before? Sign back in',
+        onclick: renderRecovery
+      })
     ])
   ]))
   name.focus()
+}
+
+/* Fix-the-Foundation F1: sign back in as an existing @username with the
+ * recovery code (shown in Profile after signup). The device ADOPTS the
+ * account's id — chats stored on other devices stay theirs; this device
+ * starts with the account, not with its history (messages are device-local). */
+function renderRecovery () {
+  clear(app)
+  viewContainer = null
+  navEl = null
+  const user = el('input', {
+    class: 'ob-name ob-uinput', type: 'text', placeholder: 'username', maxlength: '16',
+    autocomplete: 'off', autocapitalize: 'none', spellcheck: 'false'
+  })
+  const code = el('input', {
+    class: 'ob-name', type: 'text', placeholder: 'recovery code',
+    autocomplete: 'off', autocapitalize: 'none', spellcheck: 'false'
+  })
+  let busy = false
+  const go = async () => {
+    if (busy) return
+    const uname = user.value.trim().toLowerCase().replace(/^@/, '')
+    const secret = code.value.trim()
+    if (!/^[a-z0-9_]{3,16}$/.test(uname)) { toast('Enter your @username'); user.focus(); return }
+    if (secret.length < 8) { toast('Enter your recovery code'); code.focus(); return }
+    busy = true; goBtn.disabled = true
+    try {
+      const res = await fetch(`${REGISTRY_API}/api/auth/guest/recover`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ username: uname, secret })
+      })
+      if (!res.ok) { toast('That username and code don’t match.'); busy = false; goBtn.disabled = false; return }
+      const acct = await res.json()
+      // Adopt the account: its id IS the identity every room and lookup keys on.
+      db.setProfile({ id: acct.userId, username: acct.username, name: acct.name || acct.username, claimSecret: secret })
+      if (acct.accountFrozen && acct.notice) toast(acct.notice)
+      boot()
+      offerNotifications()
+      navigate('#/chat')
+    } catch {
+      toast('Could not reach the server — try again.')
+      busy = false; goBtn.disabled = false
+    }
+  }
+  const goBtn = el('button', { class: 'pill ok ob-go', type: 'button', text: 'Sign back in', onclick: go })
+  app.appendChild(el('div', { class: 'onboard scroll-y' }, [
+    el('div', { class: 'ob-inner' }, [
+      el('h1', { text: 'Sign back in' }),
+      el('p', { class: 'ob-lede', text: 'Your @username plus the recovery code from your Profile screen. Messages stay on the devices that hold them.' }),
+      el('label', { text: 'Username' }),
+      el('div', { class: 'ob-username' }, [el('span', { class: 'ob-uat', text: '@' }), user]),
+      el('label', { text: 'Recovery code' }),
+      code,
+      goBtn,
+      el('button', { class: 'linkbtn', type: 'button', text: 'Back', onclick: renderOnboarding })
+    ])
+  ]))
+  user.focus()
 }
 
 /* ------------------------------------------------------------------ boot */

@@ -164,27 +164,28 @@ await checkAsync('a RETURNING device — persisted undefined — reports ok, not
  * the banner accuses a working device or a device quietly poisons its peers
  * while the UI says everything is fine.
  */
-await checkAsync('ephemeral: status warns AND publishIdentity refuses to overwrite', async () => {
+await checkAsync('ephemeral: status warns AND publishIdentity publishes the key in use (F2)', async () => {
   globalThis.indexedDB = fakeIndexedDB({ lossy: true })
   let posted = false
   globalThis.fetch = (url, opts) => {
     const u = String(url)
     if (opts?.method === 'POST') { posted = true; return Promise.resolve({ ok: true, status: 200, json: async () => ({}) }) }
     if (u.includes('/api/v2/auth/keys/')) {
-      // A DIFFERENT key is already published — the good one this must not clobber.
       return Promise.resolve({ ok: true, status: 200, json: async () => ({ publicKey: 'AAAA-a-previously-published-key', algo: 'X25519' }) })
     }
     return Promise.resolve({ ok: false, status: 404, json: async () => ({}) })
   }
-  const { publishIdentity, identityStatus, PUBLISH } = await freshStore()
+  const { publishIdentity, identityStatus } = await freshStore()
   const published = await publishIdentity(tokenFor('me'))
-  /* A3 gave this refusal a DEFINED reason. It used to return a bare `false`,
-   * identical to a dropped connection — so a caller could not tell "this device
-   * is broken and only the user can fix it" from "retry in a moment". The shape
-   * is an object rather than a string precisely so a truthy failure value
-   * cannot invert a caller's `if`. */
-  return identityStatus() === 'ephemeral' && posted === false &&
-    published.ok === false && published.reason === PUBLISH.REFUSED_EPHEMERAL
+  /* REWRITTEN IN F2 (owner decision). A3 refused to publish an ephemeral key
+   * to protect the previously published record — but the transport encrypts
+   * with the in-hand key regardless, so the refusal made the session
+   * unhealable: peers re-fetching the server record got a key this session
+   * does not hold, wrong-key in both directions, permanently. The record now
+   * always states the key actually in use; peers adopt it through the
+   * proof-driven self-heal (key-self-heal.test.js), and the churn stays
+   * visible — identityStatus still says 'ephemeral' so the UI warns. */
+  return identityStatus() === 'ephemeral' && posted === true && published.ok === true
 })
 
 await checkAsync('returning device: status is ok AND publishIdentity is allowed to publish', async () => {

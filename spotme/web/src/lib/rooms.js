@@ -814,6 +814,18 @@ function createConnection (convo) {
           convo.peerKey = peerKey
           db.upsertConvo({ roomId: convo.roomId, peerKey })
         },
+        /* F2: a key change PROVEN by undecryptable frames is adopted so the
+         * conversation continues — persisted to record and closure exactly
+         * like a first key, and logged. The trust store has already recorded
+         * the change (server-refetch provenance), so Verify shows it. */
+        onPeerKeyAdopted: ({ adopted, previous }) => {
+          convo.peerKey = adopted
+          db.upsertConvo({ roomId: convo.roomId, peerKey: adopted })
+          console.warn(
+            `spotme identity: adopted ${convo.peer?.name || 'this contact'}'s changed key after ` +
+            `decrypt failure (healed). previous=${String(previous).slice(0, 12)}… adopted=${String(adopted).slice(0, 12)}…`
+          )
+        },
         onPeerKeyProposed: ({ proposed, pinned }) => {
           /* A5. Still no write — the pin is untouched and the room keeps
            * deriving against it. What changes is that the room is marked

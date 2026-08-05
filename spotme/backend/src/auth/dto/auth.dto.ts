@@ -25,6 +25,19 @@ export class SignupDto {
 // Guest (no-account) identity — the web client's onboarding produces exactly
 // this: a device-generated hex id, a claimed username, and a locally held
 // claim secret whose hash proves ownership on re-auth and release.
+/** Fix-the-Foundation F1: sign back in to an existing guest account from a
+ *  device that lost its local state — @username plus the recovery code (the
+ *  claim secret). No id: the device mints none; it ADOPTS the account's. */
+export class GuestRecoverDto {
+  @IsString()
+  @Matches(/^[a-z0-9_]{3,16}$/)
+  username!: string;
+
+  @IsString()
+  @Length(8, 128)
+  secret!: string;
+}
+
 export class GuestAuthDto {
   @IsString()
   @Matches(/^[a-f0-9]{8,64}$/i)

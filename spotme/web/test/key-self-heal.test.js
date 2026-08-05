@@ -188,30 +188,54 @@ await checkAsync('without forcing, the STORED peer key is used and nothing hits 
   return keyFetches === before
 })
 
-await checkAsync('forcing asks what the peer publishes NOW, but DERIVES against the pin', async () => {
-  /* REWRITTEN IN A2. This used to assert the opposite — that forcing adopted
-   * whatever the server returned — and it passed, which was the vulnerability:
-   * the server both chooses that key and can provoke the decrypt failure that
-   * triggers the refetch. The re-fetch still happens (it is how a change is
-   * DETECTED); what changed is that its answer is a proposal, not an adoption. */
+await checkAsync('forcing adopts what the peer publishes NOW, and the frame opens (F2 heal)', async () => {
+  /* REWRITTEN IN F2 (owner decision, Fix-the-Foundation). A2 asserted the
+   * opposite — derive against the pin, always — and its measured price was
+   * that every HONEST re-key (a device that lost storage and recovered its
+   * account) killed the conversation permanently in both directions. The rule
+   * now: `forceRefetch` fires only after a frame failed against the pin, and
+   * on that proof the fetched key is ADOPTED so the chat continues. The
+   * adoption is observable, not silent: the trust store records the change
+   * with server-refetch provenance and Verify surfaces it. */
   const key = await roomKeyForConvo(convo, async () => ({ accessToken: 'tok' }), { forceRefetch: true })
-  const sealed = Buffer.from(await wireFrame(staleKey, { text: 'still the pinned key' }), 'base64')
+  const sealed = Buffer.from(await wireFrame(trueKey, { text: 'healed onto the new key' }), 'base64')
   const out = await crypto.subtle.decrypt(
     { name: 'AES-GCM', iv: sealed.subarray(0, 12) }, key, sealed.subarray(12))
-  return JSON.parse(new TextDecoder().decode(out)).text === 'still the pinned key'
+  return JSON.parse(new TextDecoder().decode(out)).text === 'healed onto the new key'
 })
 
-await checkAsync('a DIFFERING key is proposed, never handed back for persistence', async () => {
-  let persisted = null
+await checkAsync('the adoption is handed back through onPeerKeyAdopted, never the first-key path', async () => {
+  let firstKeyPath = null
+  let adoption = null
   let proposal = null
   await roomKeyForConvo(convo, async () => ({ accessToken: 'tok' }), {
     forceRefetch: true,
-    onPeerKeyChanged: (k) => { persisted = k },
+    onPeerKeyChanged: (k) => { firstKeyPath = k },
+    onPeerKeyAdopted: (a) => { adoption = a },
     onPeerKeyProposed: (p) => { proposal = p }
   })
-  // onPeerKeyChanged is the PERSIST path. It must not fire for a replacement,
-  // or the pin is gone and the substitution is permanent.
-  return persisted === null && proposal?.proposed === bobNewPub && proposal?.pinned === bobOldPub
+  // The replacement must arrive through the ADOPTED callback (which persists
+  // AND logs), not through the silent first-key path, and not as a mere
+  // proposal — a proposal would leave the room deriving against a dead pin.
+  return firstKeyPath === null && proposal === null &&
+    adoption?.adopted === bobNewPub && adoption?.previous === bobOldPub
+})
+
+await checkAsync('WITHOUT forcing, a differing key stays a proposal and the pin is untouched', async () => {
+  /* The A2 substitution defense survives on every path frames have not
+   * disproven: boot and routine derives never rotate the pin. Only a decrypt
+   * failure (forceRefetch) earns adoption. */
+  let adoption = null
+  let proposal = null
+  const key = await roomKeyForConvo(convo, async () => ({ accessToken: 'tok' }), {
+    onPeerKeyAdopted: (a) => { adoption = a },
+    onPeerKeyProposed: (p) => { proposal = p }
+  })
+  const sealed = Buffer.from(await wireFrame(staleKey, { text: 'still the pinned key' }), 'base64')
+  const out = await crypto.subtle.decrypt(
+    { name: 'AES-GCM', iv: sealed.subarray(0, 12) }, key, sealed.subarray(12))
+  return JSON.parse(new TextDecoder().decode(out)).text === 'still the pinned key' &&
+    adoption === null && proposal === null
 })
 
 await checkAsync('an UNCHANGED key reports nothing — no pointless write on every heal', async () => {
@@ -283,7 +307,7 @@ await checkAsync('SANITY: the rotated frame genuinely cannot be opened with the 
 
 clearRoomKey(ROOM)
 providerCalls = []
-/* Registered exactly as rooms.js registers it, persistence callback included. */
+/* Registered exactly as rooms.js registers it, persistence callbacks included. */
 setRoomKeyProvider(ROOM, (opts) => {
   providerCalls.push(opts)
   return roomKeyForConvo(convo, async () => ({ accessToken: 'tok' }), {
@@ -291,6 +315,10 @@ setRoomKeyProvider(ROOM, (opts) => {
     onPeerKeyChanged: (peerKey) => {
       convo.peerKey = peerKey
       db.upsertConvo({ roomId: ROOM, peerKey })
+    },
+    onPeerKeyAdopted: ({ adopted }) => {
+      convo.peerKey = adopted
+      db.upsertConvo({ roomId: ROOM, peerKey: adopted })
     }
   })
 })
@@ -302,28 +330,25 @@ const msg = room.makeAction('msg')
 let received = null
 msg.onMessage = (payload) => { received = payload }
 
-await checkAsync('THE WIRING: a rotated key does NOT open the frame, and is not adopted', async () => {
-  /* REWRITTEN IN A2 — this and the assertion below were the pair that proved
-   * the silent adoption worked end to end. They read "a message sent after the
-   * peer rotated its key still ARRIVES" and "...and the recovered key is
-   * PERSISTED", and both passed.
-   *
-   * Read together with who controls the inputs, they describe the attack: the
-   * server picks the replacement key, the server can provoke the decrypt
-   * failure that triggers the refetch, and the client then adopts and persists
-   * the server's choice. Recovery and compromise were indistinguishable.
-   *
-   * The frame now stays shut. That is the deliberate trade. */
+await checkAsync('THE WIRING: a rotated key heals — the frame ARRIVES after adoption (F2)', async () => {
+  /* REWRITTEN IN F2 (owner decision). A2 kept this frame shut to make server-
+   * driven substitution and honest recovery indistinguishable-but-refused; its
+   * measured price was that honest recovery — the overwhelmingly common case
+   * once account recovery exists — bricked conversations with delete-this-chat
+   * advice on both phones. The trade is now: heal on proof (a frame the pin
+   * cannot open), record the change (trust store, server-refetch provenance),
+   * and surface it in Verify — availability with an audit trail instead of a
+   * dead room. */
   room.onFrame({ roomId: ROOM, from: BOB, type: 'msg', seq: 1, payload: await wireFrame(trueKey, { text: 'you can hear me now' }) })
   for (let i = 0; i < 40 && !received; i++) await tick()
-  return received === null
+  return received?.text === 'you can hear me now'
 })
 
-await checkAsync('...and the pin is UNCHANGED on both the record and the object', async () => {
-  // Persisting to only one of the two was the old repair's failure mode; not
-  // persisting to EITHER is the new requirement.
+await checkAsync('...and the adopted pin is persisted to BOTH the record and the object', async () => {
+  // Persisting to only one of the two was the old repair's failure mode; the
+  // heal must update both, or the room repairs itself forever.
   const onRecord = db.state?.().convos?.[ROOM]?.peerKey
-  return convo.peerKey === bobOldPub && (onRecord === undefined || onRecord === bobOldPub)
+  return convo.peerKey === bobNewPub && (onRecord === undefined || onRecord === bobNewPub)
 })
 
 await checkAsync('a frame that decrypts but is not JSON does NOT trigger a key re-fetch', async () => {
