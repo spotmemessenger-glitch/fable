@@ -233,6 +233,22 @@ const REGISTRY_API = API_BASE
 const USERNAME_RE = /^[a-z0-9_]{3,16}$/
 const CHECK_DEBOUNCE_MS = 400
 
+/* 18+ gate (owner decision D6). Year-month only — never a full birthday — and
+ * the same CONSERVATIVE month rule the server enforces: eligible only once the
+ * 18th-birthday month has fully passed in UTC. This check is a courtesy so the
+ * refusal is instant and clearly worded; the server refuses independently, so
+ * bypassing this buys nothing. */
+const BIRTH_YM_RE = /^\d{4}-(0[1-9]|1[0-2])$/
+const AGE_REFUSAL = 'Spot Me is for people 18 and over. We are not able to offer you an account yet.'
+function isAdultYM (ym) {
+  if (!BIRTH_YM_RE.test(ym)) return false
+  const now = new Date()
+  const eighteenthYear = Number(ym.slice(0, 4)) + 18
+  const month = Number(ym.slice(5, 7))
+  const curY = now.getUTCFullYear()
+  return curY > eighteenthYear || (curY === eighteenthYear && now.getUTCMonth() + 1 > month)
+}
+
 function renderOnboarding () {
   clear(app)
   viewContainer = null
@@ -285,6 +301,13 @@ function renderOnboarding () {
     checkTimer = setTimeout(() => checkAvailability(cleaned), CHECK_DEBOUNCE_MS)
   })
 
+  /* Birth year-month for the 18+ gate. type="month" gets a native picker on
+   * phones and degrades to text elsewhere — the placeholder covers that. */
+  const birthYM = el('input', {
+    class: 'ob-name', type: 'month', placeholder: 'YYYY-MM',
+    autocomplete: 'bday', max: new Date().toISOString().slice(0, 7)
+  })
+
   const avatarSlot = el('button', {
     class: 'ob-avatar', type: 'button', 'aria-label': 'Add a photo',
     onclick: () => filePick.click()
@@ -315,19 +338,41 @@ function renderOnboarding () {
       return
     }
     if (usernameState === 'taken') { toast('That username is taken'); username.focus(); return }
+    const ym = birthYM.value.trim()
+    if (!BIRTH_YM_RE.test(ym)) {
+      toast('Enter your birth month — Spot Me is 18+')
+      birthYM.focus()
+      return
+    }
+    if (!isAdultYM(ym)) { toast(AGE_REFUSAL); return }
 
     starting = true
     goBtn.disabled = true
     // Mint the profile id first — the claim record binds username -> id.
-    const me = db.setProfile({ name: chosen, lang: 'en', avatar: avatarData })
+    // birthYearMonth stays on-device too: every later guest re-auth (fresh
+    // install token fetch) sends it so the account is created age-verified.
+    const me = db.setProfile({ name: chosen, lang: db.profile()?.lang || 'en', avatar: avatarData, birthYearMonth: ym })
     let claimed = false
     let reachable = true
     try {
       const res = await fetch(`${REGISTRY_API}/api/username`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ username: handle, id: me.id, name: chosen, secret: me.claimSecret })
+        body: JSON.stringify({ username: handle, id: me.id, name: chosen, secret: me.claimSecret, birthYearMonth: ym })
       })
+      if (res.status === 400) {
+        // The server's own 18+ refusal (it re-checks; the client check above is
+        // only a courtesy). Terminal for this attempt — no account was created.
+        let msg = null
+        try { msg = (await res.clone().json())?.message } catch { /* non-JSON */ }
+        const text = Array.isArray(msg) ? msg.join(' ') : String(msg || '')
+        if (text.includes('18 and over')) {
+          toast(AGE_REFUSAL)
+          starting = false
+          goBtn.disabled = false
+          return
+        }
+      }
       if (res.status === 409) {
         setUsernameState('taken')
         toast('That username was just taken — try another')
@@ -360,6 +405,17 @@ function renderOnboarding () {
 
   const goBtn = el('button', { class: 'pill ok ob-go', type: 'button', text: 'Start', onclick: start })
 
+  /* A pre-gate device arriving back here (age_declaration_required) keeps its
+   * identity: prefill so "confirm your birth month" is one field, not a redo. */
+  const existing = db.profile()
+  if (existing?.name) name.value = existing.name
+  if (existing?.username) { username.value = existing.username; setUsernameState('idle') }
+  if (existing?.avatar) {
+    avatarData = existing.avatar
+    clear(avatarSlot)
+    avatarSlot.appendChild(avatar({ avatar: existing.avatar }, 84))
+  }
+
   app.appendChild(el('div', { class: 'onboard scroll-y' }, [
     el('div', { class: 'ob-inner' }, [
       el('h1', { text: 'Spot Me' }),
@@ -381,6 +437,9 @@ function renderOnboarding () {
         usernameStatus
       ]),
       el('p', { class: 'ob-uhint', text: '3–16 letters, numbers, underscores' }),
+      el('label', { text: 'Birth month' }),
+      birthYM,
+      el('p', { class: 'ob-uhint', text: 'Spot Me is 18+. Only the year and month — never your full birthday.' }),
       goBtn,
       el('p', { class: 'ob-fine', text: 'No password, no phone number. Your profile lives on this device.' })
     ])
@@ -534,7 +593,15 @@ function boot () {
    * working, and that ambiguity is the exact shape of every bug found here
    * tonight. The transport reports the fact; this is what turns it into
    * something the person holding the phone can read. */
-  setTerminalAuthHandler(({ message }) => {
+  setTerminalAuthHandler(({ code, message }) => {
+    if (code === 'age_declaration_required') {
+      // A pre-gate install: the device has a profile but no declaration, and
+      // the server now refuses to (re)create its account without one. Back
+      // through onboarding — it prefills, and chats stay in local storage.
+      toast(message || 'Spot Me is 18+ now — confirm your birth month to continue.')
+      renderOnboarding()
+      return
+    }
     toast(message || 'This account has been deleted. Start a new one to keep chatting.')
   })
 

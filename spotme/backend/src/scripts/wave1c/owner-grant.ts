@@ -1,38 +1,55 @@
 /**
- * Wave 1C, C7 — Stage-A OWNER GRANT (explicit owner "go"). TEMPORARY (reverted).
+ * Wave 1C, C7 — Stage-A INVITED-SET GRANT (owner + explicitly named friends).
  *
- * Runs INSIDE the deployed image (needs the private DB + a loopback HTTP call).
- * It:
- *   1. locates the owner's account SERVER-SIDE (by their signup email) — never
- *      asks for, prints, or logs the userId;
- *   2. reports the pre-op Discovery allowlist COUNT, and if any UNEXPECTED rows
- *      exist (anything other than the owner's own 'stage-a owner' grant) it
- *      STOPS without deleting — for the owner's decision;
- *   3. inserts EXACTLY ONE `DomainAllowlist` row for the owner (idempotent
- *      upsert), note 'stage-a owner';
- *   4. verifies: owner → 200, a non-allowlisted adult → 404, an allowlisted-but-
- *      unverified account → 403, RuntimeFlag zero rows, exactly ONE allowlist
- *      row after the operation;
- *   5. cleans up every probe row it created — the owner's grant is the only
- *      thing left behind.
+ * Runs INSIDE the deployed image (needs the private DB + a loopback HTTP call),
+ * wired transiently into main.ts for one deploy and reverted after capture.
  *
- * Aggregate results only. No userId, no full email, ever leaves this function.
+ * SCOPE (owner directive): a SMALL invited set — the owner plus up to ~10
+ * friends, each an EXPLICIT row. No wildcard, no "any email" open access;
+ * public access is Stage C and needs the owner's explicit go.
+ *
+ * Each invitee is located SERVER-SIDE by a selector the owner supplies:
+ *  - `email`    — for accounts made via /auth/signup (which records email);
+ *  - `username` — for accounts made via the web app's guest flow, which
+ *                 records NO email; the claimed @username is the identifier.
+ * The tool never asks for, prints, or logs a userId; selectors are masked in
+ * output. Per run it:
+ *   1. reports the pre-op Discovery allowlist COUNT; any row that does not
+ *      belong to the current invited set STOPS the run (notes listed, nothing
+ *      deleted) for the owner's decision;
+ *   2. upserts one row per LOCATED invitee (idempotent — re-runs never
+ *      duplicate), note carrying who/why; refuses to exceed MAX_ROWS;
+ *   3. verifies: every located invitee → 200; a non-allowlisted adult → 404;
+ *      an allowlisted-but-unverified account → 403; RuntimeFlag zero rows;
+ *      final row count == located invitees;
+ *   4. reports invitees NOT yet found (masked) as pending — they get their row
+ *      on a later run, after they sign up;
+ *   5. cleans up every probe row it created.
+ *
+ * REVOCATION: delete that user's row (DomainAllowlist, domain='discovery') —
+ * dark again for them within one 5s cache window. Auditable: every row has
+ * note + addedAt; list with the DomainAllowlistService or plain SQL.
  */
 
 import { PrismaClient } from '@prisma/client';
 import { sign } from 'jsonwebtoken';
 import { createHash } from 'node:crypto';
 
-// The owner's account is located by the email their real signup recorded.
-const OWNER_EMAIL = 'movietrends47@gmail.com';
+/** The invited set. Owner first; append friends (email OR username) as they
+ *  join, then re-run. Growing this list is a code change — deliberate, so
+ *  every widening is diffable and attributable. HARD CAP below. */
+const INVITED: Array<{ email?: string; username?: string; note: string }> = [
+  { email: 'movietrends47@gmail.com', note: 'stage-a owner' },
+  // { username: 'friendname', note: 'stage-a invitee: <who>' },
+];
+const MAX_ROWS = 11; // owner + ~10 — Stage-A scale guard
 const DOMAIN = 'discovery';
-const NOTE = 'stage-a owner';
 
-function maskEmail(e: string | null | undefined): string {
-  if (!e) return '(none)';
-  const [u, d] = e.split('@');
-  if (!d) return '***';
-  return `${u.slice(0, 1)}***${u.slice(-1)}@${d}`;
+function mask(s: string | null | undefined): string {
+  if (!s) return '(none)';
+  const at = s.indexOf('@');
+  if (at > 0) return `${s.slice(0, 1)}***${s.slice(at - 1)}`;
+  return `${s.slice(0, 2)}***`;
 }
 
 export async function runOwnerGrant(port: number): Promise<Record<string, unknown>> {
@@ -50,15 +67,18 @@ export async function runOwnerGrant(port: number): Promise<Record<string, unknow
   const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
   try {
+    if (INVITED.length > MAX_ROWS) {
+      out.status = 'STOP_INVITED_SET_TOO_LARGE';
+      out.detail = `${INVITED.length} invitees exceeds the Stage-A cap of ${MAX_ROWS}. Widening beyond this is Stage B/C and needs the owner's explicit go.`;
+      return out;
+    }
+
     // ---- 0. Privacy-safe aggregate diagnostic (counts only, never PII). ----
-    const nowYear = new Date().getUTCFullYear();
-    const [total, adults, withBYM, frozen, guests, withEmail, mostRecent] = await Promise.all([
+    const [total, adults, withBYM, frozen, mostRecent] = await Promise.all([
       prisma.user.count({ where: { deletedAt: null } }),
       prisma.user.count({ where: { deletedAt: null, ageVerified: true, accountStatus: 'active' } }),
       prisma.user.count({ where: { deletedAt: null, birthYearMonth: { not: null } } }),
       prisma.user.count({ where: { deletedAt: null, accountStatus: 'frozen_minor' } }),
-      prisma.user.count({ where: { deletedAt: null, email: null } }),
-      prisma.user.count({ where: { deletedAt: null, email: { not: null } } }),
       prisma.user.findFirst({ where: { deletedAt: null }, orderBy: { createdAt: 'desc' }, select: { createdAt: true } }),
     ]);
     out.diag = {
@@ -66,51 +86,33 @@ export async function runOwnerGrant(port: number): Promise<Record<string, unknow
       adult_active: adults,
       with_birthYearMonth: withBYM,
       frozen_minor: frozen,
-      guest_no_email: guests,
-      with_email: withEmail,
       most_recent_signup_utc: mostRecent?.createdAt?.toISOString() ?? '(none)',
-      now_year: nowYear,
     };
 
-    // ---- 1. LOCATE THE OWNER (server-side, by signup email). ----
-    // email is @unique, so this is 0 or 1 rows.
-    let owner = await prisma.user.findFirst({
-      where: { email: OWNER_EMAIL, deletedAt: null },
-      select: { id: true, email: true, ageVerified: true, accountStatus: true },
-    });
-    let locatedBy = 'email';
-    if (!owner) {
-      // Fallback: the single adult, active, non-deleted account. In staging this
-      // is the owner's account (there is no other real cohort). Only auto-select
-      // when there is EXACTLY ONE — any ambiguity STOPS below.
-      const adults = await prisma.user.findMany({
-        where: { ageVerified: true, accountStatus: 'active', deletedAt: null },
-        select: { id: true, email: true, ageVerified: true, accountStatus: true },
+    // ---- 1. LOCATE each invitee server-side (exact unique selector). ----
+    const located: Array<{ id: string; note: string; masked: string }> = [];
+    const pending: string[] = [];
+    const notEligible: Array<{ masked: string; why: string }> = [];
+    for (const inv of INVITED) {
+      const selector = inv.email ? { email: inv.email } : inv.username ? { username: inv.username } : null;
+      if (!selector) continue;
+      const row = await prisma.user.findFirst({
+        where: { ...selector, deletedAt: null },
+        select: { id: true, ageVerified: true, accountStatus: true },
       });
-      out.adult_active_account_count = adults.length;
-      if (adults.length === 1) {
-        owner = adults[0];
-        locatedBy = 'sole-adult-account';
+      const masked = mask(inv.email ?? inv.username);
+      if (!row) {
+        pending.push(masked);
+      } else if (row.ageVerified !== true || row.accountStatus !== 'active') {
+        // The gate would 403 them anyway; recorded so the owner knows why.
+        notEligible.push({ masked, why: row.accountStatus !== 'active' ? 'account not active' : 'age not verified' });
       } else {
-        out.status = 'STOP_OWNER_NOT_UNIQUELY_IDENTIFIED';
-        out.detail =
-          adults.length === 0
-            ? 'No account found by the owner email, and no adult+active account exists. Complete signup + 18+ declaration first.'
-            : `Found ${adults.length} adult+active accounts and none match the owner email; cannot disambiguate safely without a selector.`;
-        return out;
+        located.push({ id: row.id, note: inv.note, masked });
       }
     }
-    out.owner_located_by = locatedBy;
-    out.owner_email_masked = maskEmail(owner.email);
-    // The owner's own account must itself satisfy the age gate, or the grant
-    // would verify to 403 rather than 200.
-    if (owner.ageVerified !== true || owner.accountStatus !== 'active') {
-      out.status = 'STOP_OWNER_ACCOUNT_NOT_ADULT_ACTIVE';
-      out.owner_ageVerified = owner.ageVerified === true;
-      out.owner_accountStatus = owner.accountStatus;
-      return out;
-    }
-    const ownerId = owner.id;
+    out.invitees_located = located.map((l) => l.masked);
+    out.invitees_pending_signup = pending;
+    out.invitees_not_eligible = notEligible;
 
     // ---- 2. PRE-OP allowlist state (count + notes, never userIds). ----
     const preRows = await prisma.domainAllowlist.findMany({
@@ -119,45 +121,51 @@ export async function runOwnerGrant(port: number): Promise<Record<string, unknow
     });
     out.pre_allowlist_count = preRows.length;
     out.pre_allowlist_notes = preRows.map((r) => r.note ?? '(no note)');
-    // Any row that is NOT the owner's own 'stage-a owner' grant is unexpected:
-    // report notes and STOP for the owner's decision (never delete).
-    const foreign = preRows.filter((r) => !(r.userId === ownerId && r.note === NOTE));
+    const invitedIds = new Set(located.map((l) => l.id));
+    const foreign = preRows.filter((r) => !invitedIds.has(r.userId));
     if (foreign.length > 0) {
       out.status = 'STOP_PREEXISTING_ALLOWLIST_ROWS';
-      out.detail = 'Pre-existing allowlist rows present; not deleting. Notes listed above. Awaiting owner decision.';
+      out.detail = 'Rows exist that are not in the current invited set; not deleting. Notes listed above. Awaiting owner decision.';
       return out;
     }
-    out.already_granted = preRows.some((r) => r.userId === ownerId && r.note === NOTE);
+    if (located.length === 0) {
+      out.status = 'STOP_NO_INVITEE_ACCOUNTS_FOUND';
+      out.detail = 'No invited account exists (eligible) in this database yet. Sign up + 18+ declaration first, then re-run.';
+      return out;
+    }
 
-    // ---- 3. INSERT exactly one row (idempotent upsert). ----
-    await prisma.domainAllowlist.upsert({
-      where: { domain_userId: { domain: DOMAIN, userId: ownerId } },
-      update: { note: NOTE },
-      create: { domain: DOMAIN, userId: ownerId, note: NOTE },
-    });
-    // Wait out the gate's 5s allowlist cache (fresh process, but belt-and-braces).
-    await sleep(5500);
+    // ---- 3. UPSERT one row per located invitee (idempotent). ----
+    for (const l of located) {
+      await prisma.domainAllowlist.upsert({
+        where: { domain_userId: { domain: DOMAIN, userId: l.id } },
+        update: { note: l.note },
+        create: { domain: DOMAIN, userId: l.id, note: l.note },
+      });
+    }
+    await sleep(5500); // gate's 5s allowlist cache
 
     // ---- 4. VERIFY. ----
-    // (a) owner → 200 on the Discovery routes (ephemeral internal token).
-    out.owner_visibility_GET = (await disc(mint(ownerId))).status; // expect 200
-    out.owner_query_POST = (
-      await disc(mint(ownerId), '/query', {
+    // (a) every located invitee → 200 on Discovery (ephemeral internal token).
+    const inviteeStatuses: Record<string, number> = {};
+    for (const l of located) inviteeStatuses[l.masked] = (await disc(mint(l.id))).status;
+    out.invitee_visibility_GET = inviteeStatuses; // expect all 200
+    out.first_invitee_query_POST = (
+      await disc(mint(located[0].id), '/query', {
         method: 'POST',
         body: JSON.stringify({ contractsVersion: 1, intent: { kind: 'people' }, scope: 'people', origin: { lat: 12.9766, lon: 77.5913 }, radius: { km: 2 } }),
       })
     ).status; // expect 2xx
 
-    // (b) a second, NON-allowlisted adult → 404.
-    const otherId = `zzgrantoth0000000`.slice(0, 16);
+    // (b) a NON-allowlisted adult → 404.
+    const otherId = 'zzgrantoth0000000'.slice(0, 16);
     probeIds.push(otherId);
     await prisma.user.create({
       data: { id: otherId, username: `zzgrantoth${port}`.slice(0, 16), claimSecretHash: createHash('sha256').update('x').digest('hex'), ageVerified: true, accountStatus: 'active', birthYearMonth: `${new Date().getUTCFullYear() - 30}-01` },
     });
     out.nonallowlisted_adult_404 = (await disc(mint(otherId))).status; // expect 404
 
-    // (c) an UNVERIFIED account, allowlisted (so it clears existence) → 403.
-    const unvId = `zzgrantunv0000000`.slice(0, 16);
+    // (c) an UNVERIFIED account, allowlisted (clears existence) → 403.
+    const unvId = 'zzgrantunv0000000'.slice(0, 16);
     probeIds.push(unvId);
     await prisma.user.create({
       data: { id: unvId, username: `zzgrantunv${port}`.slice(0, 16), claimSecretHash: createHash('sha256').update('y').digest('hex') },
@@ -165,20 +173,19 @@ export async function runOwnerGrant(port: number): Promise<Record<string, unknow
     await prisma.domainAllowlist.create({ data: { domain: DOMAIN, userId: unvId, note: 'probe-403 (removed)' } });
     await sleep(5500);
     out.allowlisted_unverified_403 = (await disc(mint(unvId))).status; // expect 403
-    // Remove the probe's allowlist row so the final count is exactly the owner's.
     await prisma.domainAllowlist.deleteMany({ where: { domain: DOMAIN, userId: unvId } });
 
     // (d) RuntimeFlag remains zero rows for discovery.
     out.runtimeflag_discovery_rows = await prisma.runtimeFlag.count({ where: { key: DOMAIN } }); // expect 0
 
-    // (e) exactly ONE allowlist row after the operation.
-    const finalRows = await prisma.domainAllowlist.findMany({ where: { domain: DOMAIN }, select: { userId: true, note: true } });
-    out.final_allowlist_count = finalRows.length; // expect 1
-    out.final_allowlist_is_owner_only = finalRows.length === 1 && finalRows[0].userId === ownerId && finalRows[0].note === NOTE;
+    // (e) final rows == located invitees, every note accounted for.
+    const finalRows = await prisma.domainAllowlist.findMany({ where: { domain: DOMAIN }, select: { userId: true, note: true, addedAt: true } });
+    out.final_allowlist_count = finalRows.length; // expect located.length
+    out.final_allowlist_notes = finalRows.map((r) => ({ note: r.note, at: r.addedAt.toISOString() }));
+    out.final_rows_match_invited = finalRows.length === located.length && finalRows.every((r) => invitedIds.has(r.userId));
   } catch (e) {
     out.error = (e as Error).message;
   } finally {
-    // Clean up EVERY probe row this run created — the owner's grant stays.
     await prisma.domainAllowlist.deleteMany({ where: { domain: DOMAIN, userId: { in: probeIds } } }).catch(() => undefined);
     await prisma.user.deleteMany({ where: { id: { in: probeIds } } }).catch(() => undefined);
     await prisma.$disconnect().catch(() => undefined);
