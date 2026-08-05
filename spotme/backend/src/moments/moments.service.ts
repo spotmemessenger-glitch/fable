@@ -37,11 +37,16 @@ export class MomentsService {
 
   constructor(
     @Inject(MOMENT_REPOSITORY_PORT) private readonly repo: MomentRepositoryPort,
-    @Optional() private readonly media: MomentMediaService | null,
+    /* EXPLICIT TOKENS on both optionals: a union type (`X | null`) emits
+     * `Object` as its design:type, so without @Inject the DI token is
+     * unresolvable and @Optional silently hands this service null — media
+     * refCounts never move and reports never reach the sink, with no error
+     * anywhere. The gate-runtime spec now asserts both wires hot. */
+    @Optional() @Inject(MomentMediaService) private readonly media: MomentMediaService | null,
     @Optional() @Inject(MOMENT_REALTIME_PORT) private readonly realtime: MomentRealtimePort = new DisabledMomentRealtime(),
     /* D7: where a report actually GOES. Optional so the service still
      * constructs in unit tests that do not build the media module. */
-    @Optional() private readonly moderationSink: ModerationSink | null = null,
+    @Optional() @Inject(ModerationSink) private readonly moderationSink: ModerationSink | null = null,
   ) {}
 
   /* ------------------------------------------------------------ lifecycle */

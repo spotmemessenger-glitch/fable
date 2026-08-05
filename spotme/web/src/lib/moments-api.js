@@ -69,9 +69,11 @@ export async function momentsAvailable () {
     await call('/feed?mode=friends')
     availability = true
   } catch (e) {
-    // Forbidden means the surface EXISTS — the tab should show and explain,
-    // rather than vanish as though the feature were not there at all.
-    availability = e instanceof MomentsForbiddenError
+    // Forbidden means the surface EXISTS — cache true. A 404 (disabled) is a
+    // real, cacheable "off". Anything else (network, 5xx) is TRANSIENT: do not
+    // poison the whole session — leave availability null so the next check
+    // re-asks. Previously any transient failure hid the tab until reload.
+    if (e instanceof MomentsForbiddenError) { availability = true } else if (e instanceof MomentsDisabledError) { availability = false } else { availability = null; return false }
   }
   return availability
 }
@@ -82,9 +84,11 @@ export function resetMomentsAvailability () { availability = null }
 
 export const feed = ({ mode = 'friends', origin = null, cursor = null, order } = {}) => {
   const q = new URLSearchParams({ mode })
-  // COARSE ONLY. The server bands distance; a precise fix must never be sent,
-  // and the caller is expected to have coarsened already (see discovery.js).
-  if (origin) { q.set('lat', String(origin.lat)); q.set('lon', String(origin.lon)) }
+  // COARSE ONLY. The server bands distance; a precise fix must never be sent.
+  // We round at the wire here as the enforceable backstop — callers are asked
+  // to coarsen too (coarseFix), but this boundary is what actually guarantees
+  // no precise device fix ever leaves, exactly as createMoment already does.
+  if (origin) { q.set('lat', String(round3(origin.lat))); q.set('lon', String(round3(origin.lon))) }
   if (cursor) q.set('cursor', cursor)
   if (order) q.set('order', order)
   return call(`/feed?${q}`)
@@ -148,8 +152,8 @@ export const unreact = (id) =>
 export const follow = (targetId) => call(`/follow/${encodeURIComponent(targetId)}`, { method: 'POST' })
 export const block = (blockedId) => call(`/block/${encodeURIComponent(blockedId)}`, { method: 'POST' })
 
-export const createStory = ({ mediaId, caption }) =>
-  call('/stories', { method: 'POST', body: { mediaId, ...(caption ? { caption } : {}) } })
+export const createStory = ({ mediaId, visibility = 'friends' }) =>
+  call('/stories', { method: 'POST', body: { mediaId, visibility } })
 
 export const report = ({ targetKind, targetId, reason, note }) =>
   call('/reports', { method: 'POST', body: { targetKind, targetId, reason, ...(note ? { note } : {}) } })

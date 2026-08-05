@@ -138,16 +138,27 @@ function buildNav () {
   return navEl
 }
 
-/** Re-ask the server which flagged surfaces exist, and rebuild the bar. */
+/** Re-ask the server which flagged surfaces exist, and rebuild the bar.
+ *  Idempotent: reconciles against the ACTUAL DOM, not a boolean, so it does
+ *  the right thing no matter which of the (boot / first-render) callers wins
+ *  the race — the earlier `on !== had` guard skipped the rebuild when the flag
+ *  was set before navEl existed, leaving the tab permanently absent. */
 export async function refreshFlaggedTabs () {
   let on = false
   try { on = await momentsAvailable() } catch { on = false }
-  const had = enabledFlags.has('moments')
   if (on) enabledFlags.add('moments'); else enabledFlags.delete('moments')
-  if (on !== had && navEl) {
-    const fresh = buildNav()
-    navEl.replaceWith(fresh)
-    navEl = fresh
+  if (!navEl) return
+  const desired = navItems().map((i) => i.path).join(',')
+  const current = [...navEl.querySelectorAll('.nv')].map((b) => b.dataset.path).join(',')
+  if (desired !== current) {
+    // buildNav() REASSIGNS the module-level navEl as a side effect, so the old
+    // element must be captured FIRST — otherwise `navEl.replaceWith(navEl)` is
+    // a no-op and the stale nav stays in the DOM while the fresh (correct) one
+    // is never inserted. That was the bug the runtime logs exposed: the
+    // reconcile "succeeded" against a detached node while the bar never moved.
+    const old = navEl
+    buildNav()
+    old.replaceWith(navEl)
     updateNav(ACTIVE_TAB[window.location.hash] || '#/chat')
   }
 }
@@ -229,6 +240,11 @@ function render () {
     // Pull down anywhere to hard-refresh: phones otherwise sit on an old
     // bundle until someone remembers the browser's own gesture.
     attachPullRefresh(app)
+    // M6: boot()'s probe can fire BEFORE this first nav exists (it runs before
+    // the first render), so the flagged-tab rebuild there no-ops on a null
+    // navEl. Re-run it now that navEl is real — momentsAvailable() is cached,
+    // so this is just the DOM rebuild the earlier call could not do.
+    refreshFlaggedTabs().catch(() => {})
   }
   clear(viewContainer)
 

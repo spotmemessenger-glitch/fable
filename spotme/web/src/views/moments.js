@@ -37,10 +37,74 @@ const REACTIONS = [
   { key: 'like', glyph: '👍' }, { key: 'love', glyph: '❤️' }, { key: 'laugh', glyph: '😂' },
   { key: 'wow', glyph: '😮' }, { key: 'support', glyph: '🫶' }
 ]
-const REPORT_REASONS = ['Nudity or sexual content', 'Violence', 'Harassment', 'Spam or scam', 'Something else']
+/* Display label -> the reason string the server stores. 'child-safety' is the
+ * one machine key the backend's MANDATORY priority lane keys on (M6); the rest
+ * are free text. Surfacing it as its own option is the only way a client can
+ * ever trigger that lane. */
+const REPORT_REASONS = [
+  { label: 'Child sexual abuse / a minor', reason: 'child-safety' },
+  { label: 'Nudity or sexual content', reason: 'Nudity or sexual content' },
+  { label: 'Violence', reason: 'Violence' },
+  { label: 'Harassment', reason: 'Harassment' },
+  { label: 'Spam or scam', reason: 'Spam or scam' },
+  { label: 'Something else', reason: 'Something else' }
+]
 /** Beyond this a video is a long clip, and the poster/preload story changes. */
 const MAX_VIDEO_BYTES = 50 * 1024 * 1024
 const MAX_IMAGE_BYTES = 50 * 1024 * 1024
+
+/* -------------------------------------------------- perf harness (M3) */
+
+/**
+ * The measurement overlay, activated ONLY by `spotme-perf` in the query
+ * string (e.g. https://…/?spotme-perf#/posts). It is the same instrument on
+ * every device — my throttled-emulation numbers and the owner's real-phone
+ * numbers come from identical code, so they are comparable and neither is
+ * dressed up as the other. Measures, per reel video:
+ *   TTFF  — ms from "this pane became active" to the first 'playing' event
+ *   stalls — count of 'waiting' events after first frame (rebuffering)
+ * and summarises median TTFF + stall rate across everything played so far.
+ */
+const PERF = (() => {
+  try { return new URLSearchParams(location.search).has('spotme-perf') } catch { return false }
+})()
+
+function perfHarness (root) {
+  if (!PERF) return { attach: () => {}, activated: () => {} }
+  const rows = new Map()   // mediaId -> {t0, ttff, stalls, el}
+  const panel = el('div', {
+    style: 'position:fixed;top:8px;left:8px;right:8px;z-index:99;background:rgba(0,0,0,.82);color:#7CFC98;' +
+      'font:11px/1.5 monospace;padding:8px 10px;border-radius:8px;pointer-events:none;white-space:pre'
+  })
+  root.appendChild(panel)
+  const draw = () => {
+    const done = [...rows.values()].filter((r) => r.ttff != null)
+    const ttffs = done.map((r) => r.ttff).sort((a, b) => a - b)
+    const median = ttffs.length ? ttffs[Math.floor(ttffs.length / 2)] : null
+    const stalled = done.filter((r) => r.stalls > 0).length
+    panel.textContent =
+      `SPOTME PERF  videos:${done.length}  medianTTFF:${median != null ? median + 'ms' : '—'}  ` +
+      `stallRate:${done.length ? Math.round((stalled / done.length) * 100) + '%' : '—'}\n` +
+      [...rows.values()].slice(-6).map((r) =>
+        `${r.name}  ttff:${r.ttff != null ? r.ttff + 'ms' : '…'}  stalls:${r.stalls}`).join('\n')
+  }
+  return {
+    attach (video, name) {
+      const row = { name, t0: null, ttff: null, stalls: 0 }
+      rows.set(name, row)
+      video.addEventListener('playing', () => {
+        if (row.t0 != null && row.ttff == null) { row.ttff = Math.round(performance.now() - row.t0); draw() }
+      })
+      video.addEventListener('waiting', () => {
+        if (row.ttff != null) { row.stalls++; draw() }
+      })
+    },
+    activated (name) {
+      const row = rows.get(name)
+      if (row && row.t0 == null) { row.t0 = performance.now(); draw() }
+    }
+  }
+}
 
 export function render (root, ctx) {
   let mode = 'nearby'
@@ -107,12 +171,15 @@ export function render (root, ctx) {
     drawRail()
   }
 
-  /** A coarse fix, or null. Never the precise one — see discovery.js. */
+  /** A coarse fix (3-decimal grid ≈ 110 m), or null. Never the precise one:
+   *  the raw device fix is rounded HERE, and the API layer rounds again at the
+   *  wire as a backstop (moments-api feed()). See discovery.js. */
   function coarseFix () {
     return new Promise((resolve) => {
       if (!navigator.geolocation) return resolve(null)
+      const c3 = (n) => Math.round(n * 1000) / 1000
       navigator.geolocation.getCurrentPosition(
-        (pos) => resolve({ lat: pos.coords.latitude, lon: pos.coords.longitude }),
+        (pos) => resolve({ lat: c3(pos.coords.latitude), lon: c3(pos.coords.longitude) }),
         () => resolve(null),
         { timeout: 6000, maximumAge: 300000 }
       )
@@ -208,7 +275,9 @@ export function render (root, ctx) {
     const mine = m.author?.userId === db.profile()?.id
     const media = (m.media || [])[0]
 
-    const mediaSlot = el('div', { class: 'mo-media' })
+    // A TEXT post has no media, so it must have no media slot — otherwise the
+    // empty 4:5 black box renders as a huge void above the text (real drive).
+    const mediaSlot = media ? el('div', { class: 'mo-media' }) : null
     if (media) {
       if (media.kind === 'video') {
         // Poster first, player on demand: a feed of autoplaying videos is the
@@ -220,7 +289,11 @@ export function render (root, ctx) {
         v.muted = true
         v.playsInline = true
         mediaSlot.appendChild(v)
-        urlFor(media.mediaId).then((u) => { if (u && !disposed) v.src = u })
+        // `#t=0.1` forces iOS Safari to decode and PAINT the first frame under
+        // preload=metadata; without it the card is a dead black box until tap
+        // (review finding). It also gives an instant poster with no extra
+        // request until the real poster pipeline is wired through.
+        urlFor(media.mediaId).then((u) => { if (u && !disposed) v.src = `${u}#t=0.1` })
         mediaSlot.appendChild(el('span', { class: 'mo-play', text: '▶' }))
       } else {
         const img = el('img', { class: 'mo-img', alt: media.alt || '', loading: 'lazy' })
@@ -257,11 +330,11 @@ export function render (root, ctx) {
         avatar({ name: who }, 34),
         el('div', { class: 'mo-whowrap' }, [
           el('b', { class: 'mo-who', text: who }),
-          el('span', { class: 'mo-meta', text: [m.coarseCellLabel, m.author?.distanceBand, when(m.createdAtUTC)].filter(Boolean).join(' · ') })
+          el('span', { class: 'mo-meta', text: [m.coarseCell, when(m.createdAtUTC)].filter(Boolean).join(' · ') })
         ])
       ]),
       mediaSlot,
-      m.text ? el('p', { class: 'mo-text', text: m.text }) : null,
+      m.text ? el('p', { class: `mo-text${media ? '' : ' only'}`, text: m.text }) : null,
       acts
     ].filter(Boolean))
   }
@@ -366,11 +439,11 @@ export function render (root, ctx) {
   }
 
   function openReport (m) {
-    actionSheet(REPORT_REASONS.map((reason) => ({
-      label: reason,
+    actionSheet(REPORT_REASONS.map((r) => ({
+      label: r.label,
       fn: async () => {
         try {
-          await M.report({ targetKind: 'moment', targetId: m.id, reason })
+          await M.report({ targetKind: 'moment', targetId: m.id, reason: r.reason })
           // Honest copy: a report is recorded, and we do not promise review
           // speed the product cannot currently deliver (see D7).
           ctx.toast('Reported. Thanks — we record every report.')
@@ -384,6 +457,7 @@ export function render (root, ctx) {
   function openComposer ({ story = false } = {}) {
     let picked = null
     let uploaded = null
+    let composerObjectUrl = null
     const preview = el('div', { class: 'mo-prev' })
     const caption = el('input', { class: 'mo-cap', type: 'text', placeholder: story ? 'Add a caption…' : 'Say something…', maxlength: '4000' })
     const file = el('input', { type: 'file', accept: 'image/*,video/*', style: 'display:none' })
@@ -406,9 +480,11 @@ export function render (root, ctx) {
       if (f.size > cap) { status.textContent = `That file is ${(f.size / 1048576).toFixed(1)} MB — the limit is ${cap / 1048576} MB.`; return }
       picked = f
       clear(preview)
+      if (composerObjectUrl) { URL.revokeObjectURL(composerObjectUrl); composerObjectUrl = null }
       const localUrl = URL.createObjectURL(f)
+      composerObjectUrl = localUrl
       preview.appendChild(isVideo
-        ? el('video', { class: 'mo-prevmedia', src: localUrl, muted: '', playsinline: '', controls: '' })
+        ? (() => { const pv = el('video', { class: 'mo-prevmedia', src: localUrl, playsinline: '', controls: '' }); pv.muted = true; return pv })()
         : el('img', { class: 'mo-prevmedia', src: localUrl, alt: '' }))
       status.textContent = 'Uploading…'
       try {
@@ -458,7 +534,7 @@ export function render (root, ctx) {
       story ? null : visBtn,
       status,
       el('button', { class: 'pill ok', type: 'button', text: story ? 'Add to story' : 'Post', onclick: post })
-    ].filter(Boolean))
+    ].filter(Boolean), () => { if (composerObjectUrl) { URL.revokeObjectURL(composerObjectUrl); composerObjectUrl = null } })
   }
 
   /* -------------------------------------------------------------- reels */
@@ -491,6 +567,10 @@ export function render (root, ctx) {
     const closeBtn = el('button', { class: 'mo-reelclose', type: 'button', text: '✕', onclick: () => closeReels() })
     const layer = el('div', { class: 'mo-reellayer' }, [track, closeBtn])
     root.appendChild(layer)
+    const perf = perfHarness(layer)
+    nodes.forEach((n, i) => perf.attach(n.v, `reel${i + 1}`))
+    // Keep the app-shell pull-to-refresh from firing on a reel swipe-down.
+    layer.addEventListener('touchmove', (e) => e.stopPropagation(), { passive: true })
 
     // Only the visible pane plays; ±1 gets its bytes ready, the rest stay cold.
     const io = new IntersectionObserver((entries) => {
@@ -517,11 +597,22 @@ export function render (root, ctx) {
       n.v.preload = preload
     }
     async function activate (i) {
+      perf.activated(`reel${i + 1}`)
       await ensureSrc(i, 'auto')
       // Neighbours: bytes ready, nothing playing.
       ensureSrc(i + 1, 'metadata'); ensureSrc(i - 1, 'metadata')
       const n = nodes[i]
-      if (n && n.v.src) { try { await n.v.play() } catch { /* autoplay refused — the poster stays */ } }
+      if (n && n.v.src) {
+        try { await n.v.play() } catch {
+          // Autoplay refused (iOS Low Power Mode / Android saver). Offer a tap
+          // rather than a dead black screen; the tap is a user gesture, which
+          // the same policy always allows.
+          if (!n.pane.querySelector('.mo-reeltap')) {
+            const tap = el('button', { class: 'mo-reeltap', type: 'button', text: '▶', onclick: () => { tap.remove(); n.v.play().catch(() => {}) } })
+            n.pane.appendChild(tap)
+          }
+        }
+      }
     }
 
     function closeReels () {
@@ -550,10 +641,12 @@ export function render (root, ctx) {
 
   /* --------------------------------------------------------------- sheet */
 
-  /** Bottom sheet, same shape the rest of the app uses. Returns its closer. */
-  function sheet (children) {
+  /** Bottom sheet, same shape the rest of the app uses. Returns its closer.
+   *  `onClose` runs exactly once on dismiss — used to revoke object URLs. */
+  function sheet (children, onClose) {
     const back = el('div', { class: 'mo-back' })
-    const close = () => back.remove()
+    let closed = false
+    const close = () => { if (closed) return; closed = true; back.remove(); if (typeof onClose === 'function') onClose() }
     back.addEventListener('click', (e) => { if (e.target === back) close() })
     back.appendChild(el('div', { class: 'mo-sheet' }, children))
     root.appendChild(back)
