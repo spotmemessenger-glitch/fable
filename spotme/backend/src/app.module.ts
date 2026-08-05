@@ -17,6 +17,7 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { PushModule } from './push/push.module';
 import { HealthModule } from './health/health.module';
 import { FlagsModule } from './flags/flags.module';
+import { DiscoveryModule } from './discovery/discovery.module';
 
 @Module({
   imports: [
@@ -44,6 +45,13 @@ import { FlagsModule } from './flags/flags.module';
     // Wave 1A R7: the activation kill-switch registry + its internal probe.
     // Every real domain flag defaults dark (missing row == disabled).
     FlagsModule,
+    // Wave 1C, C3: Discovery is MOUNTED but DARK. Its controller sits behind
+    // DomainGate('discovery', { requireAdult: true }); with zero RuntimeFlag
+    // rows in production every /api/v2/discovery route answers 404 — identical
+    // to being unmounted — until the Stage-A allowlist (C7) turns it on for the
+    // owner account only. Mounting-behind-the-gate is exactly what lets an
+    // activation be one auditable change away from fully dark.
+    DiscoveryModule,
   ],
 })
 export class AppModule {}
