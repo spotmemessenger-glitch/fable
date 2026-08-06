@@ -81,7 +81,7 @@
   height: 40px;
   border-radius: 50%;
   background: var(--ink);
-  color: #fff;
+  color: var(--onfill);
   display: grid;
   place-items: center;
   flex: none;
