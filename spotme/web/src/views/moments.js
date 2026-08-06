@@ -28,6 +28,8 @@ import { db } from '../lib/db.js'
 import { el, clear, avatar, actionSheet } from '../lib/ui.js'
 import * as M from '../lib/moments-api.js'
 import { videoEl, watchInView, playExclusive, pause, pauseAll, isSoundOn, setSoundOn, onSoundChange } from '../lib/video.js'
+import { openPhotoEditor } from '../lib/photoedit.js'
+import { fileToDataURL, fileFromDataURL } from '../lib/media.js'
 
 /**
  * The card's icon set, in the SAME grammar as the bottom bar (see NAV_ITEMS in
@@ -720,15 +722,78 @@ export function render (root, ctx, params) {
 
   /* ------------------------------------------------------------ composer */
 
+  /**
+   * Frames for the trim filmstrip, drawn off a hidden <video> onto a canvas.
+   *
+   * DEGRADES RATHER THAN FAILS. A browser that cannot decode the picked clip —
+   * Chrome on Android meeting HEVC from an iPhone is the everyday case — throws
+   * somewhere in here, and the composer falls back to a plain trim bar with no
+   * thumbnails. Trimming still works; you just cannot see what you are cutting.
+   * The alternative, an editor that refuses to open at all, is worse.
+   */
+  async function filmstrip (url, count = 8) {
+    // Through the same factory as every other video, even though this one is
+    // never shown: one place decides what a <video> is in this app, and an
+    // offscreen exception is how that stops being true.
+    const v = videoEl('mo-offscreen', { loop: false, preload: 'auto' })
+    v.src = url
+    const shots = []
+    try {
+      await new Promise((res, rej) => {
+        v.addEventListener('loadedmetadata', res, { once: true })
+        v.addEventListener('error', () => rej(new Error('undecodable')), { once: true })
+        setTimeout(() => rej(new Error('timeout')), 8000)
+      })
+      const c = document.createElement('canvas')
+      c.height = 56
+      c.width = Math.max(1, Math.round(56 * ((v.videoWidth / v.videoHeight) || 0.56)))
+      const g = c.getContext('2d')
+      for (let i = 0; i < count; i++) {
+        const t = (v.duration * (i + 0.5)) / count
+        await new Promise((res) => {
+          v.addEventListener('seeked', res, { once: true })
+          // A seek that never lands must not hang the composer forever.
+          setTimeout(res, 1200)
+          v.currentTime = Math.min(t, Math.max(0, v.duration - 0.05))
+        })
+        g.drawImage(v, 0, 0, c.width, c.height)
+        shots.push(c.toDataURL('image/jpeg', 0.6))
+      }
+    } catch { /* no thumbnails; the bar below still trims */ }
+    v.removeAttribute('src')
+    v.load()
+    return shots
+  }
+
   function openComposer ({ story = false } = {}) {
     let picked = null
     let uploaded = null
     let composerObjectUrl = null
+    /* Video edit state, in MILLISECONDS — the unit the edit route takes, and
+     * fine enough that a chosen cover frame lands where it was chosen. */
+    let durMs = 0
+    let trimStartMs = 0
+    let trimEndMs = 0
+    let coverAtMs = 0
+
     const preview = el('div', { class: 'mo-prev' })
-    const caption = el('input', { class: 'mo-cap', type: 'text', placeholder: story ? 'Add a caption…' : 'Say something…', maxlength: '4000' })
+    const tools = el('div', { class: 'mo-tools' })
     const file = el('input', { type: 'file', accept: 'image/*,video/*', style: 'display:none' })
     let visibility = story ? 'friends' : 'nearby'
-    const status = el('p', { class: 'mo-note', text: '' })
+    const status = el('p', { class: 'mo-substatus', text: '' })
+
+    /* Multiline, and it grows with what is written — a single-line input made
+     * a caption of any length a peephole. It stops at four lines so the sheet
+     * cannot walk off the bottom of the screen, and scrolls past that. */
+    const caption = el('textarea', {
+      class: 'mo-cap', rows: '1', maxlength: '4000', placeholder: 'Write a caption…'
+    })
+    const grow = () => {
+      caption.style.height = 'auto'
+      const line = parseFloat(getComputedStyle(caption).lineHeight) || 21
+      caption.style.height = `${Math.min(caption.scrollHeight, line * 4 + 24)}px`
+    }
+    caption.addEventListener('input', grow)
 
     const visBtn = el('button', {
       class: 'pill', type: 'button', text: `Visible to: ${visibility}`,
@@ -738,31 +803,12 @@ export function render (root, ctx, params) {
         })), 'Who can see this?')
     })
 
-    file.addEventListener('change', async () => {
-      const f = file.files?.[0]
-      if (!f) return
-      const isVideo = (f.type || '').startsWith('video/')
-      const cap = isVideo ? MAX_VIDEO_BYTES : MAX_IMAGE_BYTES
-      if (f.size > cap) { status.textContent = `That file is ${(f.size / 1048576).toFixed(1)} MB — the limit is ${cap / 1048576} MB.`; return }
-      picked = f
-      clear(preview)
-      if (composerObjectUrl) { URL.revokeObjectURL(composerObjectUrl); composerObjectUrl = null }
-      const localUrl = URL.createObjectURL(f)
-      composerObjectUrl = localUrl
-      preview.appendChild(isVideo
-        ? (() => {
-            // Same inline guarantees as the feed: the composer preview must not
-            // be the one <video> that still hijacks iOS into the native player.
-            const pv = videoEl('mo-prevmedia', { loop: false })
-            pv.setAttribute('controls', '')
-            pv.src = localUrl
-            return pv
-          })()
-        : el('img', { class: 'mo-prevmedia', src: localUrl, alt: '' }))
+    /** Send the currently-picked bytes. Called again after an edit replaces them. */
+    async function upload () {
       status.textContent = 'Uploading…'
       try {
         const t0 = performance.now()
-        uploaded = await M.uploadMedia(f)
+        uploaded = await M.uploadMedia(picked)
         const ms = Math.round(performance.now() - t0)
         // The stripping claim is the SERVER's, echoed only when it says so.
         status.textContent = uploaded?.exifStripped
@@ -772,17 +818,189 @@ export function render (root, ctx, params) {
         uploaded = null
         status.textContent = e.message === 'too-large' ? 'That file is too large.' : (e.message || 'Upload failed.')
       }
+    }
+
+    /**
+     * Crop / rotate / draw on the picked photo, in THE CHAT EDITOR — the same
+     * `openPhotoEditor` chat and profile already use, extended with the shape
+     * presets rather than reimplemented here. One editor, three callers.
+     *
+     * It returns a canvas re-encode, so the bytes that go up are NOT the bytes
+     * that came off the camera. That is the point (a canvas re-encode carries
+     * no EXIF), but it also means the upload has to happen AGAIN with the new
+     * bytes — the server strips and hashes what it is given, and what it was
+     * given has changed.
+     */
+    async function editPhoto () {
+      if (!picked) return
+      try {
+        const { dataURL } = await fileToDataURL(picked, MAX_IMAGE_BYTES)
+        const res = await openPhotoEditor([dataURL])
+        if (!res || !res.dataURL) return          // dismissed; keep the original
+        picked = fileFromDataURL(res.dataURL, 'post.jpg')
+        // The editor has its own caption line; honour it only if this one is
+        // still empty, so editing never silently overwrites what was typed.
+        if (res.caption && !caption.value.trim()) { caption.value = res.caption; grow() }
+        showPicked(false)
+        await upload()
+      } catch (e) { status.textContent = e.message || 'Could not edit that photo.' }
+    }
+
+    /** Trim bar + cover picker for a video. Server applies both on Post. */
+    async function videoTools (localUrl, pv) {
+      const strip = el('div', { class: 'mo-strip' })
+      const range = el('div', { class: 'mo-striprange' })
+      const hA = el('span', { class: 'mo-handle a' })
+      const hB = el('span', { class: 'mo-handle b' })
+      const cover = el('span', { class: 'mo-covermark' })
+      const readout = el('p', { class: 'mo-substatus', text: '' })
+      strip.append(range, hA, hB, cover)
+      tools.append(
+        el('p', { class: 'mo-toollabel', text: 'Trim — drag the ends. Tap to set the cover.' }),
+        strip, readout
+      )
+
+      const shots = await filmstrip(localUrl)
+      if (shots.length) {
+        strip.classList.add('shot')
+        strip.style.backgroundImage = shots.map((s) => `url(${s})`).join(',')
+        strip.style.backgroundSize = `${100 / shots.length}% 100%`
+        strip.style.backgroundPosition = shots
+          .map((_, i) => `${(i * 100) / (shots.length - 1 || 1)}% 0`).join(',')
+      }
+
+      const secs = (ms) => `${(ms / 1000).toFixed(1)}s`
+      const paint = () => {
+        const pc = (ms) => `${durMs ? (ms / durMs) * 100 : 0}%`
+        range.style.left = pc(trimStartMs)
+        range.style.right = `${durMs ? 100 - (trimEndMs / durMs) * 100 : 0}%`
+        hA.style.left = pc(trimStartMs)
+        hB.style.left = pc(trimEndMs)
+        cover.style.left = pc(coverAtMs)
+        readout.textContent =
+          `${secs(trimStartMs)} – ${secs(trimEndMs)}  ·  ${secs(trimEndMs - trimStartMs)} long  ·  cover at ${secs(coverAtMs)}`
+      }
+
+      const atX = (e) => {
+        const r = strip.getBoundingClientRect()
+        return Math.max(0, Math.min(1, (e.clientX - r.left) / (r.width || 1))) * durMs
+      }
+      let drag = null
+      strip.addEventListener('pointerdown', (e) => {
+        if (!durMs) return
+        strip.setPointerCapture?.(e.pointerId)
+        const t = atX(e)
+        // Whichever handle is nearer takes the drag; a press anywhere else is
+        // the cover, which is why the cover needs no handle of its own.
+        const dA = Math.abs(t - trimStartMs)
+        const dB = Math.abs(t - trimEndMs)
+        const grab = durMs * 0.06
+        drag = dA < dB && dA < grab ? 'a' : (dB < grab ? 'b' : 'cover')
+        move(e)
+      })
+      const move = (e) => {
+        if (!drag) return
+        const t = atX(e)
+        const min = 300      // a clip shorter than this is not a clip
+        if (drag === 'a') trimStartMs = Math.min(t, trimEndMs - min)
+        else if (drag === 'b') trimEndMs = Math.max(t, trimStartMs + min)
+        else coverAtMs = t
+        trimStartMs = Math.max(0, trimStartMs)
+        trimEndMs = Math.min(durMs, trimEndMs)
+        // The cover must stay inside the cut, or it points at a frame the
+        // finished clip does not contain.
+        coverAtMs = Math.max(trimStartMs, Math.min(coverAtMs, trimEndMs))
+        pv.currentTime = (drag === 'cover' ? coverAtMs : (drag === 'a' ? trimStartMs : trimEndMs)) / 1000
+        paint()
+      }
+      strip.addEventListener('pointermove', move)
+      const lift = () => { drag = null }
+      strip.addEventListener('pointerup', lift)
+      strip.addEventListener('pointercancel', lift)
+      paint()
+    }
+
+    /** Render the picked file, and the tools that belong to its kind. */
+    function showPicked (fresh = true) {
+      const isVideo = (picked.type || '').startsWith('video/')
+      clear(preview)
+      clear(tools)
+      if (fresh && composerObjectUrl) { URL.revokeObjectURL(composerObjectUrl); composerObjectUrl = null }
+      if (!composerObjectUrl || fresh) composerObjectUrl = URL.createObjectURL(picked)
+      const localUrl = composerObjectUrl
+
+      if (isVideo) {
+        // Same inline guarantees as the feed: the composer preview must not be
+        // the one <video> that still hijacks iOS into the native player.
+        const pv = videoEl('mo-prevmedia', { loop: false })
+        pv.setAttribute('controls', '')
+        pv.src = localUrl
+        preview.appendChild(pv)
+        pv.addEventListener('loadedmetadata', () => {
+          durMs = Math.max(0, Math.round((pv.duration || 0) * 1000))
+          trimStartMs = 0
+          trimEndMs = durMs
+          coverAtMs = Math.min(1000, durMs)     // the worker's own default
+          videoTools(localUrl, pv)
+        }, { once: true })
+      } else {
+        preview.appendChild(el('img', { class: 'mo-prevmedia', src: localUrl, alt: '' }))
+        tools.appendChild(el('button', {
+          class: 'pill', type: 'button', text: 'Crop, rotate & draw', onclick: editPhoto
+        }))
+      }
+    }
+
+    file.addEventListener('change', async () => {
+      const f = file.files?.[0]
+      if (!f) return
+      const isVideo = (f.type || '').startsWith('video/')
+      const cap = isVideo ? MAX_VIDEO_BYTES : MAX_IMAGE_BYTES
+      if (f.size > cap) { status.textContent = `That file is ${(f.size / 1048576).toFixed(1)} MB — the limit is ${cap / 1048576} MB.`; return }
+      picked = f
+      showPicked(true)
+      await upload()
     })
 
+    const postWord = story ? 'Add to story' : 'Post'
+    const postBtn = el('button', { class: 'mo-post', type: 'button', onclick: () => post() },
+      [el('span', { text: postWord })])
+
+    /* The spinner replaces the WORD, in place, and the button keeps its size.
+     * A button that shrinks or disappears mid-tap is how a second Post gets
+     * sent — and `disabled` is what actually prevents that, not the spinner. */
+    const setBusy = (on) => {
+      postBtn.disabled = on
+      postBtn.classList.toggle('busy', on)
+      clear(postBtn)
+      postBtn.appendChild(on
+        ? el('span', { class: 'mo-spin', role: 'status', 'aria-label': 'Posting' })
+        : el('span', { text: postWord }))
+    }
+
     const post = async () => {
+      if (postBtn.disabled) return
       if (!uploaded && !caption.value.trim()) { status.textContent = 'Add a photo, a video, or something to say.'; return }
       if (story && !uploaded) { status.textContent = 'A story needs a photo or video.'; return }
+      setBusy(true)
       try {
+        /* Trim and cover go up BEFORE the moment is created, so the first
+         * transcode already has them and the clip is never briefly published
+         * at its untrimmed length. Only sent when they say something: an
+         * untouched video must not look edited. */
+        const isVideo = uploaded && (picked.type || '').startsWith('video/')
+        if (isVideo && durMs && (trimStartMs > 0 || trimEndMs < durMs || coverAtMs !== Math.min(1000, durMs))) {
+          await M.editMedia(uploaded.mediaId, {
+            trimStartMs: trimStartMs > 0 ? trimStartMs : null,
+            trimEndMs: trimEndMs < durMs ? trimEndMs : null,
+            coverAtMs
+          })
+        }
         if (story) {
           await M.createStory({ mediaId: uploaded.mediaId, caption: caption.value.trim() || undefined })
           ctx.toast('Story added')
         } else {
-          const kind = uploaded ? ((picked.type || '').startsWith('video/') ? 'video' : 'photo') : 'text'
+          const kind = uploaded ? (isVideo ? 'video' : 'photo') : 'text'
           const location = (visibility === 'nearby' || visibility === 'public') ? await coarseFix() : null
           await M.createMoment({
             kind,
@@ -795,7 +1013,10 @@ export function render (root, ctx, params) {
         }
         close()
         load(true)
-      } catch (e) { status.textContent = e.message || 'Could not post.' }
+      } catch (e) {
+        setBusy(false)
+        status.textContent = e.message || 'Could not post.'
+      }
     }
 
     const close = sheet([
@@ -803,10 +1024,12 @@ export function render (root, ctx, params) {
       preview,
       el('button', { class: 'pill', type: 'button', text: 'Choose photo or video', onclick: () => file.click() }),
       file,
+      tools,
       caption,
       story ? null : visBtn,
-      status,
-      el('button', { class: 'pill ok', type: 'button', text: story ? 'Add to story' : 'Post', onclick: post })
+      // The button leads; the upload note is secondary text underneath it.
+      postBtn,
+      status
     ].filter(Boolean), () => { if (composerObjectUrl) { URL.revokeObjectURL(composerObjectUrl); composerObjectUrl = null } })
   }
 
