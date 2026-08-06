@@ -990,6 +990,15 @@ model MomentMediaAsset {
   variants        String?
   posterKey       String?
   durationSeconds Float?
+  /// Composer edits, applied by the transcode worker rather than on the phone.
+  /// Trimming in the browser means re-encoding on the device — slow on mid-range
+  /// Android, lossy, and codec-dependent — so the composer records INTENT here
+  /// and ffmpeg (which the worker already runs) does the cut. All nullable: an
+  /// unedited clip transcodes exactly as it did before these existed.
+  trimStartMs     Int?
+  trimEndMs       Int?
+  /// Which frame becomes the poster. Null keeps the worker's 1s default.
+  coverAtMs       Int?
 }
 
 /// ─────────────────────────────────────────────────────────────────────────

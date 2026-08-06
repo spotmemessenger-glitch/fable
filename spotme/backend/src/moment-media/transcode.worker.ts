@@ -61,6 +61,9 @@ export interface TranscodeResult {
 export interface TranscodeIO {
   /** Fetch the stored original. */
   readOriginal(mediaId: string): Promise<{ bytes: Buffer; mimeType: string } | null>;
+  /** The composer's trim/cover choices, if this asset carries any. Optional so
+   *  existing fakes and callers keep working — absent means unedited. */
+  readEdits?(mediaId: string): Promise<MediaEdits | null>;
   /** Store one derived rendition. */
   writeDerived(mediaId: string, name: string, bytes: Buffer, contentType: string): Promise<string>;
   /** Record the finished ladder against the asset. */
@@ -86,9 +89,45 @@ export async function probeDuration(file: string): Promise<number | null> {
  * flags that actually matter (faststart, metadata strip, codecs) rather than
  * trusting a comment about them.
  */
-export function transcodeArgs(input: string, output: string, v: (typeof VARIANTS)[number]): string[] {
+/** Composer edits, as the worker sees them. All optional; absent = unedited. */
+export interface MediaEdits {
+  trimStartMs?: number | null;
+  trimEndMs?: number | null;
+  coverAtMs?: number | null;
+}
+
+/** ffmpeg wants seconds with a decimal, not milliseconds. */
+const secs = (ms: number) => (ms / 1000).toFixed(3);
+
+export function transcodeArgs(
+  input: string,
+  output: string,
+  v: (typeof VARIANTS)[number],
+  edits: MediaEdits = {},
+): string[] {
+  /* TRIM: fast-seek in, explicit DURATION out.
+   *
+   * `-ss` BEFORE `-i` seeks the input, which is both far faster (ffmpeg jumps
+   * to the nearest keyframe rather than decoding everything it discards) and
+   * re-bases timestamps at zero, so the trimmed clip starts at 0 instead of
+   * carrying an offset the player then has to seek past.
+   *
+   * The end is expressed as `-t <duration>` on the OUTPUT rather than `-to`.
+   * `-to` combined with an input `-ss` has meant different things across
+   * ffmpeg versions — absolute in the original timeline in some, relative to
+   * the seek point in others — and a cut whose length depends on the build is
+   * not a cut anyone can rely on. A duration is the same everywhere. */
+  const start = Number(edits.trimStartMs);
+  const end = Number(edits.trimEndMs);
+  const hasStart = Number.isFinite(start) && start > 0;
+  const from = hasStart ? start : 0;
+  const hasEnd = Number.isFinite(end) && end > from;
+
+  const seek: string[] = hasStart ? ['-ss', secs(start)] : [];
+  const dur: string[] = hasEnd ? ['-t', secs(end - from)] : [];
   return [
     '-hide_banner', '-loglevel', 'error', '-y',
+    ...seek,
     '-i', input,
     // GPS and every other container tag: gone. The image path strips EXIF;
     // this is the same promise for video.
@@ -116,17 +155,34 @@ export function transcodeArgs(input: string, output: string, v: (typeof VARIANTS
     // (H.264 requires them; an odd width is a hard encoder failure).
     '-vf', `scale=-2:'min(${v.height},ih)'`,
     '-c:a', 'aac', '-b:a', v.audioBitrate, '-ac', '2',
+    ...dur,
     // THE FLAG THIS WHOLE FILE EXISTS FOR.
     '-movflags', '+faststart',
     output,
   ];
 }
 
-/** A single frame, one second in — far enough to miss a black opening frame. */
-export function posterArgs(input: string, output: string): string[] {
+/**
+ * A single frame for the poster.
+ *
+ * Defaults to one second in — far enough to miss the black opening frame most
+ * cameras record. `coverAtMs` overrides it with the frame the person actually
+ * chose in the composer, which is the difference between a poster and a cover.
+ *
+ * `-ss` goes BEFORE `-i` here too: seeking to a frame is much cheaper than
+ * decoding up to it and throwing the rest away.
+ */
+export function posterArgs(input: string, output: string, edits: MediaEdits = {}): string[] {
+  const at = Number(edits.coverAtMs);
+  /* A cover is chosen against the TRIMMED clip the person was scrubbing, but
+   * the poster is cut from the ORIGINAL file — so the trim start has to be
+   * added back or every cover lands earlier than the frame they picked. */
+  const base = Number(edits.trimStartMs);
+  const offset = Number.isFinite(base) && base > 0 ? base : 0;
+  const seek = Number.isFinite(at) && at >= 0 ? secs(at + offset) : '1.000';
   return [
     '-hide_banner', '-loglevel', 'error', '-y',
-    '-i', input, '-ss', '00:00:01', '-frames:v', '1',
+    '-ss', seek, '-i', input, '-frames:v', '1',
     '-vf', 'scale=-2:720', '-q:v', '4',
     output,
   ];
@@ -143,11 +199,12 @@ export async function transcodeOne(mediaId: string, io: TranscodeIO): Promise<Tr
     const input = join(dir, 'in');
     await writeFile(input, original.bytes);
     const durationSeconds = await probeDuration(input);
+    const edits = (io.readEdits ? await io.readEdits(mediaId) : null) ?? {};
 
     const variants: TranscodeResult['variants'] = [];
     for (const v of VARIANTS) {
       const out = join(dir, `${v.name}.mp4`);
-      await run('ffmpeg', transcodeArgs(input, out, v));
+      await run('ffmpeg', transcodeArgs(input, out, v, edits));
       const bytes = await readFile(out);
       const storageKey = await io.writeDerived(mediaId, v.name, bytes, 'video/mp4');
       variants.push({ name: v.name, bytes: bytes.length, storageKey });
@@ -156,7 +213,7 @@ export async function transcodeOne(mediaId: string, io: TranscodeIO): Promise<Tr
     let posterKey: string | null = null;
     try {
       const p = join(dir, 'poster.jpg');
-      await run('ffmpeg', posterArgs(input, p));
+      await run('ffmpeg', posterArgs(input, p, edits));
       posterKey = await io.writeDerived(mediaId, 'poster', await readFile(p), 'image/jpeg');
     } catch {
       // A missing poster degrades the first frame, it does not fail the job —
