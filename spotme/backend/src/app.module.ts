@@ -12,6 +12,7 @@ import { GroupsModule } from './groups/groups.module';
 import { StoriesModule } from './stories/stories.module';
 import { RoomsModule } from './rooms/rooms.module';
 import { RealtimeModule } from './realtime/realtime.module';
+import { CallsModule } from './calls/calls.module';
 import { StorageModule } from './storage/storage.module';
 import { ScheduleModule } from '@nestjs/schedule';
 import { PushModule } from './push/push.module';
@@ -42,6 +43,9 @@ import { MomentsModule } from './moments/moments.module';
     PushModule,
     RoomsModule,
     RealtimeModule,
+    // Call MEDIA only (ADR-003). Additive: with LIVEKIT_* unset it mounts
+    // routes that answer "not configured here" and nothing else changes.
+    CallsModule,
     HealthModule,
     // Wave 1A R7: the activation kill-switch registry + its internal probe.
     // Every real domain flag defaults dark (missing row == disabled).
@@ -57,6 +61,7 @@ import { MomentsModule } from './moments/moments.module';
      * DomainGate('moments'), which 404s while the RuntimeFlag row is absent
      * and no allowlist entry names the caller. Production keeps zero rows. */
     MomentsModule,
+
   ],
 })
 export class AppModule {}

@@ -74,9 +74,19 @@ host, or a backup. This is the scenario the whole schema is built for.
 
 **What the attacker does not get:** message plaintext, media plaintext
 (`mediaKey` objects are encrypted client-side before upload, per the schema
-comment), call media (WebRTC stays peer-to-peer; TURN relays encrypted SRTP
-without keys), or room secrets for conversations established without a
+comment), or room secrets for conversations established without a
 server-relayed knock.
+
+**What they DO get, since 2026-08-05 (ADR-004): live call audio and video.**
+This bullet previously claimed call media was out of reach because WebRTC
+stayed peer-to-peer. That is no longer true — the peer-to-peer path was deleted
+and calls run on a LiveKit SFU, which decrypts media in order to forward it.
+Frames are TLS-protected in transit and are not stored, but an attacker who
+controls the media server sees the call. **Calls are not end-to-end encrypted;
+messages still are.** The documented upgrade path is LiveKit's
+insertable-streams E2EE, where participants agree a key the server never holds;
+it is not implemented. Note the scope: this is the MEDIA server. A TURN relay,
+a separate thing, still only forwards bytes it cannot read.
 
 **Mitigations.** P1: ciphertext-only storage (already the schema contract),
 least-privilege DB credentials, host secret manager (Section 9), disk

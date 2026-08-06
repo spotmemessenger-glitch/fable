@@ -23,9 +23,10 @@
  * receipts and knocks now arrive even when the two devices were never online
  * together. That is the single failure P2P could not fix.
  *
- * Calls stay genuinely peer-to-peer: media rides RTCPeerConnections built
- * here (perfect negotiation, signalling relayed as an ephemeral action);
- * call audio/video never touches the server.
+ * Calls no longer live here at all. Media used to ride RTCPeerConnections
+ * built in this file, and that path is deleted (ADR-004): call audio and video
+ * now go to the LiveKit SFU, which CAN see them. Only the ring/accept/decline
+ * signal still travels this transport, as an ordinary sealed action.
  *
  * ADR-033 (2026-08-06): the Trystero P2P opt-out this file used to carry has
  * been removed. Server-side transport is the only path now — no fallback.
@@ -545,19 +546,15 @@ function serverRoom (config, roomId) {
    * two ids could join and replay the whole history (see backend dm-room.ts).
    * Undefined for groups, the lobby and inbox rooms, which the gate skips. */
   const peerId = config?.peerId
-  const rtcConfig = config?.rtcConfig || {}
   const actions = new Map()      // name -> action record
-  const peerPcs = new Map()      // peerId -> { pc, makingOffer, polite } (calls only)
   const peers = new Map()        // peerId -> fake pc for getPeers()
   const pendingRequests = new Map() // reqId -> {resolve, reject, timer}
   let onPeerJoinHandler = null
   let onPeerLeaveHandler = null
-  let onPeerStreamHandler = null
   /* Fired when a frame cannot be opened and re-agreement did not rescue it.
    * The room reports the fact; deciding what a user should be told about it is
    * the view's business, not the transport's. */
   let onUndecryptableHandler = null
-  const localStreams = new Set()
   let left = false
 
   /**
@@ -665,11 +662,6 @@ function serverRoom (config, roomId) {
       keyReady = true
       if (type === 'fetchreq') return void handleFetchReq(frame, key)
       if (type === 'fetchres') return void handleFetchRes(frame, key)
-      if (type === 'rtc') {
-        const signal = JSON.parse(dec(await openSealed(key, frame.payload)))
-        if (signal.to === selfId) await handleRtcSignal(from, signal)
-        return
-      }
       const a = actions.get(type)
       if (!a) return
       if (type === 'bin') {
@@ -772,7 +764,6 @@ function serverRoom (config, roomId) {
 
   function removePeer (peerId) {
     if (!peers.delete(peerId)) return
-    closePc(peerId)
     onPeerLeaveHandler?.(peerId)
   }
 
@@ -877,7 +868,7 @@ function serverRoom (config, roomId) {
       unopenedFloor = null
       for (const peerId of ack.peers || []) addPeer(peerId, true)
       for (const ev of ack.events || []) await dispatch(ev, true)
-      await absorbEnvelopes(ack.envelopes, key)
+await absorbEnvelopes(ack.envelopes, key)
       advanceCursor(ack.lastEventId)
       await drainReplay(socket, ack)
       return socket
@@ -1024,70 +1015,18 @@ function serverRoom (config, roomId) {
     } catch { /* not for us */ }
   }
 
-  /* -- calls: real WebRTC between peers, signalling via the socket -------- */
-
-  async function sendRtc (to, signal) {
-    try { await sendAction('rtc', { to, from: selfId, ...signal }) } catch { /* peer gone */ }
-  }
-
-  function ensurePc (peerId) {
-    let entry = peerPcs.get(peerId)
-    if (entry) return entry
-    const pc = new RTCPeerConnection(rtcConfig)
-    entry = { pc, makingOffer: false, polite: String(selfId) < String(peerId) }
-    peerPcs.set(peerId, entry)
-    pc.onnegotiationneeded = async () => {
-      try {
-        entry.makingOffer = true
-        await pc.setLocalDescription()
-        await sendRtc(peerId, { description: pc.localDescription })
-      } finally { entry.makingOffer = false }
-    }
-    pc.onicecandidate = ({ candidate }) => { if (candidate) sendRtc(peerId, { candidate }) }
-    pc.ontrack = ({ streams }) => {
-      if (streams?.[0]) onPeerStreamHandler?.(streams[0], peerId, undefined)
-    }
-    pc.onconnectionstatechange = () => {
-      if (['failed', 'closed'].includes(pc.connectionState)) closePc(peerId)
-    }
-    return entry
-  }
-
-  async function handleRtcSignal (from, signal) {
-    const entry = ensurePc(from)
-    const { pc } = entry
-    try {
-      if (signal.description) {
-        const collision = signal.description.type === 'offer' &&
-          (entry.makingOffer || pc.signalingState !== 'stable')
-        if (collision && !entry.polite) return
-        if (collision) await pc.setLocalDescription({ type: 'rollback' }).catch(() => {})
-        await pc.setRemoteDescription(signal.description)
-        if (signal.description.type === 'offer') {
-          for (const stream of localStreams) {
-            for (const track of stream.getTracks()) {
-              if (!pc.getSenders().some((s) => s.track === track)) pc.addTrack(track, stream)
-            }
-          }
-          await pc.setLocalDescription()
-          await sendRtc(from, { description: pc.localDescription })
-        }
-      } else if (signal.candidate) {
-        await pc.addIceCandidate(signal.candidate).catch(() => {})
-      }
-    } catch (error) {
-      console.warn('spotme transport: rtc negotiation error:', error?.message)
-    }
-  }
-
-  function closePc (peerId) {
-    const entry = peerPcs.get(peerId)
-    if (!entry) return
-    peerPcs.delete(peerId)
-    try { entry.pc.close() } catch { /* already closed */ }
-  }
-
-  /* -- the Trystero-shaped surface --------------------------------------- */
+  /* -- the Trystero-shaped surface --------------------------------------- *
+   *
+   * CALL MEDIA IS NOT HERE ANY MORE. This module used to build an
+   * RTCPeerConnection per peer, relay offers/answers/candidates as an `rtc`
+   * action, and expose addStream / removeStream / replaceTrack / onPeerStream
+   * so a call could push tracks peer-to-peer. All of it is deleted: calls run
+   * on the LiveKit SFU (ADR-004) and no longer touch this transport.
+   *
+   * What remains is messaging — actions, history replay, attachment slices and
+   * lazy fetch. The `call` action still passes through as an ordinary sealed
+   * action, because RINGING is a message ("I want to talk to you"), not media.
+   */
 
   const room = {
     DURABLE: true,
@@ -1110,45 +1049,13 @@ function serverRoom (config, roomId) {
 
     set onPeerJoin (fn) { onPeerJoinHandler = fn },
     set onPeerLeave (fn) { onPeerLeaveHandler = fn },
-    set onPeerStream (fn) { onPeerStreamHandler = fn },
     set onUndecryptable (fn) { onUndecryptableHandler = fn },
 
     getPeers () { return Object.fromEntries(peers) },
 
-    addStream (stream, options) {
-      localStreams.add(stream)
-      const targets = options?.target ? [options.target] : [...peers.keys()]
-      for (const peerId of targets) {
-        const { pc } = ensurePc(peerId)
-        for (const track of stream.getTracks()) {
-          if (!pc.getSenders().some((s) => s.track === track)) pc.addTrack(track, stream)
-        }
-      }
-    },
-
-    removeStream (stream) {
-      localStreams.delete(stream)
-      for (const { pc } of peerPcs.values()) {
-        for (const sender of pc.getSenders()) {
-          if (sender.track && stream.getTracks().includes(sender.track)) {
-            try { pc.removeTrack(sender) } catch { /* renegotiating */ }
-          }
-        }
-      }
-    },
-
-    replaceTrack (oldTrack, newTrack) {
-      for (const { pc } of peerPcs.values()) {
-        for (const sender of pc.getSenders()) {
-          if (sender.track === oldTrack) sender.replaceTrack(newTrack).catch(() => {})
-        }
-      }
-    },
-
     leave () {
       left = true
       activeRooms.delete(roomId)
-      for (const peerId of [...peerPcs.keys()]) closePc(peerId)
       for (const { timer, reject } of pendingRequests.values()) {
         clearTimeout(timer)
         reject(new Error('room left'))

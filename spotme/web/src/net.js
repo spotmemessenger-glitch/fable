@@ -117,8 +117,10 @@ export function createNet (roomId, secret, handlers, getHistory, peerId) {
     kind: 'request',
     onRequest: (data, context) => handlers.onFetch ? handlers.onFetch(data, context) : null
   })
-  // Call signalling: {type:'offer'|'accept'|'decline'|'end', video:bool}.
-  // The media itself rides WebRTC tracks via addStream, not this action.
+  // Call RINGING: {type:'offer'|'accept'|'decline'|'end', video:bool}.
+  // This is the only part of a call that touches this transport. The media
+  // itself is published to the LiveKit SFU (ADR-004); the peer-to-peer track
+  // path this action used to accompany has been deleted.
   const call = room.makeAction('call')
   // Live-location updates: {id, lat, lon} while sharing; {id, stop:true} ends.
   const locup = room.makeAction('locup')
@@ -143,9 +145,6 @@ export function createNet (roomId, secret, handlers, getHistory, peerId) {
   bin.onReceiveProgress = (progress, context) => handlers.onBinaryProgress?.(progress, context)
   call.onMessage = (payload, meta) => handlers.onCall?.(payload, meta?.peerId)
   locup.onMessage = (payload, meta) => handlers.onLocup?.(payload, meta?.peerId)
-
-  room.onPeerStream = (stream, peerId, metadata) =>
-    handlers.onStream?.(stream, peerId, metadata)
 
   // Backlog from an existing peer. Merging is the store's job — it may already
   // hold some of these, and several peers may answer the same join.
@@ -243,9 +242,6 @@ export function createNet (roomId, secret, handlers, getHistory, peerId) {
     fetchFrom: (data, options) => fetchAction.request(data, { timeoutMs: FETCH_TIMEOUT_MS, ...options }),
     sendCall: (data, options) => msgSafe(call.send(data, options)),
     sendLocup: (data) => msgSafe(locup.send(data)),
-    addStream: (stream, options) => room.addStream(stream, options),
-    removeStream: (stream, options) => room.removeStream(stream, options),
-    replaceTrack: (oldTrack, newTrack, options) => room.replaceTrack(oldTrack, newTrack, options),
     peerIds: () => Object.keys(room.getPeers()),
     peerCount: () => Object.keys(room.getPeers()).length,
     /**

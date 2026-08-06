@@ -1867,9 +1867,25 @@
 
 .v-chat .callov .callmute.on { background: #fff; color: var(--ink); }
 
+/* One remote fills the screen. Two or more tile.
+ *
+ * The grid owns the positioning so a tile is just a cell — with `inset: 0` on
+ * every .callremote, a second participant would land exactly on top of the
+ * first and only the last one drawn would ever be visible. */
+.v-chat .callov .callgrid {
+  position: absolute; inset: 0; z-index: 0;
+  display: grid; gap: 2px;
+  grid-template-columns: 1fr;
+}
+.v-chat .callov .callgrid.n2,
+.v-chat .callov .callgrid.n3,
+.v-chat .callov .callgrid.n4 { grid-template-columns: repeat(2, 1fr); }
+.v-chat .callov .callgrid.n5,
+.v-chat .callov .callgrid.n6 { grid-template-columns: repeat(3, 1fr); }
+
 .v-chat .callov .callremote {
-  position: absolute; inset: 0; width: 100%; height: 100%;
-  object-fit: cover; z-index: 0;
+  width: 100%; height: 100%; min-height: 0;
+  object-fit: cover; background: #000;
 }
 
 .v-chat .callov.video .callinfo {
