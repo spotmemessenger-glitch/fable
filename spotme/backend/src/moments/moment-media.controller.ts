@@ -101,6 +101,26 @@ export class MomentMediaController {
     if (!asset || asset.refCount < 1) throw new NotFoundException();
     const url = await this.media.downloadUrl(asset.storageKey);
     if (!url) throw new NotFoundException();
-    return { url, kind: asset.kind, mimeType: asset.mimeType };
+    /* The transcode worker has been writing a poster frame since M3 and this
+     * route never handed it back, so every video card in the feed had nothing
+     * to paint before the first decoded frame and rendered as a black box.
+     * The bytes existed the whole time; only this line was missing.
+     *
+     * Null-safe on purpose: `posterKey` is null for images, for assets older
+     * than the worker, and for the clips whose poster step failed (the worker
+     * treats that as a degrade, not a job failure). The client keeps its own
+     * fallback for those, so a null here is a softer poster, never a break. */
+    const posterUrl = asset.posterKey ? await this.media.downloadUrl(asset.posterKey) : null;
+    return {
+      url,
+      posterUrl,
+      kind: asset.kind,
+      mimeType: asset.mimeType,
+      // Intrinsic size lets the card reserve the right box BEFORE bytes land,
+      // so the feed does not reflow under the reader when a video decodes.
+      width: asset.width ?? null,
+      height: asset.height ?? null,
+      durationSeconds: asset.durationSeconds ?? null,
+    };
   }
 }

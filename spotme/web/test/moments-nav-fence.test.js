@@ -33,6 +33,7 @@ const decomment = (src) => src
 const main = decomment(read('src', 'main.js'))
 const view = decomment(read('src', 'views', 'moments.js'))
 const api = decomment(read('src', 'lib', 'moments-api.js'))
+const video = decomment(read('src', 'lib', 'video.js'))
 
 let pass = 0
 let fail = 0
@@ -93,8 +94,33 @@ check('a 404 is treated as "surface absent", never as a bug to retry',
 check('403 is kept DISTINCT from 404 — age refusal is not a missing feature',
   /MomentsForbiddenError/.test(api) && /res\.status === 403/.test(api))
 
+/* The observer moved into lib/video.js so the feed and the reels viewer share
+ * ONE implementation instead of hand-rolling the same logic twice. The
+ * behaviour this fence guards is unchanged — it just has to look in both
+ * files now: the shared factory owns the IntersectionObserver, and the view
+ * still preloads its neighbours without ever playing them. */
 check('reels: only the active pane plays, neighbours are preloaded not played',
-  /IntersectionObserver/.test(view) && /ensureSrc\(i \+ 1, 'metadata'\)/.test(view))
+  /IntersectionObserver/.test(video) && /watchInView/.test(view) &&
+  /ensureSrc\(i \+ 1, 'metadata'\)/.test(view))
+
+check('the in-view observer is defined ONCE and shared, never re-rolled per surface',
+  (video.match(/new IntersectionObserver/g) || []).length === 1 &&
+  !/new IntersectionObserver/.test(view))
+
+/* The bug this pins: a <video> that is not inline-eligible when play() is
+ * called is handed to the iOS native fullscreen player, which takes over the
+ * screen and never comes back to our viewer. Both spellings, every element —
+ * the elements are built by one factory precisely so this cannot drift. */
+check('every video is inline on iOS — both playsinline spellings, set once centrally',
+  /setAttribute\('playsinline'/.test(video) &&
+  /setAttribute\('webkit-playsinline'/.test(video) &&
+  /playsInline = true/.test(video) &&
+  !/document\.createElement\('video'\)/.test(view))
+
+/* The raw coarse cell (`g11.933:79.808`) is an internal grid id AND a rounded
+ * coordinate. It reached users on every located post; it must never render. */
+check('the internal coarseCell id is never printed to a reader',
+  !/text:.*coarseCell/.test(view) && /coarseCell \? 'Nearby'/.test(view))
 
 console.log('\n========================================')
 console.log(`  ${pass}/${pass + fail} passed`)
