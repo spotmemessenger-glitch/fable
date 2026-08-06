@@ -28,6 +28,9 @@ import { API_BASE } from '../api.js'
 import { freshTokens } from '../socket-transport.js'
 import { TransportStatus, TransportEvents } from './ITransportAdapter.js'
 
+/** How long startup waits for the broker before calling it unavailable. */
+const CONNECT_TIMEOUT_MS = 5000
+
 /** Channel naming. Kept in one place so the server's ACL can mirror it exactly. */
 export const roomChannel = (roomId) => `room:${roomId}`
 
@@ -80,8 +83,30 @@ export function createCentrifugoAdapter ({ url } = {}) {
     client.on('disconnected', () => { state = TransportStatus.CLOSED })
     client.on('error', () => { state = TransportStatus.FAILED })
 
+    /* BOUNDED. Centrifuge retries a failed connection forever by design
+     * (minReconnectDelay..maxReconnectDelay above), and a retry is not an
+     * 'error' — so waiting for only those two events can wait for ever.
+     * That is not hypothetical: with the SDK installed and the broker
+     * unreachable, this promise never settled, `createTransport()` never
+     * returned, and both the app's transport selection and `transport.test.js`
+     * hung with no output and nothing to point at.
+     *
+     * A broker that has not answered in this long is unavailable as far as
+     * startup is concerned. Hanging is worse than falling back: the caller is
+     * holding the whole connect path open. The client is disconnected on the
+     * way out so it does not keep retrying in the background after we have
+     * already chosen Socket.IO. */
     await new Promise((resolve, reject) => {
-      const cleanup = () => { client.off('connected', ok); client.off('error', bad) }
+      const timer = setTimeout(() => {
+        cleanup()
+        try { client.disconnect() } catch { /* never connected */ }
+        reject(new Error(`centrifugo: no connection within ${CONNECT_TIMEOUT_MS}ms`))
+      }, CONNECT_TIMEOUT_MS)
+      const cleanup = () => {
+        clearTimeout(timer)
+        client.off('connected', ok)
+        client.off('error', bad)
+      }
       const ok = () => { cleanup(); resolve() }
       const bad = (ctx) => { cleanup(); reject(new Error(`centrifugo: ${ctx?.error?.message || 'connect failed'}`)) }
       client.on('connected', ok)

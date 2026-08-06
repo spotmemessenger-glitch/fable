@@ -31,6 +31,17 @@ const WHEEL_SENSITIVITY = 0.0015
 const PEN_WIDTHS_PX = [3, 6, 11]   // screen px — converted to image px at stroke start
 const MIN_CROP_PX = 24             // image px
 
+/* Original first, because it is the default and the one that needs no thought.
+ * Then the three shapes a feed actually uses: square, the 4:5 portrait that is
+ * the tallest a column can carry without one post owning the screen, and 16:9
+ * for anything shot landscape. `null` means freeform. */
+const CROP_RATIOS = [
+  { label: 'Original', value: null },
+  { label: '1:1', value: 1 },
+  { label: '4:5', value: 4 / 5 },
+  { label: '16:9', value: 16 / 9 }
+]
+
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v))
 
 const teal = () =>
@@ -119,6 +130,12 @@ function mountEditor (imgs, resolve) {
   let cropMode = false
   let pendingRot = 0          // 0/90/180/270, preview-only until Apply
   let cropRect = null         // in rotated-image coords
+  /* Locked crop shape, or null for freeform. Presets exist because a feed is a
+   * COLUMN: a post that is 1:1 or 4:5 sits in the same rhythm as the ones above
+   * and below it, and eyeballing that by dragging corners is something nobody
+   * gets right twice. `null` stays the default — the photo someone took is the
+   * photo they meant, until they say otherwise. */
+  let cropRatio = null
   let stickerOpen = false
   let textTarget = null       // layer being re-edited, or null for a new one
   let tFont = 'sans'
@@ -436,12 +453,19 @@ function mountEditor (imgs, resolve) {
       class: 'pe-rot', type: 'button', 'aria-label': 'Rotate 90°', html: IC.rotate,
       onclick () {
         pendingRot = (pendingRot + 90) % 360
-        const { w, h } = effSize()
-        cropRect = { x: 0, y: 0, w, h }
         repaint()
-        syncCropUI()
+        // Re-fit rather than reset: a chosen shape survives a rotation, which
+        // is the whole reason someone rotates while cropping.
+        setCropRatio(cropRatio)
       }
     }),
+    /* Their own row. Four chips plus rotate, Cancel and Apply do not fit on
+     * one 390px line — cramming them pushed Apply off the screen entirely,
+     * which a drive at that width caught. */
+    el('div', { class: 'pe-ratios' }, CROP_RATIOS.map((r) => el('button', {
+      class: 'pe-ratio', type: 'button', text: r.label, 'data-ratio': r.label,
+      onclick () { setCropRatio(r.value) }
+    }))),
     el('span', { class: 'pe-gap' }),
     el('button', { class: 'pe-cropcancel', type: 'button', text: 'Cancel', onclick: () => exitCrop() }),
     el('button', { class: 'pe-cropapply', type: 'button', text: 'Apply', onclick: applyCrop })
@@ -536,6 +560,33 @@ function mountEditor (imgs, resolve) {
     cropbar.style.display = 'flex'
     setRing('crop')
     repaint()
+    // Opens on Original every time — the shape is a choice, never a leftover
+    // from the last photo someone cropped.
+    setCropRatio(null)
+  }
+
+  /**
+   * The biggest rect of `ratio` that fits, centred. Centred rather than
+   * top-left because the subject of a photo is almost never in the corner, and
+   * a preset that lops off someone's head is a preset nobody presses twice.
+   * `null` restores the full frame.
+   */
+  function fitRatio (ratio) {
+    const { w: EW, h: EH } = effSize()
+    if (!ratio) return { x: 0, y: 0, w: EW, h: EH }
+    let w = EW
+    let h = w / ratio
+    if (h > EH) { h = EH; w = h * ratio }
+    return { x: (EW - w) / 2, y: (EH - h) / 2, w, h }
+  }
+
+  function setCropRatio (ratio) {
+    cropRatio = ratio
+    cropRect = fitRatio(ratio)
+    for (const b of cropbar.querySelectorAll('.pe-ratio')) {
+      const mine = CROP_RATIOS.find((r) => r.label === b.dataset.ratio)
+      b.classList.toggle('on', mine ? mine.value === ratio : false)
+    }
     syncCropUI()
   }
 
@@ -585,6 +636,25 @@ function mountEditor (imgs, resolve) {
       if (cropDrag.corner.includes('r')) x2 = clamp(r0.x + r0.w + dx, x1 + min, EW)
       if (cropDrag.corner.includes('t')) y1 = clamp(r0.y + dy, 0, y2 - min)
       if (cropDrag.corner.includes('b')) y2 = clamp(r0.y + r0.h + dy, y1 + min, EH)
+      if (cropRatio) {
+        /* A locked shape has to STAY that shape while a corner is dragged.
+         * Width leads and height follows, anchored to the corner opposite the
+         * one under the finger — so the box grows away from where you are
+         * pulling rather than sliding out from under it. If the derived height
+         * would leave the image, height leads instead and width follows. */
+        let w = x2 - x1
+        let h = w / cropRatio
+        const top = cropDrag.corner.includes('t')
+        const left = cropDrag.corner.includes('l')
+        if (h > EH) { h = EH; w = h * cropRatio }
+        if (left) x1 = x2 - w; else x2 = x1 + w
+        if (top) y1 = y2 - h; else y2 = y1 + h
+        // Pushed past an edge: pull the whole box back in rather than distort.
+        if (x1 < 0) { x2 -= x1; x1 = 0 }
+        if (y1 < 0) { y2 -= y1; y1 = 0 }
+        if (x2 > EW) { x1 -= x2 - EW; x2 = EW }
+        if (y2 > EH) { y1 -= y2 - EH; y2 = EH }
+      }
       cropRect = { x: x1, y: y1, w: x2 - x1, h: y2 - y1 }
     }
     syncCropUI()

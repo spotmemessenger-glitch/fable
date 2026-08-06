@@ -55,22 +55,63 @@
 
 .mo-list { display: flex; flex-direction: column; gap: 18px; }
 .mo-card { background: var(--surface, #fff); }
-.mo-cardhead { display: flex; align-items: center; gap: 10px; padding: 8px 16px; }
+.mo-cardhead { display: flex; align-items: center; gap: 10px; padding: 8px 10px 8px 16px; }
 .mo-whowrap { display: flex; flex-direction: column; min-width: 0; }
 .mo-who { font-size: 14px; }
 .mo-meta { font-size: 12px; color: var(--muted, #667); }
-.mo-media { position: relative; background: #000; aspect-ratio: 4 / 5; overflow: hidden; }
+/* The ⋯ menu lives in the HEADER now, hard right, away from the reaction. */
+.mo-cardmore { margin-left: auto; flex: 0 0 auto; color: var(--muted, #667); }
+
+/* The media box holds its shape BEFORE anything loads. `aspect-ratio` here is
+   the default reservation; the card overwrites it inline with the asset's real
+   ratio as soon as the server reports one, so the feed never reflows under a
+   reader. The placeholder is a neutral well rather than #000 — an unloaded
+   card should read as "coming", not as a dead black rectangle. */
+.mo-media {
+  position: relative; overflow: hidden;
+  background: var(--well, #eceef1);
+  aspect-ratio: 4 / 5;
+}
 .mo-img, .mo-video { width: 100%; height: 100%; object-fit: cover; display: block; }
+
 .mo-play {
   position: absolute; inset: 0; display: grid; place-items: center;
-  font-size: 40px; color: #fff; text-shadow: 0 2px 12px rgba(0,0,0,.5);
-  pointer-events: none;
+  color: #fff; pointer-events: none;
+  filter: drop-shadow(0 2px 10px rgba(0, 0, 0, .45));
+  transition: opacity .18s ease;
 }
+.mo-play svg { width: 54px; height: 54px; }
+/* Running video: the play glyph is a state marker, so it gets out of the way. */
+.mo-media.on .mo-play { opacity: 0; }
+
+/* Sound sits ON the media, because that is what it governs. */
+.mo-sound {
+  position: absolute; right: 10px; bottom: 10px; z-index: 2;
+  border: 0; border-radius: 999px; background: rgba(0, 0, 0, .55);
+  color: #fff; width: 36px; height: 36px; padding: 0; cursor: pointer;
+  display: grid; place-items: center;
+  -webkit-tap-highlight-color: transparent;
+}
+.mo-sound svg { width: 19px; height: 19px; display: block; }
+
 .mo-text { padding: 8px 16px 0; margin: 0; font-size: 15px; line-height: 1.4; }
-.mo-acts { display: flex; align-items: center; gap: 4px; padding: 6px 12px 2px; }
-.mo-act { border: 0; background: none; font-size: 20px; padding: 6px 8px; line-height: 1; }
-.mo-act.on { transform: scale(1.08); }
-.mo-spacer { flex: 1; }
+.mo-acts { display: flex; align-items: center; gap: 2px; padding: 4px 10px 2px; }
+
+/* Icon buttons: a 24px glyph centred in a 44px touch target, in the bottom
+   bar's stroke grammar. The emoji row this replaces was font-size 20px text —
+   three different metrics, three different colour palettes, and no way at all
+   to express an active state. */
+.mo-icon {
+  border: 0; background: none; padding: 0; cursor: pointer;
+  display: inline-grid; place-items: center;
+  width: 44px; height: 44px; color: var(--ink);
+  -webkit-tap-highlight-color: transparent;
+  transition: color .16s ease, transform .12s ease;
+}
+.mo-icon svg { width: 24px; height: 24px; display: block; }
+.mo-icon:active { transform: scale(.92); }
+/* Active reaction: filled, and the one place this screen spends a colour. */
+.mo-act.on { color: #e8365d; }
 .mo-more { margin: 8px auto; display: block; }
 .mo-note { padding: 24px 16px; text-align: center; color: var(--muted, #667); }
 .mo-note b { display: block; color: var(--ink); margin-bottom: 6px; }
@@ -87,11 +128,102 @@
   display: flex; flex-direction: column; gap: 12px;
 }
 .mo-sheethead { text-align: center; font-size: 16px; }
-.mo-prev { min-height: 40px; }
-.mo-prevmedia { width: 100%; max-height: 46vh; object-fit: contain; border-radius: 12px; background: #000; }
+/* FLEX, not block. As a block container this did not size to the <video>
+   inside it — the media laid out 388px tall while the parent reported ~285,
+   so the "Choose photo or video" button and the trim tools rendered ON TOP of
+   the preview. A flex column hugs its child's real height, whatever the
+   intrinsic ratio turns out to be once metadata lands. */
+/* `flex: 0 0 auto` is the half that actually fixes it. `.mo-sheet` is a flex
+   COLUMN that scrolls, so every child defaults to flex-shrink:1 — the preview
+   was being squashed to 284px around a 354px video, and the overflowing media
+   painted over the controls below it. Nothing here may shrink; the sheet
+   scrolls instead. */
+.mo-prev { display: flex; flex-direction: column; flex: 0 0 auto; min-height: 40px; }
+.mo-prevmedia {
+  width: 100%; max-height: 42vh; max-height: 42dvh;
+  object-fit: contain; border-radius: 12px; background: #000;
+  display: block; flex: 0 0 auto;
+}
 .mo-cap, .mo-cminput {
   width: 100%; border: 1px solid var(--line, #dcdfe4); border-radius: 12px;
   padding: 12px 14px; font-size: 15px; background: var(--surface, #fff); color: var(--ink);
+}
+/* The caption grows with what is written, up to four lines (the cap is set in
+   JS, where the line height is actually known), then scrolls. */
+.mo-cap {
+  font-family: var(--font); line-height: 1.4; resize: none; overflow-y: auto;
+  min-height: 46px; display: block;
+}
+
+/* ------------------------------------------------------ composer tools */
+
+.mo-tools { display: flex; flex-direction: column; gap: 8px; }
+.mo-toollabel { margin: 0; font-size: 12px; color: var(--muted, #667); }
+
+/* The trim filmstrip. Frames are painted as background layers so a browser
+   that cannot decode the clip simply gets a plain bar that still trims. */
+.mo-strip {
+  position: relative; height: 56px; border-radius: 10px; overflow: hidden;
+  background: var(--well, #eceef1); background-repeat: no-repeat;
+  touch-action: none; cursor: pointer; user-select: none;
+}
+.mo-strip.shot { background-color: #000; }
+/* Everything outside the selection is dimmed, so the cut reads at a glance. */
+.mo-striprange {
+  position: absolute; top: 0; bottom: 0;
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, .5);
+  border-top: 2px solid var(--accent, #0a7d76);
+  border-bottom: 2px solid var(--accent, #0a7d76);
+}
+.mo-handle {
+  position: absolute; top: 0; bottom: 0; width: 12px; margin-left: -6px;
+  background: var(--accent, #0a7d76); border-radius: 4px;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, .25);
+}
+.mo-handle::after {
+  content: ''; position: absolute; left: 4.5px; top: 18px;
+  width: 3px; height: 20px; border-radius: 2px; background: rgba(255, 255, 255, .9);
+}
+.mo-covermark {
+  position: absolute; top: -3px; bottom: -3px; width: 3px; margin-left: -1.5px;
+  background: #fff; box-shadow: 0 0 0 1px rgba(0, 0, 0, .45);
+}
+
+/* --------------------------------------------------------- post button */
+
+/* The one commitment on this sheet, and it looks like it: full width, a real
+   thumb target, accent-filled. Everything else here is a pill. */
+.mo-post {
+  width: 100%; min-height: 54px; border: 0; border-radius: 16px;
+  background: var(--accent, #0a7d76); color: #fff;
+  font-family: var(--font); font-size: 16.5px; font-weight: 700;
+  letter-spacing: -.01em; cursor: pointer;
+  display: grid; place-items: center;
+  box-shadow: 0 6px 18px rgba(10, 125, 118, .28);
+  transition: transform .12s ease, box-shadow .16s ease, opacity .16s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+.mo-post:active { transform: scale(.98); box-shadow: 0 3px 10px rgba(10, 125, 118, .24); }
+.mo-post:disabled { cursor: default; opacity: .78; }
+.mo-post.busy { box-shadow: none; }
+
+/* Spinner sits where the word was, so the button never changes size. */
+.mo-spin {
+  width: 20px; height: 20px; border-radius: 50%; display: block;
+  border: 2.5px solid rgba(255, 255, 255, .35);
+  border-top-color: #fff;
+  animation: mo-spin .7s linear infinite;
+}
+@keyframes mo-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .mo-spin { animation-duration: 2.4s; }
+}
+
+/* Secondary line under the button — "Ready — location data removed" and the
+   upload/error copy. Deliberately quiet: it reports, it does not ask. */
+.mo-substatus {
+  margin: 0; text-align: center; font-size: 12px; color: var(--muted, #667);
+  min-height: 16px;
 }
 .mo-cmlist { display: flex; flex-direction: column; gap: 10px; min-height: 80px; }
 .mo-cm { display: flex; gap: 8px; font-size: 14px; }
@@ -111,8 +243,9 @@
 .mo-reeltap {
   position: absolute; inset: 0; margin: auto; width: 72px; height: 72px;
   border: 0; border-radius: 999px; background: rgba(0,0,0,.5); color: #fff;
-  font-size: 30px; z-index: 3;
+  z-index: 3; display: grid; place-items: center; padding: 0;
 }
+.mo-reeltap svg { width: 34px; height: 34px; display: block; }
 .mo-reeltrack::-webkit-scrollbar { display: none; }
 .mo-reel {
   height: 100%; scroll-snap-align: start; position: relative;
@@ -129,3 +262,11 @@
   border: 0; background: rgba(0,0,0,.45); color: #fff;
   width: 36px; height: 36px; border-radius: 999px; font-size: 16px;
 }
+/* Sits beside Close, carrying the same shared sound state as the feed cards. */
+.mo-reelsound {
+  position: absolute; top: calc(14px + env(safe-area-inset-top, 0px)); right: 58px; z-index: 4;
+  border: 0; background: rgba(0,0,0,.45); color: #fff;
+  width: 36px; height: 36px; border-radius: 999px; padding: 0;
+  display: grid; place-items: center;
+}
+.mo-reelsound svg { width: 19px; height: 19px; display: block; }

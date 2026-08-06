@@ -1,14 +1,13 @@
 /**
- * Spot Me — which transport this device uses. ADR-002 §1.
+ * Spot Me — which transport this device uses. ADR-002 §1, superseded by ADR-033.
  *
- * The flag is `localStorage['spotme.transport']`, which ALREADY EXISTS: it is
- * how a device reverts to the old Trystero P2P stack. Extending it beats
- * inventing a second mechanism — two switches for one decision is how a device
- * ends up in a state neither switch describes.
+ * The flag is `localStorage['spotme.transport']`.
  *
  *   socketio   (default) the NestJS Socket.IO gateway
  *   centrifugo           opt-in, requires VITE_CENTRIFUGO_URL and the broker
- *   p2p                  legacy Trystero, handled in socket-transport.js
+ *
+ * ADR-033 (2026-08-06): the `p2p` (Trystero) option has been removed. Spot Me
+ * is server-side transport only — no P2P fallback for calls or messaging.
  *
  * FALLBACK IS DELIBERATE AND VISIBLE. Centrifugo is not deployed yet and the
  * `centrifuge` package may not be installed. Asking for it and silently getting
@@ -32,15 +31,10 @@ export { TRANSPORT_KEYS, selectedTransport, setTransport } from './select.js'
  *
  * Returns `{ adapter, requested, actual, reason }` rather than a bare adapter
  * so a fallback is visible to the caller instead of being inferred from
- * behaviour. `p2p` returns null — that path is not adapter-shaped and is
- * handled inside socket-transport.js.
+ * behaviour.
  */
 export async function createTransport (opts = {}) {
   const requested = opts.transport || selectedTransport()
-
-  if (requested === 'p2p') {
-    return { adapter: null, requested, actual: 'p2p', reason: 'p2p is handled inside socket-transport.js' }
-  }
 
   if (requested === 'centrifugo') {
     const adapter = createCentrifugoAdapter(opts)

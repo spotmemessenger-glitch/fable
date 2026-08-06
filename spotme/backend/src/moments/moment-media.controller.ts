@@ -95,12 +95,89 @@ export class MomentMediaController {
    * by at least one moment, and by the gate above. Anything else 404s
    * uniformly, so an unknown id and a forbidden id are indistinguishable.
    */
+  /**
+   * Record the composer's trim / cover choices and re-run the transcode.
+   *
+   * WHY THE SERVER DOES THE CUT. Trimming in the browser means re-encoding on
+   * the phone: slow on mid-range Android, lossy, and dependent on which codecs
+   * that browser happens to expose. This process already runs ffmpeg for every
+   * clip, so the composer sends INTENT and the worker does the work — the same
+   * reason chat refuses to ship a client-side trimmer rather than fake one.
+   *
+   * IDEMPOTENT AND RE-EDITABLE: it overwrites whatever was there and enqueues
+   * again, so changing your mind is just another call. The ladder is rebuilt
+   * from the ORIGINAL every time, never from the previously trimmed output, so
+   * repeated edits cannot stack or compound quality loss.
+   */
+  @Post(':mediaId/edit')
+  async edit(
+    @CurrentUser() _u: Principal,
+    @Param('mediaId') mediaId: string,
+    @Body() body: { trimStartMs?: unknown; trimEndMs?: unknown; coverAtMs?: unknown },
+  ) {
+    const asset = await this.prisma.momentMediaAsset.findUnique({ where: { id: mediaId } });
+    if (!asset || asset.refCount < 1) throw new NotFoundException();
+    if (asset.kind !== 'video') {
+      throw new BadRequestException({ error: 'not_video', reason: 'only video assets carry trim or cover points' });
+    }
+
+    /* Validated at the boundary, because these become ffmpeg arguments. A
+     * non-finite or negative value is refused rather than coerced: silently
+     * turning nonsense into 0 would produce a clip that is not what anyone
+     * asked for, and the person would have no way to tell. */
+    const ms = (v: unknown, field: string): number | null => {
+      if (v === undefined || v === null) return null;
+      const n = Number(v);
+      if (!Number.isFinite(n) || n < 0) {
+        throw new BadRequestException({ error: 'bad_edit', reason: `${field} must be a non-negative number of milliseconds` });
+      }
+      return Math.round(n);
+    };
+    const trimStartMs = ms(body?.trimStartMs, 'trimStartMs');
+    const trimEndMs = ms(body?.trimEndMs, 'trimEndMs');
+    const coverAtMs = ms(body?.coverAtMs, 'coverAtMs');
+    if (trimStartMs !== null && trimEndMs !== null && trimEndMs <= trimStartMs) {
+      throw new BadRequestException({ error: 'bad_edit', reason: 'trimEndMs must be greater than trimStartMs' });
+    }
+
+    await this.prisma.momentMediaAsset.updateMany({
+      where: { id: mediaId },
+      data: { trimStartMs, trimEndMs, coverAtMs },
+    });
+    // Without Redis the queue is inert and says so, rather than reporting a
+    // job that will never run.
+    const { enqueued } = await this.media.enqueueTransform({
+      mediaId, targetMime: 'video/mp4', maxWidth: 1920, maxHeight: 1920, argsTemplate: 'transcode',
+    });
+    return { mediaId, trimStartMs, trimEndMs, coverAtMs, requeued: enqueued };
+  }
+
   @Get(':mediaId/url')
   async url(@CurrentUser() _u: Principal, @Param('mediaId') mediaId: string) {
     const asset = await this.prisma.momentMediaAsset.findUnique({ where: { id: mediaId } });
     if (!asset || asset.refCount < 1) throw new NotFoundException();
     const url = await this.media.downloadUrl(asset.storageKey);
     if (!url) throw new NotFoundException();
-    return { url, kind: asset.kind, mimeType: asset.mimeType };
+    /* The transcode worker has been writing a poster frame since M3 and this
+     * route never handed it back, so every video card in the feed had nothing
+     * to paint before the first decoded frame and rendered as a black box.
+     * The bytes existed the whole time; only this line was missing.
+     *
+     * Null-safe on purpose: `posterKey` is null for images, for assets older
+     * than the worker, and for the clips whose poster step failed (the worker
+     * treats that as a degrade, not a job failure). The client keeps its own
+     * fallback for those, so a null here is a softer poster, never a break. */
+    const posterUrl = asset.posterKey ? await this.media.downloadUrl(asset.posterKey) : null;
+    return {
+      url,
+      posterUrl,
+      kind: asset.kind,
+      mimeType: asset.mimeType,
+      // Intrinsic size lets the card reserve the right box BEFORE bytes land,
+      // so the feed does not reflow under the reader when a video decodes.
+      width: asset.width ?? null,
+      height: asset.height ?? null,
+      durationSeconds: asset.durationSeconds ?? null,
+    };
   }
 }

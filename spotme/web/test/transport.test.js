@@ -149,14 +149,25 @@ check('an unknown stored value falls back to the default, it does not throw', ()
   return selectedTransport() === 'socketio'
 })
 
-check('setTransport accepts the three known keys and rejects others', () => {
+check('setTransport accepts the known keys and rejects others', () => {
   for (const k of TRANSPORT_KEYS) if (setTransport(k) !== k) return false
   try { setTransport('smoke-signals'); return false } catch { return true }
 })
 
-check('p2p is still reachable — the legacy escape hatch is not broken', () => {
-  setTransport('p2p')
-  return selectedTransport() === 'p2p'
+/* ADR-033: the p2p escape hatch is REMOVED, and stays removed. These assert
+ * absence — a PR that reintroduces the option must fail here. */
+
+check('p2p is not a transport key any more (ADR-033)', () => {
+  return !TRANSPORT_KEYS.includes('p2p')
+})
+
+check('setTransport refuses p2p (ADR-033)', () => {
+  try { setTransport('p2p'); return false } catch { return true }
+})
+
+check('a stored legacy p2p flag falls back to the default (ADR-033)', () => {
+  localStorage.setItem('spotme.transport', 'p2p')
+  return selectedTransport() === 'socketio'
 })
 
 /* ===================== fallback must be VISIBLE ========================= */
@@ -171,16 +182,69 @@ await checkAsync('asking for centrifugo without the SDK falls back AND says so',
          typeof reason === 'string' && reason.length > 0 && adapter?.name === 'socketio'
 })
 
-await checkAsync('p2p returns no adapter, and says why', async () => {
-  setTransport('p2p')
-  const { adapter, actual, reason } = await createTransport()
-  return adapter === null && actual === 'p2p' && typeof reason === 'string'
-})
-
 await checkAsync('socketio is returned with no fallback reason', async () => {
   setTransport('socketio')
   const { adapter, requested, actual, reason } = await createTransport()
   return requested === 'socketio' && actual === 'socketio' && reason === null && adapter?.name === 'socketio'
+})
+
+/* ADR-033: no source file may import the removed P2P stack. An import is the
+ * one thing a reintroduction cannot avoid, so it is what gets asserted. */
+await checkAsync('no src file imports trystero (ADR-033)', async () => {
+  const { readdirSync, readFileSync, statSync } = await import('node:fs')
+  const { join } = await import('node:path')
+  const { fileURLToPath } = await import('node:url')
+  const src = fileURLToPath(new URL('../src', import.meta.url))
+  const offenders = []
+  const walk = (dir) => {
+    for (const name of readdirSync(dir)) {
+      const p = join(dir, name)
+      if (statSync(p).isDirectory()) { walk(p); continue }
+      if (!/\.(js|mjs|ts)$/.test(name)) continue
+      const text = readFileSync(p, 'utf8')
+      if (/from\s+['"][^'"]*trystero|import\(\s*['"][^'"]*trystero/.test(text)) offenders.push(p)
+    }
+  }
+  walk(src)
+  if (offenders.length) console.error('  trystero imports found in:', offenders)
+  return offenders.length === 0
+})
+
+/* ...AND NO TEST MAY NAME IT EITHER.
+ *
+ * The src-only fence above passed while the suite was broken. Five test files
+ * still carried `mock.module('@trystero-p2p/torrent', …)` — defensive stubs
+ * that threw if the P2P path was reached. Harmless while the package was
+ * installed; fatal once ADR-033 removed it, because mock.module() has to
+ * RESOLVE a specifier before it can stub it. `npm ci && npm test` therefore
+ * died on ERR_MODULE_NOT_FOUND at the third file, and a fence that only looked
+ * at src/ could not see it.
+ *
+ * A dependency is not removed until nothing references it, tests included. */
+await checkAsync('no test file references trystero either (ADR-033)', async () => {
+  const { readdirSync, readFileSync, statSync } = await import('node:fs')
+  const { join } = await import('node:path')
+  const { fileURLToPath } = await import('node:url')
+  const dir = fileURLToPath(new URL('.', import.meta.url))
+  const offenders = []
+  const walk = (d) => {
+    for (const name of readdirSync(d)) {
+      const p = join(d, name)
+      if (statSync(p).isDirectory()) { walk(p); continue }
+      if (!/\.(js|mjs|ts)$/.test(name)) continue
+      const text = readFileSync(p, 'utf8')
+      /* Comments are stripped first: this file and the cleaned suites EXPLAIN
+       * the removed package by name, and prose must not read as a reference. */
+      const code = text.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '')
+      /* Only SPECIFIER positions count — `mock.module('…')`, `from '…'`,
+       * `import('…')`. A bare search for the word matched the fence above,
+       * whose own regex literal spells it out, so this file failed itself. */
+      if (/(?:mock\.module\(|from|import\()\s*['"][^'"]*trystero/.test(code)) offenders.push(p)
+    }
+  }
+  walk(dir)
+  if (offenders.length) console.error('  trystero references found in:', offenders)
+  return offenders.length === 0
 })
 
 /* ============================== channels ================================ */

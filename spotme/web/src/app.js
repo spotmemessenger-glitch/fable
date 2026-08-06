@@ -3,7 +3,7 @@
  *
  * Two screens: set up who you are, then the conversation. No framework; the
  * app is small enough that direct DOM work is clearer than a render loop, and
- * it keeps the bundle to Trystero plus a few kilobytes.
+ * it keeps the bundle small.
  */
 import { createNet, roomLink, readLink, randomId, selfId } from './net.js'
 import { createStore, loadIdentity, saveIdentity } from './store.js'
