@@ -175,6 +175,16 @@ export function render (root, ctx, params) {
     return `${Math.round(mins / 1440)}d`
   }
 
+  /* A HUMAN location line — never the raw coarse-cell id. `coarseCell` is an
+   * internal grid key ("g11.933:79.808"); rendering it verbatim leaked a
+   * near-precise location AND read as a bug. A post only carries a cell when it
+   * was shared to a location-bearing audience (nearby/public), and the feed
+   * already knows these are near the viewer, so "Nearby" is the honest label.
+   * A distance ("~200 m away") or a licensed place name is a later refinement;
+   * it needs the viewer's own fix and/or a geocoder, and must never regress to
+   * showing coordinates. */
+  const placeLabel = (m) => (m.coarseCell ? 'Nearby' : null)
+
   /* ---------------------------------------------------------------- load */
 
   /**
@@ -437,7 +447,7 @@ export function render (root, ctx, params) {
         avatar({ name: who }, 34),
         el('div', { class: 'mo-whowrap' }, [
           el('b', { class: 'mo-who', text: who }),
-          el('span', { class: 'mo-meta', text: [m.coarseCell, when(m.createdAtUTC)].filter(Boolean).join(' · ') })
+          el('span', { class: 'mo-meta', text: [placeLabel(m), when(m.createdAtUTC)].filter(Boolean).join(' · ') })
         ])
       ]),
       mediaSlot,
