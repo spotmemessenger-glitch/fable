@@ -14,7 +14,7 @@
  * through `rooms.js` calling socket-transport directly. An adapter that could
  * be handed a key is an adapter that will eventually derive one.
  */
-import { joinRoom, freshTokens, serverMode } from '../socket-transport.js'
+import { joinRoom, freshTokens } from '../socket-transport.js'
 import { TransportStatus, TransportEvents } from './ITransportAdapter.js'
 
 export function createSocketIOAdapter ({ appId = 'io.ysnapai.spotme', rtcConfig } = {}) {
@@ -96,8 +96,6 @@ export function createSocketIOAdapter ({ appId = 'io.ysnapai.spotme', rtcConfig 
 
   return {
     name: 'socketio',
-    /** True when this build is actually server-backed rather than P2P. */
-    serverMode,
     connect,
     disconnect,
     subscribe,

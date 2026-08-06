@@ -50,9 +50,10 @@ const DEFAULT_SETTINGS = {
  * user had just erased. It also left the replay cursors, which name every room
  * the user took part in and how far they read. Both are now removed.
  *
- * `spotme.transport` is deliberately kept: it is a debug opt-out
- * (`'p2p'` restores Trystero), not user data, and silently reverting it turns
- * a wipe into a transport change nobody asked for.
+ * `spotme.transport` is deliberately kept: it selects between server
+ * transports (socketio/centrifugo — ADR-033 removed the p2p option), not user
+ * data, and silently reverting it turns a wipe into a transport change nobody
+ * asked for.
  *
  * Still true after this fix, and worth saying plainly: a wipe is LOCAL. It
  * deletes nothing from the server, and it cannot revoke the refresh token

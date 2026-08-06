@@ -17,12 +17,10 @@
  "type": "module",
  "dependencies": {
   "@capacitor/push-notifications": "^8.1.2",
-  "@trystero-p2p/torrent": "^0.25.3",
   "jsqr": "^1.4.0",
   "qrcode-generator": "^2.0.4",
   "socket.io-client": "^4.8.3",
-  "spotme-core": "file:vendor/spotme-core",
-  "trystero": "^0.25.3"
+  "spotme-core": "file:vendor/spotme-core"
  },
  "devDependencies": {
   "@capacitor/android": "^8.4.2",

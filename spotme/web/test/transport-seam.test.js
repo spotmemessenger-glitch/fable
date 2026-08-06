@@ -100,11 +100,13 @@ check('an explicit socketio selection is honoured as itself', () => {
   return report.requested === 'socketio' && report.actual === 'socketio' && report.reason === null
 })
 
-check('p2p passes through — socket-transport reads the same flag and returns Trystero', () => {
-  setTransport('p2p')
-  const room = joinRoom({ password: 'x' }, 'room-p2p')
+check('p2p cannot be selected — the escape hatch is removed (ADR-033)', () => {
+  try { setTransport('p2p'); return false } catch { /* expected */ }
+  // A legacy device with the flag already stored still gets the server path.
+  localStorage.setItem('spotme.transport', 'p2p')
+  const room = joinRoom({ password: 'x' }, 'room-legacy-p2p-flag')
   const report = activeTransport()
-  return !!room && report.requested === 'p2p' && report.actual === 'p2p' && report.reason === null
+  return !!room && report.requested === 'socketio' && report.actual === 'socketio'
 })
 
 /* ================== asking for centrifugo is not silent ================== */

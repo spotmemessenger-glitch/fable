@@ -1,7 +1,7 @@
 /**
  * Spot Me — discovery lobby.
  *
- * One app-wide Trystero room every open client joins, carrying presence
+ * One app-wide room every open client joins, carrying presence
  * announcements only — who is nearby, with COARSE position. Chat requests no
  * longer travel here: see reach.js, which addresses a request directly to one
  * person's own inbox room instead of broadcasting it through this shared one.
@@ -115,7 +115,7 @@ function createLobby () {
   function start () {
     if (room || !db.ready()) return
     // Relay credentials first: joining with STUN-only would strand anyone on
-    // mobile data, and Trystero reads the config once at join time.
+    // mobile data, and the room transport reads the config once at join time.
     if (!relayReady) {
       readyRTC().then(() => { relayReady = true; start() })
       return
