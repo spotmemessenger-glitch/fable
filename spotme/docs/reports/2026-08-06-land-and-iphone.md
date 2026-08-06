@@ -428,3 +428,426 @@ spotme/web/src/lib/moments-api.js                     momentById + MomentNotFoun
 spotme/web/src/views/moments.js                       single-post view
 spotme/web/src/views/moments.css                      .mo-backbtn
 ```
+
+---
+---
+
+# Appendix — continuation session (`claude/wave-1c-land-iphone-homzb6`)
+
+Everything above this line is the `…-ecc8ff` session's report. This appendix is
+a **different session**, run against the same mission. I have appended rather
+than overwritten: two sessions were told to file at this path, and their record
+should not be destroyed to make room for mine.
+
+**Headline.** Three sessions worked this mission in parallel today. The other
+two landed items 3 and 4 and deployed both hosts. **My versions of items 3 and
+4 are dropped — theirs are better.** What this branch is actually for is three
+things master does not have, one of which is the fix for master being CI-red
+right now. Item 2 is **STOPPED at your own instruction**: the @username is
+still blank.
+
+---
+
+## 1. The handle is still blank — item 2 stops here, per your rule
+
+Your ordering rule was:
+
+> if my account does not exist in that database yet, STOP and tell me — I'll
+> sign up on the preview first rather than have you guess a handle.
+
+The line in this brief reads, again:
+
+```
+Q1 — MY HANDLE: @__________   (owner: type it here)
+```
+
+I cannot check whether the account exists, because there is no handle to look
+up. So this stops one step earlier than your rule anticipated, for the same
+reason it exists: **guessing would grant a gated production surface to whoever
+owns the handle I picked.** This is the third brief in which the field was left
+blank, so I want to be direct — the field appears to be getting lost between
+your editor and the message. Pasting the handle on its own line in your next
+message is enough.
+
+Everything else for item 2 is built, proven, and waits on that one string.
+
+---
+
+## 2. Master moved under me, and two sessions solved the same items
+
+At the start of my previous turn, `origin/master` was `6c675e9`. It is now
+`4bc8682`, and none of my commits are in it. What landed instead:
+
+| SHA | What | Whose |
+|---|---|---|
+| `5319d9b` | iPhone media — HEIC + `.mov` | `…-ecc8ff` |
+| `48b6aeb` | share deeplink | `…-ecc8ff` |
+| `d578fda` | merge of the above into master | `…-ecc8ff` |
+| `ff05145` | their session report | `…-ecc8ff` |
+| `4bc8682` | deploy report — both hosts deployed | a third session |
+
+Two sessions built items 3 and 4 independently and **converged on the same
+architecture**: normalise at the *ingest* boundary, not in the `{moment-media}`
+worker, because the worker only writes derived renditions and the stored
+original would keep its coordinates. That agreement is worth more than either
+implementation.
+
+**Where they differ, theirs is better, so theirs is what survived my merge:**
+
+- their `normalize.ts` validates **magic bytes against the declared MIME** and
+  raises typed `TranscodeUnavailable` / `NormalizeFailed` errors;
+- their deeplink adds a real `GET /moments/:id` + `momentById` and a proper
+  **single-post view** with a back affordance and a `notfound` state. I had
+  deliberately *not* built the by-id read, and flagged in my previous report
+  that this left shared links working only for a recipient whose feed already
+  contained the post. **They closed the gap I left open.**
+
+So I dropped my `normalize.ts`, `media.service.ts` changes,
+`moment-normalize.spec.ts`, my HEIC/`.mov` fixtures, `hash-route.js`,
+`share-deeplink.test.js`, my `.mo-focus` CSS, my `.gitignore` exception and my
+duplicate CI libheif step. Nothing of mine that duplicated theirs is kept.
+
+### What this branch adds over master — exactly three files
+
+```
+spotme/web/test/phone-harness.mjs                    ← MASTER IS RED WITHOUT THIS
+spotme/backend/src/scripts/wave1d/owner-grant-moments.ts
+spotme/web/test/moments-journey-harness.mjs
+```
+
+---
+
+## 3. Master is CI-red right now, and this is the fix
+
+This is the most actionable thing in this appendix.
+
+```
+aa3f00f  success   ← the last green commit on master
+6c675e9  failure
+d578fda  failure   ← the iPhone-media + deeplink merge
+4bc8682  failure   ← "both hosts deployed"
+```
+
+`npm run lint` is a CI gate on the web job. `f39cb95` landed the phone harness
+carrying two bindings it never uses — a `writeFile` import and a `handleB` for
+a second account whose chat leg was never driven. Reproduced against a clean
+checkout of `origin/master`:
+
+```
+/spotme/web/test/phone-harness.mjs
+   69:24  error  'writeFile' is assigned a value but never used
+  100:9   error  'handleB' is assigned a value but never used
+✖ 2 problems (2 errors, 0 warnings)
+```
+
+Master has been red for four commits, across two sessions, including the one
+that deployed to production. The fix is a two-line deletion and it is on this
+branch. **Merging this branch turns master green.**
+
+---
+
+## 4. The metadata claim, asserted — not assumed
+
+You asked for the assertion, not the intention. These are assertions on the
+bytes the server **wrote to the object store**, read back off disk after a real
+upload through the composer UI in a real browser — and run against **master's**
+implementation, so this is an independent verification of the other session's
+work rather than of my own.
+
+```
+JPEG   source had Exif+GPS   → stored 16188B, no Exif marker,
+                               metadata segments [], kept ["0xe0","0xdb","0xc4","0xc0","SOS"]
+HEIC   source had Exif+GPS   → stored is JPEG 20224B, no Exif marker,
+                               metadata segments [], no HEIC ftyp
+.mov   source had a location → stored original 53236B, ffprobe reports only
+       tag                     major_brand / minor_version / compatible_brands / encoder
+```
+
+Every leg asserts the **source is still tagged** before claiming the pipeline
+removed it, so a fixture that quietly stopped being tagged fails instead of
+passing vacuously.
+
+### A correction to my own previous report
+
+My earlier harness reported the stored JPEG as leaking GPS. **It was not.** The
+check scanned raw bytes for `0x8825`, the GPS IFD tag — two bytes, which turn up
+by chance inside entropy-coded pixel data. Measured: a *correctly stripped*
+16 KB JPEG contained `0x8825` once, at offset **15175**, well past SOS at 329.
+
+This is the same class of error as the mp4 `loci` finding, in the opposite
+direction: there a byte scan gave a false **pass**, here a false **fail**. Both
+are now structural — JPEG asserts that no APP1..APP15 or COM segment survives
+(what `stripJpeg` actually guarantees), and video asserts through ffprobe's
+parser rather than over bytes.
+
+---
+
+## 5. The full journey, driven — 18 passed, 0 failed, 2 not driven
+
+Real Chromium, 390×844, `isMobile`, touch, iPhone UA, against master's code, a
+real API + PostGIS, and a real on-disk object store.
+
+| Journey step | Result | Evidence |
+|---|---|---|
+| signup with the 18+ gate (under-18 refused) | **PASS** | stays on onboarding after an under-18 month |
+| signup with the 18+ gate (adult completes) | **PASS** | signed up as a fresh handle |
+| identity survives a full close and reopen | **PASS** | browser genuinely closed and relaunched |
+| chat A↔B readable both ways | **NOT DRIVEN** | needs two live peers over the realtime seam the calls session owns |
+| Posts tab ABSENT before the grant | **PASS** | bar shows `["#/discovery","#/chat","#/notifications"]` |
+| the grant allowlists exactly this account | **PASS** | `moments_rows=1 owner_feed=200 stranger_feed=404 runtimeFlag_present=false` |
+| Posts tab PRESENT after the grant | **PASS** | tab appears and opens |
+| post a JPEG | **PASS** | stored bytes: no Exif marker, no metadata segments |
+| post a HEIC | **PASS** | stored as JPEG, no metadata segments, no HEIC `ftyp` |
+| post an iPhone `.mov` | **PASS** | stored as mp4, ffprobe reports no location tag |
+| the feed shows the new posts | **PASS** | 3 cards |
+| share deeplink opens THAT post | **PASS** | Share button → `/#/posts?m=<id>` → title "Post", exactly 1 card, back present, tab `#/posts` |
+| a share link to a missing post says so | **PASS** | no card rendered, "unavailable" message |
+| react | **PASS** | react button `mo-act` → `mo-act on` |
+| comment | **PASS** | comment visible in the thread |
+| delete own post | **PASS** | cards 3 → 2 |
+| username search | **PASS** | `HTTP 200 {"results":[{"username":"…"}]}` |
+| nearby map | **PASS** | discovery surface renders |
+| story / reels swipe / report / block | **NOT DRIVEN** | story+reels need a surviving video card (the delete leg removes one); report/block need a SECOND authored account. Reachable, not exercised — so not claimed. |
+
+The deeplink leg uses the **actual Share button** and reads the link off the
+clipboard, rather than synthesising a URL — so it tests the flow a person would
+use, not a URL shape I assumed.
+
+### A real trap found by driving it
+
+**A post made with no location permission is invisible to everyone, forever.**
+The composer defaults to `nearby` visibility, and the nearby feed filters on
+`geog IS NOT NULL` + `ST_DWithin`. Deny location, and the post returns 201, the
+media is stored, the row exists — and it appears in no feed at all. The friends
+feed does not rescue it either: that requires an explicit follow, and nobody
+follows themselves. Not fixed here; it needs a product decision (refuse the
+post, fall back to `public`, or warn).
+
+### Emulation numbers — labelled
+
+**Chromium CPU-throttling emulation on a cloud container. Not device numbers.**
+Third-party requests blocked, because the render-blocking font CDN is reset by
+this sandbox's proxy and would swamp the app's own figure.
+
+```
+cpu=1x   FCP=448ms  nav=434ms  frames=59  over50ms=0  worst=17ms
+cpu=4x   FCP=648ms  nav=581ms  frames=61  over50ms=0  worst=21ms
+```
+
+FCP scales with the throttle, which is the sanity check that it is genuinely
+CPU-bound — unlike the 12.9s reading two sessions ago that was identical at 1×
+and 4× and turned out to be a network artifact.
+
+---
+
+## 6. Production, checked from here
+
+I could not deploy (see §7), but the deployed hosts are reachable and I checked
+them rather than trusting the deploy report:
+
+| Check | Result |
+|---|---|
+| `spotme-web-v2.vercel.app` | **200** |
+| api `/health` | **200** `{"status":"ok"}` |
+| api `/ready` | **200** `{"status":"ready","checks":{"db":"up","redis":"up"}}` |
+| api `/api/v2/exchange/offers` (dark) | **404** |
+| api `/api/v2/assistant/compose` (dark) | **404** |
+| api `/api/v1/moments/feed` unauthenticated | **401** |
+| api `buildId` | `84dfbddbab23bd0b` |
+
+**One caveat worth recording:** the *first* `/ready` probe returned **503**;
+three retries immediately after all returned 200 with `db: up, redis: up`. It
+reads as a cold-start artifact rather than a standing fault, but a load
+balancer using `/ready` as its gate will see that 503. Worth knowing before it
+is wired to anything that reacts to it.
+
+---
+
+## 7. Why I could not deploy, and the durable fix
+
+You said you were adding `RAILWAY_TOKEN` and `VERCEL_TOKEN` to the environment
+settings. **They are not visible to this process**, and neither CLI is
+installed here:
+
+```
+RAILWAY_TOKEN = (unset)      railway  (not installed)
+VERCEL_TOKEN  = (unset)      vercel   (not installed)
+DATABASE_URL  = (unset)
+```
+
+This is expected and is not a problem with what you did: **environment settings
+are read when a session's container starts.** This process started before you
+added them, so it cannot see them. A restarted session will.
+
+Note also how the third session actually deployed: **not** through env tokens,
+but through `railway`/`vercel` CLIs that were already logged in, holding their
+own credentials on disk. So a fresh session may find itself able to deploy even
+with both env vars empty — check `railway whoami` / `vercel whoami` before
+concluding you are blocked.
+
+Your instruction about never printing the credential is right and is what the
+runbooks below do: `railway run` injects `DATABASE_URL` into the child process's
+environment, so it is never echoed, logged, or committed.
+
+### The handoff line for a restarted session
+
+Paste this as the opening prompt of a fresh session:
+
+> Continue the Wave-1C mission on branch `claude/wave-1c-land-iphone-homzb6`
+> (it is merged up to master and adds three files: the phone-harness lint fix
+> that turns master green, `owner-grant-moments.ts`, and
+> `moments-journey-harness.mjs`). My handle is **@\<PASTE IT HERE\>**.
+> Check `railway whoami` and `vercel whoami` first — the CLIs may already hold
+> credentials even when `RAILWAY_TOKEN`/`VERCEL_TOKEN` are unset. Then, in
+> order: (1) merge this branch into master and confirm CI goes green — master
+> has been red since `6c675e9` on a web lint gate; (2) run the allowlist
+> runbook in `spotme/docs/reports/2026-08-06-land-and-iphone.md` §8 to switch
+> Moments on for my account only, reporting row counts and never printing my
+> userId; (3) redeploy the api service and re-verify `/health`, `/ready`, dark
+> routes 404 and moments 401; (4) re-run the journey harness against the
+> deployed hosts. Read that report's appendix before starting.
+
+---
+
+## 8. Runbooks for the three blocked steps
+
+### 8a. Switch Moments on for the owner's account only
+
+**Needs:** the owner's @username; `DATABASE_URL` resolved via the Railway CLI;
+the api reachable on `PORT` for the verification leg.
+
+```bash
+cd spotme/backend
+npm ci && npx prisma generate && npm run build
+
+# DATABASE_URL is injected into the child process — never printed.
+railway link          # project spotme-backend, environment production, service api
+railway run --service api -- \
+  env MOMENTS_OWNER_USERNAME='<handle>' PORT=4000 \
+  node dist/scripts/wave1d/owner-grant-moments.js
+```
+
+Expected output, and what each field means:
+
+```json
+{
+  "pre_domainAllowlist_rows_total": 0,      // report this BEFORE anything else
+  "pre_domainAllowlist_rows_moments": 0,
+  "pre_runtimeFlag_moments_present": false,
+  "selector": "ab***",                       // masked; the userId is never printed
+  "owner_found": true,
+  "granted": true,
+  "owner_feed_status": 200,                  // the owner reaches the feed
+  "non_allowlisted_feed_status": 404,        // a second adult still does not
+  "post_domainAllowlist_rows_moments": 1,    // exactly one row
+  "post_runtimeFlag_moments_present": false, // the flag is NOT created
+  "status": "OK"
+}
+```
+
+**It stops rather than guessing, in four cases** — no selector; a `moments`
+RuntimeFlag row already enabled (which would mean the domain is on for
+everyone, and an allowlist row would not narrow it); a `moments` allowlist row
+this script did not write (notes listed, nothing added or deleted); the account
+not found. It is idempotent — re-running leaves exactly one row.
+
+**Do NOT create the `moments` RuntimeFlag row.** `DomainGate` grants existence
+on *either* the flag *or* an allowlist row, so that row switches Moments on for
+**every** account. The allowlist row alone is what gates it to one person.
+
+**Revocation** is one row:
+`DELETE FROM "DomainAllowlist" WHERE domain='moments' AND "userId"=…` — dark
+again within one 5s cache window.
+
+### 8b. Redeploy the api service
+
+**Needs:** Railway access (env token *or* a logged-in CLI). **Announce before
+running** — the calls session owns the realtime seam on this service.
+
+```bash
+cd spotme/backend
+npm run deploy          # stages deploy-api/ — a bare `railway up` SKIPS this
+                        # and the Dockerfile assert fails the build on purpose
+railway up --service api
+```
+
+Then re-verify:
+
+```bash
+curl -s https://api-production-0a4ca.up.railway.app/health   # {"status":"ok"}
+curl -s https://api-production-0a4ca.up.railway.app/ready    # db up, redis up
+                                                             # may 503 on cold start — retry
+curl -so /dev/null -w '%{http_code}\n' .../api/v2/exchange/offers      # 404
+curl -so /dev/null -w '%{http_code}\n' .../api/v1/moments/feed         # 401
+curl -s .../api/version                                                # buildId
+```
+
+`/health` and `/ready` are at the **root**, not under `/api` — `/api/health` is
+a 404 and is not evidence of anything.
+
+### 8c. Deploy the web surface to `spotme-web-v2`
+
+**Needs:** Vercel access. Two traps the deploy session recorded, both real:
+
+```bash
+cd spotme/web
+npm ci && npm run build
+# The project's Root Directory is set, so deploy PREBUILT output.
+npx vercel build --prod
+test -d .vercel/output/static || { echo "EMPTY BUILD — do not deploy"; exit 1; }
+npx vercel deploy --prebuilt --prod
+```
+
+The `test -d` line is not decoration: a zero exit status alone has previously
+shipped an empty deployment.
+
+**Order:** Vercel **before** Railway on any change where a new backend can 401
+an old bundle.
+
+---
+
+## 9. Verification at the merged tree
+
+| Gate | Result |
+|---|---|
+| backend `tsc --noEmit` | clean |
+| backend `npm run build` | clean |
+| backend `npm test` | **642 passed / 0 failed** (22 skipped, 5 suites skipped — need Redis/Typesense/MinIO) |
+| web `npm run lint` | **clean** (master is not) |
+| web `npm test` | clean |
+| web `vite build` | clean |
+| journey harness vs master's code | **18 passed / 0 failed / 2 not driven** |
+
+**GitHub CI still has not run on this branch** — `ci.yml` triggers on
+`pull_request` and pushes to `master` only, and you have not asked for a PR. So
+this is locally verified, not CI-verified, with the same two gaps as before: the
+5 suites needing Redis/Typesense/MinIO, and CI's `s3-verify-clean` step.
+
+### Hygiene
+
+- Nothing staged with `git add -A`; every commit staged named paths, and
+  `git diff --cached` was read before each.
+- `spotme/web/package-lock.json` reverted, not committed — `npm install`
+  rewrote all 3,784 lines by changing indentation. Verified semantically
+  identical (parsed JSON compares equal).
+- `playwright` reverted out of `package.json` — the harnesses install it at run
+  time and CI's `npm ci` should not carry it.
+- **Changes on this branch that were not mine:** master's `5319d9b`, `48b6aeb`,
+  `d578fda`, `ff05145`, `4bc8682` arrived via the merge. I did not modify any
+  of them; I resolved every overlapping file **in their favour** and deleted my
+  own duplicates. The one file of theirs I do change is
+  `phone-harness.mjs`, and only to delete the two unused bindings failing CI.
+- I did not touch the calls/realtime port or `rooms.js`.
+
+---
+
+## 10. What I need from you
+
+1. **Your @username**, on its own line. Item 2 is one command from done.
+2. **Merge this branch into master** (or ask me for a PR) — master is red and
+   this is the fix.
+3. **A decision on the orphaned-post trap** in §5: a post made without location
+   permission is silently invisible to everyone, forever.
+4. **The Google Fonts render-block** is still unfixed: `index.html` pulls
+   `fonts.googleapis.com` as a render-blocking stylesheet with no fallback, so
+   a blocked or slow CDN means a blank screen.
