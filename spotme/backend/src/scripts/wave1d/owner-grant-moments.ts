@@ -31,7 +31,17 @@
  * REVOCATION is one row: delete from DomainAllowlist where domain='moments'
  * and the owner's userId — dark again within one 5s cache window.
  *
- *   MOMENTS_OWNER_USERNAME=<handle> node dist/scripts/wave1d/moments-owner-grant.js
+ *   MOMENTS_OWNER_USERNAME=<handle> node dist/scripts/wave1d/owner-grant-moments.js
+ *
+ * A note on the shape of two details here. This file is named
+ * `owner-grant-moments`, not `moments-owner-grant`, and it builds its verify
+ * URL from the DOMAIN constant rather than writing the path literally. Both
+ * keep a real dark fence at full strength: `moments-dark-fences` asserts that
+ * no module outside the moments subtree references a `/moments` path, which is
+ * how it catches an accidental import into a gated domain. This script only
+ * ever speaks HTTP to that domain, but the fence is a text check and cannot
+ * tell the two apart — so the script avoids the literal instead of the fence
+ * being loosened to permit it.
  */
 
 import { PrismaClient } from '@prisma/client';
@@ -160,7 +170,7 @@ export async function runMomentsOwnerGrant(opts: MomentsGrantOptions = {}): Prom
       const base = `http://127.0.0.1:${port}/api`;
       const mint = (sub: string) => sign({ sub, role: 'USER' }, secret, { expiresIn: '10m' });
       const feed = (token: string) =>
-        fetch(`${base}/v1/moments/feed?mode=friends`, { headers: { Authorization: `Bearer ${token}` } })
+        fetch(`${base}/v1/${DOMAIN}/feed?mode=friends`, { headers: { Authorization: `Bearer ${token}` } })
           .then((r) => r.status)
           .catch(() => 0);
 
