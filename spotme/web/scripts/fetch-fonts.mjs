@@ -42,13 +42,50 @@ const WEB = join(HERE, '..')
 const FONT_DIR = join(WEB, 'public', 'fonts')
 const OUT_CSS = join(WEB, 'src', 'fonts.css')
 
-/* The families and weights index.html used to request. Keep in sync with the
- * weights the design system actually uses; adding one here is the only
- * supported way to add a face. */
-const REQUEST =
-  'family=Sora:wght@400;500;600;700;800' +
-  '&family=Plus+Jakarta+Sans:wght@400;500;600;700' +
-  '&display=swap'
+/* The families this app ships. Adding one here is the only supported way to
+ * add a face — edit this list and re-run.
+ *
+ * `subsets` restricts which unicode-range blocks are kept. The Noto families
+ * ship latin and latin-ext blocks of their own, and keeping them would vendor
+ * a second, worse Latin face that can never render: within a family the
+ * browser picks by unicode-range, but ACROSS families the stack order decides,
+ * and Sora is always ahead. Keeping only the script each font is here for is
+ * what stops this directory quadrupling in size for no rendered pixel.
+ *
+ * Weights cost almost nothing to add. These are variable fonts, so every
+ * weight of a family and subset is the same file — more weights means more
+ * @font-face declarations pointing at bytes already on disk. The Indic faces
+ * therefore carry the full set the UI actually uses (400 body, 500/600/700
+ * labels, names and emphasis) rather than a guess. 800 is the wordmark only,
+ * which is Latin, so the Indic faces stop at 700. */
+const LATIN_WEIGHTS = [400, 500, 600, 700, 800]
+const UI_WEIGHTS = [400, 500, 600, 700]
+
+/* One Noto family per script in LANGS (src/lib/translate.js), where "Indian
+ * languages are first-class". Without these, a reader whose system lacks the
+ * script sees tofu — and the language picker renders every native name at
+ * once, so it is the app's own UI that breaks, not just message content.
+ *
+ *   Devanagari  Hindi, Marathi, Konkani      Bengali    Bengali, Assamese
+ *   Kannada     Kannada, Tulu                Gurmukhi   Punjabi
+ *   Tamil / Telugu / Malayalam / Odia / Gujarati — one language each
+ *
+ * Urdu (ur) is Arabic script, not Indic, and wants Nastaliq rather than a
+ * naskh Noto Sans to be read comfortably. It is deliberately NOT covered
+ * here — doing it badly would look like it was handled. */
+const FAMILIES = [
+  { family: 'Sora', weights: LATIN_WEIGHTS },
+  { family: 'Plus Jakarta Sans', weights: UI_WEIGHTS },
+  { family: 'Noto Sans Devanagari', weights: UI_WEIGHTS, subsets: ['devanagari'] },
+  { family: 'Noto Sans Tamil', weights: UI_WEIGHTS, subsets: ['tamil'] },
+  { family: 'Noto Sans Telugu', weights: UI_WEIGHTS, subsets: ['telugu'] },
+  { family: 'Noto Sans Bengali', weights: UI_WEIGHTS, subsets: ['bengali'] },
+  { family: 'Noto Sans Kannada', weights: UI_WEIGHTS, subsets: ['kannada'] },
+  { family: 'Noto Sans Malayalam', weights: UI_WEIGHTS, subsets: ['malayalam'] },
+  { family: 'Noto Sans Oriya', weights: UI_WEIGHTS, subsets: ['oriya'] },
+  { family: 'Noto Sans Gujarati', weights: UI_WEIGHTS, subsets: ['gujarati'] },
+  { family: 'Noto Sans Gurmukhi', weights: UI_WEIGHTS, subsets: ['gurmukhi'] },
+]
 
 /* Google serves woff2 only to browsers it recognises; with Node's default
  * agent string it returns truetype, which is ~3x the bytes. */
@@ -58,16 +95,30 @@ const UA =
 
 const slug = (s) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
 
-const css = await fetch(`https://fonts.googleapis.com/css2?${REQUEST}`, {
-  headers: { 'User-Agent': UA },
-}).then((r) => {
-  if (!r.ok) throw new Error(`Google Fonts returned ${r.status}`)
-  return r.text()
-})
+/* One request per family, so a family's subsets can be filtered independently
+ * and a failure names the family that caused it. */
+const blocks = []
+for (const { family, weights, subsets } of FAMILIES) {
+  const spec = `${family.replace(/ /g, '+')}:wght@${weights.join(';')}`
+  const css = await fetch(`https://fonts.googleapis.com/css2?family=${spec}&display=swap`, {
+    headers: { 'User-Agent': UA },
+  }).then((r) => {
+    if (!r.ok) throw new Error(`Google Fonts returned ${r.status} for ${family}`)
+    return r.text()
+  })
 
-/* Each @font-face is preceded by a /* subset *\/ comment naming its range. */
-const blocks = [...css.matchAll(/\/\*\s*([a-z-]+)\s*\*\/\s*@font-face\s*\{(.*?)\}/gs)]
-if (!blocks.length) throw new Error('no @font-face blocks parsed — did the API change?')
+  /* Each @font-face is preceded by a /* subset *\/ comment naming its range. */
+  const found = [...css.matchAll(/\/\*\s*([a-z-]+)\s*\*\/\s*@font-face\s*\{(.*?)\}/gs)]
+  if (!found.length) throw new Error(`no @font-face blocks parsed for ${family} — did the API change?`)
+
+  const kept = subsets ? found.filter(([, s]) => subsets.includes(s)) : found
+  if (!kept.length) {
+    throw new Error(
+      `${family}: none of the requested subsets [${subsets}] are served — ` +
+      `available: ${[...new Set(found.map(([, s]) => s))].join(', ')}`)
+  }
+  blocks.push(...kept)
+}
 
 const field = (body, re, what) => {
   const m = body.match(re)

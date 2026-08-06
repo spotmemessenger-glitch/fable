@@ -129,6 +129,88 @@ check('--onfill is never used as a background',
 check('--surface is never used as a text colour',
   !/(^|[^-])color:\s*var\(--surface\)/m.test(consolidatedSrc))
 
+/* ---- 5. typography: every language in the picker has glyphs -------------
+ *
+ * LANGS renders each language's NATIVE name in the picker, all at once. A
+ * script with no font behind it draws as tofu, so this is the app's own UI
+ * breaking, not just message content.
+ *
+ * The check is against real codepoints, not a list of family names: take the
+ * native name of every language, and require some vendored @font-face whose
+ * unicode-range actually covers it. That way adding a language to LANGS
+ * without adding its font FAILS here rather than shipping boxes. */
+
+const fontsCss = decomment(read('fonts.css'))
+const translate = read('lib', 'translate.js')
+
+/* Every unicode-range the vendored faces declare, flattened to [lo, hi]. */
+const covered = []
+for (const m of fontsCss.matchAll(/unicode-range:\s*([^;]+);/g)) {
+  for (const part of m[1].split(',')) {
+    const r = part.trim().match(/^U\+([0-9A-F]+)(?:-([0-9A-F]+))?$/i)
+    if (r) covered.push([parseInt(r[1], 16), parseInt(r[2] || r[1], 16)])
+  }
+}
+const isCovered = (cp) => covered.some(([lo, hi]) => cp >= lo && cp <= hi)
+
+const langs = [...translate.matchAll(/\{\s*code:\s*'([\w-]+)',\s*name:\s*'([^']+)',\s*native:\s*'([^']+)'/g)]
+  .map(([, code, name, native]) => ({ code, name, native }))
+
+check(`LANGS parsed (${langs.length} languages)`, langs.length >= 24)
+
+/* Deliberately NOT vendored, each for a stated reason:
+ *   ar, ur  Arabic script. Urdu wants Nastaliq, not a naskh Noto Sans;
+ *           shipping the wrong one would look like it was handled.
+ *   ja/zh/ko  CJK faces are megabytes each — every platform ships its own.
+ *   ru      Cyrillic, universally present in system fonts.
+ * Asserted as an EXACT set, so dropping an Indic font shows up here too. */
+const SYSTEM_RENDERED = ['ar', 'ja', 'ko', 'ru', 'ur', 'zh']
+
+/* EVERY codepoint is checked, with no "ignore the low ones" shortcut. An
+ * earlier draft of this fence skipped anything below U+2000 to step over
+ * ASCII — which silently skipped Devanagari (U+0900), Tamil (U+0B80),
+ * Cyrillic and Arabic too, i.e. every script this check exists for, and
+ * passed vacuously. Latin needs no exemption anyway: Sora's own latin
+ * unicode-range covers it, so it is simply covered like everything else. */
+const uncovered = langs
+  .filter(({ native }) => [...native].some((ch) => !isCovered(ch.codePointAt(0))))
+  .map(({ code }) => code)
+  .sort()
+
+check(`the languages relying on system fonts are EXACTLY ${SYSTEM_RENDERED.join(', ')}${
+  uncovered.join() !== SYSTEM_RENDERED.join() ? ` — found ${uncovered.join(', ') || '(none)'}` : ''}`,
+uncovered.join() === SYSTEM_RENDERED.join())
+
+/* Named-but-not-vendored is the other half of the same failure: a family in
+ * the stack that no @font-face defines silently falls through to the next. */
+const stack = (tokens.match(/--font:\s*([^;]+);/) || [, ''])[1]
+const quoted = [...stack.matchAll(/"([^"]+)"/g)].map((m) => m[1])
+const vendored = new Set([...fontsCss.matchAll(/font-family:\s*'([^']+)'/g)].map((m) => m[1]))
+
+/* Quoted but NOT ours: a system face that needs quoting because its name has
+ * a space. It is a fallback, not something to vendor. */
+const SYSTEM_FAMILIES = ['Segoe UI']
+
+const notVendored = quoted.filter((f) => !vendored.has(f) && !SYSTEM_FAMILIES.includes(f))
+check(`every quoted family in --font is vendored${notVendored.length ? ` — missing: ${notVendored.join(', ')}` : ''}`,
+  notVendored.length === 0)
+
+const notInStack = [...vendored].filter((f) => !quoted.includes(f))
+check(`every vendored family is reachable from --font${notInStack.length ? ` — orphaned: ${notInStack.join(', ')}` : ''}`,
+  notInStack.length === 0)
+
+/* Sora must stay first: it is the locked Latin face, and a family ahead of it
+ * would restyle every screen in the app. */
+check('Sora is still the first family in --font', /^\s*"Sora"/.test(stack))
+
+/* The vendored files must exist — a fonts.css pointing at a missing file is
+ * a 404 per face and silent tofu. */
+const onDisk = new Set(readdirSync(join(SRC, '..', 'public', 'fonts')))
+const referencedFiles = [...new Set([...fontsCss.matchAll(/url\('\/fonts\/([^']+)'\)/g)].map((m) => m[1]))]
+const absent = referencedFiles.filter((f) => !onDisk.has(f))
+check(`all ${referencedFiles.length} referenced font files exist${absent.length ? ` — missing: ${absent.join(', ')}` : ''}`,
+  absent.length === 0)
+
 console.log('\n========================================')
 console.log(`  ${pass}/${pass + fail} passed`)
 console.log('========================================\n')
