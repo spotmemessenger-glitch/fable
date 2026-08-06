@@ -53,6 +53,23 @@ const REPORT_REASONS = [
 const MAX_VIDEO_BYTES = 50 * 1024 * 1024
 const MAX_IMAGE_BYTES = 50 * 1024 * 1024
 
+/* Inline single-stroke icons — no icon-font, no dependency, ~0 KB added. One
+ * 24px grid, `currentColor`, outline default; the heart gets a filled variant
+ * for the active (reacted) state. Weight/roundness match the bottom-bar set.
+ * These replace the emoji row (🤍 💬 ↗ ⋯) the makeover brief called out. */
+const SW = 'fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"'
+const svg = (inner) => `<svg viewBox="0 0 24 24" width="24" height="24" ${SW} aria-hidden="true">${inner}</svg>`
+const ICONS = {
+  heart: svg('<path d="M12 20.3 4.6 13a4.6 4.6 0 0 1 6.5-6.5l.9.9.9-.9A4.6 4.6 0 0 1 19.4 13z"/>'),
+  heartFilled: `<svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round" aria-hidden="true"><path d="M12 20.3 4.6 13a4.6 4.6 0 0 1 6.5-6.5l.9.9.9-.9A4.6 4.6 0 0 1 19.4 13z"/></svg>`,
+  comment: svg('<path d="M21 11.5a8 8 0 0 1-11.6 7.1L3.5 20.5l1.9-5.7A8 8 0 1 1 21 11.5z"/>'),
+  share: svg('<path d="M22 2 11 13"/><path d="M22 2 15.5 21l-4-8.5L3 8.5 22 2z"/>'),
+  more: `<svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="19" cy="12" r="1.7"/></svg>`,
+  bookmark: svg('<path d="M18 21 12 16.5 6 21V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2z"/>'),
+  muted: svg('<path d="M11 5 6.5 9H3v6h3.5L11 19z"/><path d="m16 9 5 6"/><path d="m21 9-5 6"/>'),
+  unmuted: svg('<path d="M11 5 6.5 9H3v6h3.5L11 19z"/><path d="M15.5 8.8a4.5 4.5 0 0 1 0 6.4"/><path d="M18.5 6a8 8 0 0 1 0 12"/>')
+}
+
 /* -------------------------------------------------- perf harness (M3) */
 
 /**
@@ -408,10 +425,28 @@ export function render (root, ctx, params) {
         v.addEventListener('playing', () => { playIcon.style.display = 'none' })
         v.addEventListener('pause', () => { playIcon.style.display = '' })
         mediaSlot.appendChild(v)
+        // Mute/unmute control, bottom-right like the references. It carries its
+        // own tap so it does not open reels, and the tap IS the user gesture
+        // that lets audio start; the icon tracks the real muted state.
+        const muteBtn = el('button', {
+          class: 'mo-mute', type: 'button', 'aria-label': 'Unmute', html: ICONS.muted,
+          // Inline so this control needs no stylesheet change: floating pill,
+          // bottom-right, over the media, 44px touch target.
+          style: 'position:absolute;right:8px;bottom:8px;width:44px;height:44px;padding:0;border:0;' +
+            'border-radius:999px;background:rgba(0,0,0,.5);color:#fff;display:grid;place-items:center;' +
+            'backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);'
+        })
+        const syncMute = () => {
+          muteBtn.innerHTML = v.muted ? ICONS.muted : ICONS.unmuted
+          muteBtn.setAttribute('aria-label', v.muted ? 'Unmute' : 'Mute')
+        }
+        muteBtn.addEventListener('click', (e) => { e.stopPropagation(); v.muted = !v.muted; syncMute() })
+        v.addEventListener('volumechange', syncMute)
         // `#t=0.1` paints a first frame immediately under preload=metadata, so
         // the card is never a black box before the observer starts it.
         urlFor(media.mediaId).then((u) => { if (u && !disposed) { v.src = `${u}#t=0.1`; feedAutoplay.observe(v) } })
         mediaSlot.appendChild(playIcon)
+        mediaSlot.appendChild(muteBtn)
       } else {
         const img = el('img', { class: 'mo-img', alt: media.alt || '', loading: 'lazy' })
         mediaSlot.appendChild(img)
@@ -419,27 +454,25 @@ export function render (root, ctx, params) {
       }
     }
 
+    /* ACTIONS: react · comment · share — icons only, NO counts (tallies are
+     * deliberately unrepresentable). The ⋯ menu moves UP into the header per
+     * the makeover. A right-aligned save/bookmark is intentionally omitted:
+     * there is no bookmarks capability server-side yet, and a control that
+     * 404s is worse than its absence — it returns with that endpoint. */
     const acts = el('div', { class: 'mo-acts' })
-    // Reactions, NO counters — see the header note.
     const reactBtn = el('button', {
       class: 'mo-act' + (m.myReaction ? ' on' : ''), type: 'button',
-      text: m.myReaction ? (REACTIONS.find((r) => r.key === m.myReaction)?.glyph || '👍') : '🤍',
-      'aria-label': 'React',
+      html: m.myReaction ? ICONS.heartFilled : ICONS.heart, 'aria-label': 'React',
       onclick: () => openReactions(m, reactBtn)
     })
     acts.appendChild(reactBtn)
     acts.appendChild(el('button', {
-      class: 'mo-act', type: 'button', text: '💬', 'aria-label': 'Comments',
+      class: 'mo-act', type: 'button', html: ICONS.comment, 'aria-label': 'Comments',
       onclick: () => openComments(m)
     }))
     acts.appendChild(el('button', {
-      class: 'mo-act', type: 'button', text: '↗', 'aria-label': 'Share',
+      class: 'mo-act', type: 'button', html: ICONS.share, 'aria-label': 'Share',
       onclick: () => shareMoment(m)
-    }))
-    acts.appendChild(el('span', { class: 'mo-spacer' }))
-    acts.appendChild(el('button', {
-      class: 'mo-act', type: 'button', text: '⋯', 'aria-label': 'More',
-      onclick: () => openMore(m, mine)
     }))
 
     return el('article', { class: 'mo-card' }, [
@@ -448,7 +481,12 @@ export function render (root, ctx, params) {
         el('div', { class: 'mo-whowrap' }, [
           el('b', { class: 'mo-who', text: who }),
           el('span', { class: 'mo-meta', text: [placeLabel(m), when(m.createdAtUTC)].filter(Boolean).join(' · ') })
-        ])
+        ]),
+        el('span', { class: 'mo-spacer' }),
+        el('button', {
+          class: 'mo-act mo-headmore', type: 'button', html: ICONS.more, 'aria-label': 'More',
+          onclick: () => openMore(m, mine)
+        })
       ]),
       mediaSlot,
       m.text ? el('p', { class: `mo-text${media ? '' : ' only'}`, text: m.text }) : null,
@@ -464,7 +502,7 @@ export function render (root, ctx, params) {
       fn: async () => {
         try {
           if (m.myReaction === r.key) { await M.unreact(m.id); m.myReaction = null } else { await M.react(m.id, r.key); m.myReaction = r.key }
-          btn.textContent = m.myReaction ? r.glyph : '🤍'
+          btn.innerHTML = m.myReaction ? ICONS.heartFilled : ICONS.heart
           btn.className = 'mo-act' + (m.myReaction ? ' on' : '')
         } catch (e) { ctx.toast(e.message || 'Could not react') }
       }
