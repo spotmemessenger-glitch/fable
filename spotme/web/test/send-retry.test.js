@@ -65,7 +65,12 @@ const socket = {
 }
 
 mock.module('socket.io-client', { namedExports: { io: () => socket } })
-mock.module('@trystero-p2p/torrent', { namedExports: { selfId: 'x', joinRoom: () => { throw new Error('unused') } } })
+/* The @trystero-p2p/torrent stub that used to sit here is gone with the
+ * package (ADR-033, server-side transport only). It was defensive — it threw
+ * if the P2P path was ever reached — and mock.module() must RESOLVE a
+ * specifier to stub it, so once the dependency was dropped the stub itself
+ * was what broke the suite. The guarantee it stood for is now structural:
+ * the module does not exist, and transport.test.js fences it. */
 mock.module(`${SRC}lib/api.js`, { namedExports: { API_BASE: 'http://localhost:9', apiUrl: (p) => `http://localhost:9/${p}` } })
 globalThis.fetch = async () => ({ ok: true, status: 200, json: async () => ({ accessToken: 't', userId: 'aaaa1111bbbb2222' }) })
 

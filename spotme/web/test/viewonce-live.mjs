@@ -47,7 +47,12 @@ globalThis.window = { location: globalThis.location, addEventListener () {} }
 mock.module(`${SRC}lib/api.js`, {
   namedExports: { API_BASE: SERVER, apiUrl: (p) => `${SERVER}/${String(p).replace(/^\//, '')}` }
 })
-mock.module('@trystero-p2p/torrent', { namedExports: { selfId: 'unused', joinRoom: () => { throw new Error('p2p not used') } } })
+/* The @trystero-p2p/torrent stub that used to sit here is gone with the
+ * package (ADR-033, server-side transport only). It was defensive — it threw
+ * if the P2P path was ever reached — and mock.module() must RESOLVE a
+ * specifier to stub it, so once the dependency was dropped the stub itself
+ * was what broke the suite. The guarantee it stood for is now structural:
+ * the module does not exist, and transport.test.js fences it. */
 
 const { db } = await import(`${SRC}lib/db.js`)
 const hex = (n) => Array.from({ length: n }, () => '0123456789abcdef'[Math.floor(Math.random() * 16)]).join('')

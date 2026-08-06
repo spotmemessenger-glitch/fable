@@ -210,6 +210,43 @@ await checkAsync('no src file imports trystero (ADR-033)', async () => {
   return offenders.length === 0
 })
 
+/* ...AND NO TEST MAY NAME IT EITHER.
+ *
+ * The src-only fence above passed while the suite was broken. Five test files
+ * still carried `mock.module('@trystero-p2p/torrent', …)` — defensive stubs
+ * that threw if the P2P path was reached. Harmless while the package was
+ * installed; fatal once ADR-033 removed it, because mock.module() has to
+ * RESOLVE a specifier before it can stub it. `npm ci && npm test` therefore
+ * died on ERR_MODULE_NOT_FOUND at the third file, and a fence that only looked
+ * at src/ could not see it.
+ *
+ * A dependency is not removed until nothing references it, tests included. */
+await checkAsync('no test file references trystero either (ADR-033)', async () => {
+  const { readdirSync, readFileSync, statSync } = await import('node:fs')
+  const { join } = await import('node:path')
+  const { fileURLToPath } = await import('node:url')
+  const dir = fileURLToPath(new URL('.', import.meta.url))
+  const offenders = []
+  const walk = (d) => {
+    for (const name of readdirSync(d)) {
+      const p = join(d, name)
+      if (statSync(p).isDirectory()) { walk(p); continue }
+      if (!/\.(js|mjs|ts)$/.test(name)) continue
+      const text = readFileSync(p, 'utf8')
+      /* Comments are stripped first: this file and the cleaned suites EXPLAIN
+       * the removed package by name, and prose must not read as a reference. */
+      const code = text.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '')
+      /* Only SPECIFIER positions count — `mock.module('…')`, `from '…'`,
+       * `import('…')`. A bare search for the word matched the fence above,
+       * whose own regex literal spells it out, so this file failed itself. */
+      if (/(?:mock\.module\(|from|import\()\s*['"][^'"]*trystero/.test(code)) offenders.push(p)
+    }
+  }
+  walk(dir)
+  if (offenders.length) console.error('  trystero references found in:', offenders)
+  return offenders.length === 0
+})
+
 /* ============================== channels ================================ */
 
 check('room channels are namespaced so the server ACL can mirror them', () => {
