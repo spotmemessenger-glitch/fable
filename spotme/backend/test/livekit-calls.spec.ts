@@ -61,8 +61,15 @@ describe('LiveKit call tokens', () => {
     }
   });
 
+  /** A service whose participant count never reaches the network. */
+  const offlineLivekit = () => {
+    const s = new LiveKitService();
+    jest.spyOn(s, 'countParticipants').mockResolvedValue(null);
+    return s;
+  };
+
   it('mints a token whose identity is the authenticated principal, not the body', async () => {
-    const controller = new CallsController(prismaWith(true), new LiveKitService());
+    const controller = new CallsController(prismaWith(true), offlineLivekit());
 
     // The body carries an identity claim it must not be able to influence.
     const res = await controller.token(principal, {
@@ -74,7 +81,7 @@ describe('LiveKit call tokens', () => {
   });
 
   it('derives the LiveKit room name and ignores any room name in the body', async () => {
-    const controller = new CallsController(prismaWith(true), new LiveKitService());
+    const controller = new CallsController(prismaWith(true), offlineLivekit());
 
     const res = await controller.token(principal, {
       roomId: 'r1',
@@ -137,6 +144,31 @@ describe('LiveKit call tokens', () => {
       ServiceUnavailableException,
     );
     expect(controller.config().available).toBe(false);
+  });
+
+  it('refuses a seventh participant — the cap is enforced where the token is minted', async () => {
+    const livekit = new LiveKitService();
+    // Six already in the room: the next person is refused, by the server, which
+    // is the only place a modified client cannot talk its way past.
+    jest.spyOn(livekit, 'countParticipants').mockResolvedValue(LiveKitService.MAX_PARTICIPANTS);
+    const controller = new CallsController(prismaWith(true), livekit);
+
+    await expect(controller.token(principal, { roomId: 'r1' })).rejects.toBeInstanceOf(
+      ForbiddenException,
+    );
+  });
+
+  it('admits the sixth, and admits when the count cannot be established', async () => {
+    const livekit = new LiveKitService();
+    const controller = new CallsController(prismaWith(true), livekit);
+
+    jest.spyOn(livekit, 'countParticipants').mockResolvedValue(LiveKitService.MAX_PARTICIPANTS - 1);
+    await expect(controller.token(principal, { roomId: 'r1' })).resolves.toHaveProperty('token');
+
+    // null = LiveKit unreachable. A listing outage must not become a calling
+    // outage, so this admits rather than refusing.
+    jest.spyOn(livekit, 'countParticipants').mockResolvedValue(null);
+    await expect(controller.token(principal, { roomId: 'r1' })).resolves.toHaveProperty('token');
   });
 
   it('will not end a call in a room the caller does not belong to', async () => {

@@ -229,6 +229,24 @@ export async function joinCallMedia ({
     timings,
 
     /**
+     * Publish a track mid-call — the camera someone turns on after joining an
+     * audio-only group call.
+     *
+     * Separate from the initial publish because the local MediaStream given at
+     * join time is the whole of what we sent then; this adds to a live session
+     * and LiveKit renegotiates underneath.
+     */
+    publishTrack: (track) => room.localParticipant.publishTrack(track),
+
+    /** Stop sending a track. The far side gets TrackUnsubscribed. */
+    async unpublishTrack (track) {
+      const publication = [...room.localParticipant.trackPublications.values()]
+        .find((p) => p.track?.mediaStreamTrack === track)
+      if (publication?.track) await room.localParticipant.unpublishTrack(publication.track)
+    },
+
+
+    /**
      * How this call actually connected, and whether media is arriving.
      *
      * MEASURED, NOT INFERRED. What candidates were OFFERED says nothing about

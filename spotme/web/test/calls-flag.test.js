@@ -23,12 +23,10 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 
-/** Minimal localStorage — the module reads one key and nothing else. */
-function withStorage (value) {
-  globalThis.localStorage = {
-    _v: value,
-    getItem (k) { return k === 'spotme.calls' ? this._v : null }
-  }
+/** Minimal localStorage over an explicit key/value map. */
+function withStorage (value, group = null) {
+  const map = { 'spotme.calls': value, 'spotme.calls.group': group }
+  globalThis.localStorage = { getItem (k) { return map[k] ?? null } }
 }
 
 const load = async () => {
@@ -61,4 +59,39 @@ test('a localStorage that throws reads as OFF, not as a crash', async () => {
   }
   const { livekitCalls } = await load()
   assert.equal(livekitCalls(), false)
+})
+
+test('group is a SEPARATE flag — enabling 1:1 must not enable group', async () => {
+  withStorage('livekit')                       // 1:1 on, group flag absent
+  const { livekitCalls, groupCalls } = await load()
+
+  assert.equal(livekitCalls(), true)
+  assert.equal(groupCalls(), false, 'turning on 1:1 must not turn on group')
+})
+
+test('group needs BOTH flags — its own is not enough on its own', async () => {
+  // Asking for group on a device where no call may be placed at all is not a
+  // half-enabled state, it is a contradiction. Group extends calls.
+  withStorage(null, 'on')
+  const a = await load()
+  assert.equal(a.groupCalls(), false)
+
+  withStorage('livekit', 'on')
+  const b = await load()
+  assert.equal(b.groupCalls(), true)
+})
+
+test('only the exact string "on" enables group', async () => {
+  for (const value of ['', 'true', '1', 'yes', 'ON', 'livekit', 'on ']) {
+    withStorage('livekit', value)
+    const { groupCalls } = await load()
+    assert.equal(groupCalls(), false, `group="${value}" must not enable group`)
+  }
+})
+
+test('a throwing localStorage leaves BOTH flags off', async () => {
+  globalThis.localStorage = { getItem () { throw new Error('private browsing') } }
+  const { livekitCalls, groupCalls } = await load()
+  assert.equal(livekitCalls(), false)
+  assert.equal(groupCalls(), false)
 })

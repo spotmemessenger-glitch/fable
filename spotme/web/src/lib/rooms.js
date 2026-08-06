@@ -30,7 +30,7 @@ import { E2E_V2 } from './crypto/e2e-v2.js'
  * nothing else — the LiveKit SDK and its adapter are behind a dynamic import
  * that never runs unless a device has opted in, so with the flag off this
  * costs one localStorage lookup per call and changes no behaviour. */
-import { livekitCalls } from './calls/select.js'
+import { livekitCalls, groupCalls } from './calls/select.js'
 
 /** Attachments bigger than this never ride the history backlog — the bytes
  * are lazily fetched on demand instead, so reconnects stay instant. */
@@ -513,7 +513,14 @@ function createConnection (convo) {
       switch (payload?.type) {
         case 'offer':
           if (call.state !== 'idle') { conn.net.sendCall({ type: 'decline', busy: true }); return }
-          conn.call = newCallState({ state: 'ringing-in', video: Boolean(payload.video) })
+          /* A GROUP ring is not a question about whether the call happens —
+           * it is already happening. `group` rides the offer so the callee
+           * knows to answer audio-only and that declining ends nothing. */
+          conn.call = newCallState({
+            state: 'ringing-in',
+            video: Boolean(payload.video),
+            group: Boolean(payload.group)
+          })
           emit({ type: 'call' })
           break
         case 'accept':
@@ -688,16 +695,30 @@ function createConnection (convo) {
    */
   const newCallState = (over = {}) => ({
     state: 'idle',
+    // `video` is whether the call has video in it at all (ours or theirs),
+    // which is what the overlay lays out for. `videoOn` is whether OUR camera
+    // is publishing — the two differ the moment video is opt-in per person.
     video: false,
+    videoOn: false,
+    group: false,
     local: null,
     remotes: new Map(),
     ...over
   })
 
-  /** Refuse early and legibly rather than failing halfway into a call. */
-  function assertCallsAvailable () {
+  /**
+   * Refuse early and legibly rather than failing halfway into a call.
+   *
+   * Group is gated SEPARATELY: `spotme.calls` alone does not enable it, so a
+   * device with 1:1 turned on refuses a group call by name rather than starting
+   * one it was never meant to place.
+   */
+  function assertCallsAvailable (group = false) {
     if (!livekitCalls()) {
       throw new Error('Calls are not enabled on this device yet')
+    }
+    if (group && !groupCalls()) {
+      throw new Error('Group calls are not enabled on this device yet')
     }
     if (!navigator.mediaDevices?.getUserMedia) {
       throw new Error('Calls need HTTPS (use the vercel.app address)')
@@ -758,24 +779,70 @@ function createConnection (convo) {
     conn.call = newCallState()
   }
 
-  /** Ring them. We do not join the SFU until somebody answers. */
+  /**
+   * Start a call.
+   *
+   * TWO RING MODELS, because two people and six are not the same problem.
+   *
+   * 1:1 — ring first, join the SFU when they answer. Joining a room to sit in
+   * it alone would publish a camera to a server for a call that may never
+   * happen.
+   *
+   * GROUP — THE INITIATOR OPENS THE ROOM IMMEDIATELY, then rings everyone. The
+   * call exists from that moment: it never waits for all of them to answer, any
+   * of them may join whenever they like, and one person declining changes
+   * nothing for the others. "Waiting for everyone" is the semantic that makes
+   * group calls feel broken — one person with a flat battery holds up five.
+   *
+   * GROUP STARTS AUDIO-ONLY whichever button was pressed. Six cameras is the
+   * expensive case and rarely the wanted one; video is opt-in per participant
+   * afterwards via `toggleVideo()`.
+   */
   conn.startCall = async function (video) {
     if (conn.call.state !== 'idle') return
-    assertCallsAvailable()
-    const local = await navigator.mediaDevices.getUserMedia({ audio: true, video })
-    conn.call = newCallState({ state: 'ringing-out', video, local })
-    conn.net.sendCall({ type: 'offer', video })
+    const group = convo.kind === 'group'
+    assertCallsAvailable(group)
+
+    const wantVideo = group ? false : Boolean(video)
+    const local = await navigator.mediaDevices.getUserMedia({ audio: true, video: wantVideo })
+
+    if (!group) {
+      conn.call = newCallState({ state: 'ringing-out', video: wantVideo, videoOn: wantVideo, local })
+      conn.net.sendCall({ type: 'offer', video: wantVideo })
+      emit({ type: 'call' })
+      return
+    }
+
+    conn.call = newCallState({ state: 'connecting', local, group: true })
+    emit({ type: 'call' })
+    try {
+      await joinCallRoom()
+    } catch (error) {
+      teardownCall(false)
+      emit({ type: 'call', failed: error?.message || 'The call could not start' })
+      throw error
+    }
+    // Ring only once we are IN the room, so the first person to accept finds
+    // somebody there rather than an empty room.
+    conn.call.state = conn.call.remotes.size > 0 ? 'active' : 'connecting'
+    conn.net.sendCall({ type: 'offer', video: false, group: true })
     emit({ type: 'call' })
   }
 
+  /**
+   * Accept. Late is fine: a group room stays open, so an invitee who answers
+   * two minutes in simply joins what is already happening.
+   */
   conn.acceptCall = async function () {
     if (conn.call.state !== 'ringing-in') return
-    assertCallsAvailable()
-    const local = await navigator.mediaDevices.getUserMedia({ audio: true, video: conn.call.video })
+    assertCallsAvailable(conn.call.group)
+    const wantVideo = conn.call.group ? false : conn.call.video
+    const local = await navigator.mediaDevices.getUserMedia({ audio: true, video: wantVideo })
     conn.call.local = local
+    conn.call.videoOn = wantVideo
     // Answer FIRST: they have been waiting since the offer, and joining the SFU
     // takes a round trip they should not sit through wondering.
-    conn.net.sendCall({ type: 'accept', video: conn.call.video })
+    conn.net.sendCall({ type: 'accept', video: wantVideo })
     try {
       await joinCallRoom()
     } catch (error) {
@@ -785,6 +852,40 @@ function createConnection (convo) {
     }
     conn.call.state = conn.call.remotes.size > 0 ? 'active' : 'connecting'
     emit({ type: 'call' })
+  }
+
+  /**
+   * This participant's camera, on or off mid-call — the opt-in half of "group
+   * starts audio-only".
+   *
+   * Publishes a NEW track rather than re-enabling an existing one: an
+   * audio-only call never opened the camera, so there is no video track to
+   * flip. Returns the resulting state so a caller can label its button without
+   * re-reading.
+   */
+  conn.toggleVideo = async function () {
+    const call = conn.call
+    if (call.state === 'idle' || !call.local) return false
+
+    if (call.videoOn) {
+      for (const track of call.local.getVideoTracks()) {
+        await callMedia?.unpublishTrack(track)
+        track.stop()
+        call.local.removeTrack(track)
+      }
+      call.videoOn = false
+      emit({ type: 'call' })
+      return false
+    }
+
+    const camera = await navigator.mediaDevices.getUserMedia({ video: true })
+    const track = camera.getVideoTracks()[0]
+    call.local.addTrack(track)
+    await callMedia?.publishTrack(track)
+    call.videoOn = true
+    call.video = true
+    emit({ type: 'call' })
+    return true
   }
 
   conn.declineCall = function () {

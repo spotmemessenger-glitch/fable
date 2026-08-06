@@ -425,7 +425,11 @@ export function render (root, ctx, roomId) {
   avBtn.addEventListener('click', () => openContactSheet())
 
   function beginCall (video) {
-    if (conn.peerCount === 0) {
+    /* A GROUP call does not wait for anyone. The initiator opens the room and
+     * rings everybody; whoever is there joins, late joiners join later, and
+     * nobody being online yet is a normal start rather than a refusal. The
+     * "they are offline" guard is a 1:1 fact and would be a lie here. */
+    if (convo.kind !== 'group' && conn.peerCount === 0) {
       ctx.toast('They are offline — calls connect while you are both online')
       return
     }
@@ -4276,7 +4280,25 @@ export function render (root, ctx, roomId) {
           muteBtn.classList.toggle('on', muted)
         }
       })
-      actions.push(muteBtn,
+      /* VIDEO IS OPT-IN, PER PARTICIPANT. A group call starts audio-only —
+       * six cameras is the expensive case and rarely the wanted one — so this
+       * is how someone turns theirs on, and it is theirs alone: it publishes
+       * one more track and asks nothing of anybody else. */
+      const camBtn = el('button', {
+        class: 'callmute' + (call.videoOn ? ' on' : ''), type: 'button',
+        text: call.videoOn ? 'Camera off' : 'Camera',
+        onclick () {
+          camBtn.disabled = true
+          conn.toggleVideo()
+            .then((on) => {
+              camBtn.textContent = on ? 'Camera off' : 'Camera'
+              camBtn.classList.toggle('on', on)
+            })
+            .catch((e) => ctx.toast(e.message || 'Camera permission needed'))
+            .finally(() => { camBtn.disabled = false })
+        }
+      })
+      actions.push(muteBtn, camBtn,
         el('button', { class: 'pill no big', type: 'button', text: 'End', onclick: () => conn.endCall() }))
     }
 

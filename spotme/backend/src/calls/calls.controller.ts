@@ -86,6 +86,26 @@ export class CallsController {
     if (!member) throw new ForbiddenException('not a member of this room');
 
     const roomName = LiveKitService.roomName(roomId);
+
+    /* THE PARTICIPANT CAP, enforced where it can actually be enforced.
+     *
+     * A limit checked only in the browser is a limit a modified client ignores,
+     * and the token is what admits someone to the room. Counted immediately
+     * before minting, which leaves a small race — two people can pass the check
+     * at once and make it seven. That is deliberate: closing it needs a lock
+     * around a third-party room, and one over is a slightly worse grid, whereas
+     * refusing wrongly is a call somebody cannot join.
+     *
+     * `null` means the count could not be established (LiveKit unreachable).
+     * We admit in that case: a listing outage must not become a calling outage.
+     */
+    const present = await this.livekit.countParticipants(roomName);
+    if (present !== null && present >= LiveKitService.MAX_PARTICIPANTS) {
+      throw new ForbiddenException(
+        `this call is full (${LiveKitService.MAX_PARTICIPANTS} people maximum)`,
+      );
+    }
+
     return { ...this.livekit.mintToken({ identity: principal.id, roomName }), roomName };
   }
 

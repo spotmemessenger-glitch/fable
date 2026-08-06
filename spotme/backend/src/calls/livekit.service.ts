@@ -44,6 +44,16 @@ export class LiveKitService {
   static readonly TOKEN_TTL_SECONDS = 10 * 60;
 
   /**
+   * The most people who may be in one call. Owner decision, 2026-08-06.
+   *
+   * Six is the video-grid cap: past six tiles nobody can see anyone, and the
+   * cost is participant-minutes per person per minute. Group calls start
+   * audio-only for the same reason — video is opt-in per participant — so this
+   * bounds the worst case rather than the common one.
+   */
+  static readonly MAX_PARTICIPANTS = 6;
+
+  /**
    * The LiveKit room name for a Spot Me conversation.
    *
    * DERIVED SERVER-SIDE, NEVER TAKEN FROM THE REQUEST. The client asks to call
@@ -156,6 +166,54 @@ export class LiveKitService {
       return res.ok;
     } catch {
       return false;
+    }
+  }
+
+  /**
+   * How many people are already in a call.
+   *
+   * THE CAP IS ENFORCED HERE, NOT IN THE CLIENT. A participant limit that lives
+   * in the browser is a suggestion: the token is what actually admits someone
+   * to the room, so the only place a seventh person can be refused is where the
+   * token is minted. The client checks too, but only so the refusal reads as a
+   * sentence instead of a failed connection.
+   *
+   * Returns null when the count cannot be established — LiveKit unreachable, or
+   * not configured. The caller ADMITS on null rather than refusing: an outage
+   * in the participant listing must not become an outage in calling, and the
+   * failure that admitting risks (a seventh tile) is far smaller than the one
+   * it avoids (nobody can call at all).
+   */
+  async countParticipants(roomName: string): Promise<number | null> {
+    const apiKey = process.env.LIVEKIT_API_KEY;
+    const apiSecret = process.env.LIVEKIT_API_SECRET;
+    if (!apiKey || !apiSecret || !this.isConfigured()) return null;
+
+    const now = Math.floor(Date.now() / 1000);
+    const admin = this.sign(
+      {
+        iss: apiKey,
+        sub: 'spotme-server',
+        nbf: now - 60,
+        iat: now,
+        exp: now + 30,
+        video: { room: roomName, roomAdmin: true },
+      },
+      apiSecret,
+    );
+
+    try {
+      const res = await fetch(`${this.httpUrl()}/twirp/livekit.RoomService/ListParticipants`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${admin}` },
+        body: JSON.stringify({ room: roomName }),
+        signal: AbortSignal.timeout(3000),
+      });
+      if (!res.ok) return null;
+      const body = (await res.json()) as { participants?: unknown[] };
+      return Array.isArray(body?.participants) ? body.participants.length : null;
+    } catch {
+      return null;
     }
   }
 

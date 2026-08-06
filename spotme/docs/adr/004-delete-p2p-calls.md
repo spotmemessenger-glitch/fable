@@ -116,14 +116,43 @@ ends the call; anyone else leaving does not.** In a two-person call those are
 the same event, which is exactly how "hang up when someone leaves" would ship
 and then drop a six-person call the moment one phone died.
 
-Still open before group is announced: a participant cap, the ring semantics for
-more than two people (who is rung, what "busy" means, what happens when the
-person who started it leaves), and whether group is audio-only first — which is
-roughly an order of magnitude cheaper and probably the common case.
+### Group parameters — owner decisions, 2026-08-06
 
-**Group is behind the same flag as 1:1.** Turning `spotme.calls` on enables
-both. If they should be separable, that is a deliberate second flag and not
-something to discover after enabling.
+**A SEPARATE FLAG.** `spotme.calls = 'livekit'` enables 1:1; group additionally
+requires `spotme.calls.group = 'on'`. Turning 1:1 on does not turn group on:
+they have different blast radii, and shipping the second by flipping the first
+would mean discovering the difference in production. Group requires both,
+because asking for group calls on a device where no call may be placed is a
+contradiction rather than a half-enabled state.
+
+**Participant cap: 6.** Enforced SERVER-SIDE in the token endpoint, because the
+token is what admits someone to a room and a browser-side limit is a
+suggestion. There is a deliberate small race — two people can pass the check at
+once and make seven — closing which would need a lock around a third-party
+room; one over is a slightly worse grid, whereas refusing wrongly is a call
+somebody cannot join. If the count cannot be established (LiveKit unreachable)
+the request is ADMITTED: a listing outage must not become a calling outage.
+
+**Group starts AUDIO-ONLY; video is opt-in per participant.** Six cameras is
+the expensive case and rarely the wanted one. `startCall()` forces audio for a
+group whichever button was pressed, and `toggleVideo()` publishes one more
+track for that participant alone — it asks nothing of anybody else. This is
+also why the state carries both `video` (is there video in this call at all,
+which is what the overlay lays out for) and `videoOn` (is OUR camera
+publishing); once video is per-person those stop being the same question.
+
+**Ring semantics.** The initiator OPENS THE ROOM FIRST and rings afterwards, so
+the first person to accept finds someone already there rather than an empty
+room. The call never waits for all invitees to answer, joining is non-blocking,
+late joiners are allowed for as long as the room is open, and one person
+declining changes nothing for anyone else. "Waiting for everyone" is the
+semantic that makes group calls feel broken — one person with a flat battery
+holds up five.
+
+**Teardown is unchanged, deliberately.** The last participant out ends the
+call; no single participant's departure ever tears it down. In a 1:1 call those
+are the same event, which is exactly how "hang up when someone leaves" ships
+and then drops a six-person call the moment one phone dies.
 
 ## Verification
 
