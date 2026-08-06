@@ -230,3 +230,4 @@ tdesktop/
 spotme/e2e/test-results/
 spotme/e2e/playwright-report/
 spotme/e2e/playwright/.cache/
+.env*
