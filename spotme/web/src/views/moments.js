@@ -128,6 +128,35 @@ export function render (root, ctx, params) {
   const wrap = el('div', { class: 'mo-wrap scroll-y' }, [head, railWrap, list])
   root.appendChild(wrap)
 
+  /* --------------------------------------- feed autoplay (Instagram grammar) */
+
+  /* Muted autoplay of the video IN VIEW, everything else paused — one playing
+   * at a time, exactly like the reels viewer's IntersectionObserver, but over
+   * the feed's card <video>s. This is what makes a feed feel alive instead of a
+   * wall of posters. Recreated on every draw so it never holds a detached node
+   * from a torn-down card. Muted, so the autoplay policy always permits it;
+   * sound is earned only by the tap that opens reels (see openReels). */
+  let feedIO = null
+  const feedVideos = new Set()
+  const feedAutoplay = {
+    reset () {
+      if (feedIO) feedIO.disconnect()
+      feedVideos.clear()
+      feedIO = new IntersectionObserver((entries) => {
+        for (const e of entries) {
+          const v = e.target
+          if (e.isIntersecting && e.intersectionRatio >= 0.6) {
+            for (const other of feedVideos) if (other !== v && !other.paused) other.pause()
+            v.play().catch(() => {})   // muted → allowed; a refusal just leaves the poster frame
+          } else {
+            v.pause()
+          }
+        }
+      }, { threshold: [0, 0.6, 1] })
+    },
+    observe (v) { if (feedIO) { feedVideos.add(v); feedIO.observe(v) } }
+  }
+
   /* ------------------------------------------------------------- helpers */
 
   /** Resolve one asset to a short-lived URL, once. */
@@ -315,6 +344,8 @@ export function render (root, ctx, params) {
       ]))
       return
     }
+    // A fresh observer for this render — the previous one's videos are gone.
+    feedAutoplay.reset()
     for (const m of items) list.appendChild(card(m))
     // One post from a link: offer the feed rather than a dead end.
     if (focusId) {
@@ -344,21 +375,33 @@ export function render (root, ctx, params) {
     const mediaSlot = media ? el('div', { class: 'mo-media' }) : null
     if (media) {
       if (media.kind === 'video') {
-        // Poster first, player on demand: a feed of autoplaying videos is the
-        // thing that makes scrolling stutter (M3 tunes this properly).
+        /* Muted autoplay in-view (Instagram grammar): the feed observer plays
+         * whichever card is on screen and pauses the rest. `playsinline` +
+         * `webkit-playsinline`, set as BOTH attributes AND the property, are
+         * what stop iOS Safari from hijacking a tapped <video> into its native
+         * fullscreen player — the "opens in a new window" bug. A tap opens the
+         * reels viewer at this post, continuing from where the feed left off,
+         * and that tap is the user gesture that earns sound. */
+        const playIcon = el('span', { class: 'mo-play', text: '▶' })
         const v = el('video', {
-          class: 'mo-video', muted: '', playsinline: '', loop: '', preload: 'metadata',
-          onclick: () => openReels(items.filter((x) => (x.media || [])[0]?.kind === 'video'), m.id)
+          class: 'mo-video', muted: '', playsinline: '', 'webkit-playsinline': '', loop: '', preload: 'metadata',
+          onclick: () => openReels(
+            items.filter((x) => (x.media || [])[0]?.kind === 'video'), m.id,
+            { startTime: v.currentTime || 0, sound: true }
+          )
         })
         v.muted = true
         v.playsInline = true
+        v.setAttribute('webkit-playsinline', '')
+        // While it autoplays there is nothing to "press play" on — hide the
+        // glyph so a playing video does not wear a play button.
+        v.addEventListener('playing', () => { playIcon.style.display = 'none' })
+        v.addEventListener('pause', () => { playIcon.style.display = '' })
         mediaSlot.appendChild(v)
-        // `#t=0.1` forces iOS Safari to decode and PAINT the first frame under
-        // preload=metadata; without it the card is a dead black box until tap
-        // (review finding). It also gives an instant poster with no extra
-        // request until the real poster pipeline is wired through.
-        urlFor(media.mediaId).then((u) => { if (u && !disposed) v.src = `${u}#t=0.1` })
-        mediaSlot.appendChild(el('span', { class: 'mo-play', text: '▶' }))
+        // `#t=0.1` paints a first frame immediately under preload=metadata, so
+        // the card is never a black box before the observer starts it.
+        urlFor(media.mediaId).then((u) => { if (u && !disposed) { v.src = `${u}#t=0.1`; feedAutoplay.observe(v) } })
+        mediaSlot.appendChild(playIcon)
       } else {
         const img = el('img', { class: 'mo-img', alt: media.alt || '', loading: 'lazy' })
         mediaSlot.appendChild(img)
@@ -548,7 +591,7 @@ export function render (root, ctx, params) {
       const localUrl = URL.createObjectURL(f)
       composerObjectUrl = localUrl
       preview.appendChild(isVideo
-        ? (() => { const pv = el('video', { class: 'mo-prevmedia', src: localUrl, playsinline: '', controls: '' }); pv.muted = true; return pv })()
+        ? (() => { const pv = el('video', { class: 'mo-prevmedia', src: localUrl, playsinline: '', 'webkit-playsinline': '', controls: '' }); pv.muted = true; pv.playsInline = true; pv.setAttribute('webkit-playsinline', ''); return pv })()
         : el('img', { class: 'mo-prevmedia', src: localUrl, alt: '' }))
       status.textContent = 'Uploading…'
       try {
@@ -607,15 +650,22 @@ export function render (root, ctx, params) {
    * Full-bleed vertical viewer. One card fills the screen, scroll-snap moves
    * between them, and only the ACTIVE video plays — the neighbours are
    * preloaded but paused, which is what keeps a scroll from stuttering.
+   *
+   * `opts.startTime` continues from where the feed's inline video was (a tap
+   * should not restart the clip), and `opts.sound` unmutes: the tap that
+   * opened this viewer is a user gesture, which is the one moment the browser
+   * lets audio begin.
    */
-  function openReels (videos, startId) {
+  function openReels (videos, startId, opts = {}) {
     if (!videos.length) return
+    let startApplied = false
     const track = el('div', { class: 'mo-reeltrack' })
     const nodes = []
     for (const m of videos) {
-      const v = el('video', { class: 'mo-reelvideo', muted: '', playsinline: '', loop: '', preload: 'none' })
+      const v = el('video', { class: 'mo-reelvideo', muted: '', playsinline: '', 'webkit-playsinline': '', loop: '', preload: 'none' })
       v.muted = true
       v.playsInline = true
+      v.setAttribute('webkit-playsinline', '')
       const media = (m.media || [])[0]
       const pane = el('section', { class: 'mo-reel' }, [
         v,
@@ -667,12 +717,16 @@ export function render (root, ctx, params) {
       ensureSrc(i + 1, 'metadata'); ensureSrc(i - 1, 'metadata')
       const n = nodes[i]
       if (n && n.v.src) {
+        // Continue from the feed's position on the pane we opened at, once.
+        if (!startApplied && opts.startTime) { startApplied = true; try { n.v.currentTime = opts.startTime } catch { /* seek not ready yet */ } }
+        // The tap that opened reels earns sound; keep it unmuted as you swipe.
+        if (opts.sound) n.v.muted = false
         try { await n.v.play() } catch {
           // Autoplay refused (iOS Low Power Mode / Android saver). Offer a tap
           // rather than a dead black screen; the tap is a user gesture, which
           // the same policy always allows.
           if (!n.pane.querySelector('.mo-reeltap')) {
-            const tap = el('button', { class: 'mo-reeltap', type: 'button', text: '▶', onclick: () => { tap.remove(); n.v.play().catch(() => {}) } })
+            const tap = el('button', { class: 'mo-reeltap', type: 'button', text: '▶', onclick: () => { tap.remove(); if (opts.sound) n.v.muted = false; n.v.play().catch(() => {}) } })
             n.pane.appendChild(tap)
           }
         }
@@ -721,6 +775,7 @@ export function render (root, ctx, params) {
 
   return () => {
     disposed = true
+    if (feedIO) feedIO.disconnect()
     if (typeof reelsCleanup === 'function') reelsCleanup()
   }
 }
