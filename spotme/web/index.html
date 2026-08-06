@@ -33,10 +33,17 @@
   <link rel="icon" href="/icon.svg" type="image/svg+xml" />
   <link rel="icon" href="/icon-192.png" sizes="192x192" type="image/png" />
   <title>Spot Me</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link rel="stylesheet"
-        href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" />
+  <!-- The faces are vendored into /fonts and declared in src/fonts.css, so
+       there is no third-party host on the critical path and no reader's IP
+       reaches Google just to load a typeface. See scripts/fetch-fonts.mjs.
+
+       Sora latin is preloaded because it is the one face EVERY reader needs:
+       without this the browser cannot discover it until the bundled CSS has
+       been fetched and parsed, which is the round trip removing the external
+       stylesheet was meant to save. `crossorigin` is required even though
+       this is same-origin — font fetches are always CORS-mode anonymous, and
+       a preload without it downloads the file a second time. -->
+  <link rel="preload" href="/fonts/sora-latin.woff2" as="font" type="font/woff2" crossorigin />
 </head>
 <body>
   <div id="app"></div>

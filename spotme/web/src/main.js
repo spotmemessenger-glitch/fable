@@ -6,6 +6,9 @@
  * network layers up. Room links (#r=...&k=...) keep working: they are the
  * proven two-phone flow, now joining straight into a conversation.
  */
+/* Faces first: tokens.css sets --font, so the @font-face rules that define
+ * those families must already be in the sheet when it is applied. */
+import './fonts.css'
 import './tokens.css'
 import { API_BASE } from './lib/api.js'
 import { db, wipeDevice } from './lib/db.js'

@@ -164,14 +164,21 @@ async function main() {
     await cdp.send('Emulation.setCPUThrottlingRate', { rate: CPU_THROTTLE });
     const fresh = await ctx.newPage();
     wire(fresh);
-    /* THIRD-PARTY FONTS ARE BLOCKED FOR THE MEASUREMENT, DELIBERATELY.
-     * index.html pulls a RENDER-BLOCKING stylesheet from fonts.googleapis.com.
-     * Wherever that host is slow or blocked, first paint waits on it — in the
-     * sandbox this harness was written in it was reset, and the measured FCP
-     * was ~12.8s at BOTH 1x and 4x CPU, i.e. entirely network-bound and
-     * meaningless as an app number. Blocking it measures the app rather than
-     * the font CDN. `externalBlocked` below reports what was cut, so the
-     * number is never read as if the page had loaded everything. */
+    /* EVERY THIRD-PARTY HOST IS BLOCKED FOR THE MEASUREMENT, DELIBERATELY.
+     * This started as a font workaround: index.html used to pull a
+     * RENDER-BLOCKING stylesheet from fonts.googleapis.com, and wherever that
+     * host was slow or blocked first paint waited on it — in the sandbox this
+     * harness was written in it was reset, and the measured FCP was ~12.8s at
+     * BOTH 1x and 4x CPU, i.e. entirely network-bound and meaningless as an
+     * app number.
+     *
+     * The fonts are vendored now (scripts/fetch-fonts.mjs), so they are
+     * same-origin, they are NOT blocked by this filter, and the number below
+     * includes them — which is the point: it is what a reader actually waits
+     * for. The block stays for every OTHER external host, so a future
+     * third-party script cannot quietly reintroduce the same distortion.
+     * `externalBlocked` reports what was cut, so the number is never read as
+     * if the page had loaded everything. */
     const externalBlocked = [];
     await fresh.route('**/*', (route) => {
       const u = route.request().url();
