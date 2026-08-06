@@ -1481,7 +1481,7 @@ export function render (root, ctx, roomId) {
    * taps on the player itself keep working the native controls. */
   function openVideoView (data) {
     const overlay = el('div', { class: 'imgview' }, [
-      el('video', { src: data, controls: '', autoplay: '', playsinline: '' })
+      el('video', { src: data, controls: '', autoplay: '', playsinline: '', 'webkit-playsinline': '' })
     ])
     overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove() })
     root.appendChild(overlay)
@@ -1528,7 +1528,7 @@ export function render (root, ctx, roomId) {
     // Kind-agnostic: a private VIDEO used to fall through to the ordinary
     // player — permanent, replayable, and listed in the media gallery.
     const img = m.kind === 'video'
-      ? el('video', { src: m.data, autoplay: '', playsinline: '', loop: '' })
+      ? el('video', { src: m.data, autoplay: '', playsinline: '', 'webkit-playsinline': '', loop: '' })
       : el('img', { src: m.data, alt: '' })
     const count = el('span', { class: 'bcount', text: String(secs) })
     const ringFg = document.createElementNS('http://www.w3.org/2000/svg', 'circle')
@@ -1762,7 +1762,7 @@ export function render (root, ctx, roomId) {
     if (m.kind === 'video') {
       // A wrapper div, not the <video> itself, so the progress ring has a home.
       return el('div', { class: 'vid' }, [
-        el('video', { src: m.data, controls: '', playsinline: '', preload: 'metadata' })
+        el('video', { src: m.data, controls: '', playsinline: '', 'webkit-playsinline': '', preload: 'metadata' })
       ])
     }
     if (m.kind === 'voice') return buildVoice(m)
@@ -2774,7 +2774,7 @@ export function render (root, ctx, roomId) {
               'aria-label': isVideo ? 'Open video' : 'Open photo'
             }, [
               isVideo
-                ? el('video', { src: m.data, muted: '', playsinline: '', preload: 'metadata' })
+                ? el('video', { src: m.data, muted: '', playsinline: '', 'webkit-playsinline': '', preload: 'metadata' })
                 : el('img', { src: m.data, alt: '' }),
               isVideo ? el('span', { class: 'cp-vplay', html: IC.play }) : null
             ])
@@ -4334,11 +4334,11 @@ export function render (root, ctx, roomId) {
 
     if (call.state === 'active' && call.remote) {
       if (call.video) {
-        const remote = el('video', { class: 'callremote', autoplay: '', playsinline: '' })
+        const remote = el('video', { class: 'callremote', autoplay: '', playsinline: '', 'webkit-playsinline': '' })
         remote.srcObject = call.remote
         parts.push(remote)
         if (call.local) {
-          const localV = el('video', { class: 'callpip', autoplay: '', playsinline: '', muted: '' })
+          const localV = el('video', { class: 'callpip', autoplay: '', playsinline: '', 'webkit-playsinline': '', muted: '' })
           localV.muted = true
           localV.srcObject = call.local
           parts.push(localV)

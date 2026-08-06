@@ -164,6 +164,13 @@ export class MomentMediaService implements MomentMediaPort, MediaUploadPort, Med
         if (!res.ok) return null;
         return { bytes: Buffer.from(await res.arrayBuffer()), mimeType: asset.mimeType };
       },
+      readEdits: async (mediaId) => {
+        const asset = await this.prisma.momentMediaAsset.findUnique({
+          where: { id: mediaId },
+          select: { trimStartMs: true, trimEndMs: true, coverAtMs: true },
+        });
+        return asset ?? null;
+      },
       writeDerived: async (mediaId, name, bytes, contentType) => {
         const key = `moments/derived/${mediaId}-${name}`;
         if (this.storage) await this.storage.putObject(key, bytes, contentType);

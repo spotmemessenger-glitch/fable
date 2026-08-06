@@ -27,6 +27,35 @@ import './moments.css'
 import { db } from '../lib/db.js'
 import { el, clear, avatar, actionSheet } from '../lib/ui.js'
 import * as M from '../lib/moments-api.js'
+import { videoEl, watchInView, playExclusive, pause, pauseAll, isSoundOn, setSoundOn, onSoundChange } from '../lib/video.js'
+import { openPhotoEditor } from '../lib/photoedit.js'
+import { fileToDataURL, fileFromDataURL } from '../lib/media.js'
+
+/**
+ * The card's icon set, in the SAME grammar as the bottom bar (see NAV_ITEMS in
+ * main.js): a 24px grid, `currentColor`, outline by default at stroke-width
+ * 1.8, and a solid fill only to mark an active state. The emoji row this
+ * replaces could not do any of that — emoji render in the system's colours and
+ * at the system's weight, so 🤍 next to 💬 next to ↗️ arrived as three
+ * different design languages stacked in one row, and none of them could show
+ * "on".
+ */
+const STROKE = 'viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"'
+const HEART_D = 'M12 20.1c-.5 0-8-4.6-8-9.6a4.4 4.4 0 018-2.6 4.4 4.4 0 018 2.6c0 5-7.5 9.6-8 9.6z'
+const ICONS = {
+  // Outline heart, and the same silhouette filled for a reaction that is on —
+  // one shape in two states, so the change reads as the same control.
+  react: `<svg ${STROKE}><path d="${HEART_D}"/></svg>`,
+  reactOn: `<svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="${HEART_D}"/></svg>`,
+  comment: `<svg ${STROKE}><path d="M20 11.9a7.6 7.6 0 01-10.9 6.9L4.6 20l1.3-4.6A7.6 7.6 0 1120 11.9z"/></svg>`,
+  share: `<svg ${STROKE}><path d="M12 15.2V3.9"/><path d="M8.3 7.6L12 3.9l3.7 3.7"/><path d="M5.8 13v5.4a1.7 1.7 0 001.7 1.7h9a1.7 1.7 0 001.7-1.7V13"/></svg>`,
+  // Dots take a solid fill because a 1.4px-radius ring reads as mush at 24px —
+  // the bar's Posts glyph solves its own small dot the same way.
+  more: `<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5.6" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="18.4" cy="12" r="1.5"/></svg>`,
+  soundOff: `<svg ${STROKE}><path d="M4.5 9.4v5.2h3.2l4.1 3.3V6.1L7.7 9.4H4.5z"/><path d="M16.4 9.8l4.1 4.4M20.5 9.8l-4.1 4.4"/></svg>`,
+  soundOn: `<svg ${STROKE}><path d="M4.5 9.4v5.2h3.2l4.1 3.3V6.1L7.7 9.4H4.5z"/><path d="M15.6 9.2a3.9 3.9 0 010 5.6"/><path d="M18.2 6.8a7.4 7.4 0 010 10.4"/></svg>`,
+  play: `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8.4 5.7a.9.9 0 011.36-.77l8.1 5.5a.9.9 0 010 1.5l-8.1 5.5a.9.9 0 01-1.36-.77V5.7z"/></svg>`
+}
 
 const FEED_MODES = [
   { key: 'nearby', label: 'Nearby' },
@@ -118,9 +147,19 @@ export function render (root, ctx, params) {
   let cursor = null
   let state = 'loading'        // loading | ok | empty | unavailable | forbidden | failed
   let detail = ''
-  const assetCache = new Map() // mediaId -> resolved URL
+  const assetCache = new Map() // mediaId -> Promise<{url,posterUrl,width,height}|null>
   let disposed = false
   let reelsCleanup = null
+
+  /* The feed's video wiring, rebuilt on every draw. `feedVids` is in DOM order
+   * so a card can preload its NEIGHBOURS without asking the DOM where it is. */
+  let feedVids = []
+  let feedIO = null
+  let unsubSound = null
+  /* Which media slots are on screen RIGHT NOW. The observer and the asset
+   * fetch race each other — whichever lands second is the one that can
+   * actually start playback, so both have to check the other's result. */
+  let inView = new Set()
 
   const head = el('div', { class: 'mo-head' })
   const railWrap = el('div', { class: 'mo-rail' })
@@ -130,13 +169,38 @@ export function render (root, ctx, params) {
 
   /* ------------------------------------------------------------- helpers */
 
-  /** Resolve one asset to a short-lived URL, once. */
-  async function urlFor (mediaId) {
+  /** Resolve one asset to its short-lived URL bundle, once. */
+  function assetFor (mediaId) {
     if (assetCache.has(mediaId)) return assetCache.get(mediaId)
-    const p = M.assetUrl(mediaId).then((r) => r?.url || null).catch(() => null)
+    const p = M.assetUrl(mediaId).then((r) => (r && r.url ? r : null)).catch(() => null)
     assetCache.set(mediaId, p)
     return p
   }
+
+  /** Just the playable/renderable URL — images and stories want only this. */
+  const urlFor = (mediaId) => assetFor(mediaId).then((a) => (a ? a.url : null))
+
+  /* THE LOCATION LINE.
+   *
+   * `coarseCell` is an internal grid id. The server builds it as `g<lat>:<lon>`
+   * (discovery.policy.ts) so rows in the same cell can be grouped and notified
+   * together — it is not a place name, it was never meant to be read, and it
+   * was being printed to people verbatim as "g11.933:79.808".
+   *
+   * Worse than ugly: it is a COORDINATE. Rounded to a ~110 m grid, but a
+   * coordinate all the same, and the entire point of that rounding is that a
+   * precise fix never leaves the device. Printing the cell handed back a good
+   * part of what the rounding was there to protect.
+   *
+   * A post either carries a location or it does not, and the only honest thing
+   * this screen can say about one it cannot name is that it is nearby. */
+  const place = (m) => (m.coarseCell ? 'Nearby' : null)
+
+  /* Aspect clamps for the reserved media box. A 9:16 phone clip is the tallest
+   * thing worth showing inline — past that a single post owns the whole screen
+   * and the feed stops reading as a feed. */
+  const AR_MIN = 0.5625
+  const AR_MAX = 1.91
 
   const when = (ts) => {
     const mins = Math.max(0, Math.round((Date.now() - Number(ts)) / 60000))
@@ -210,9 +274,21 @@ export function render (root, ctx, params) {
     return new Promise((resolve) => {
       if (!navigator.geolocation) return resolve(null)
       const c3 = (n) => Math.round(n * 1000) / 1000
+      /* BOUNDED BY US, not just by the API. `getCurrentPosition`'s own
+       * `timeout` starts when the browser begins LOCATING, and does not cover
+       * the permission prompt sitting unanswered in front of it — so someone
+       * who ignores that dialog gets neither callback, ever, and the feed
+       * behind it stays on "Loading…" for as long as they look at it.
+       *
+       * Whoever answers first wins, and a missing fix is not an error: the
+       * nearby feed simply loads without an origin, exactly as it does when
+       * permission is refused outright. */
+      let done = false
+      const finish = (v) => { if (!done) { done = true; resolve(v) } }
+      setTimeout(() => finish(null), 7000)
       navigator.geolocation.getCurrentPosition(
-        (pos) => resolve({ lat: c3(pos.coords.latitude), lon: c3(pos.coords.longitude) }),
-        () => resolve(null),
+        (pos) => finish({ lat: c3(pos.coords.latitude), lon: c3(pos.coords.longitude) }),
+        () => finish(null),
         { timeout: 6000, maximumAge: 300000 }
       )
     })
@@ -273,6 +349,14 @@ export function render (root, ctx, params) {
 
   function drawList () {
     clear(list)
+    /* A redraw replaces every card, so the previous observer and its registry
+     * point at nodes that have left the document. Tear both down first, and
+     * stop whatever was playing — otherwise a removed <video> keeps its audio
+     * running with nothing on screen to pause it. */
+    if (feedIO) { feedIO.disconnect(); feedIO = null }
+    pauseAll()
+    feedVids = []
+    inView = new Set()
     if (state === 'loading') { list.appendChild(el('p', { class: 'mo-note', text: 'Loading…' })); return }
     if (state === 'unavailable') {
       list.appendChild(el('div', { class: 'mo-note' }, [
@@ -316,6 +400,7 @@ export function render (root, ctx, params) {
       return
     }
     for (const m of items) list.appendChild(card(m))
+    wireFeedVideos()
     // One post from a link: offer the feed rather than a dead end.
     if (focusId) {
       list.appendChild(el('button', {
@@ -330,73 +415,191 @@ export function render (root, ctx, params) {
     }
   }
 
+  /**
+   * Autoplay-in-view for the feed, built from the SAME observer factory the
+   * reels viewer uses (`watchInView` in lib/video.js) rather than a second
+   * hand-rolled one. The two surfaces ask an identical question — "is this the
+   * element being looked at?" — and answering it twice is how they drift.
+   *
+   * Only the card in view plays, and `playExclusive` guarantees it is the only
+   * video playing anywhere, so scrolling never leaves a trail of audio behind.
+   */
+  function wireFeedVideos () {
+    if (!feedVids.length) return
+    const at = (node) => feedVids.findIndex((f) => f.slot === node)
+
+    feedIO = watchInView(
+      (node) => {
+        const i = at(node)
+        if (i < 0) return
+        inView.add(node)
+        // Neighbours get their metadata ready so the next card starts without
+        // a stall — bytes only, never the speaker.
+        for (const j of [i - 1, i + 1]) {
+          if (feedVids[j] && feedVids[j].v.preload !== 'auto') feedVids[j].v.preload = 'metadata'
+        }
+        feedVids[i].v.preload = 'auto'
+        // No source yet means the asset call is still out; its `then` will
+        // start playback instead, using the set this just joined.
+        if (feedVids[i].v.src) playExclusive(feedVids[i].v)
+      },
+      (node) => {
+        const i = at(node)
+        inView.delete(node)
+        if (i >= 0) pause(feedVids[i].v)
+      }
+    )
+    for (const f of feedVids) feedIO.observe(f.slot)
+
+    /* Sound is one shared truth. Flipping it on any card has to repaint every
+     * other card's control, or the feed shows two contradictory states at once
+     * and the button stops meaning anything. */
+    if (!unsubSound) {
+      unsubSound = onSoundChange((on) => {
+        for (const f of feedVids) {
+          const b = f.slot.querySelector('.mo-sound')
+          if (!b) continue
+          b.innerHTML = on ? ICONS.soundOn : ICONS.soundOff
+          b.setAttribute('aria-label', on ? 'Mute' : 'Unmute')
+        }
+      })
+    }
+  }
+
   function draw () { if (!disposed) { drawHead(); drawRail(); drawList() } }
 
   /* ---------------------------------------------------------------- card */
+
+  /* Outline by default, the same silhouette FILLED once you have reacted —
+   * one shape in two states, so the change reads as the same control rather
+   * than as a different button appearing.
+   *
+   * Note this deliberately does not show WHICH of the five reactions was
+   * chosen; the button says "you reacted", and the sheet is where the choice
+   * lives. Showing the picked emoji here would put a system-drawn glyph back
+   * into a row that exists to be one stroke weight. */
+  const reactFace = (key) => (key ? ICONS.reactOn : ICONS.react)
 
   function card (m) {
     const who = m.author?.displayName || m.author?.userId || 'Someone'
     const mine = m.author?.userId === db.profile()?.id
     const media = (m.media || [])[0]
 
+    /* HEADER ABOVE THE MEDIA. The ⋯ menu belongs here, not at the far end of
+     * the action row: that put "report" and "block" one thumb-slip from
+     * "react", and left the header with dead space exactly where every feed
+     * people already use puts the control. */
+    const head = el('header', { class: 'mo-cardhead' }, [
+      avatar({ name: who, avatar: m.author?.avatar }, 36),
+      el('div', { class: 'mo-whowrap' }, [
+        el('b', { class: 'mo-who', text: who }),
+        el('span', { class: 'mo-meta', text: [place(m), when(m.createdAtUTC)].filter(Boolean).join(' · ') })
+      ]),
+      el('button', {
+        class: 'mo-icon mo-cardmore', type: 'button', html: ICONS.more,
+        'aria-label': 'More', onclick: () => openMore(m, mine)
+      })
+    ])
+
     // A TEXT post has no media, so it must have no media slot — otherwise the
     // empty 4:5 black box renders as a huge void above the text (real drive).
     const mediaSlot = media ? el('div', { class: 'mo-media' }) : null
+    /* Reserve the real box as soon as the server tells us the intrinsic size,
+     * which is the same round-trip that hands over the URL — so the shape is
+     * known BEFORE a byte of media decodes and the card never resizes under a
+     * reader mid-scroll. The CSS holds a 4:5 default until then. */
+    const reserve = (a) => {
+      if (!a || !(a.width > 0) || !(a.height > 0)) return
+      const ar = Math.min(AR_MAX, Math.max(AR_MIN, a.width / a.height))
+      mediaSlot.style.aspectRatio = String(ar)
+    }
+
     if (media) {
       if (media.kind === 'video') {
-        // Poster first, player on demand: a feed of autoplaying videos is the
-        // thing that makes scrolling stutter (M3 tunes this properly).
-        const v = el('video', {
-          class: 'mo-video', muted: '', playsinline: '', loop: '', preload: 'metadata',
-          onclick: () => openReels(items.filter((x) => (x.media || [])[0]?.kind === 'video'), m.id)
-        })
-        v.muted = true
-        v.playsInline = true
+        const v = videoEl('mo-video')
         mediaSlot.appendChild(v)
-        // `#t=0.1` forces iOS Safari to decode and PAINT the first frame under
-        // preload=metadata; without it the card is a dead black box until tap
-        // (review finding). It also gives an instant poster with no extra
-        // request until the real poster pipeline is wired through.
-        urlFor(media.mediaId).then((u) => { if (u && !disposed) v.src = `${u}#t=0.1` })
-        mediaSlot.appendChild(el('span', { class: 'mo-play', text: '▶' }))
+
+        /* Tapping the media opens the reels viewer AT THIS POST and CONTINUES
+         * from where the card had got to. Restarting at zero is the thing that
+         * makes the viewer feel like a different video instead of the same one
+         * getting bigger. */
+        v.addEventListener('click', () => {
+          openReels(items.filter((x) => (x.media || [])[0]?.kind === 'video'), m.id, v.currentTime || 0)
+        })
+
+        /* The sound control sits ON the media, because that is the thing it
+         * governs, and it carries the tap that browsers require: audible
+         * playback is only ever granted from a real gesture. */
+        const sound = el('button', {
+          class: 'mo-sound', type: 'button',
+          html: isSoundOn() ? ICONS.soundOn : ICONS.soundOff,
+          'aria-label': isSoundOn() ? 'Mute' : 'Unmute',
+          onclick: (e) => {
+            // Not a tap on the media — this must not also open the reels.
+            e.stopPropagation()
+            setSoundOn(!isSoundOn(), v)
+            if (v.paused) playExclusive(v)
+          }
+        })
+        mediaSlot.appendChild(sound)
+        mediaSlot.appendChild(el('span', { class: 'mo-play', html: ICONS.play }))
+        // The play glyph is a STATE, not decoration: it marks a card that is
+        // holding still, and gets out of the way the moment one is running.
+        v.addEventListener('playing', () => mediaSlot.classList.add('on'))
+        v.addEventListener('pause', () => mediaSlot.classList.remove('on'))
+
+        assetFor(media.mediaId).then((a) => {
+          if (!a || disposed) return
+          reserve(a)
+          /* POSTER, ALWAYS. The card must never be a black rectangle. The
+           * transcode worker has written a poster frame for every clip since
+           * M3 and the URL route simply never handed it back (fixed in the
+           * same change as this). `#t=0.1` stays as the fallback for assets
+           * with no poster — older uploads, and the clips whose poster step
+           * failed — where nudging past frame zero is the only way to make
+           * iOS decode and paint something under preload=metadata. */
+          if (a.posterUrl) v.poster = a.posterUrl
+          v.src = a.posterUrl ? a.url : `${a.url}#t=0.1`
+          /* The observer almost always wins this race: the card is on screen
+           * before its URL comes back. Calling play() then would be a play()
+           * on a source-less element — a guaranteed rejection that leaves the
+           * card frozen on its poster with nothing to retry it. So the arrival
+           * of the source is itself a trigger. */
+          if (inView.has(mediaSlot)) playExclusive(v)
+        })
+
+        feedVids.push({ m, v, slot: mediaSlot })
       } else {
         const img = el('img', { class: 'mo-img', alt: media.alt || '', loading: 'lazy' })
         mediaSlot.appendChild(img)
-        urlFor(media.mediaId).then((u) => { if (u && !disposed) img.src = u })
+        assetFor(media.mediaId).then((a) => {
+          if (!a || disposed) return
+          reserve(a)
+          img.src = a.url
+        })
       }
     }
 
+    /* The action row. Reactions, NO counters — see the header note. */
     const acts = el('div', { class: 'mo-acts' })
-    // Reactions, NO counters — see the header note.
     const reactBtn = el('button', {
-      class: 'mo-act' + (m.myReaction ? ' on' : ''), type: 'button',
-      text: m.myReaction ? (REACTIONS.find((r) => r.key === m.myReaction)?.glyph || '👍') : '🤍',
-      'aria-label': 'React',
+      class: 'mo-icon mo-act' + (m.myReaction ? ' on' : ''), type: 'button',
+      html: reactFace(m.myReaction),
+      'aria-label': 'React', 'aria-pressed': m.myReaction ? 'true' : 'false',
       onclick: () => openReactions(m, reactBtn)
     })
     acts.appendChild(reactBtn)
     acts.appendChild(el('button', {
-      class: 'mo-act', type: 'button', text: '💬', 'aria-label': 'Comments',
-      onclick: () => openComments(m)
+      class: 'mo-icon mo-act', type: 'button', html: ICONS.comment,
+      'aria-label': 'Comments', onclick: () => openComments(m)
     }))
     acts.appendChild(el('button', {
-      class: 'mo-act', type: 'button', text: '↗', 'aria-label': 'Share',
-      onclick: () => shareMoment(m)
-    }))
-    acts.appendChild(el('span', { class: 'mo-spacer' }))
-    acts.appendChild(el('button', {
-      class: 'mo-act', type: 'button', text: '⋯', 'aria-label': 'More',
-      onclick: () => openMore(m, mine)
+      class: 'mo-icon mo-act', type: 'button', html: ICONS.share,
+      'aria-label': 'Share', onclick: () => shareMoment(m)
     }))
 
     return el('article', { class: 'mo-card' }, [
-      el('header', { class: 'mo-cardhead' }, [
-        avatar({ name: who }, 34),
-        el('div', { class: 'mo-whowrap' }, [
-          el('b', { class: 'mo-who', text: who }),
-          el('span', { class: 'mo-meta', text: [m.coarseCell, when(m.createdAtUTC)].filter(Boolean).join(' · ') })
-        ])
-      ]),
+      head,
       mediaSlot,
       m.text ? el('p', { class: `mo-text${media ? '' : ' only'}`, text: m.text }) : null,
       acts
@@ -411,8 +614,9 @@ export function render (root, ctx, params) {
       fn: async () => {
         try {
           if (m.myReaction === r.key) { await M.unreact(m.id); m.myReaction = null } else { await M.react(m.id, r.key); m.myReaction = r.key }
-          btn.textContent = m.myReaction ? r.glyph : '🤍'
-          btn.className = 'mo-act' + (m.myReaction ? ' on' : '')
+          btn.innerHTML = reactFace(m.myReaction)
+          btn.className = 'mo-icon mo-act' + (m.myReaction ? ' on' : '')
+          btn.setAttribute('aria-pressed', m.myReaction ? 'true' : 'false')
         } catch (e) { ctx.toast(e.message || 'Could not react') }
       }
     })), 'React')
@@ -518,15 +722,78 @@ export function render (root, ctx, params) {
 
   /* ------------------------------------------------------------ composer */
 
+  /**
+   * Frames for the trim filmstrip, drawn off a hidden <video> onto a canvas.
+   *
+   * DEGRADES RATHER THAN FAILS. A browser that cannot decode the picked clip —
+   * Chrome on Android meeting HEVC from an iPhone is the everyday case — throws
+   * somewhere in here, and the composer falls back to a plain trim bar with no
+   * thumbnails. Trimming still works; you just cannot see what you are cutting.
+   * The alternative, an editor that refuses to open at all, is worse.
+   */
+  async function filmstrip (url, count = 8) {
+    // Through the same factory as every other video, even though this one is
+    // never shown: one place decides what a <video> is in this app, and an
+    // offscreen exception is how that stops being true.
+    const v = videoEl('mo-offscreen', { loop: false, preload: 'auto' })
+    v.src = url
+    const shots = []
+    try {
+      await new Promise((res, rej) => {
+        v.addEventListener('loadedmetadata', res, { once: true })
+        v.addEventListener('error', () => rej(new Error('undecodable')), { once: true })
+        setTimeout(() => rej(new Error('timeout')), 8000)
+      })
+      const c = document.createElement('canvas')
+      c.height = 56
+      c.width = Math.max(1, Math.round(56 * ((v.videoWidth / v.videoHeight) || 0.56)))
+      const g = c.getContext('2d')
+      for (let i = 0; i < count; i++) {
+        const t = (v.duration * (i + 0.5)) / count
+        await new Promise((res) => {
+          v.addEventListener('seeked', res, { once: true })
+          // A seek that never lands must not hang the composer forever.
+          setTimeout(res, 1200)
+          v.currentTime = Math.min(t, Math.max(0, v.duration - 0.05))
+        })
+        g.drawImage(v, 0, 0, c.width, c.height)
+        shots.push(c.toDataURL('image/jpeg', 0.6))
+      }
+    } catch { /* no thumbnails; the bar below still trims */ }
+    v.removeAttribute('src')
+    v.load()
+    return shots
+  }
+
   function openComposer ({ story = false } = {}) {
     let picked = null
     let uploaded = null
     let composerObjectUrl = null
+    /* Video edit state, in MILLISECONDS — the unit the edit route takes, and
+     * fine enough that a chosen cover frame lands where it was chosen. */
+    let durMs = 0
+    let trimStartMs = 0
+    let trimEndMs = 0
+    let coverAtMs = 0
+
     const preview = el('div', { class: 'mo-prev' })
-    const caption = el('input', { class: 'mo-cap', type: 'text', placeholder: story ? 'Add a caption…' : 'Say something…', maxlength: '4000' })
+    const tools = el('div', { class: 'mo-tools' })
     const file = el('input', { type: 'file', accept: 'image/*,video/*', style: 'display:none' })
     let visibility = story ? 'friends' : 'nearby'
-    const status = el('p', { class: 'mo-note', text: '' })
+    const status = el('p', { class: 'mo-substatus', text: '' })
+
+    /* Multiline, and it grows with what is written — a single-line input made
+     * a caption of any length a peephole. It stops at four lines so the sheet
+     * cannot walk off the bottom of the screen, and scrolls past that. */
+    const caption = el('textarea', {
+      class: 'mo-cap', rows: '1', maxlength: '4000', placeholder: 'Write a caption…'
+    })
+    const grow = () => {
+      caption.style.height = 'auto'
+      const line = parseFloat(getComputedStyle(caption).lineHeight) || 21
+      caption.style.height = `${Math.min(caption.scrollHeight, line * 4 + 24)}px`
+    }
+    caption.addEventListener('input', grow)
 
     const visBtn = el('button', {
       class: 'pill', type: 'button', text: `Visible to: ${visibility}`,
@@ -536,24 +803,12 @@ export function render (root, ctx, params) {
         })), 'Who can see this?')
     })
 
-    file.addEventListener('change', async () => {
-      const f = file.files?.[0]
-      if (!f) return
-      const isVideo = (f.type || '').startsWith('video/')
-      const cap = isVideo ? MAX_VIDEO_BYTES : MAX_IMAGE_BYTES
-      if (f.size > cap) { status.textContent = `That file is ${(f.size / 1048576).toFixed(1)} MB — the limit is ${cap / 1048576} MB.`; return }
-      picked = f
-      clear(preview)
-      if (composerObjectUrl) { URL.revokeObjectURL(composerObjectUrl); composerObjectUrl = null }
-      const localUrl = URL.createObjectURL(f)
-      composerObjectUrl = localUrl
-      preview.appendChild(isVideo
-        ? (() => { const pv = el('video', { class: 'mo-prevmedia', src: localUrl, playsinline: '', controls: '' }); pv.muted = true; return pv })()
-        : el('img', { class: 'mo-prevmedia', src: localUrl, alt: '' }))
+    /** Send the currently-picked bytes. Called again after an edit replaces them. */
+    async function upload () {
       status.textContent = 'Uploading…'
       try {
         const t0 = performance.now()
-        uploaded = await M.uploadMedia(f)
+        uploaded = await M.uploadMedia(picked)
         const ms = Math.round(performance.now() - t0)
         // The stripping claim is the SERVER's, echoed only when it says so.
         status.textContent = uploaded?.exifStripped
@@ -563,17 +818,189 @@ export function render (root, ctx, params) {
         uploaded = null
         status.textContent = e.message === 'too-large' ? 'That file is too large.' : (e.message || 'Upload failed.')
       }
+    }
+
+    /**
+     * Crop / rotate / draw on the picked photo, in THE CHAT EDITOR — the same
+     * `openPhotoEditor` chat and profile already use, extended with the shape
+     * presets rather than reimplemented here. One editor, three callers.
+     *
+     * It returns a canvas re-encode, so the bytes that go up are NOT the bytes
+     * that came off the camera. That is the point (a canvas re-encode carries
+     * no EXIF), but it also means the upload has to happen AGAIN with the new
+     * bytes — the server strips and hashes what it is given, and what it was
+     * given has changed.
+     */
+    async function editPhoto () {
+      if (!picked) return
+      try {
+        const { dataURL } = await fileToDataURL(picked, MAX_IMAGE_BYTES)
+        const res = await openPhotoEditor([dataURL])
+        if (!res || !res.dataURL) return          // dismissed; keep the original
+        picked = fileFromDataURL(res.dataURL, 'post.jpg')
+        // The editor has its own caption line; honour it only if this one is
+        // still empty, so editing never silently overwrites what was typed.
+        if (res.caption && !caption.value.trim()) { caption.value = res.caption; grow() }
+        showPicked(false)
+        await upload()
+      } catch (e) { status.textContent = e.message || 'Could not edit that photo.' }
+    }
+
+    /** Trim bar + cover picker for a video. Server applies both on Post. */
+    async function videoTools (localUrl, pv) {
+      const strip = el('div', { class: 'mo-strip' })
+      const range = el('div', { class: 'mo-striprange' })
+      const hA = el('span', { class: 'mo-handle a' })
+      const hB = el('span', { class: 'mo-handle b' })
+      const cover = el('span', { class: 'mo-covermark' })
+      const readout = el('p', { class: 'mo-substatus', text: '' })
+      strip.append(range, hA, hB, cover)
+      tools.append(
+        el('p', { class: 'mo-toollabel', text: 'Trim — drag the ends. Tap to set the cover.' }),
+        strip, readout
+      )
+
+      const shots = await filmstrip(localUrl)
+      if (shots.length) {
+        strip.classList.add('shot')
+        strip.style.backgroundImage = shots.map((s) => `url(${s})`).join(',')
+        strip.style.backgroundSize = `${100 / shots.length}% 100%`
+        strip.style.backgroundPosition = shots
+          .map((_, i) => `${(i * 100) / (shots.length - 1 || 1)}% 0`).join(',')
+      }
+
+      const secs = (ms) => `${(ms / 1000).toFixed(1)}s`
+      const paint = () => {
+        const pc = (ms) => `${durMs ? (ms / durMs) * 100 : 0}%`
+        range.style.left = pc(trimStartMs)
+        range.style.right = `${durMs ? 100 - (trimEndMs / durMs) * 100 : 0}%`
+        hA.style.left = pc(trimStartMs)
+        hB.style.left = pc(trimEndMs)
+        cover.style.left = pc(coverAtMs)
+        readout.textContent =
+          `${secs(trimStartMs)} – ${secs(trimEndMs)}  ·  ${secs(trimEndMs - trimStartMs)} long  ·  cover at ${secs(coverAtMs)}`
+      }
+
+      const atX = (e) => {
+        const r = strip.getBoundingClientRect()
+        return Math.max(0, Math.min(1, (e.clientX - r.left) / (r.width || 1))) * durMs
+      }
+      let drag = null
+      strip.addEventListener('pointerdown', (e) => {
+        if (!durMs) return
+        strip.setPointerCapture?.(e.pointerId)
+        const t = atX(e)
+        // Whichever handle is nearer takes the drag; a press anywhere else is
+        // the cover, which is why the cover needs no handle of its own.
+        const dA = Math.abs(t - trimStartMs)
+        const dB = Math.abs(t - trimEndMs)
+        const grab = durMs * 0.06
+        drag = dA < dB && dA < grab ? 'a' : (dB < grab ? 'b' : 'cover')
+        move(e)
+      })
+      const move = (e) => {
+        if (!drag) return
+        const t = atX(e)
+        const min = 300      // a clip shorter than this is not a clip
+        if (drag === 'a') trimStartMs = Math.min(t, trimEndMs - min)
+        else if (drag === 'b') trimEndMs = Math.max(t, trimStartMs + min)
+        else coverAtMs = t
+        trimStartMs = Math.max(0, trimStartMs)
+        trimEndMs = Math.min(durMs, trimEndMs)
+        // The cover must stay inside the cut, or it points at a frame the
+        // finished clip does not contain.
+        coverAtMs = Math.max(trimStartMs, Math.min(coverAtMs, trimEndMs))
+        pv.currentTime = (drag === 'cover' ? coverAtMs : (drag === 'a' ? trimStartMs : trimEndMs)) / 1000
+        paint()
+      }
+      strip.addEventListener('pointermove', move)
+      const lift = () => { drag = null }
+      strip.addEventListener('pointerup', lift)
+      strip.addEventListener('pointercancel', lift)
+      paint()
+    }
+
+    /** Render the picked file, and the tools that belong to its kind. */
+    function showPicked (fresh = true) {
+      const isVideo = (picked.type || '').startsWith('video/')
+      clear(preview)
+      clear(tools)
+      if (fresh && composerObjectUrl) { URL.revokeObjectURL(composerObjectUrl); composerObjectUrl = null }
+      if (!composerObjectUrl || fresh) composerObjectUrl = URL.createObjectURL(picked)
+      const localUrl = composerObjectUrl
+
+      if (isVideo) {
+        // Same inline guarantees as the feed: the composer preview must not be
+        // the one <video> that still hijacks iOS into the native player.
+        const pv = videoEl('mo-prevmedia', { loop: false })
+        pv.setAttribute('controls', '')
+        pv.src = localUrl
+        preview.appendChild(pv)
+        pv.addEventListener('loadedmetadata', () => {
+          durMs = Math.max(0, Math.round((pv.duration || 0) * 1000))
+          trimStartMs = 0
+          trimEndMs = durMs
+          coverAtMs = Math.min(1000, durMs)     // the worker's own default
+          videoTools(localUrl, pv)
+        }, { once: true })
+      } else {
+        preview.appendChild(el('img', { class: 'mo-prevmedia', src: localUrl, alt: '' }))
+        tools.appendChild(el('button', {
+          class: 'pill', type: 'button', text: 'Crop, rotate & draw', onclick: editPhoto
+        }))
+      }
+    }
+
+    file.addEventListener('change', async () => {
+      const f = file.files?.[0]
+      if (!f) return
+      const isVideo = (f.type || '').startsWith('video/')
+      const cap = isVideo ? MAX_VIDEO_BYTES : MAX_IMAGE_BYTES
+      if (f.size > cap) { status.textContent = `That file is ${(f.size / 1048576).toFixed(1)} MB — the limit is ${cap / 1048576} MB.`; return }
+      picked = f
+      showPicked(true)
+      await upload()
     })
 
+    const postWord = story ? 'Add to story' : 'Post'
+    const postBtn = el('button', { class: 'mo-post', type: 'button', onclick: () => post() },
+      [el('span', { text: postWord })])
+
+    /* The spinner replaces the WORD, in place, and the button keeps its size.
+     * A button that shrinks or disappears mid-tap is how a second Post gets
+     * sent — and `disabled` is what actually prevents that, not the spinner. */
+    const setBusy = (on) => {
+      postBtn.disabled = on
+      postBtn.classList.toggle('busy', on)
+      clear(postBtn)
+      postBtn.appendChild(on
+        ? el('span', { class: 'mo-spin', role: 'status', 'aria-label': 'Posting' })
+        : el('span', { text: postWord }))
+    }
+
     const post = async () => {
+      if (postBtn.disabled) return
       if (!uploaded && !caption.value.trim()) { status.textContent = 'Add a photo, a video, or something to say.'; return }
       if (story && !uploaded) { status.textContent = 'A story needs a photo or video.'; return }
+      setBusy(true)
       try {
+        /* Trim and cover go up BEFORE the moment is created, so the first
+         * transcode already has them and the clip is never briefly published
+         * at its untrimmed length. Only sent when they say something: an
+         * untouched video must not look edited. */
+        const isVideo = uploaded && (picked.type || '').startsWith('video/')
+        if (isVideo && durMs && (trimStartMs > 0 || trimEndMs < durMs || coverAtMs !== Math.min(1000, durMs))) {
+          await M.editMedia(uploaded.mediaId, {
+            trimStartMs: trimStartMs > 0 ? trimStartMs : null,
+            trimEndMs: trimEndMs < durMs ? trimEndMs : null,
+            coverAtMs
+          })
+        }
         if (story) {
           await M.createStory({ mediaId: uploaded.mediaId, caption: caption.value.trim() || undefined })
           ctx.toast('Story added')
         } else {
-          const kind = uploaded ? ((picked.type || '').startsWith('video/') ? 'video' : 'photo') : 'text'
+          const kind = uploaded ? (isVideo ? 'video' : 'photo') : 'text'
           const location = (visibility === 'nearby' || visibility === 'public') ? await coarseFix() : null
           await M.createMoment({
             kind,
@@ -586,7 +1013,10 @@ export function render (root, ctx, params) {
         }
         close()
         load(true)
-      } catch (e) { status.textContent = e.message || 'Could not post.' }
+      } catch (e) {
+        setBusy(false)
+        status.textContent = e.message || 'Could not post.'
+      }
     }
 
     const close = sheet([
@@ -594,10 +1024,12 @@ export function render (root, ctx, params) {
       preview,
       el('button', { class: 'pill', type: 'button', text: 'Choose photo or video', onclick: () => file.click() }),
       file,
+      tools,
       caption,
       story ? null : visBtn,
-      status,
-      el('button', { class: 'pill ok', type: 'button', text: story ? 'Add to story' : 'Post', onclick: post })
+      // The button leads; the upload note is secondary text underneath it.
+      postBtn,
+      status
     ].filter(Boolean), () => { if (composerObjectUrl) { URL.revokeObjectURL(composerObjectUrl); composerObjectUrl = null } })
   }
 
@@ -608,14 +1040,12 @@ export function render (root, ctx, params) {
    * between them, and only the ACTIVE video plays — the neighbours are
    * preloaded but paused, which is what keeps a scroll from stuttering.
    */
-  function openReels (videos, startId) {
+  function openReels (videos, startId, startAt = 0) {
     if (!videos.length) return
     const track = el('div', { class: 'mo-reeltrack' })
     const nodes = []
     for (const m of videos) {
-      const v = el('video', { class: 'mo-reelvideo', muted: '', playsinline: '', loop: '', preload: 'none' })
-      v.muted = true
-      v.playsInline = true
+      const v = videoEl('mo-reelvideo', { preload: 'none' })
       const media = (m.media || [])[0]
       const pane = el('section', { class: 'mo-reel' }, [
         v,
@@ -628,66 +1058,101 @@ export function render (root, ctx, params) {
       track.appendChild(pane)
     }
 
+    /* Where the viewer opens, and where it currently is. `startAt` is the card's
+     * playhead handed over by the tap, so the clip CONTINUES instead of
+     * restarting — a restart is what makes the viewer feel like a different
+     * video rather than the same one filling the screen. */
+    const startIdx = Math.max(0, nodes.findIndex((n) => n.m.id === startId))
+    let activeIdx = startIdx
+    let resumed = false
+
     const closeBtn = el('button', { class: 'mo-reelclose', type: 'button', text: '✕', onclick: () => closeReels() })
-    const layer = el('div', { class: 'mo-reellayer' }, [track, closeBtn])
+    /* The same shared sound state the cards use, so opening a reel from a card
+     * you had already unmuted does not silently start over in silence. */
+    const soundBtn = el('button', {
+      class: 'mo-reelsound', type: 'button',
+      html: isSoundOn() ? ICONS.soundOn : ICONS.soundOff,
+      'aria-label': isSoundOn() ? 'Mute' : 'Unmute',
+      onclick: () => {
+        const on = !isSoundOn()
+        setSoundOn(on, nodes[activeIdx]?.v)
+        soundBtn.innerHTML = on ? ICONS.soundOn : ICONS.soundOff
+        soundBtn.setAttribute('aria-label', on ? 'Mute' : 'Unmute')
+      }
+    })
+    const layer = el('div', { class: 'mo-reellayer' }, [track, closeBtn, soundBtn])
     root.appendChild(layer)
     const perf = perfHarness(layer)
     nodes.forEach((n, i) => perf.attach(n.v, `reel${i + 1}`))
     // Keep the app-shell pull-to-refresh from firing on a reel swipe-down.
     layer.addEventListener('touchmove', (e) => e.stopPropagation(), { passive: true })
 
-    // Only the visible pane plays; ±1 gets its bytes ready, the rest stay cold.
-    const io = new IntersectionObserver((entries) => {
-      for (const e of entries) {
-        const i = nodes.findIndex((n) => n.pane === e.target)
-        if (i < 0) continue
-        if (e.isIntersecting && e.intersectionRatio > 0.6) {
-          activate(i)
-        } else {
-          nodes[i].v.pause()
-        }
-      }
-    }, { threshold: [0, 0.6, 1] })
+    /* Only the visible pane plays; ±1 gets its bytes ready, the rest stay cold.
+     * Built from the same `watchInView` factory the feed uses — one observer
+     * implementation, two callers, no chance of the two surfaces disagreeing
+     * about what "in view" means. */
+    const paneAt = (target) => nodes.findIndex((n) => n.pane === target)
+    const io = watchInView(
+      (target) => { const i = paneAt(target); if (i >= 0) activate(i) },
+      (target) => { const i = paneAt(target); if (i >= 0) pause(nodes[i].v) }
+    )
     for (const n of nodes) io.observe(n.pane)
 
     async function ensureSrc (i, preload) {
       const n = nodes[i]
       if (!n || !n.mediaId) return
       if (!n.v.src) {
-        const u = await urlFor(n.mediaId)
-        if (!u || disposed) return
-        n.v.src = u
+        const a = await assetFor(n.mediaId)
+        if (!a || disposed) return
+        // A poster here too: a reel that has not decoded yet is otherwise a
+        // full black screen, which reads as broken rather than as loading.
+        if (a.posterUrl) n.v.poster = a.posterUrl
+        n.v.src = a.url
       }
       n.v.preload = preload
     }
+
+    /** Continue from `t`, as soon as the element knows enough to seek. */
+    function seekTo (v, t) {
+      if (!(t > 0)) return
+      const go = () => { try { v.currentTime = t } catch { /* seek refused */ } }
+      if (v.readyState >= 1) go()
+      else v.addEventListener('loadedmetadata', go, { once: true })
+    }
+
     async function activate (i) {
+      activeIdx = i
       perf.activated(`reel${i + 1}`)
       await ensureSrc(i, 'auto')
       // Neighbours: bytes ready, nothing playing.
       ensureSrc(i + 1, 'metadata'); ensureSrc(i - 1, 'metadata')
       const n = nodes[i]
-      if (n && n.v.src) {
-        try { await n.v.play() } catch {
-          // Autoplay refused (iOS Low Power Mode / Android saver). Offer a tap
-          // rather than a dead black screen; the tap is a user gesture, which
-          // the same policy always allows.
-          if (!n.pane.querySelector('.mo-reeltap')) {
-            const tap = el('button', { class: 'mo-reeltap', type: 'button', text: '▶', onclick: () => { tap.remove(); n.v.play().catch(() => {}) } })
-            n.pane.appendChild(tap)
-          }
-        }
+      if (!n || !n.v.src) return
+      // Only the pane the tap came from resumes, and only the first time it is
+      // activated — scrolling back to it later should start it fresh.
+      if (i === startIdx && !resumed) { resumed = true; seekTo(n.v, startAt) }
+      const ok = await playExclusive(n.v)
+      if (!ok && !n.pane.querySelector('.mo-reeltap')) {
+        // Autoplay refused even muted (iOS Low Power Mode / Android saver).
+        // Offer a tap rather than a dead black screen; the tap is a user
+        // gesture, which the same policy always allows.
+        const tap = el('button', {
+          class: 'mo-reeltap', type: 'button', html: ICONS.play,
+          'aria-label': 'Play',
+          onclick: () => { tap.remove(); playExclusive(n.v) }
+        })
+        n.pane.appendChild(tap)
       }
     }
 
     function closeReels () {
       io.disconnect()
-      for (const n of nodes) { n.v.pause(); n.v.removeAttribute('src'); n.v.load() }
+      for (const n of nodes) { pause(n.v); n.v.removeAttribute('src'); n.v.load() }
       layer.remove()
       reelsCleanup = null
     }
     reelsCleanup = closeReels
 
-    const startIdx = Math.max(0, nodes.findIndex((n) => n.m.id === startId))
     nodes[startIdx]?.pane.scrollIntoView({ block: 'start' })
     activate(startIdx)
   }
@@ -722,5 +1187,10 @@ export function render (root, ctx, params) {
   return () => {
     disposed = true
     if (typeof reelsCleanup === 'function') reelsCleanup()
+    // Leaving the screen must take the audio with it. Without this a video
+    // that was playing keeps its sound running behind whatever comes next.
+    if (feedIO) { feedIO.disconnect(); feedIO = null }
+    if (unsubSound) { unsubSound(); unsubSound = null }
+    pauseAll()
   }
 }

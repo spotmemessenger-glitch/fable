@@ -38,10 +38,73 @@ describe('M3 — transcode arguments', () => {
     expect(vf).toContain('scale=-2:');   // -2 keeps aspect AND rounds to even
   });
 
+  /* H.264 High profile is 8-bit 4:2:0 only, and libx264 REFUSES anything else
+   * rather than degrading — the job dies before a byte is written and the
+   * person who shot the clip just sees that it never posted.
+   *
+   * Measured against real ffmpeg, both of these fail without the guard:
+   *   yuv444p      -> "high profile doesn't support 4:4:4"
+   *   yuv420p10le  -> "high profile doesn't support a bit depth of 10"
+   * The second is not exotic: it is what an iPhone 12 or newer records by
+   * default with Dolby Vision HDR on. */
+  it('pins the pixel format — 10-bit HDR and 4:4:4 sources must not fail the encoder', () => {
+    expect(args).toContain('-pix_fmt');
+    expect(args[args.indexOf('-pix_fmt') + 1]).toBe('yuv420p');
+    for (const v of VARIANTS) {
+      expect(transcodeArgs('i', 'o', v).join(' ')).toContain('-pix_fmt yuv420p');
+    }
+  });
+
   it('never upscales: the ladder caps at the source height', () => {
     for (const v of VARIANTS) {
       expect(transcodeArgs('i', 'o', v).join(' ')).toContain(`min(${v.height},ih)`);
     }
+  });
+
+  describe('composer edits — the server does the cut, not the phone', () => {
+    it('an unedited asset is byte-identical to before edits existed', () => {
+      expect(transcodeArgs('/tmp/in', '/tmp/out.mp4', VARIANTS[0], {})).toEqual(args);
+      expect(transcodeArgs('/tmp/in', '/tmp/out.mp4', VARIANTS[0], {
+        trimStartMs: null, trimEndMs: null, coverAtMs: null,
+      })).toEqual(args);
+    });
+
+    it('trim start fast-seeks BEFORE -i — cheaper, and it re-bases to zero', () => {
+      const a = transcodeArgs('in', 'out', VARIANTS[0], { trimStartMs: 2500 });
+      expect(a.indexOf('-ss')).toBeLessThan(a.indexOf('-i'));
+      expect(a[a.indexOf('-ss') + 1]).toBe('2.500');
+    });
+
+    /* `-to` alongside an input `-ss` has meant different things across ffmpeg
+     * versions. A DURATION is the same everywhere, so the end point is always
+     * expressed that way — and it is measured from the cut, not from zero. */
+    it('the end is a duration measured from the cut, never an absolute -to', () => {
+      const a = transcodeArgs('in', 'out', VARIANTS[0], { trimStartMs: 2000, trimEndMs: 6500 });
+      expect(a).not.toContain('-to');
+      expect(a[a.indexOf('-t') + 1]).toBe('4.500');       // 6.5s - 2.0s
+    });
+
+    it('an end with no start is a duration from zero', () => {
+      const a = transcodeArgs('in', 'out', VARIANTS[0], { trimEndMs: 3000 });
+      expect(a[a.indexOf('-t') + 1]).toBe('3.000');
+    });
+
+    it('a nonsensical range is ignored rather than encoded as a negative length', () => {
+      const a = transcodeArgs('in', 'out', VARIANTS[0], { trimStartMs: 5000, trimEndMs: 1000 });
+      expect(a).not.toContain('-t');
+    });
+
+    it('the cover frame is the one chosen, offset back onto the untrimmed original', () => {
+      // Chosen 3s into a clip that was trimmed to start at 2s -> 5s in the
+      // original file. Without the offset every cover lands early.
+      const p = posterArgs('in', 'out.jpg', { coverAtMs: 3000, trimStartMs: 2000 });
+      expect(p[p.indexOf('-ss') + 1]).toBe('5.000');
+      expect(p.indexOf('-ss')).toBeLessThan(p.indexOf('-i'));
+    });
+
+    it('no cover chosen keeps the 1s default that misses a black opening frame', () => {
+      expect(posterArgs('in', 'out.jpg')[posterArgs('in', 'out.jpg').indexOf('-ss') + 1]).toBe('1.000');
+    });
   });
 
   it('caps bitrate — an unbounded encode is what stutters on a mid-range phone', () => {
@@ -54,8 +117,16 @@ describe('M3 — transcode arguments', () => {
     expect(VARIANTS[0].height).toBeGreaterThan(VARIANTS[1].height);
   });
 
+  /* Asserts the SECOND, not the spelling. The timestamp moved from
+   * `00:00:01` to `1.000` when cover-frame selection arrived — the same
+   * position, in the format the chosen-frame path already had to produce —
+   * and the seek moved ahead of `-i` so ffmpeg jumps to the frame instead of
+   * decoding up to it. Pinning the literal string made a faster, identical
+   * poster look like a regression. */
   it('takes the poster a second in, not at frame zero (which is often black)', () => {
-    expect(posterArgs('i', 'o').join(' ')).toContain('-ss 00:00:01');
+    const p = posterArgs('i', 'o');
+    expect(Number(p[p.indexOf('-ss') + 1])).toBe(1);
+    expect(p.indexOf('-ss')).toBeLessThan(p.indexOf('-i'));
   });
 
   it('marks the HLS boundary at 30s rather than guessing per clip', () => {

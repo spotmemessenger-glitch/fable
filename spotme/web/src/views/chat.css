@@ -2201,6 +2201,24 @@
   padding: 8px 14px;
 }
 
+/* The crop bar carries more than one row's worth on a phone: rotate, four
+   shape presets, Cancel and Apply. The presets take their own full-width line
+   ABOVE the actions (order:-1) and scroll sideways if they still overflow, so
+   Apply can never be pushed off the screen. */
+.pe-cropbar { flex-wrap: wrap; row-gap: 8px; }
+
+.pe-ratios {
+  order: -1;
+  width: 100%;
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding-bottom: 2px;
+}
+
+.pe-ratios::-webkit-scrollbar { display: none; }
+
 .pe-gap { flex: 1; }
 
 .pe-w {
@@ -2247,6 +2265,29 @@
 }
 
 .pe-rot svg { width: 17px; height: 17px; }
+
+/* Crop shape presets. Same dark-editor grammar as the rotate control: a quiet
+   translucent chip, going solid white when it is the shape in force. */
+.pe-ratio {
+  border: none;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .13);
+  color: #fff;
+  padding: 8px 12px;
+  font-size: 12.5px;
+  font-weight: 600;
+  font-family: var(--font);
+  cursor: pointer;
+  flex: none;
+  white-space: nowrap;
+  transition: background .15s ease, color .15s ease;
+}
+
+.pe-ratio.on {
+  background: #fff;
+  color: #0f0f10;
+  font-weight: 700;
+}
 
 .pe-cropapply {
   border: none;
