@@ -11,6 +11,7 @@ import { API_BASE } from './lib/api.js'
 import { db, wipeDevice } from './lib/db.js'
 import { lobby } from './lib/discovery.js'
 import { reach } from './lib/reach.js'
+import { splitHash } from './lib/hash-route.js'
 import { rooms } from './lib/rooms.js'
 import { publishIdentity, identityStatus } from './lib/crypto/identity-store.js'
 import { freshTokens, setTerminalAuthHandler } from './lib/socket-transport.js'
@@ -159,7 +160,9 @@ export async function refreshFlaggedTabs () {
     const old = navEl
     buildNav()
     old.replaceWith(navEl)
-    updateNav(ACTIVE_TAB[window.location.hash] || '#/chat')
+    // Route path, not the raw hash: a shared `#/posts?m=…` link must still
+    // light the Posts tab rather than falling through to Chats.
+    updateNav(splitHash(window.location.hash).path || '#/chat')
   }
 }
 
@@ -274,9 +277,15 @@ function render () {
   }
 
   navEl.style.display = ''
-  const view = ROUTES[hash] || inbox
-  updateNav(hash in ROUTES ? hash : '#/chat')
-  currentCleanup = view.render(viewContainer, ctx)
+  /* A hash may carry a QUERY — `#/posts?m=<id>` is the share link a post's own
+   * share button builds. Route on the PATH and hand the parameters to the
+   * view: looking the whole string up in ROUTES never matched, so every shared
+   * link fell through to the `|| inbox` default and opened the wrong screen
+   * entirely. Splitting here is also what lets the tab stay lit. */
+  const { path, params } = splitHash(hash)
+  const view = ROUTES[path] || inbox
+  updateNav(path in ROUTES ? path : '#/chat')
+  currentCleanup = view.render(viewContainer, ctx, params)
 }
 
 /* ------------------------------------------------------------ onboarding */

@@ -106,7 +106,11 @@ function perfHarness (root) {
   }
 }
 
-export function render (root, ctx) {
+export function render (root, ctx, params) {
+  /* The post a share link points at (`#/posts?m=<id>`). Null for a normal
+   * visit. It is consumed ONCE, on the first successful load, so that paging
+   * or switching feeds afterwards does not keep yanking the view back. */
+  let focusId = params?.get?.('m') || null
   let mode = 'nearby'
   let items = []
   let stories = []
@@ -161,6 +165,40 @@ export function render (root, ctx) {
       if (e instanceof M.MomentsDisabledError) { state = 'unavailable' } else if (e instanceof M.MomentsForbiddenError) { state = 'forbidden'; detail = e.message } else { state = 'failed'; detail = e.message }
     }
     draw()
+    maybeFocus().catch(() => {})
+  }
+
+  /* ------------------------------------------------- shared-link focus */
+
+  /* A shared link has to land on the POST, not merely on the feed that happens
+   * to contain it. The post may not be on the first page, so page forward a
+   * bounded number of times looking for it rather than either giving up
+   * immediately or scrolling the whole feed. */
+  const FOCUS_MAX_PAGES = 5
+  let focusPagesTried = 0
+
+  async function maybeFocus () {
+    if (!focusId || disposed || state !== 'ok') return
+    const escaped = window.CSS?.escape ? window.CSS.escape(focusId) : focusId.replace(/["\\]/g, '\\$&')
+    const card = list.querySelector(`[data-moment-id="${escaped}"]`)
+    if (card) {
+      focusId = null // consumed: paging or switching feeds must not re-yank
+      card.scrollIntoView({ block: 'center', behavior: 'smooth' })
+      // A hint, not a mode — it fades once it has done its job.
+      card.classList.add('mo-focus')
+      setTimeout(() => card.classList.remove('mo-focus'), 2400)
+      return
+    }
+    if (cursor && focusPagesTried < FOCUS_MAX_PAGES) {
+      focusPagesTried++
+      await load(false)
+      return
+    }
+    /* Out of pages, or no more feed. Say so plainly: the post may be private,
+     * deleted, or from someone this account cannot see, and silently showing
+     * an ordinary feed is what made the link look broken in the first place. */
+    focusId = null
+    ctx.toast('That post isn’t in your feed')
   }
 
   async function loadStories () {
@@ -325,7 +363,7 @@ export function render (root, ctx) {
       onclick: () => openMore(m, mine)
     }))
 
-    return el('article', { class: 'mo-card' }, [
+    return el('article', { class: 'mo-card', 'data-moment-id': m.id }, [
       el('header', { class: 'mo-cardhead' }, [
         avatar({ name: who }, 34),
         el('div', { class: 'mo-whowrap' }, [
