@@ -27,10 +27,10 @@
  * here (perfect negotiation, signalling relayed as an ephemeral action);
  * call audio/video never touches the server.
  *
- * Opt-out: localStorage['spotme.transport'] = 'p2p' restores Trystero.
+ * ADR-033 (2026-08-06): the Trystero P2P opt-out this file used to carry has
+ * been removed. Server-side transport is the only path now — no fallback.
  */
 import { io } from 'socket.io-client'
-import * as torrent from '@trystero-p2p/torrent'
 import { db } from './db.js'
 
 import { API_BASE as SERVER } from './api.js'
@@ -45,13 +45,9 @@ const ACK_TIMEOUT_MS = 15_000
 const KEY_ITERATIONS = 60_000
 const PROFILE_POLL_MS = 500
 
-export const serverMode = (() => {
-  try { return localStorage.getItem('spotme.transport') !== 'p2p' } catch { return true }
-})()
-
 /** Stable identity: the profile id, not a per-session random — which also
  * makes "mine" detection survive reloads for the first time. */
-export let selfId = serverMode ? (db.profile()?.id || null) : torrent.selfId
+export let selfId = db.profile()?.id || null
 
 const enc = (s) => new TextEncoder().encode(s)
 const dec = (b) => new TextDecoder().decode(b)
@@ -1179,7 +1175,6 @@ function serverRoom (config, roomId) {
 /* ------------------------------------------------------------- exports -- */
 
 export function joinRoom (config, roomId) {
-  if (!serverMode) return torrent.joinRoom(config, roomId)
   const existing = activeRooms.get(roomId)
   if (existing) return existing
   return serverRoom(config, roomId)

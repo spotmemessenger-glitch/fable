@@ -82,8 +82,6 @@ export function joinRoom (config, roomId) {
 
   report = { requested, actual, reason }
 
-  // 'p2p' is handled inside socket-transport.js, which reads the same flag and
-  // returns a Trystero room. One switch, read in one place, honoured in both.
   return joinSocketIoRoom(config, roomId)
 }
 
