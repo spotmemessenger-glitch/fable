@@ -66,7 +66,7 @@ async function onboard(page, { name, handle, ym }) {
 
 async function main() {
   const { chromium } = await import('playwright');
-  const { mkdtemp, rm, writeFile } = await import('node:fs/promises');
+  const { mkdtemp, rm } = await import('node:fs/promises');
   const { tmpdir } = await import('node:os');
   const { join } = await import('node:path');
 
@@ -97,7 +97,6 @@ async function main() {
   wire(page);
 
   const handleA = 'ph' + uniq();
-  const handleB = 'pb' + uniq();
 
   console.log('— identity & the 18+ gate —');
 

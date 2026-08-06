@@ -17,7 +17,10 @@ const results = {}
 const names = []
 const check = (name, pass) => { names.push(name); results[name] = pass === true }
 
-const ROOT = new URL('..', import.meta.url).pathname
+import { fileURLToPath } from 'node:url'
+// fileURLToPath, not .pathname — on Windows the latter yields "/C:/…", which
+// join() turns into a non-existent "C:\C:\…" path and the suite dies here.
+const ROOT = fileURLToPath(new URL('..', import.meta.url))
 const SRC = join(ROOT, 'src')
 const TEST = join(ROOT, 'test')
 
@@ -34,13 +37,15 @@ function walk (dir, out = []) {
   for (const entry of readdirSync(dir)) {
     const full = join(dir, entry)
     if (statSync(full).isDirectory()) walk(full, out)
-    else if (entry.endsWith('.js') || entry.endsWith('.mjs')) out.push(full)
+    // Forward slashes even on Windows, so path comparisons below mean the
+    // same thing everywhere.
+    else if (entry.endsWith('.js') || entry.endsWith('.mjs')) out.push(full.replace(/\\/g, '/'))
   }
   return out
 }
 
-const srcFiles = walk(SRC).map((f) => ({ path: relative(ROOT, f), body: readFileSync(f, 'utf8') }))
-const testFiles = walk(TEST).map((f) => ({ path: relative(ROOT, f), body: readFileSync(f, 'utf8') }))
+const srcFiles = walk(SRC).map((f) => ({ path: relative(ROOT, f).replace(/\\/g, '/'), body: readFileSync(f, 'utf8') }))
+const testFiles = walk(TEST).map((f) => ({ path: relative(ROOT, f).replace(/\\/g, '/'), body: readFileSync(f, 'utf8') }))
 
 /* ------------------------------------------ 1. nothing in the app uses it -- */
 {

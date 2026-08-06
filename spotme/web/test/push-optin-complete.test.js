@@ -25,15 +25,20 @@
  */
 import { readFileSync, readdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
-const SRC = new URL('../src/', import.meta.url).pathname
+// fileURLToPath, not .pathname: on Windows the latter yields "/C:/…", which
+// join() turns into the non-existent "C:\C:\…" and the whole chain dies here.
+const SRC = fileURLToPath(new URL('../src/', import.meta.url))
 
 function jsFiles (dir) {
   const out = []
   for (const entry of readdirSync(dir)) {
     const full = join(dir, entry)
     if (statSync(full).isDirectory()) out.push(...jsFiles(full))
-    else if (entry.endsWith('.js')) out.push(full)
+    // Forward slashes even on Windows, so the endsWith('/lib/notify.js')
+    // exclusion and the rel() names below mean the same thing everywhere.
+    else if (entry.endsWith('.js')) out.push(full.replace(/\\/g, '/'))
   }
   return out
 }

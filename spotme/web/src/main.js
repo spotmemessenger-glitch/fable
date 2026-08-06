@@ -36,7 +36,7 @@ import * as verify from './views/verify.js'
 import * as notifications from './views/notifications.js'
 import * as stories from './views/stories.js'
 import * as moments from './views/moments.js'
-import { momentsAvailable } from './lib/moments-api.js'
+import { momentsAvailable, resetMomentsAvailability } from './lib/moments-api.js'
 
 const app = document.getElementById('app')
 
@@ -124,6 +124,26 @@ function routePath (hash) {
   return i === -1 ? h : h.slice(0, i)
 }
 
+/* M7: Posts is the HOME of a served account.
+ *
+ * The cold-open landing decision needs an answer BEFORE the server probe can
+ * possibly have one, so the probe's last definitive answer is kept in
+ * settings (`momentsHome`) and read synchronously at load. It is a CACHE of
+ * the server's statement, never a switch of its own: a device that has never
+ * been told "served" cannot land on Posts, the bar is still built only from
+ * the live probe, and every Moments request is still gated server-side. The
+ * probe reconciles a stale cache in both directions in refreshFlaggedTabs.
+ *
+ * Only the four bar tabs count as a "remembered last tab" a cold open may
+ * override. Anything else in the hash — a thread, a share link with params,
+ * a settings screen — is someone going SOMEWHERE, and always wins. */
+const BAR_TABS = new Set(NAV_ITEMS.map((item) => item.path))
+// A resetting device is mid-wipe: its hint is the very data being erased, so
+// the landing falls back to the line that has always been here.
+const homeTab = () => (!RESETTING && db.ready() && db.settings().momentsHome ? '#/posts' : '#/chat')
+let coldOpenTab = null   // the bar tab this load landed on by default, until the person navigates
+let hintLed = false      // that landing was chosen by the stored hint, not by the URL
+
 let navEl = null
 
 /* Which flagged tabs the SERVER is currently serving. Empty until the probe
@@ -155,6 +175,24 @@ export async function refreshFlaggedTabs () {
   let on = false
   try { on = await momentsAvailable() } catch { on = false }
   if (on) enabledFlags.add('moments'); else enabledFlags.delete('moments')
+  /* M7: remember the answer so the NEXT cold open lands right without waiting
+   * for this probe — and reconcile THIS one while the person is still sitting
+   * on the landing tab. Served + still on the default → move Home to Posts
+   * (the first grant, or a device with no cache yet). Not served + the cache
+   * chose Posts → back to Chats rather than a dead tab. Once they navigate
+   * anywhere themselves, coldOpenTab is null and nothing moves them again. */
+  if (db.ready() && db.settings().momentsHome !== on) db.setSettings({ momentsHome: on })
+  if (coldOpenTab && window.location.hash === coldOpenTab) {
+    if (on && coldOpenTab !== '#/posts') {
+      coldOpenTab = '#/posts'
+      hintLed = true
+      navigate('#/posts')
+    } else if (!on && hintLed) {
+      coldOpenTab = null
+      hintLed = false
+      navigate('#/chat')
+    }
+  }
   if (!navEl) return
   const desired = navItems().map((i) => i.path).join(',')
   const current = [...navEl.querySelectorAll('.nv')].map((b) => b.dataset.path).join(',')
@@ -483,13 +521,16 @@ function renderOnboarding () {
     // false, so it bails there. This is the moment a profile first exists —
     // ask now, or a fresh install would never be asked at all.
     offerNotifications()
-    // Land on Messages — never on whatever screen the hash pointed at before
+    // Land on Home — never on whatever screen the hash pointed at before
     // onboarding (after "Clear all data" it was #/settings, which stuck).
+    // Home is homeTab(), not a literal: a served account interrupted by the
+    // age re-declaration returns to Posts (M7); a fresh device, which cannot
+    // hold the hint yet, lands on Messages exactly as before.
     if (readLink()) {
       const roomId = adoptRoomLink()
       if (roomId) { window.location.hash = `#/thread/${roomId}`; return }
     }
-    navigate('#/chat')
+    navigate(homeTab())
   }
 
   const goBtn = el('button', { class: 'pill ok ob-go', type: 'button', text: 'Start', onclick: start })
@@ -577,6 +618,13 @@ function renderRecovery () {
       const acct = await res.json()
       // Adopt the account: its id IS the identity every room and lookup keys on.
       db.setProfile({ id: acct.userId, username: acct.username, name: acct.name || acct.username, claimSecret: secret })
+      /* M7: a DIFFERENT account now owns this device. The moments answer
+       * cached for the previous one — the in-memory probe result and the
+       * persisted landing hint — proves nothing about this account, so
+       * forget both; boot()'s probe below re-asks the server and, if this
+       * account is served, the landing reconciler moves Home to Posts. */
+      resetMomentsAvailability()
+      db.setSettings({ momentsHome: false })
       if (acct.accountFrozen && acct.notice) toast(acct.notice)
       boot()
       offerNotifications()
@@ -829,6 +877,15 @@ document.addEventListener('visibilitychange', () => {
 
 window.addEventListener('hashchange', render)
 
+/* M7: any navigation away from the cold-open landing ends the probe's licence
+ * to move the screen — the person has chosen where they are, and yanking them
+ * to Posts after that would be theft of control, not a default. The landing
+ * write itself fires this event with an IDENTICAL hash, which is why the
+ * guard compares rather than clearing unconditionally. */
+window.addEventListener('hashchange', () => {
+  if (coldOpenTab && window.location.hash !== coldOpenTab) { coldOpenTab = null; hintLed = false }
+})
+
 // Kicked off before the boot sequence below reads the profile: a reset that
 // races the lobby would announce the identity it is about to delete.
 if (RESETTING) maybeFreshStart()
@@ -932,7 +989,26 @@ if (linkedRoom) {
       }
     })
   } else {
-    window.location.hash = '#/chat'
+    // M7: Home is Posts for an account the server last said is served,
+    // Chats for everyone else — which for a never-served account is exactly
+    // the line that has always been here.
+    coldOpenTab = homeTab()
+    hintLed = coldOpenTab === '#/posts'
+    window.location.hash = coldOpenTab
+  }
+} else if (!RESETTING && BAR_TABS.has(window.location.hash)) {
+  /* M7: a bare bar-tab hash is the REMEMBERED last tab — the URL surviving a
+   * reload or a restored tab — not a deeplink. A served account's cold open
+   * overrides it and lands Home = Posts; for everyone else it keeps meaning
+   * what it always has. Routes with params (`#/posts?m=…`), threads, and
+   * every unlisted screen never enter this branch and always win. */
+  coldOpenTab = window.location.hash
+  if (homeTab() === '#/posts') {
+    hintLed = true
+    if (coldOpenTab !== '#/posts') {
+      coldOpenTab = '#/posts'
+      window.location.hash = coldOpenTab
+    }
   }
 }
 render()
