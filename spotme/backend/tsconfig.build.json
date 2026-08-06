@@ -8,9 +8,25 @@
   // locally while production kept working, so local verification silently
   // stopped testing what actually ships.
   "extends": "./tsconfig.json",
+  //
+  // `tsBuildInfoFile` LIVES INSIDE `dist` ON PURPOSE. tsconfig.json sets
+  // `incremental: true`, and nest-cli.json sets `deleteOutDir: true`. Those two
+  // combine badly: the build wipes `dist/` while the build-info file survives
+  // outside it, so TypeScript consults it, concludes the output is already
+  // current, emits NOTHING, and exits 0. Every build after the first produced an
+  // empty `dist/` and reported success.
+  //
+  // CI never caught it because a fresh checkout has no build-info file and
+  // nothing in CI runs `dist/main.js` — so the "Build" step passed while
+  // building nothing. It bites a warm working tree and a cached Docker layer,
+  // which is exactly where a green build is most trusted.
+  //
+  // Keeping the file inside the output directory ties the two together: delete
+  // the output, and the record of having produced it goes with it.
   "compilerOptions": {
     "rootDir": "src",
-    "outDir": "dist"
+    "outDir": "dist",
+    "tsBuildInfoFile": "dist/.tsbuildinfo"
   },
   "exclude": ["node_modules", "dist", "test", "**/*.spec.ts"]
 }

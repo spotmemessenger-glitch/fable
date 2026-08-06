@@ -7,15 +7,25 @@ import {
   OnGatewayConnection,
   OnGatewayDisconnect,
 } from '@nestjs/websockets';
+import { Logger } from '@nestjs/common';
 import { Server, Socket } from 'socket.io';
 import { JwtService } from '@nestjs/jwt';
 import { PushService } from '../push/push.service';
+// The DM gate stays here: it is a property of joining, not of group policy, and
+// RoomsAuthService has no business knowing about DM pairing. GroupPolicy and
+// GroupsService are gone from this file because policy() moved wholesale.
+import { isDmRoom, verifyDmJoin } from './dm-room';
 import { RoomsService } from './rooms.service';
 import { RoomsAuthService } from './rooms-auth.service';
 
 interface JoinPayload {
   roomId: string;
   since?: number;
+  /* Who the caller says the other participant is. The server does NOT trust it
+   * — it recomputes the room id from this plus the AUTHENTICATED user and
+   * compares, so a wrong peer simply fails to derive the room. Optional because
+   * clients older than this change do not send it; see verifyDmJoin. */
+  peerId?: string;
 }
 
 interface ActionPayload {
@@ -70,6 +80,8 @@ const decodeB64 = (data: string | null | undefined): Buffer =>
 })
 export class RoomsGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer() server!: Server;
+
+  private readonly log = new Logger(RoomsGateway.name);
 
   // roomId -> userId -> live sockets. In-memory: single node is Phase 1;
   // the Redis adapter replaces this map when the gateway scales out.
@@ -182,6 +194,28 @@ export class RoomsGateway implements OnGatewayConnection, OnGatewayDisconnect {
     const refusal = await this.auth.authorizeJoin(roomId, userId);
     if (refusal) return { error: refusal };
 
+    /* AND THE SAME IS TRUE OF A DM, WHICH NOTHING CHECKED.
+     *
+     * `policy()` returns null for anything that is not a group, so a direct
+     * message was authorised by nothing at all — and a DM room id is a pure
+     * function of two PUBLIC user ids. Anyone who learned two ids could compute
+     * the room and be handed `replay(roomId, 0)` below: the entire history, in
+     * plaintext for an `e2e_v1` room whose key derives from those same two ids.
+     *
+     * The id is self-authenticating, so no new state is needed — see dm-room.ts.
+     * Checked BEFORE `remember()` runs, because enrolling first would let the
+     * intrusion mint the membership row that excuses it. */
+    const verdict = verifyDmJoin(
+      roomId,
+      userId,
+      typeof body.peerId === 'string' ? body.peerId : undefined,
+      isDmRoom(roomId) && !body.peerId ? await this.push.isMember(roomId, userId) : false,
+    );
+    if (!verdict.allow) {
+      this.log.warn(`refused DM join (${verdict.reason}) room=${roomId} user=${userId}`);
+      return { error: 'not a participant in this conversation' };
+    }
+
     // Rooms are opaque ids the server cannot decode, so membership is learned
     // from who joins — and it is the only way to know whom to notify later.
     void this.push.remember(roomId, userId).catch(() => undefined);
@@ -196,7 +230,7 @@ export class RoomsGateway implements OnGatewayConnection, OnGatewayDisconnect {
       client.to(`r:${roomId}`).emit('peer', { roomId, peerId: userId, action: 'join' });
     }
     const since = Number.isFinite(body.since) ? Math.max(0, Number(body.since)) : 0;
-    const { events, envelopes, lastEventId } = await this.roomsService.replay(roomId, since);
+    const { events, envelopes, lastEventId, truncated } = await this.roomsService.replay(roomId, since);
     return {
       peers: [...room.keys()].filter((id) => id !== userId),
       events: events.map((e) => ({
@@ -208,6 +242,9 @@ export class RoomsGateway implements OnGatewayConnection, OnGatewayDisconnect {
       })),
       envelopes: envelopes.map((e) => ({ seq: e.id, from: e.senderId, meta: e.meta, attachId: e.attachId })),
       lastEventId,
+      // More is waiting above lastEventId — the client should come straight
+      // back rather than sit on a partial history until the next reconnect.
+      truncated,
     };
   }
 

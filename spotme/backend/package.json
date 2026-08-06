@@ -13,7 +13,8 @@
     "seed:employee": "node dist/scripts/seed-employee.js",
     "predeploy": "node -e \"const{cpSync,rmSync}=require('fs');rmSync('deploy-api',{recursive:true,force:true});cpSync('../web/api','deploy-api',{recursive:true});console.log('staged web/api -> deploy-api')\"",
     "deploy": "railway up --detach",
-    "test": "jest"
+    "test": "jest",
+    "postbuild": "node scripts/build-id.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1100.0",
@@ -67,5 +68,10 @@
     "@prisma/engines@5.22.0": true,
     "argon2@0.41.1": true,
     "prisma@5.22.0": true
+  },
+  "overrides": {
+    "multer": "^2.2.0",
+    "lodash": "^4.18.1",
+    "glob@10": "^10.5.0"
   }
 }

@@ -1,4 +1,6 @@
 import { Injectable } from '@nestjs/common';
+import { PrismaService } from '../prisma/prisma.service';
+import { ACCOUNT_FROZEN_MINOR } from '../policy/age';
 import { GroupPolicy, GroupsService } from '../groups/groups.service';
 
 /**
@@ -27,7 +29,26 @@ export class RoomsAuthService {
   // radius: a ban or mute takes at most this long to bite.
   private policyCache = new Map<string, { policy: GroupPolicy | null; expires: number }>();
 
-  constructor(private groups: GroupsService) {}
+  constructor(
+    private groups: GroupsService,
+    private prisma: PrismaService,
+  ) {}
+
+  // Wave 1C (D6 addendum): frozen-status lookups ride the same short-TTL
+  // pattern as group policy — the freeze takes at most POLICY_TTL_MS to bite
+  // on an already-connected socket.
+  private frozenCache = new Map<string, { frozen: boolean; expires: number }>();
+
+  private async isFrozen(userId: string): Promise<boolean> {
+    const hit = this.frozenCache.get(userId);
+    if (hit && hit.expires > Date.now()) return hit.frozen;
+    const row = await this.prisma.user
+      .findUnique({ where: { id: userId }, select: { accountStatus: true } })
+      .catch(() => null);
+    const frozen = row?.accountStatus === ACCOUNT_FROZEN_MINOR;
+    this.frozenCache.set(userId, { frozen, expires: Date.now() + POLICY_TTL_MS });
+    return frozen;
+  }
 
   /**
    * Null means "not a group" — a DM, where knowing the roomId is still the
@@ -116,6 +137,13 @@ export class RoomsAuthService {
     type: string,
     meta: Record<string, unknown> | undefined,
   ): Promise<string | null> {
+    /* Wave 1C (D6 addendum): a FROZEN account's existing chat is READ-ONLY.
+     * Outbound communication types are refused at the same seam that enforces
+     * group mutes; read machinery (seen, profile sync, fetch) still works, so
+     * the person can read their history and the policy notice. */
+    if ((type === 'msg' || type === 'knock') && (await this.isFrozen(userId))) {
+      return 'account_frozen';
+    }
     const policy = await this.policy(roomId, userId);
     return policy ? this.refuse(policy, type, meta) : null;
   }

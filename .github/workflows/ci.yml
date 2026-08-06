@@ -1,0 +1,362 @@
+# Spot Me CI.
+#
+# WHY THIS EXISTS. Until now the only check on a pull request was "Vercel
+# Preview Comments", which is a preview *deployment*: it runs `vite build` and
+# no tests at all. A PR could go green having executed zero assertions, and the
+# backend suite in particular could not run anywhere — it needs Postgres, and
+# every local environment without one reports 44 identical
+# PrismaClientInitializationError failures that are trivially mistaken for a
+# stable baseline.
+#
+# So this workflow's job is to make a green check mean something: the backend
+# suite against a real Postgres, the web suite, type-check, and both builds.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [master]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: backend — tests against Postgres, typecheck, build
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        # postgis/postgis (not plain postgres): the Phase 2 discovery schema
+        # declares a geography(Point,4326) column, so the runtime and the tests
+        # need PostGIS present. This job applies the committed migrations
+        # (`prisma migrate deploy`, same as production boot), and the very first
+        # spatial migration runs `CREATE EXTENSION IF NOT EXISTS postgis` itself —
+        # idempotent, so it succeeds whether or not the image pre-enabled it.
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: spotme_test
+        ports: ['5432:5432']
+        # Without the health check the first test can race the server's startup
+        # and fail as if the schema were wrong.
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      # Valkey — the Redis-protocol runtime the BullMQ integration spec
+      # exercises (same protocol as production's Dragonfly Cloud). Only the
+      # queue spec reads TEST_REDIS_URL; nothing sets REDIS_URL, so the app's
+      # QueueService stays disabled and no runtime path activates in CI.
+      valkey:
+        image: valkey/valkey:8-alpine
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd "valkey-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/spotme_test?schema=public
+      # Points the BullMQ integration spec at the Valkey service above. This is
+      # NOT the production Dragonfly URL and is not a secret.
+      TEST_REDIS_URL: redis://localhost:6379
+      # Not a secret and not read from the repository's real ones. No test
+      # references this variable or the 'dev-only-secret' default, so setting it
+      # changes no assertion — it is here so CI never exercises the hardcoded
+      # fallback, which is R5 in 10-PRIORITY-0-AUDIT.md.
+      #
+      # There is deliberately no JWT_REFRESH_SECRET: it does not exist. Both
+      # strategies read JWT_ACCESS_SECRET, which is the finding R5 records.
+      JWT_ACCESS_SECRET: ci-access-secret-not-a-real-key
+      # Points the integration suite at the MinIO started by the step below.
+      # Absent these, s3-integration.spec.ts SKIPS LOUDLY rather than passing
+      # vacuously.
+      S3_ENDPOINT: http://localhost:9000
+      S3_BUCKET: spotme-itest
+      S3_REGION: us-east-1
+      S3_ACCESS_KEY_ID: spotmeci
+      S3_SECRET_ACCESS_KEY: spotmeci-not-a-real-secret
+      S3_FORCE_PATH_STYLE: 'true'
+
+    defaults:
+      run:
+        working-directory: spotme/backend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: spotme/backend/package-lock.json
+
+      - run: npm ci
+
+      # The media pipeline SHELLS OUT, so the tests need the same binaries the
+      # runtime image installs (see spotme/backend/Dockerfile):
+      #   ffmpeg           — `.mov` → faststart MP4, `-map_metadata -1`
+      #   libheif-examples — `heif-convert`, HEIC → JPEG (pulls libde265)
+      # moment-media-iphone.spec.ts FAILS rather than skips when these are
+      # missing: a silent skip on the suite that proves GPS is stripped would
+      # let a regression ship looking green.
+      - name: Install media transcode tools
+        run: sudo apt-get update -y && sudo apt-get install -y --no-install-recommends ffmpeg libheif-examples
+
+      # MINIO AS A STEP, NOT A SERVICE. The official image needs `server /data`
+      # as its command, and Actions service containers cannot specify one —
+      # `bitnami/minio:latest`, which can, no longer exists ("manifest unknown").
+      # A step also lets readiness be waited for explicitly rather than trusted
+      # to a health-check guess.
+      #
+      # WHY MINIO AND NOT A LIGHTER EMULATOR: it VERIFIES SIGNATURES. Measured —
+      # `s3rver` serves completely unsigned requests with 200, so a green
+      # authorization test against it proves nothing. Credentials here are this
+      # container's own, created fresh per run and destroyed with it.
+      #
+      # PINNED BY DIGEST, NOT BY TAG. `bitnami/minio:latest` disappearing under
+      # us is exactly why: CI infrastructure must not change when an upstream
+      # tag moves. This digest is the image the run that established this job
+      # green actually pulled, confirmed against the registry. To upgrade,
+      # resolve a new digest deliberately and let CI prove it:
+      #   docker buildx imagetools inspect minio/minio:latest
+      - name: Start MinIO
+        run: |
+          docker run -d --name minio \
+            -p 9000:9000 \
+            -e MINIO_ROOT_USER=spotmeci \
+            -e MINIO_ROOT_PASSWORD=spotmeci-not-a-real-secret \
+            minio/minio@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e \
+            server /data
+          for i in $(seq 1 30); do
+            if curl -fsS http://localhost:9000/minio/health/live >/dev/null 2>&1; then
+              echo "MinIO ready after ${i}s"; exit 0
+            fi
+            sleep 1
+          done
+          echo "::error::MinIO did not become ready"; docker logs minio; exit 1
+
+      - name: Create the test bucket
+        run: node scripts/s3-ensure-bucket.mjs
+
+      # Apply the committed MIGRATIONS, not a schema push. `prisma db push` syncs
+      # only what schema.prisma can express, silently omitting raw-SQL-managed
+      # objects — the GiST index on the Unsupported geography column
+      # (DiscoveryVisibility_geog_idx) and the MomentReactionRow closed-registry
+      # CHECK. Those live only in migration SQL, so under db push the drift-guard
+      # specs (discovery-people, moments-lifecycle) correctly fail. Production
+      # boots via `migrate deploy`; testing the same way is prod parity and the
+      # only way these raw objects — and the ST_DWithin index plan that depends
+      # on them — are actually exercised.
+      - name: Apply migrations (prod parity — creates raw-SQL-managed objects)
+        run: npx prisma migrate deploy
+
+      # Ordered cheapest-first so an obvious break fails in seconds.
+      - name: Type-check
+        run: npx tsc --noEmit
+
+      - name: Build
+        run: npm run build
+
+      - name: Test
+        run: npm test
+
+      # `if: always()` so a FAILING suite — the case most likely to have skipped
+      # its own afterAll — is still checked. Nothing is at stake in the MinIO
+      # container itself; what this protects is the R2 staging bucket, by
+      # proving the cleanup path still works on every pull request instead of
+      # only during a rare manual run against a real bucket.
+      - name: Confirm the suite cleaned up after itself
+        if: always()
+        run: node scripts/s3-verify-clean.mjs
+
+  compose:
+    name: compose — dev stack config is valid (both profiles)
+    runs-on: ubuntu-latest
+    # Phase 1A: the dev/CI stack (docker-compose.dev.yml) is never deployed, but
+    # a broken compose file breaks every developer at once. This validates that
+    # the standard stack (Postgres+PostGIS, Valkey) and the opt-in
+    # search-benchmark profile (Meilisearch, Typesense) both parse, and that the
+    # heavy search services are gated OUT of the default stack.
+    steps:
+      - uses: actions/checkout@v4
+      - name: Standard stack parses and excludes the benchmark services
+        run: |
+          set -euo pipefail
+          out=$(docker compose -f spotme/docker-compose.dev.yml config --services | sort)
+          echo "default services: $out"
+          echo "$out" | grep -qx postgres
+          echo "$out" | grep -qx valkey
+          if echo "$out" | grep -qxE 'meilisearch|typesense'; then
+            echo "::error::search services must be behind the search-benchmark profile, not in the default stack"; exit 1
+          fi
+      - name: Search-benchmark profile parses and adds the engines
+        run: |
+          set -euo pipefail
+          out=$(docker compose -f spotme/docker-compose.dev.yml --profile search-benchmark config --services | sort)
+          echo "benchmark services: $out"
+          echo "$out" | grep -qx meilisearch
+          echo "$out" | grep -qx typesense
+
+  web:
+    name: web — tests and build
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: spotme/web
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: spotme/web/package-lock.json
+
+      - run: npm ci
+
+      # Cheapest first: lint fails in seconds, the suite takes longer.
+      # Correctness rules only — see spotme/web/eslint.config.mjs for why there
+      # is no `tsc --checkJs` gate here.
+      - name: Lint
+        run: npm run lint
+
+      # `build` runs a prebuild that re-vendors ../core, so it also proves the
+      # vendored copy in the tree matches the source it was taken from.
+      - name: Build
+        run: npm run build
+
+      - name: Test
+        run: npm test
+
+  e2e:
+    name: e2e — real browser against a real backend
+    runs-on: ubuntu-latest
+    # Every other suite in this repo runs a module against a fake. That is right
+    # for a state machine and cannot answer whether the send gate in rooms.js
+    # refuses a send in a real browser. This is where that gets answered.
+    services:
+      postgres:
+        # postgis/postgis for the same reason as the backend job: the discovery
+        # schema's geography column must push onto a PostGIS-enabled database.
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: spotme_e2e
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 10s
+          --health-timeout 5s --health-retries 5
+    env:
+      # Throwaway, and the only credentials this job has. The backend refuses to
+      # boot on a JWT secret under 32 characters, so this is long rather than
+      # that guard weakened. NOTHING here reads a repository secret.
+      E2E_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/spotme_e2e?schema=public
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/spotme_e2e?schema=public
+      JWT_ACCESS_SECRET: e2e-only-not-a-real-key-0123456789abcdefghijklmnop
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install backend
+        working-directory: spotme/backend
+        run: npm ci
+
+      - name: Apply the Prisma schema
+        working-directory: spotme/backend
+        run: npx prisma db push --skip-generate --accept-data-loss
+
+      - name: Build the backend
+        working-directory: spotme/backend
+        run: npm run build
+
+      # THE WARM-BUILD REGRESSION, as its own step.
+      #
+      # The original bug: nest-cli deletes dist/ while tsconfig's incremental
+      # build-info survived OUTSIDE it, so TypeScript concluded the output was
+      # already current, emitted nothing, and exited 0. CI never caught it
+      # because a fresh checkout has no build-info file and nothing ran
+      # dist/main.js -- the Build step passed while building nothing.
+      #
+      # A fresh-checkout build therefore proves nothing about this. The second
+      # build, on the SAME workspace with nothing cleaned by hand, is the one
+      # that used to fail. This step stands alone so it keeps catching the
+      # regression even if the e2e suite is rewritten.
+      - name: Warm-build regression — a second build on the same workspace
+        working-directory: spotme/backend
+        run: |
+          set -euo pipefail
+          test -f dist/main.js || { echo "::error::first build emitted no dist/main.js"; exit 1; }
+          first_hash=$(sha256sum dist/main.js | cut -d' ' -f1)
+          first_id=$(cat dist/BUILD_ID)
+          echo "first build  main.js=${first_hash:0:12}… BUILD_ID=$first_id"
+
+          # Deliberately NO clean, NO rm -rf dist, NO cache reset.
+          npm run build
+
+          test -f dist/main.js || {
+            echo "::error::the SECOND build emitted nothing — the incremental/deleteOutDir bug is back"; exit 1; }
+          second_hash=$(sha256sum dist/main.js | cut -d' ' -f1)
+          second_id=$(cat dist/BUILD_ID)
+          echo "second build main.js=${second_hash:0:12}… BUILD_ID=$second_id"
+
+          # The artefact must still correspond to the CURRENT source, which is
+          # what a source-derived build id is for. Recomputed independently.
+          expected=$(node scripts/build-id.mjs)
+          [ "$second_id" = "$expected" ] || {
+            echo "::error::dist/BUILD_ID ($second_id) does not match current source ($expected)"; exit 1; }
+
+      - name: …and the twice-built artefact actually starts
+        working-directory: spotme/backend
+        env:
+          PORT: 3399
+        run: |
+          set -euo pipefail
+          node dist/main.js > /tmp/warm.log 2>&1 &
+          pid=$!
+          for i in $(seq 1 30); do
+            if curl -fsS "http://127.0.0.1:3399/api/version" > /tmp/ver.json 2>/dev/null; then break; fi
+            sleep 1
+          done
+          kill $pid 2>/dev/null || true
+          cat /tmp/ver.json
+          grep -q "$(cat dist/BUILD_ID)" /tmp/ver.json || {
+            echo "::error::the started process did not report the built BUILD_ID"; tail -20 /tmp/warm.log; exit 1; }
+
+      - name: Install web
+        working-directory: spotme/web
+        run: npm ci
+
+      - name: Install e2e
+        working-directory: spotme/e2e
+        run: npm ci
+
+      - name: Install Chromium
+        working-directory: spotme/e2e
+        run: npx playwright install --with-deps chromium
+
+      - name: Run
+        working-directory: spotme/e2e
+        run: npm test
+
+      # Only on failure. A trace per passing test is artefact nobody opens.
+      - name: Traces and screenshots
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-failure-artifacts
+          path: |
+            spotme/e2e/test-results/
+            spotme/e2e/playwright-report/
+          retention-days: 7

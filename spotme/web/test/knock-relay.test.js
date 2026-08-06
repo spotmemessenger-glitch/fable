@@ -25,6 +25,7 @@
  * `handleStore` and `handleGet` run unmodified, end to end, offline.
  */
 import { createServer } from 'node:http'
+import { createHmac } from 'node:crypto'
 
 /* ------------------------------------------------- fake Upstash REST ---- */
 
@@ -101,14 +102,35 @@ function fakeRes () {
   return r
 }
 
-const post = async (body) => {
+/* THE RELAY IS AUTHENTICATED NOW, so every request here carries a real token.
+ *
+ * It holds room SECRETS — the key each conversation is encrypted with — and it
+ * used to hand every pending knock, key included, to anyone who named a user
+ * id in a query string. The identity now comes from the token: GET reads the
+ * caller's own inbox, `ack` clears the caller's own inbox, and `store` stamps
+ * the caller as the sender so a knock cannot claim to come from someone else.
+ *
+ * Signed here rather than stubbed, so this exercises the same HS256 path
+ * `_auth.js` runs in production instead of a shape that only looks like it. */
+const tokenFor = (sub) => {
+  const part = (o) => Buffer.from(JSON.stringify(o)).toString('base64url')
+  const head = part({ alg: 'HS256', typ: 'JWT' })
+  const body = part({ sub, exp: Math.floor(Date.now() / 1000) + 900 })
+  const sig = createHmac('sha256', process.env.JWT_ACCESS_SECRET || 'dev-only-secret')
+    .update(`${head}.${body}`).digest('base64url')
+  return `${head}.${body}.${sig}`
+}
+const auth = (sub) => ({ authorization: `Bearer ${tokenFor(sub)}` })
+
+const post = async (body, as = ALICE) => {
   const res = fakeRes()
-  await handler({ method: 'POST', headers: {}, body }, res)
+  await handler({ method: 'POST', headers: auth(as), body }, res)
   return res
 }
 const get = async (userId) => {
   const res = fakeRes()
-  await handler({ method: 'GET', headers: {}, query: { userId } }, res)
+  // `userId` is now WHO IS ASKING, not a parameter the server trusts.
+  await handler({ method: 'GET', headers: auth(userId), query: {} }, res)
   return res
 }
 
@@ -216,10 +238,51 @@ await checkAsync('a non-string senderKey cannot crash the handler', async () => 
   return k?.senderKey === null
 })
 
+/* --------------------------------------------------- authentication --- */
+
+await checkAsync('THE HOLE: an unauthenticated GET is refused, not answered', async () => {
+  const res = fakeRes()
+  await handler({ method: 'GET', headers: {}, query: { userId: BOB } }, res)
+  return res.code === 401
+})
+
+await checkAsync('a forged token is refused (the signature is actually checked)', async () => {
+  const res = fakeRes()
+  await handler({ method: 'GET', headers: { authorization: 'Bearer aaa.bbb.ccc' }, query: {} }, res)
+  return res.code === 401
+})
+
+await checkAsync('reading someone ELSE\'s inbox now returns YOUR inbox, not theirs', async () => {
+  const roomId = 'dm-' + 'c'.repeat(16)
+  await post(knockFor(roomId))                       // Alice knocks Bob
+  // Mallory asks with her own token; the old query parameter is ignored.
+  const res = fakeRes()
+  await handler({ method: 'GET', headers: auth('cccc3333cccc3333'), query: { userId: BOB } }, res)
+  const knocks = res.body?.knocks || []
+  return res.code === 200 && !knocks.some((k) => k.roomId === roomId)
+})
+
+await checkAsync('…while the real owner still gets it', async () => {
+  const roomId = 'dm-' + 'd'.repeat(16)
+  await post(knockFor(roomId))
+  const knocks = (await get(BOB)).body?.knocks || []
+  return knocks.some((k) => k.roomId === roomId)
+})
+
+await checkAsync('a knock cannot claim to be from someone else', async () => {
+  const roomId = 'dm-' + 'e'.repeat(16)
+  // Mallory posts a knock whose payload names Alice as the sender.
+  await post(knockFor(roomId), 'cccc3333cccc3333')
+  const k = ((await get(BOB)).body?.knocks || []).find((x) => x.roomId === roomId)
+  return k?.from?.id === 'cccc3333cccc3333'
+})
+
+
 /* ------------------------------------------------------------- report --- */
 server.close()
 const names = Object.keys(results)
 const passed = names.filter((n) => results[n]).length
+
 console.log('\n========================================')
 console.log('  knock relay — no silent v2 downgrade')
 console.log('========================================')

@@ -1,11 +1,58 @@
-import { Injectable, ConflictException } from '@nestjs/common';
+import { Injectable, ConflictException, NotFoundException, ForbiddenException } from '@nestjs/common';
 import * as argon2 from 'argon2';
 import { PrismaService } from '../prisma/prisma.service';
+import { UsersService } from '../users/users.service';
 import { Role } from '../common/enums/role.enum';
 
 @Injectable()
 export class AdminService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private users: UsersService,
+  ) {}
+
+  /**
+   * Soft-delete an app user on an admin's authority.
+   *
+   * WHY THIS ROUTE EXISTS. `DELETE /api/users/me` is self-service — it acts on
+   * the JWT's subject — so removing an account needs a token AS that account,
+   * and `claimSecretHash` is set only at creation. Two probe accounts made on
+   * throwaway sessions were therefore unreachable by any route: their claim
+   * secrets died with the devices, and there was no admin path at all. They
+   * went on appearing to real users in Discovery as live neighbours.
+   *
+   * Deliberately the SAME soft delete as the self-service route rather than a
+   * second definition of "deleted" — one of them would drift, and the one that
+   * drifts is always the one nobody runs. The hard-delete job owns purging.
+   *
+   * The mutation alone would have been decorative: nothing checked `deletedAt`
+   * at auth time, so a deleted account kept refreshing and kept broadcasting in
+   * the lobby. `AuthService.refresh` and `guestAuth` now refuse it, which is
+   * what actually evicts the ghost.
+   */
+  async softDeleteUser(userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, username: true, role: true, deletedAt: true },
+    });
+    if (!user) throw new NotFoundException('no such user');
+    /* Staff live in the Employee table; a User carrying an elevated role is a
+     * deliberate grant, and the ghost-cleanup path is not where it should be
+     * revocable. Narrow on purpose — this route exists to remove noise. */
+    if (user.role !== Role.USER) {
+      throw new ForbiddenException('only ordinary user accounts can be deleted here');
+    }
+    if (user.deletedAt) {
+      return { id: user.id, username: user.username, deletedAt: user.deletedAt, alreadyDeleted: true };
+    }
+    const deleted = await this.users.softDeleteAccount(user.id);
+    return {
+      id: deleted.id,
+      username: deleted.username,
+      deletedAt: deleted.deletedAt,
+      alreadyDeleted: false,
+    };
+  }
 
   // ── Growth / demographics — aggregate only, never per-user location ──
   async installsOverTime(days = 30) {

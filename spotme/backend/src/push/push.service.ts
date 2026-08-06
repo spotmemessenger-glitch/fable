@@ -103,6 +103,25 @@ export class PushService {
     return { ok: true };
   }
 
+  /**
+   * Same, but only if the token is this user's.
+   *
+   * The unscoped variants above delete by endpoint/token alone, which was
+   * exactly enough for an unauthenticated caller to silence someone else's
+   * device. They stay for internal callers (a 410 from the push service means
+   * the endpoint is dead no matter who owned it); anything reached from a
+   * request must go through these.
+   */
+  async unregisterDeviceOwned(userId: string, token: string) {
+    await this.prisma.deviceToken.deleteMany({ where: { token, userId } });
+    return { ok: true };
+  }
+
+  async unsubscribeOwned(userId: string, endpoint: string) {
+    await this.prisma.pushSubscription.deleteMany({ where: { endpoint, userId } });
+    return { ok: true };
+  }
+
   async subscribe(
     userId: string,
     sub: { endpoint: string; keys: { p256dh: string; auth: string } },
@@ -269,6 +288,22 @@ export class PushService {
       });
     }
     return { sent, pruned: dead.length };
+  }
+
+  /**
+   * Has this user already been recorded in this room?
+   *
+   * Used by the DM join gate as the fallback for clients too old to name their
+   * peer. Read-only on purpose: `remember()` must not run until the join has
+   * been authorised, or the act of intruding would create the very membership
+   * row that later makes the intruder look legitimate.
+   */
+  async isMember(roomId: string, userId: string): Promise<boolean> {
+    const row = await this.prisma.roomMember.findUnique({
+      where: { roomId_userId: { roomId, userId } },
+      select: { roomId: true },
+    });
+    return Boolean(row);
   }
 
   /** Remember that this user belongs to this room, so we know whom to notify. */

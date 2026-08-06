@@ -133,6 +133,23 @@ export function setRoomKeyProvider (roomId, provider) {
 }
 
 /**
+ * Forget this room's replay position, so the next join asks for its history
+ * from the beginning.
+ *
+ * Only for deleting a conversation. The server replays strictly `id > since`,
+ * so a cursor left behind means a re-created chat starts mid-history with a
+ * hole where the undelivered messages were — which is exactly the state the
+ * "delete this chat and start it again" advice is meant to escape. Replaying
+ * from 0 is safe by construction: `store.add()` dedupes by id and honours
+ * tombstones.
+ */
+export function clearRoomCursor (roomId) {
+  try {
+    localStorage.removeItem(`${CURSOR_PREFIX}${db.profile()?.id || 'anon'}.${roomId}`)
+  } catch { /* private mode */ }
+}
+
+/**
  * Seal / open bytes with a room's key, WITHOUT handing the key out.
  *
  * Phase 5 uploads attachment slices straight to object storage, so the sealing
@@ -167,9 +184,58 @@ export function clearRoomKey (roomId) {
   const cacheKey = `${roomId}`
   keyProviders.delete(cacheKey)
   keyCache.delete(cacheKey)
+  refreshInFlight.delete(cacheKey)
+  refreshedAt.delete(cacheKey)
 }
 
-function roomKey (roomId, password) {
+/* Self-heal bookkeeping. `refreshInFlight` coalesces — a join replay of thirty
+ * undecryptable frames must produce ONE key fetch, not thirty. `refreshedAt`
+ * is the floor under that: when a room is genuinely unrecoverable every frame
+ * that arrives would otherwise hit the network forever. */
+const refreshInFlight = new Map()
+const refreshedAt = new Map()
+const REFRESH_COOLDOWN_MS = 30_000
+
+/**
+ * Re-agree this room's key because the one in hand cannot open a frame.
+ *
+ * THE BUG THIS EXISTS FOR. A device that cannot persist its X25519 identity
+ * republishes a fresh public key on every launch, and each republish
+ * staleifies the `convo.peerKey` every peer stored at creation. Both sides then
+ * derive different room keys and every frame is dropped undecryptable — in both
+ * directions, permanently, because `roomKeyForConvo` prefers the stored
+ * `peerKey` and only fetches when it is absent. Measured on two real handsets:
+ * @vijay22's published key moved three times in one session, @ajith11's never
+ * did, and the chat went silent while the server kept accepting messages and
+ * push notifications kept firing.
+ *
+ * Evicting the cache alone does nothing: the provider would re-derive from the
+ * same stale stored key. `forceRefetch` is what makes this a repair.
+ *
+ * v1 rooms have no provider and get null — a PBKDF2 key derived from the room
+ * password cannot be wrong in this way, so there is nothing to re-agree.
+ *
+ * Returns the fresh key, or null if this room cannot or should not refresh now.
+ */
+export function refreshRoomKey (roomId) {
+  const cacheKey = `${roomId}`
+  if (!keyProviders.has(cacheKey)) return Promise.resolve(null)
+  const inFlight = refreshInFlight.get(cacheKey)
+  if (inFlight) return inFlight
+  if (Date.now() - (refreshedAt.get(cacheKey) || 0) < REFRESH_COOLDOWN_MS) return Promise.resolve(null)
+
+  // Stamped BEFORE the attempt, so a failing refresh is rate-limited too.
+  refreshedAt.set(cacheKey, Date.now())
+  keyCache.delete(cacheKey)
+  const run = Promise.resolve()
+    .then(() => roomKey(roomId, undefined, { forceRefetch: true }))
+    .catch(() => null)          // a wedged room must not become an unhandled rejection
+    .then((key) => { refreshInFlight.delete(cacheKey); return key || null })
+  refreshInFlight.set(cacheKey, run)
+  return run
+}
+
+function roomKey (roomId, password, opts) {
   const cacheKey = `${roomId}`
   if (!keyCache.has(cacheKey)) {
     const provider = keyProviders.get(cacheKey)
@@ -178,7 +244,7 @@ function roomKey (roomId, password) {
       // also evicts itself so a later attempt (peer publishes a key, network
       // returns) can succeed instead of the room being wedged forever.
       keyCache.set(cacheKey, Promise.resolve()
-        .then(() => provider())
+        .then(() => provider(opts))
         .then((key) => {
           if (!key) throw new Error(`no agreed key for room ${roomId}`)
           return key
@@ -273,6 +339,32 @@ async function unwrapMeta (key, meta) {
 
 let socketPromise = null
 
+/* Terminal auth — an account the server will never accept again.
+ *
+ * Stopping the retry loop is only half of it. A device that silently stops
+ * trying looks exactly like a device that is quietly working, which is the
+ * failure mode this whole area keeps producing, so the fact has to be
+ * reportable. Registered by the app; announced at most once per page. */
+let onTerminalAuthHandler = null
+let terminalAuthAnnounced = false
+
+/** Called when this identity can never authenticate again. `{code, message}`. */
+export function setTerminalAuthHandler (fn) {
+  onTerminalAuthHandler = typeof fn === 'function' ? fn : null
+}
+
+/** What the app can ask, e.g. before showing a chat that will never connect. */
+export function isTerminalAuth () { return terminalAuthAnnounced }
+
+function onTerminalAuth (error) {
+  if (terminalAuthAnnounced) return
+  terminalAuthAnnounced = true
+  console.warn(`spotme auth: ${error?.message || 'this identity is no longer accepted'}`)
+  try {
+    onTerminalAuthHandler?.({ code: error?.code || 'terminal', message: error?.message || '' })
+  } catch { /* a reporting failure must not resurrect the loop */ }
+}
+
 async function guestAuth () {
   // Wait out onboarding: the profile appears in local storage the moment the
   // user taps Start; nothing joins a room before that anyway.
@@ -292,7 +384,12 @@ async function guestAuth () {
     // answer — which is exactly where we were. Capacitor reports 'android' or
     // 'ios' inside the packaged app and 'web' in a browser tab.
     platform: globalThis.Capacitor?.getPlatform?.() || 'web',
-    appVersion: APP_VERSION
+    appVersion: APP_VERSION,
+    // 18+ gate: a NEW identity is an account creation, which the server
+    // refuses without an adult declaration. Onboarding stored the year-month
+    // on this device; older installs that predate the field simply omit it
+    // (their account already exists, so re-auth needs no declaration).
+    birthYearMonth: me.birthYearMonth || undefined
   }
   let res = await fetch(`${SERVER}/api/auth/guest`, {
     method: 'POST',
@@ -307,6 +404,51 @@ async function guestAuth () {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ ...body, username: `${username.slice(0, 11)}_${String(me.id).slice(0, 4)}` })
     })
+  }
+  /* A DELETED ACCOUNT IS TERMINAL. STOP, DO NOT RETRY.
+   *
+   * Everything here used to collapse into one untyped throw, and the callers
+   * treat any failure as transient: `ensureSocket` nulls its promise so the
+   * next call retries, and `join` re-runs itself every two seconds forever.
+   * For a backend blip that is exactly right. For an account that no longer
+   * exists it is a device spinning silently until the battery goes, with the
+   * user told nothing at all.
+   *
+   * The server distinguishes the two now — 403 `deleted_account` rather than a
+   * 401 — so this marks the error `terminal` and the retry paths honour it. */
+  if (res.status === 403) {
+    let code = null
+    try { code = (await res.clone().json())?.error } catch { /* non-JSON body */ }
+    if (code === 'deleted_account') {
+      const dead = new Error('this account has been deleted')
+      dead.terminal = true
+      dead.code = 'deleted_account'
+      throw dead
+    }
+  }
+  /* An age refusal is TERMINAL, like a deleted account: the server will refuse
+   * this identity's creation on every retry, so the 2s retry loops must stop
+   * rather than spin silently forever (which is exactly what a plain 400 did
+   * to every pre-gate install). */
+  if (res.status === 400) {
+    let msg = null
+    try { msg = (await res.clone().json())?.message } catch { /* non-JSON body */ }
+    const text = Array.isArray(msg) ? msg.join(' ') : String(msg || '')
+    if (text.includes('18 and over')) {
+      const refused = new Error('Spot Me is for people 18 and over.')
+      refused.terminal = true
+      refused.code = 'age_requirement'
+      throw refused
+    }
+    /* A device from before the gate: its profile has no stored declaration, so
+     * account creation is refused until one is made. Terminal here, and the
+     * shell routes it back through onboarding to collect the birth month. */
+    if (text.includes('birthYearMonth') && !me.birthYearMonth) {
+      const need = new Error('Spot Me is 18+ now — confirm your birth month to continue.')
+      need.terminal = true
+      need.code = 'age_declaration_required'
+      throw need
+    }
   }
   if (!res.ok) throw new Error(`guest auth failed (${res.status})`)
   const tokens = await res.json()
@@ -351,9 +493,22 @@ function ensureSocket () {
     })
     socket.on('action', (frame) => activeRooms.get(frame?.roomId)?.onFrame(frame))
     socket.on('peer', (frame) => activeRooms.get(frame?.roomId)?.onPeer(frame))
+    /* Only RE-connects rejoin. This handler is registered above the
+     * `once('connect', resolve)` below, so on the first connect it ran FIRST —
+     * and every room is already in `activeRooms` by then, because `serverRoom`
+     * registers itself and calls `join()` synchronously while this promise is
+     * still awaiting `guestAuth`. So each room emitted `join` twice with the
+     * same `since`, and the server replayed the whole window twice.
+     *
+     * Duplicate messages were absorbed by `store.add`'s id check, which is why
+     * this stayed invisible. The damage was to the cursor hold: two replay loops
+     * interleave on their awaits, and the second one's `unopenedFloor = null`
+     * cleared a floor the first had just set for a frame it could not open. The
+     * first loop then advanced the cursor straight past it — exactly the loss
+     * `unopenedFloor` exists to prevent, re-opened by the double join. */
+    let everConnected = false
     socket.on('connect', () => {
-      // First connect resolves the promise; later connects are reconnects —
-      // every active room rejoins from its cursor and diffs its peer set.
+      if (!everConnected) { everConnected = true; return }
       for (const room of activeRooms.values()) room.rejoin()
     })
     // Debug handle in the spirit of window.__rooms / window.__lobby: a dead
@@ -371,7 +526,11 @@ function ensureSocket () {
     })
     return socket
   })()
-  socketPromise.catch(() => { socketPromise = null })  // allow retry after failure
+  socketPromise.catch((error) => {
+    // Allow a retry after a transient failure — but a terminal one must STAY
+    // failed, or nulling this is just the retry loop by another name.
+    if (!error?.terminal) socketPromise = null
+  })
   return socketPromise
 }
 
@@ -385,11 +544,21 @@ async function emitAck (socket, event, body) {
 
 function serverRoom (config, roomId) {
   const password = config?.password
+  /* Who the other participant is, for a DM. The server recomputes the room id
+   * from this plus the AUTHENTICATED caller and refuses a mismatch — a DM room
+   * id is a pure function of two public ids, so without it anyone who learned
+   * two ids could join and replay the whole history (see backend dm-room.ts).
+   * Undefined for groups, the lobby and inbox rooms, which the gate skips. */
+  const peerId = config?.peerId
   const actions = new Map()      // name -> action record
   const peers = new Map()        // peerId -> fake pc for getPeers()
   const pendingRequests = new Map() // reqId -> {resolve, reject, timer}
   let onPeerJoinHandler = null
   let onPeerLeaveHandler = null
+  /* Fired when a frame cannot be opened and re-agreement did not rescue it.
+   * The room reports the fact; deciding what a user should be told about it is
+   * the view's business, not the transport's. */
+  let onUndecryptableHandler = null
   let left = false
 
   /**
@@ -407,7 +576,58 @@ function serverRoom (config, roomId) {
   const readCursor = () => { try { return Number(localStorage.getItem(cursorKey())) || 0 } catch { return 0 } }
   const writeCursor = (n) => { try { localStorage.setItem(cursorKey(), String(n)) } catch { /* private mode */ } }
 
-  const keyPromise = roomKey(roomId, password)
+  /**
+   * The lowest seq this room has seen and could NOT open. Nothing at or above
+   * it may be marked as consumed.
+   *
+   * THE BUG THIS EXISTS FOR — it is the reason a broken chat never recovered.
+   * The cursor used to advance in `dispatch`'s `finally`, which runs whether or
+   * not the frame opened. The server replays strictly `id > since`, so one
+   * undecryptable frame burned its own place in the replay window and the
+   * message was gone from every future join — permanently, on both devices,
+   * even after the key was repaired. Fixing the key brought nothing back
+   * because there was nothing left to bring.
+   *
+   * A wrong key is REPAIRABLE, so a frame it could not open has not been
+   * consumed and must keep its place. Anything else — JSON that is not JSON, a
+   * type nobody registered — is not repairable by waiting, and holding the
+   * cursor for those would stall the room forever, so those still advance.
+   *
+   * Reset at the start of every join: a rejoin replays from the held cursor, so
+   * the failures either recur (and hold again) or do not (and the room moves
+   * on). That is what makes this self-correcting rather than a permanent stall.
+   */
+  let unopenedFloor = null
+  /**
+   * Hold, but ONLY where a repair is actually possible.
+   *
+   * `refreshRoomKey` returns null outright for a room with no key provider, and
+   * providers exist only for e2e_v2 conversations. A v1 room, a group room, the
+   * inbox/knock rooms — all derive from a fixed password, so a frame they cannot
+   * open will never open, and holding for it would pin the cursor forever:
+   * every reconnect replays a growing prefix until the backlog passes the
+   * server's REPLAY_LIMIT and newer events fall out of the window entirely. For
+   * the inbox that would eventually stop chat requests arriving.
+   *
+   * Which is the same rule the catch already applies to a SyntaxError — not
+   * repairable by waiting means not worth holding for.
+   */
+  const holdCursorAt = (seq) => {
+    if (!seq || !keyProviders.has(`${roomId}`)) return
+    if (unopenedFloor === null || seq < unopenedFloor) unopenedFloor = seq
+  }
+  /** Advance to `seq`, but never at or past a frame still waiting on a repair. */
+  const advanceCursor = (seq) => {
+    if (!seq) return
+    const ceiling = unopenedFloor === null ? seq : Math.min(seq, unopenedFloor - 1)
+    if (ceiling > readCursor()) writeCursor(ceiling)
+  }
+
+  /* Re-read the cache on every use instead of capturing the promise once.
+   * `refreshRoomKey` repairs a room by EVICTING that cache entry, and a
+   * captured promise would go on resolving to the stale key for the life of the
+   * page — the room would self-heal in the cache and stay broken in the room. */
+  const currentKey = () => roomKey(roomId, password)
 
   function actionRecord (name) {
     if (!actions.has(name)) {
@@ -420,11 +640,30 @@ function serverRoom (config, roomId) {
 
   /* -- incoming ---------------------------------------------------------- */
 
-  async function dispatch (frame, isReplay) {
+  async function dispatch (frame, isReplay, isRetry) {
     if (left || !frame || frame.from === selfId) return
-    const key = await keyPromise
     const { type, from } = frame
+    /* False until the room key is in hand, so the catch can tell "we never got
+     * a key" apart from "the key we had did not work". Both are repairable and
+     * both must hold the cursor; only the second is worth a re-agreement. */
+    let keyReady = false
+    /* Set when this call hands the frame to a retry. `try { return f() } finally
+     * {}` runs the finally AT the return statement, not when the returned
+     * promise settles — so without this the outer call advanced the cursor
+     * before the retry had even failed, and the hold arrived too late to matter.
+     * The retry owns the cursor for that frame. */
+    let delegated = false
     try {
+      /* INSIDE the try, deliberately. This used to sit above it, so a room
+       * whose key cannot be agreed — an e2e_v2 room has no password fallback,
+       * so `roomKeyForConvo` throwing is its designed behaviour — rejected
+       * here and became an unhandled rejection: no catch, no warning, no
+       * `onUndecryptable`, and the `finally` never ran either. The room went
+       * silent with nothing anywhere saying why, while the Discovery lobby
+       * (a password room with no provider) kept working and made the app look
+       * healthy. */
+      const key = await currentKey()
+      keyReady = true
       if (type === 'fetchreq') return void handleFetchReq(frame, key)
       if (type === 'fetchres') return void handleFetchRes(frame, key)
       const a = actions.get(type)
@@ -439,12 +678,86 @@ function serverRoom (config, roomId) {
         a.onMessage?.(payload, { peerId: from })
       }
     } catch (error) {
+      /* A WRONG KEY IS REPAIRABLE. TRY, EXACTLY ONCE.
+       *
+       * `OperationError` is AES-GCM refusing to authenticate — the tag did not
+       * match, which for this transport means the key is wrong rather than the
+       * bytes are damaged. It is the one failure here worth acting on: a
+       * SyntaxError from JSON.parse means we DID decrypt and the sender sent
+       * nonsense, and re-agreeing a key would not change that.
+       *
+       * Only ever one retry (`isRetry`), and `refreshRoomKey` refuses to run
+       * more than once per room per cooldown, so a room whose peer key is
+       * genuinely gone degrades to the old behaviour — one warning per frame —
+       * instead of one key fetch per frame. */
+      if (!isRetry && error?.name === 'OperationError') {
+        const fresh = await refreshRoomKey(roomId)
+        if (fresh) { delegated = true; return dispatch(frame, isReplay, true) }
+      }
+      /* RE-AGREEMENT DID NOT SAVE IT, SO SAY SO OUT LOUD.
+       *
+       * Reaching here with an OperationError means the room is genuinely
+       * broken: either the retry above ran and still could not authenticate, or
+       * there was no repair to offer (v1 room, no provider, or the cooldown is
+       * holding). Both are the same fact to a user — messages are arriving and
+       * none of them can be opened — and until now both were a `console.warn`
+       * on a device with no console, which is how a chat could look merely
+       * quiet while it was actually dead.
+       *
+       * ONLY OperationError. A SyntaxError from JSON.parse means we DID
+       * decrypt and the sender sent nonsense; announcing a key mismatch there
+       * would blame the key for a bug somewhere else entirely. */
+      /* `!keyReady` means `currentKey()` itself rejected — the room has no
+       * agreed key at all, which for the user is the same sentence as a wrong
+       * one ("messages are arriving and I cannot read them") and is repairable
+       * by the same actions. It reports `reason` so the view can distinguish
+       * them later without this having to guess now. */
+      if (error?.name === 'OperationError' || !keyReady) {
+        /* Hold the cursor BEFORE announcing. The announcement is what puts a
+         * warning on screen; the hold is what keeps the message retrievable
+         * once the user acts on it. */
+        holdCursorAt(frame.seq)
+        onUndecryptableHandler?.({
+          roomId, type, from, isReplay: Boolean(isReplay),
+          reason: keyReady ? 'wrong-key' : 'no-key'
+        })
+      }
       // A frame we cannot decrypt or parse must never kill the dispatch loop —
       // it is one lost event, not a dead room.
-      if (!isReplay) console.warn(`spotme transport: dropped ${type} frame:`, error?.message)
+      // Logged on replay too: a reload delivers EVERYTHING through replay, so
+      // suppressing it there kept the console clean on the one run where the
+      // damage was worst.
+      console.warn(`spotme transport: dropped ${type} frame${isReplay ? ' (replay)' : ''}:`, error?.message)
     } finally {
-      if (frame.seq && frame.seq > readCursor()) writeCursor(frame.seq)
+      if (!delegated) advanceCursor(frame.seq)
     }
+  }
+
+  /**
+   * Live frames, ONE AT A TIME, in arrival order.
+   *
+   * The replay loops are `for … await dispatch(…)` and therefore ordered. Live
+   * delivery was not: `onFrame` fired `dispatch` without awaiting it, so two
+   * frames arriving together both sat on `await openSealed(…)` and finished in
+   * whatever order WebCrypto happened to finish them.
+   *
+   * That breaks `advanceCursor`, which is only sound in order. A frame that
+   * fails sets `unopenedFloor` in its `catch` — but only AFTER a
+   * `refreshRoomKey` network round trip. A later frame that decrypts fine
+   * reaches its `finally` during that window, sees the floor still `null`, and
+   * writes a cursor above the frame that is about to be held. The hold then
+   * lands too late and the earlier message is never replayed again.
+   *
+   * It reorders order-sensitive handlers too: an `edit` that opens before the
+   * `msg` it edits finds no target and returns silently, so a corrected message
+   * stays wrong forever on the receiving device.
+   *
+   * Serialising costs nothing real — dispatch is already async and frames
+   * arrive far slower than they decrypt — and it fixes both at once.
+   */
+  let frameChain = Promise.resolve()
+  const enqueueFrame = (frame) => {
+    frameChain = frameChain.then(() => dispatch(frame, false)).catch(() => {})
   }
 
   function addPeer (peerId, announce) {
@@ -461,47 +774,120 @@ function serverRoom (config, roomId) {
 
   /* -- join / rejoin ----------------------------------------------------- */
 
+  /**
+   * Attachments that arrived while this device was away, as detached history
+   * entries — bubble appears, bytes fetch on demand.
+   *
+   * SHARED BY BOTH JOIN PATHS, and that is the whole point of it existing.
+   * `rejoin` used to skip this block and still run `advanceCursor`, which is
+   * unconditional, permanent loss: the server strips `bin` from `ack.events`
+   * (rooms.service.ts `type: { not: 'bin' }`), so an envelope is the ONLY way a
+   * missed attachment ever comes back, and `lastEventId` counts the bin rows it
+   * declined to send. Every photo, voice note and file received across a
+   * reconnect was dropped and then marked as consumed.
+   *
+   * And `rejoin` is the common path, not the rare one — `joinPromise` is cached,
+   * so the full `join` runs once per room per page load and every socket drop
+   * after that (a lift, wifi handing over to cellular) went through `rejoin`.
+   */
+  async function absorbEnvelopes (envelopes, key) {
+    if (!envelopes?.length) return
+    const messages = []
+    for (const env of envelopes) {
+      const metadata = await unwrapMeta(key, env.meta)
+      if (!metadata?.id) continue
+      /* `total` is KEPT for a storage-backed attachment.
+       *
+       * Stripping it was right while every byte lived in the RoomEvent log —
+       * the lazy fetch asks the server for slices and counts them itself. A
+       * storage-backed attachment has no slices, so a receiver that loses
+       * `total` has an envelope it can render and bytes it can never retrieve:
+       * "tap to load" that fails forever, on every future join. Measured in the
+       * two-origin harness, on the offline-delivery path specifically.
+       *
+       * `viaStorage` needs no special handling — it rides along in the rest
+       * spread, since only `seq` and `total` are destructured out. It is read
+       * here rather than restored.
+       *
+       * The fix lives in this helper rather than at one call site, because all
+       * three join paths absorb envelopes and any of them can be the one that
+       * carries a missed attachment. envelope-viastorage.test.js pins it. */
+      const { seq, total, ...envelope } = metadata
+      messages.push(metadata.viaStorage
+        ? { ...envelope, total, data: null, detached: true }
+        : { ...envelope, data: null, detached: true })
+    }
+    if (messages.length) actions.get('history')?.onMessage?.({ messages }, { peerId: 'server' })
+  }
+
+  /**
+   * One replay page: dispatch the events, absorb the envelopes, move the cursor.
+   * Returns whether the server says more is waiting above what it just sent.
+   *
+   * A device offline long enough to miss more than REPLAY_LIMIT events gets a
+   * CAPPED page, and there is no second join until the next reconnect — which on
+   * a phone that is now awake and working may be hours away, or never. So keep
+   * asking while the server says it truncated. `PAGE_CAP` is a stop, not a
+   * limit: a server that answered `truncated` forever would otherwise spin here.
+   */
+  const PAGE_CAP = 20
+  async function replayPage (socket) {
+    const ack = await emitAck(socket, 'join', { roomId, since: readCursor(), peerId })
+    const key = await currentKey()
+    unopenedFloor = null
+    for (const ev of ack.events || []) await dispatch(ev, true)
+    await absorbEnvelopes(ack.envelopes, key)
+    advanceCursor(ack.lastEventId)
+    return { ack, more: Boolean(ack.truncated) }
+  }
+
+  async function drainReplay (socket, firstAck) {
+    let more = Boolean(firstAck?.truncated)
+    for (let page = 0; more && page < PAGE_CAP; page++) {
+      // The floor only holds while a page is being replayed; if a frame in this
+      // page could not be opened the cursor has not moved past it, so the next
+      // page starts from the same place and we would loop. Stop and let the
+      // ordinary rejoin path retry once the key is repaired.
+      const before = readCursor()
+      const next = await replayPage(socket)
+      more = next.more && readCursor() > before
+    }
+  }
+
   let joinPromise = null
 
   function join () {
     if (joinPromise) return joinPromise
     joinPromise = (async () => {
       const socket = await ensureSocket()
-      const ack = await emitAck(socket, 'join', { roomId, since: readCursor() })
-      const key = await keyPromise
+      const ack = await emitAck(socket, 'join', { roomId, since: readCursor(), peerId })
+      const key = await currentKey()
+      /* Cleared only once a key is actually in hand, and AFTER `currentKey()`
+       * on purpose. `join` retries every 2s on failure, and `currentKey()` is
+       * the throw that fails it — so resetting above this line handed the retry
+       * loop a fresh floor every 2 seconds, and each live frame that arrived in
+       * between set a HIGHER floor than the last, letting the cursor creep past
+       * frames already held. That is the original data loss again, just slower.
+       * Past this point the replay is genuinely about to run, so a reset means
+       * "re-evaluate what is unopenable now", which is what it is for. */
+      unopenedFloor = null
       for (const peerId of ack.peers || []) addPeer(peerId, true)
       for (const ev of ack.events || []) await dispatch(ev, true)
-      // Attachments that arrived while this device was away come back as
-      // detached history entries — bubble appears, bytes fetch on demand.
-      if (ack.envelopes?.length) {
-        const messages = []
-        for (const env of ack.envelopes) {
-          const metadata = await unwrapMeta(key, env.meta)
-          if (!metadata?.id) continue
-          /* `total` and `viaStorage` are KEPT for a storage-backed attachment.
-           *
-           * Stripping them was right while every byte lived in the RoomEvent
-           * log — the lazy fetch asks the server for slices and needs neither.
-           * A Phase 5 attachment has no slices, so a receiver that loses those
-           * two fields has an envelope it can render and bytes it can never
-           * retrieve: "tap to load" that fails forever. Measured in the
-           * two-origin harness, on the offline-delivery path specifically. */
-          const { seq, total, ...envelope } = metadata
-          messages.push(metadata.viaStorage
-            ? { ...envelope, total, data: null, detached: true }
-            : { ...envelope, data: null, detached: true })
-        }
-        if (messages.length) {
-          const h = actions.get('history')
-          h?.onMessage?.({ messages }, { peerId: 'server' })
-        }
-      }
-      if (ack.lastEventId > readCursor()) writeCursor(ack.lastEventId)
+await absorbEnvelopes(ack.envelopes, key)
+      advanceCursor(ack.lastEventId)
+      await drainReplay(socket, ack)
       return socket
     })()
-    joinPromise.catch(() => {
+    joinPromise.catch((error) => {
       // A failed boot (backend briefly down, auth race during onboarding)
       // must not leave the room permanently dead — retry until it lands.
+      // A TERMINAL failure is the exception: retrying a deleted account cannot
+      // succeed, so this is the loop that has to stop rather than the one that
+      // has to persist.
+      if (error?.terminal) {
+        onTerminalAuth(error)
+        return
+      }
       joinPromise = null
       if (!left) setTimeout(() => join(), 2000)
     })
@@ -512,12 +898,16 @@ function serverRoom (config, roomId) {
     if (left) return
     try {
       const socket = await socketPromise
-      const ack = await emitAck(socket, 'join', { roomId, since: readCursor() })
+      const ack = await emitAck(socket, 'join', { roomId, since: readCursor(), peerId })
+      const key = await currentKey()
+      unopenedFloor = null   // same reasoning as join(): only once a replay is really about to run
       const alive = new Set(ack.peers || [])
       for (const peerId of [...peers.keys()]) if (!alive.has(peerId)) removePeer(peerId)
       for (const peerId of alive) addPeer(peerId, true)
       for (const ev of ack.events || []) await dispatch(ev, true)
-      if (ack.lastEventId > readCursor()) writeCursor(ack.lastEventId)
+      await absorbEnvelopes(ack.envelopes, key)
+      advanceCursor(ack.lastEventId)
+      await drainReplay(socket, ack)
     } catch { /* reconnect loop will fire again */ }
   }
 
@@ -526,7 +916,7 @@ function serverRoom (config, roomId) {
   async function sendAction (type, data, sendOpts = {}, attachId) {
     if (left) return
     const socket = await join()
-    const key = await keyPromise
+    const key = await currentKey()
     const bytes = toBytes(data)
     const payload = b64(await seal(key, bytes || enc(JSON.stringify(data ?? null))))
     const meta = await wrapMeta(key, sendOpts.metadata)
@@ -549,7 +939,7 @@ function serverRoom (config, roomId) {
 
   async function requestBytes (data, reqOpts = {}) {
     const socket = await join()
-    const key = await keyPromise
+    const key = await currentKey()
     // The server log answers first — it holds every slice ever sent through
     // it, which is exactly the case P2P could not serve (sender offline).
     if (data?.id) {
@@ -664,6 +1054,7 @@ function serverRoom (config, roomId) {
 
     set onPeerJoin (fn) { onPeerJoinHandler = fn },
     set onPeerLeave (fn) { onPeerLeaveHandler = fn },
+    set onUndecryptable (fn) { onUndecryptableHandler = fn },
 
     getPeers () { return Object.fromEntries(peers) },
 
@@ -679,7 +1070,7 @@ function serverRoom (config, roomId) {
     },
 
     // internals used by the shared socket dispatcher
-    onFrame: (frame) => { dispatch(frame, false) },
+    onFrame: (frame) => { enqueueFrame(frame) },
     onPeer: (frame) => {
       if (frame.peerId === selfId) return
       if (frame.action === 'join') addPeer(frame.peerId, true)

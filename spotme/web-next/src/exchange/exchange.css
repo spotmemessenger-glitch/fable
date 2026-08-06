@@ -1,0 +1,23 @@
+.ex-composer { display: flex; flex-direction: column; gap: 12px; max-width: 640px; }
+.ex-composer label { display: flex; flex-direction: column; gap: 4px; }
+.ex-composer input, .ex-composer select, .ex-composer textarea { min-height: 44px; padding: 8px 10px; font-size: 16px; box-sizing: border-box; }
+.ex-composer textarea { min-height: 88px; }
+.ex-kinds, .ex-tabs { display: flex; gap: 8px; flex-wrap: wrap; }
+.ex-touch { min-width: 44px; min-height: 44px; padding: 10px 14px; cursor: pointer; }
+.ex-touch:focus-visible { outline: 3px solid #0a7; outline-offset: 2px; }
+.ex-primary { background: #0a7; color: #fff; border: none; border-radius: 8px; }
+.ex-check { flex-direction: row !important; align-items: center; gap: 8px; min-height: 44px; }
+.ex-check input[type='checkbox'] { min-width: 24px; min-height: 24px; }
+.ex-card { border: 1px solid #ddd; border-radius: 12px; padding: 12px; margin: 8px 0; }
+.ex-card header { display: flex; gap: 8px; align-items: baseline; }
+.ex-card footer { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+.ex-kind, .ex-status, .ex-band { font-size: 12px; color: #567; border: 1px solid #cde; border-radius: 6px; padding: 1px 6px; }
+.ex-note { font-size: 12px; color: #777; }
+.ex-error { color: #a33; }
+.ex-price { font-weight: 600; }
+.ex-area { color: #567; font-size: 13px; }
+.ex-why summary { cursor: pointer; min-height: 44px; display: flex; align-items: center; }
+@media (prefers-color-scheme: dark) {
+  .ex-card { border-color: #333; }
+  .ex-note, .ex-area { color: #9ab; }
+}

@@ -152,12 +152,31 @@ export class RoomsService {
         envelopes.set(slice.attachId, slice);
       }
     }
-    const lastEventId = Math.max(
-      since,
-      events.length ? events[events.length - 1].id : 0,
-      attachments.length ? attachments[attachments.length - 1].id : 0,
-    );
-    return { events, envelopes: [...envelopes.values()], lastEventId };
+    /* THE FRONTIER IS WHERE THE CAPPED QUERY STOPPED, NOT THE NEWEST ROW WE SAW.
+     *
+     * `events` is `take: REPLAY_LIMIT`; `attachments` is not capped at all. So
+     * for a client far enough behind, this used to hand back events #1..#5000
+     * and a `lastEventId` taken from a bin row created long AFTER #5000. The
+     * client advanced its cursor to that id, and every event in between — up to
+     * 1200 messages in the case I worked through — was never returned by any
+     * future join. Silent, permanent, and with no gap indicator anywhere.
+     *
+     * The cursor is a promise that everything below it has been delivered, so it
+     * may only ever reach as far as this response actually reached. `truncated`
+     * lets the client come straight back for the next page instead of waiting
+     * for a reconnect that may not come. */
+    const truncated = events.length === REPLAY_LIMIT;
+    const lastEventId = truncated
+      ? events[events.length - 1].id
+      : Math.max(
+          since,
+          events.length ? events[events.length - 1].id : 0,
+          attachments.length ? attachments[attachments.length - 1].id : 0,
+        );
+    // An envelope above the frontier has not been delivered either — sending it
+    // now would put a bubble on screen that the cursor cannot account for.
+    const inWindow = [...envelopes.values()].filter((e) => e.id <= lastEventId);
+    return { events, envelopes: inWindow, lastEventId, truncated };
   }
 
   /**

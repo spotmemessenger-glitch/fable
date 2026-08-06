@@ -12,16 +12,17 @@ import { db, wipeDevice } from './lib/db.js'
 import { lobby } from './lib/discovery.js'
 import { reach } from './lib/reach.js'
 import { rooms } from './lib/rooms.js'
-import { publishIdentity } from './lib/crypto/identity-store.js'
-import { freshTokens } from './lib/socket-transport.js'
+import { publishIdentity, identityStatus } from './lib/crypto/identity-store.js'
+import { freshTokens, setTerminalAuthHandler } from './lib/socket-transport.js'
+import { setBlockedSendHandler } from './lib/crypto/identity-enforcement.js'
 import { readyRTC } from './net.js'
 import { attachPullRefresh } from './lib/pullrefresh.js'
 import { el, clear, toast, avatar, actionSheet } from './lib/ui.js'
 import { compressImage, shrinkDataURL, AVATAR_EDGE, AVATAR_QUALITY } from './lib/media.js'
 import { openCrop } from './lib/crop.js'
 import { readLink } from './net.js'
-import { primeAudio, startNotifier, notifyState, enableNotify, notifyBlockedReason } from './lib/notify.js'
-import { subscribePush, isNative as isNativeShell } from './lib/push.js'
+import { primeAudio, startNotifier, notifyState, enableNotify, notifyBlockedReason, alertMessage } from './lib/notify.js'
+import { subscribePush, attachPushHandlers, isNative as isNativeShell } from './lib/push.js'
 
 import * as inbox from './views/inbox.js'
 import * as discovery from './views/discovery.js'
@@ -31,8 +32,11 @@ import * as profile from './views/profile.js'
 import * as contacts from './views/contacts.js'
 import * as groups from './views/groups.js'
 import * as groupManage from './views/group-manage.js'
+import * as verify from './views/verify.js'
 import * as notifications from './views/notifications.js'
 import * as stories from './views/stories.js'
+import * as moments from './views/moments.js'
+import { momentsAvailable } from './lib/moments-api.js'
 
 const app = document.getElementById('app')
 
@@ -58,15 +62,26 @@ const resetOrdered = () => {
 
 const RESETTING = new URL(window.location.href).searchParams.has('fresh') || resetOrdered()
 
+/* F1: ask the browser to mark this origin's storage durable, so the identity
+ * key and profile survive storage pressure. Best-effort — denial changes
+ * nothing about how the app behaves, it only leaves eviction possible. */
+if (!RESETTING) { try { navigator.storage?.persist?.().catch(() => {}) } catch { /* older engines */ } }
+
 /* ------------------------------------------------- locked bottom bar (5) */
 
 const NAV_ITEMS = [
   {
-    // Home left the bar (owner call): the chat list is the landing screen and
-    // the Stories screen carries the way back. This slot is Stories now — the
-    // rings moved off Home entirely.
-    path: '#/stories', label: 'Stories',
-    icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="8.4" stroke-dasharray="4.6 3.1"/><circle cx="12" cy="12" r="3.4"/></svg>'
+    /* M6: POSTS replaces Stories in the bar. Stories are not a destination —
+     * they are the ring row at the top of the Posts feed, the way Instagram
+     * and Messenger do it, so the bar stays at five slots and the rings sit
+     * where people already look for them. #/stories still routes (old links
+     * keep working); it simply has no tab.
+     *
+     * `flag: 'moments'` means this item is DROPPED from the bar unless the
+     * server serves Moments to this account — in production the bar is
+     * byte-identical to what it was before this change. */
+    path: '#/posts', label: 'Posts', flag: 'moments',
+    icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><rect x="3.4" y="3.4" width="17.2" height="17.2" rx="4.6"/><circle cx="12" cy="12" r="3.6"/><circle cx="17" cy="7" r="1.1" fill="currentColor" stroke="none"/></svg>'
   },
   {
     path: '#/discovery', label: 'Discovery',
@@ -96,14 +111,32 @@ const ACTIVE_TAB = {
   '#/bluetooth': '#/chat',      // a Home tab now, so Chats stays lit
   '#/chat': '#/chat',
   '#/settings': null,           // reached via the profile pic
-  '#/stories': '#/stories',
+  '#/stories': null,            // still routable by link; no tab of its own
+  '#/posts': '#/posts',
   '#/notifications': '#/notifications'
+}
+
+/** The route part of a hash, without its query string: `#/posts?m=abc` →
+ *  `#/posts`. Share links are the only routes that carry params today. */
+function routePath (hash) {
+  const h = hash || '#/chat'
+  const i = h.indexOf('?')
+  return i === -1 ? h : h.slice(0, i)
 }
 
 let navEl = null
 
+/* Which flagged tabs the SERVER is currently serving. Empty until the probe
+ * answers, so the bar renders in its production shape first and gains a tab
+ * only if Moments is genuinely available — never the other way round. */
+const enabledFlags = new Set()
+
+function navItems () {
+  return NAV_ITEMS.filter((item) => !item.flag || enabledFlags.has(item.flag))
+}
+
 function buildNav () {
-  navEl = el('nav', { class: 'nav' }, NAV_ITEMS.map((item) =>
+  navEl = el('nav', { class: 'nav' }, navItems().map((item) =>
     el('button', {
       class: 'nv', type: 'button', 'data-path': item.path,
       html: item.icon,
@@ -111,6 +144,33 @@ function buildNav () {
     }, [item.label])
   ))
   return navEl
+}
+
+/** Re-ask the server which flagged surfaces exist, and rebuild the bar.
+ *  Idempotent: reconciles against the ACTUAL DOM, not a boolean, so it does
+ *  the right thing no matter which of the (boot / first-render) callers wins
+ *  the race — the earlier `on !== had` guard skipped the rebuild when the flag
+ *  was set before navEl existed, leaving the tab permanently absent. */
+export async function refreshFlaggedTabs () {
+  let on = false
+  try { on = await momentsAvailable() } catch { on = false }
+  if (on) enabledFlags.add('moments'); else enabledFlags.delete('moments')
+  if (!navEl) return
+  const desired = navItems().map((i) => i.path).join(',')
+  const current = [...navEl.querySelectorAll('.nv')].map((b) => b.dataset.path).join(',')
+  if (desired !== current) {
+    // buildNav() REASSIGNS the module-level navEl as a side effect, so the old
+    // element must be captured FIRST — otherwise `navEl.replaceWith(navEl)` is
+    // a no-op and the stale nav stays in the DOM while the fresh (correct) one
+    // is never inserted. That was the bug the runtime logs exposed: the
+    // reconcile "succeeded" against a detached node while the bar never moved.
+    const old = navEl
+    buildNav()
+    old.replaceWith(navEl)
+    // Strip any `?m=…` before the tab lookup, for the same reason the router
+    // does: `#/posts?m=x` is the Posts tab, not an unknown route.
+    updateNav(routePath(window.location.hash))
+  }
 }
 
 function updateNav (route) {
@@ -152,6 +212,7 @@ const ROUTES = {
   '#/settings': profile,
   '#/notifications': notifications,
   '#/stories': stories,
+  '#/posts': moments,
   '#/bluetooth': bluetooth
 }
 
@@ -189,6 +250,11 @@ function render () {
     // Pull down anywhere to hard-refresh: phones otherwise sit on an old
     // bundle until someone remembers the browser's own gesture.
     attachPullRefresh(app)
+    // M6: boot()'s probe can fire BEFORE this first nav exists (it runs before
+    // the first render), so the flagged-tab rebuild there no-ops on a null
+    // navEl. Re-run it now that navEl is real — momentsAvailable() is cached,
+    // so this is just the DOM rebuild the earlier call could not do.
+    refreshFlaggedTabs().catch(() => {})
   }
   clear(viewContainer)
 
@@ -196,6 +262,15 @@ function render () {
   if (threadMatch) {
     navEl.style.display = 'none'
     currentCleanup = chat.render(viewContainer, ctx, decodeURIComponent(threadMatch[1]))
+    return
+  }
+
+  /* Key verification is a full screen entered from one chat, and its back
+   * button returns to that chat — same shape as group management below. */
+  const verifyMatch = hash.match(/^#\/verify\/(.+)$/)
+  if (verifyMatch) {
+    navEl.style.display = 'none'
+    currentCleanup = verify.render(viewContainer, ctx, decodeURIComponent(verifyMatch[1]))
     return
   }
 
@@ -208,10 +283,20 @@ function render () {
     return
   }
 
+  /* A route may carry a query string — `#/posts?m=<id>` is the share link a
+   * post's own Share button produces. The lookup below used to be a plain
+   * `ROUTES[hash]`, so the whole `#/posts?m=…` string missed every key and
+   * fell through to the `|| inbox` default: every shared post link opened the
+   * chat list. Split the path from its params and route on the path, then hand
+   * the params to the view so it can honour them. */
+  const qIndex = hash.indexOf('?')
+  const path = routePath(hash)
+  const params = new URLSearchParams(qIndex === -1 ? '' : hash.slice(qIndex + 1))
+
   navEl.style.display = ''
-  const view = ROUTES[hash] || inbox
-  updateNav(hash in ROUTES ? hash : '#/chat')
-  currentCleanup = view.render(viewContainer, ctx)
+  const view = ROUTES[path] || inbox
+  updateNav(path in ROUTES ? path : '#/chat')
+  currentCleanup = view.render(viewContainer, ctx, params)
 }
 
 /* ------------------------------------------------------------ onboarding */
@@ -221,6 +306,37 @@ function render () {
 const REGISTRY_API = API_BASE
 const USERNAME_RE = /^[a-z0-9_]{3,16}$/
 const CHECK_DEBOUNCE_MS = 400
+
+/* 18+ gate (owner decision D6). Year-month only — never a full birthday — and
+ * the same CONSERVATIVE month rule the server enforces: eligible only once the
+ * 18th-birthday month has fully passed in UTC. This check is a courtesy so the
+ * refusal is instant and clearly worded; the server refuses independently, so
+ * bypassing this buys nothing. */
+/* Fix-the-Foundation F1: this account lives in this browser's storage, and
+ * in-app browser views (links opened inside WhatsApp, Instagram, chat apps…)
+ * often keep a SEPARATE, throwaway copy of that storage — which is exactly
+ * "I have to sign up again every time I reopen". The app cannot stop a host
+ * app from discarding its webview storage; what it can do is ask for durable
+ * storage, say out loud when the window looks throwaway, and (the real fix)
+ * let the same @username sign back in with a recovery code. */
+const IN_APP_BROWSER_RE = /\bwv\b|FBAN|FBAV|FB_IAB|Instagram|Line\/|MicroMessenger|Snapchat|GSA\/|TikTok|Twitter/i
+function looksInApp () {
+  const ua = navigator.userAgent || ''
+  if (IN_APP_BROWSER_RE.test(ua)) return true
+  // iOS webviews ship AppleWebKit without the trailing "Safari" token.
+  return /iPhone|iPad/.test(ua) && /AppleWebKit/.test(ua) && !/Safari\//.test(ua)
+}
+
+const BIRTH_YM_RE = /^\d{4}-(0[1-9]|1[0-2])$/
+const AGE_REFUSAL = 'Spot Me is for people 18 and over. We are not able to offer you an account yet.'
+function isAdultYM (ym) {
+  if (!BIRTH_YM_RE.test(ym)) return false
+  const now = new Date()
+  const eighteenthYear = Number(ym.slice(0, 4)) + 18
+  const month = Number(ym.slice(5, 7))
+  const curY = now.getUTCFullYear()
+  return curY > eighteenthYear || (curY === eighteenthYear && now.getUTCMonth() + 1 > month)
+}
 
 function renderOnboarding () {
   clear(app)
@@ -274,6 +390,13 @@ function renderOnboarding () {
     checkTimer = setTimeout(() => checkAvailability(cleaned), CHECK_DEBOUNCE_MS)
   })
 
+  /* Birth year-month for the 18+ gate. type="month" gets a native picker on
+   * phones and degrades to text elsewhere — the placeholder covers that. */
+  const birthYM = el('input', {
+    class: 'ob-name', type: 'month', placeholder: 'YYYY-MM',
+    autocomplete: 'bday', max: new Date().toISOString().slice(0, 7)
+  })
+
   const avatarSlot = el('button', {
     class: 'ob-avatar', type: 'button', 'aria-label': 'Add a photo',
     onclick: () => filePick.click()
@@ -304,19 +427,41 @@ function renderOnboarding () {
       return
     }
     if (usernameState === 'taken') { toast('That username is taken'); username.focus(); return }
+    const ym = birthYM.value.trim()
+    if (!BIRTH_YM_RE.test(ym)) {
+      toast('Enter your birth month — Spot Me is 18+')
+      birthYM.focus()
+      return
+    }
+    if (!isAdultYM(ym)) { toast(AGE_REFUSAL); return }
 
     starting = true
     goBtn.disabled = true
     // Mint the profile id first — the claim record binds username -> id.
-    const me = db.setProfile({ name: chosen, lang: 'en', avatar: avatarData })
+    // birthYearMonth stays on-device too: every later guest re-auth (fresh
+    // install token fetch) sends it so the account is created age-verified.
+    const me = db.setProfile({ name: chosen, lang: db.profile()?.lang || 'en', avatar: avatarData, birthYearMonth: ym })
     let claimed = false
     let reachable = true
     try {
       const res = await fetch(`${REGISTRY_API}/api/username`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ username: handle, id: me.id, name: chosen, secret: me.claimSecret })
+        body: JSON.stringify({ username: handle, id: me.id, name: chosen, secret: me.claimSecret, birthYearMonth: ym })
       })
+      if (res.status === 400) {
+        // The server's own 18+ refusal (it re-checks; the client check above is
+        // only a courtesy). Terminal for this attempt — no account was created.
+        let msg = null
+        try { msg = (await res.clone().json())?.message } catch { /* non-JSON */ }
+        const text = Array.isArray(msg) ? msg.join(' ') : String(msg || '')
+        if (text.includes('18 and over')) {
+          toast(AGE_REFUSAL)
+          starting = false
+          goBtn.disabled = false
+          return
+        }
+      }
       if (res.status === 409) {
         setUsernameState('taken')
         toast('That username was just taken — try another')
@@ -349,6 +494,17 @@ function renderOnboarding () {
 
   const goBtn = el('button', { class: 'pill ok ob-go', type: 'button', text: 'Start', onclick: start })
 
+  /* A pre-gate device arriving back here (age_declaration_required) keeps its
+   * identity: prefill so "confirm your birth month" is one field, not a redo. */
+  const existing = db.profile()
+  if (existing?.name) name.value = existing.name
+  if (existing?.username) { username.value = existing.username; setUsernameState('idle') }
+  if (existing?.avatar) {
+    avatarData = existing.avatar
+    clear(avatarSlot)
+    avatarSlot.appendChild(avatar({ avatar: existing.avatar }, 84))
+  }
+
   app.appendChild(el('div', { class: 'onboard scroll-y' }, [
     el('div', { class: 'ob-inner' }, [
       el('h1', { text: 'Spot Me' }),
@@ -370,11 +526,80 @@ function renderOnboarding () {
         usernameStatus
       ]),
       el('p', { class: 'ob-uhint', text: '3–16 letters, numbers, underscores' }),
+      el('label', { text: 'Birth month' }),
+      birthYM,
+      el('p', { class: 'ob-uhint', text: 'Spot Me is 18+. Only the year and month — never your full birthday.' }),
       goBtn,
-      el('p', { class: 'ob-fine', text: 'No password, no phone number. Your profile lives on this device.' })
+      el('p', { class: 'ob-fine', text: 'No password, no phone number. Your profile lives on this device.' }),
+      looksInApp()
+        ? el('p', { class: 'ob-fine', style: 'color:#b45309', text: 'You seem to be inside another app’s browser — it may forget you when it closes. Open spotme-web-v2.vercel.app in Chrome or Safari and use “Add to Home Screen”.' })
+        : null,
+      el('button', {
+        class: 'linkbtn', type: 'button', text: 'Been here before? Sign back in',
+        onclick: renderRecovery
+      })
     ])
   ]))
   name.focus()
+}
+
+/* Fix-the-Foundation F1: sign back in as an existing @username with the
+ * recovery code (shown in Profile after signup). The device ADOPTS the
+ * account's id — chats stored on other devices stay theirs; this device
+ * starts with the account, not with its history (messages are device-local). */
+function renderRecovery () {
+  clear(app)
+  viewContainer = null
+  navEl = null
+  const user = el('input', {
+    class: 'ob-name ob-uinput', type: 'text', placeholder: 'username', maxlength: '16',
+    autocomplete: 'off', autocapitalize: 'none', spellcheck: 'false'
+  })
+  const code = el('input', {
+    class: 'ob-name', type: 'text', placeholder: 'recovery code',
+    autocomplete: 'off', autocapitalize: 'none', spellcheck: 'false'
+  })
+  let busy = false
+  const go = async () => {
+    if (busy) return
+    const uname = user.value.trim().toLowerCase().replace(/^@/, '')
+    const secret = code.value.trim()
+    if (!/^[a-z0-9_]{3,16}$/.test(uname)) { toast('Enter your @username'); user.focus(); return }
+    if (secret.length < 8) { toast('Enter your recovery code'); code.focus(); return }
+    busy = true; goBtn.disabled = true
+    try {
+      const res = await fetch(`${REGISTRY_API}/api/auth/guest/recover`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ username: uname, secret })
+      })
+      if (!res.ok) { toast('That username and code don’t match.'); busy = false; goBtn.disabled = false; return }
+      const acct = await res.json()
+      // Adopt the account: its id IS the identity every room and lookup keys on.
+      db.setProfile({ id: acct.userId, username: acct.username, name: acct.name || acct.username, claimSecret: secret })
+      if (acct.accountFrozen && acct.notice) toast(acct.notice)
+      boot()
+      offerNotifications()
+      navigate('#/chat')
+    } catch {
+      toast('Could not reach the server — try again.')
+      busy = false; goBtn.disabled = false
+    }
+  }
+  const goBtn = el('button', { class: 'pill ok ob-go', type: 'button', text: 'Sign back in', onclick: go })
+  app.appendChild(el('div', { class: 'onboard scroll-y' }, [
+    el('div', { class: 'ob-inner' }, [
+      el('h1', { text: 'Sign back in' }),
+      el('p', { class: 'ob-lede', text: 'Your @username plus the recovery code from your Profile screen. Messages stay on the devices that hold them.' }),
+      el('label', { text: 'Username' }),
+      el('div', { class: 'ob-username' }, [el('span', { class: 'ob-uat', text: '@' }), user]),
+      el('label', { text: 'Recovery code' }),
+      code,
+      goBtn,
+      el('button', { class: 'linkbtn', type: 'button', text: 'Back', onclick: renderOnboarding })
+    ])
+  ]))
+  user.focus()
 }
 
 /* ------------------------------------------------------------------ boot */
@@ -431,7 +656,20 @@ async function maybeFreshStart () {
     } catch { /* offline — the name stays claimed, nothing else breaks */ }
   }
 
-  try { wipeDevice() } catch { /* private mode — nothing to clear */ }
+  /* AWAITED, and its answer acted on. Two things were wrong with firing this
+   * and reloading: the IndexedDB deletes had not finished when the page went
+   * away, and a wipe that FAILED — most realistically because another tab still
+   * holds a database open, which makes deleteDatabase block and silently do
+   * nothing — reloaded into a screen that claimed the device was clean while
+   * the data was still on disk. Telling someone their data is gone when it is
+   * not is the one outcome this button must never produce. */
+  let wiped = { ok: false, failures: ['unknown'] }
+  try { wiped = await wipeDevice() } catch { /* private mode — nothing to clear */ }
+  if (!wiped.ok) {
+    toast(`Couldn’t finish clearing this device (${wiped.failures.join(', ')}). ` +
+      'Close any other Spot Me tabs and try again.')
+    return false
+  }
   // Stamped AFTER the wipe, so a reset interrupted half-way runs again next
   // time instead of being marked done.
   try { localStorage.setItem(EPOCH_KEY, RESET_EPOCH) } catch { /* private mode */ }
@@ -498,13 +736,66 @@ function boot () {
    * It runs OUTSIDE the readyRTC() gate below because it is plain HTTP and has
    * nothing to do with ICE.
    */
-  publishIdentity(freshTokens).catch(() => {})
+  /* `publishIdentity` loads the identity on its way through, so once it settles
+   * — either way — `identityStatus()` has a real answer. Toasting here rather
+   * than only in the chat means a device in this state says so at launch,
+   * before the user has typed a message nobody will be able to read. The chat
+   * carries the persistent copy; this is the one that arrives unprompted. */
+  /* An identity the server will never accept again — a deleted account.
+   *
+   * Registered because stopping the retry loop is only half the fix: a device
+   * that quietly stops trying is indistinguishable from one that is quietly
+   * working, and that ambiguity is the exact shape of every bug found here
+   * tonight. The transport reports the fact; this is what turns it into
+   * something the person holding the phone can read. */
+  setTerminalAuthHandler(({ code, message }) => {
+    if (code === 'age_declaration_required') {
+      // A pre-gate install: the device has a profile but no declaration, and
+      // the server now refuses to (re)create its account without one. Back
+      // through onboarding — it prefills, and chats stay in local storage.
+      toast(message || 'Spot Me is 18+ now — confirm your birth month to continue.')
+      renderOnboarding()
+      return
+    }
+    toast(message || 'This account has been deleted. Start a new one to keep chatting.')
+  })
+
+  /* A5. What a refused send says out loud.
+   *
+   * Registered here rather than imported by `rooms.js` for the same reason as
+   * the handler above: the room layer must not reach into a view, and a
+   * refusal nobody is told about is indistinguishable from a message that
+   * quietly went nowhere — which is the ambiguity this codebase keeps
+   * rediscovering. `message` already names what would clear the block, so this
+   * does not compose its own sentence.
+   *
+   * Inert until enforcement is switched on: nothing is refused today. */
+  setBlockedSendHandler(({ message }) => {
+    toast(message || 'That message was not sent — check this contact’s verification.')
+  })
+
+  publishIdentity(freshTokens)
+    .catch(() => {})
+    .then(() => {
+      const state = identityStatus()
+      if (state === 'ephemeral') {
+        toast('This device can’t save its encryption key — messages you send can’t be read.')
+      } else if (state === 'unavailable') {
+        toast('This device can’t store encryption keys — private browsing is the usual cause.')
+      }
+    })
 
   readyRTC().then(() => {
     rooms.connectAll()
     lobby.start()
     reach.joinInbox()
   })
+
+  /* M6: ask the server whether Moments is served to THIS account, and add the
+   * Posts tab only if it is. Fire-and-forget — the bar is already painted in
+   * its production shape, so a slow or failed probe simply leaves it that way
+   * rather than blocking the first frame. */
+  refreshFlaggedTabs().catch(() => {})
 }
 
 db.subscribe(() => {
@@ -603,6 +894,24 @@ if (!RESETTING) {
     } else {
       offerNotifications()
     }
+
+    /* Consume what arrives. Registration only makes the phone REACHABLE; until
+     * these are attached, a push landing while the app is open displays nothing
+     * (Android hands it to the running app rather than the tray) and a tap on a
+     * tray notification opens the app on whatever screen it was last showing.
+     *
+     * Not chained to subscribePush: a token registered on a PREVIOUS launch is
+     * still live, so taps must route even when today's registration fails.
+     * `#/thread/<roomId>` is the chat itself — `#/chat` is the chat LIST, and
+     * routing there would drop the user one screen short every time.
+     *
+     * alertMessage takes an object, and it earns its keep here: it suppresses
+     * the alert when this very room is already on screen, and only raises a
+     * system notification when the app is hidden. */
+    attachPushHandlers({
+      onForeground: ({ roomId, title, body }) => alertMessage({ roomId, title, body }),
+      onOpenRoom: (roomId) => { window.location.hash = `#/thread/${roomId}` }
+    }).catch(() => {})
   })
 }
 

@@ -465,3 +465,20 @@
   .gm-row,
   .gw-step { animation: none; }
 }
+
+/* Verify-encryption screen (views/verify.js). Monospace and wide-spaced because
+   these digits get read ALOUD to another person — the whole point is that a
+   transposed pair is noticed, so 0/O and 1/l must not be able to blur. */
+.vf-body { padding: 0 16px 24px; display: flex; flex-direction: column; gap: 14px; }
+.safety-number {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 1.15rem;
+  line-height: 2;
+  letter-spacing: 0.08em;
+  word-spacing: 0.5em;
+  text-align: center;
+  padding: 16px 12px;
+  border-radius: 12px;
+  background: var(--surface-2, rgba(127,127,127,.10));
+  user-select: all;              /* one tap selects the whole number to compare */
+}

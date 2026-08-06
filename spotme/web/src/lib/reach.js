@@ -53,7 +53,7 @@
 // Rooms come from the transport seam; setRoomKey stays a direct import because
 // it is KEY MATERIAL, which no adapter may carry (ADR-002 §2, FORBIDDEN_KEY_SURFACE).
 import { joinRoom } from './transport/room.js'
-import { setRoomKey, freshTokens } from './socket-transport.js'
+import { setRoomKey, freshTokens, serverMode } from './socket-transport.js'
 import { RTC_CONFIG, readyRTC } from '../net.js'
 import { db } from './db.js'
 import { rooms } from './rooms.js'
@@ -67,6 +67,7 @@ const HEARTBEAT_MS = 10_000
 const OUTBOX_TTL_MS = 24 * 60 * 60_000   // 24 hours — was 10 min, which silently abandoned most requests
 
 import { API_BASE as API_ORIGIN } from './api.js'
+import { authHeaders } from './auth-headers.js'
 const KNOCK_ENDPOINT = `${API_ORIGIN}/api/knock`
 
 /** Stable, non-cryptographic string hash — enough to derive a room id/secret
@@ -86,6 +87,20 @@ function stableHash (input) {
 
 /** One inbox room id per Spot Me id — never guessable from a username alone. */
 const inboxRoomId = (userId) => `inbox-${stableHash(`spotme-inbox-v1:${userId}`)}`
+
+/**
+ * Place the line a knock carried into the room's thread.
+ *
+ * Never throws: a first message that cannot be shown must not take the knock —
+ * and therefore the whole conversation — down with it.
+ */
+function firstMessage (roomId, { id, from, name, lang, text }) {
+  try {
+    rooms.injectLocal(roomId, {
+      id, from, name, lang, ts: Date.now(), kind: 'text', text
+    })
+  } catch { /* the conversation still opens; only its opening line is missing */ }
+}
 
 /**
  * Deterministic conversation for a PAIR, independent of who reaches out first.
@@ -209,6 +224,21 @@ function createReach () {
       id: payload.from.id, name: payload.from.name || 'Unknown',
       avatar: payload.from.avatar || null, lang: payload.from.lang || 'en'
     })
+    /* THE FIRST LINE IS A MESSAGE, NOT JUST A PREVIEW.
+     *
+     * It used to reach `last` and `pushNote` and stop there, so the
+     * notification quoted the text and the thread was empty when the chat was
+     * opened — "it shows in notifications but not the actual message". The id
+     * rides in the knock so the live P2P copy and the relay copy land as ONE
+     * message; a sender on an older build sends none, and the fallback keeps
+     * that deterministic per room so its two copies still collapse. */
+    if (payload.text) {
+      firstMessage(payload.roomId, {
+        id: payload.msgId || `k_${stableHash(`${payload.roomId}:${payload.from.id}:${payload.text}`)}`,
+        from: payload.from.id, name: payload.from.name || 'Unknown',
+        lang: payload.from.lang || 'en', text: String(payload.text).slice(0, 300)
+      })
+    }
     // A v2 room is joined by the agreement continuation above, NOT here. Joining
     // now would derive a key from the v1 password and win the cache before
     // agreement finishes, leaving both sides unable to open each other's
@@ -227,12 +257,17 @@ function createReach () {
    * recipient ever comes online. Never blocks or throws — P2P delivery above
    * is still the primary path, this only covers its one blind spot.
    */
+  /* The relay authenticates now: it holds room SECRETS, and it used to hand
+   * them to anyone who named a user id. `authHeaders()` fails open to an
+   * unauthenticated attempt, which earns a clean 401 rather than a hang — and
+   * `safe()` already swallows that, so a token that is not ready yet degrades
+   * to "P2P only", which is what this path was before the relay existed. */
   function relayStore (toId, payload) {
-    safe(fetch(KNOCK_ENDPOINT, {
+    safe(authHeaders().then((headers) => fetch(KNOCK_ENDPOINT, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify({ action: 'store', toId, knock: payload })
-    }))
+    })))
   }
 
   /**
@@ -245,18 +280,20 @@ function createReach () {
     if (!me?.id) return
     let knocks
     try {
-      const res = await fetch(`${KNOCK_ENDPOINT}?userId=${encodeURIComponent(me.id)}`)
+      // The server reads the inbox owner off the token; the query parameter it
+      // used to trust is gone.
+      const res = await fetch(KNOCK_ENDPOINT, { headers: await authHeaders() })
       if (!res.ok) return
       const data = await res.json()
       knocks = Array.isArray(data?.knocks) ? data.knocks : []
     } catch { return }
     if (!knocks.length) return
     for (const payload of knocks) receiveKnock(payload)
-    safe(fetch(KNOCK_ENDPOINT, {
+    safe(authHeaders().then((headers) => fetch(KNOCK_ENDPOINT, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'ack', userId: me.id, roomIds: knocks.map((k) => k.roomId) })
-    }))
+      headers,
+      body: JSON.stringify({ action: 'ack', roomIds: knocks.map((k) => k.roomId) })
+    })))
   }
 
   /** My own inbox: joined once at boot, left only by explicit teardown. */
@@ -272,6 +309,30 @@ function createReach () {
     knockAck = room.makeAction('knockAck')
 
     knock.onMessage = (payload, meta) => {
+      /* THE TRANSPORT ALREADY KNOWS WHO SENT THIS. USE IT.
+       *
+       * `meta.peerId` is server-authenticated — rooms.gateway builds every
+       * frame's `from` out of `client.data.userId`, which comes from the JWT
+       * `sub`, so a peer cannot forge it. This handler had it in hand, used it
+       * only to address the ack, and took `payload.from.id` on trust for
+       * everything that mattered.
+       *
+       * That let any authenticated user post a knock claiming to be anyone.
+       * `receiveKnock` then stores the ATTACKER's chosen `roomId`, `secret` and
+       * `peer.id` — so the victim opens a chat labelled with a friend's name,
+       * in a room the attacker picked, under a key the attacker chose, and
+       * reads and writes everything in it. No cryptography is broken; it is
+       * simply never invoked.
+       *
+       * A knock that disagrees with the transport is not a knock.
+       *
+       * ONLY IN SERVER MODE, and the distinction is not pedantic. `selfId` is
+       * `db.profile().id` on the socket transport but `torrent.selfId` — a
+       * per-session connection id — under the `spotme.transport = p2p` escape
+       * hatch. There, peer ids are not account ids and never claimed to be, so
+       * comparing them would reject every legitimate knock. Enforce the rule
+       * where the guarantee exists; do not invent one where it does not. */
+      if (serverMode && meta?.peerId && payload?.from?.id !== meta.peerId) return
       const status = receiveKnock(payload)
       if (status === 'invalid' || status === 'blocked') return
       // The ack must self-identify as US (the one who just received the
@@ -426,13 +487,27 @@ function createReach () {
 
     rooms.ensure(roomId)
 
+    /* One id for this knock's opening line, deterministic per room so that
+     * reach()'s own re-entry after key agreement, the live P2P knock and the
+     * relay copy all resolve to the SAME message instead of three. */
+    const msgId = `k_${stableHash(`${roomId}:${me.id}:${String(text || '')}`)}`
+
     const payload = {
       from: { id: me.id, name: me.name, avatar: me.avatar, lang: me.lang },
       roomId, secret, text: String(text || '').slice(0, 300), mode,
       // The recipient needs our public key to agree the same key. `secret` still
       // rides along for v1 rooms and for peers on an older build; a v2 recipient
       // ignores it entirely.
-      e2eVersion, senderKey
+      e2eVersion, senderKey, msgId
+    }
+
+    // Our own opening line belongs in our own thread too — without this the
+    // sender watched their first message vanish as the chat opened.
+    if (text) {
+      firstMessage(roomId, {
+        id: msgId, from: me.id, name: me.name, lang: me.lang,
+        text: String(text).slice(0, 300)
+      })
     }
     // Both are plain HTTP, independent of WebRTC/TURN readiness — no reason
     // to make them wait behind the relayReady gate below.

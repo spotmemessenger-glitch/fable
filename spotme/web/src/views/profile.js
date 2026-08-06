@@ -15,12 +15,22 @@ import { openCrop } from '../lib/crop.js'
 import { el, clear, avatar, actionSheet } from '../lib/ui.js'
 import { notifyState, enableNotify, chime, notifyBlockedReason } from '../lib/notify.js'
 import { subscribePush } from '../lib/push.js'
+import { API_BASE as REGISTRY_API } from '../lib/api.js'
 
 /* ------------------------------------------------------------- icons */
 
-const REGISTRY_API = (location.hostname === 'localhost' || /^[\d.:[\]]+$/.test(location.hostname))
-  ? 'https://spotme-messenger.vercel.app'
-  : ''
+/* ONE REGISTRY, OR TWO PEOPLE CANNOT FIND EACH OTHER.
+ *
+ * This file used to pick its own origin — same-origin (Vercel) in production,
+ * a hardcoded Vercel URL in dev — while EVERY other caller went to `API_BASE`
+ * (Railway): the username search in api.js, main.js, inbox.js and
+ * member-picker.js. Both hosts really do run a registry
+ * (web/api/username.js and backend's username.controller.ts), so the two
+ * diverge in practice: you claim @name on one and everybody searches the other,
+ * which reads as "that user does not exist".
+ *
+ * api.js and main.js both already document this invariant in comments. This was
+ * the one file breaking it. */
 const USERNAME_RE = /^[a-z0-9_]{2,}$/
 
 const I = {
@@ -229,6 +239,25 @@ export function render (root, ctx) {
       value: () => (db.profile().username ? '@' + db.profile().username : ''),
       empty: 'Claim a username',
       open: () => openUsernameSheet()
+    },
+    {
+      /* Fix-the-Foundation F1: the way back in. This device's claim secret IS
+       * the recovery code — with it plus the @username, any browser can sign
+       * back in to this account after storage loss (the endless re-signup bug).
+       * Shown masked; tapping copies. It never leaves the device except to the
+       * recovery endpoint, which compares only its hash. */
+      key: 'recovery',
+      label: 'Recovery code',
+      value: () => (db.profile().claimSecret ? '••••  tap to copy' : ''),
+      empty: '—',
+      open: async () => {
+        const secret = db.profile().claimSecret
+        if (!secret) { ctx.toast('No recovery code on this device'); return }
+        try {
+          await navigator.clipboard.writeText(secret)
+          ctx.toast('Recovery code copied — save it somewhere safe. It signs you back in if this device forgets you.')
+        } catch { ctx.toast('Could not copy the code') }
+      }
     },
     {
       key: 'phone',
@@ -990,9 +1019,17 @@ export function render (root, ctx) {
       (on) => db.setSettings({ vibrate: on })),
     el('div', {
       class: 'note',
-      text: 'Alerts need Spot Me open in a tab. Messages travel straight between '
-        + 'devices, so with the app fully closed there is no connection and nothing '
-        + 'to announce — unlike apps whose servers hold your messages for you.'
+      /* This used to say alerts could never reach a closed app, because
+       * messages "travel straight between devices". That was true of the
+       * Trystero P2P build and has been false since the server tier landed —
+       * the server relays, and it pushes when an event arrives for someone who
+       * is not connected. Left standing, it told users the working feature was
+       * impossible. */
+      text: '“On · closed-app alerts” means this device can be woken when a '
+        + 'message arrives. The alert only ever says that something arrived, '
+        + 'never what it said — the server cannot read your messages. Plain '
+        + '“On” means push is not set up for this device, so Spot Me has to be '
+        + 'open for you to be told.'
     }),
 
     el('div', { class: 'sec', text: 'Language & translation' }),

@@ -11,6 +11,7 @@ import { db } from '../lib/db.js'
 import { lobby, distanceM, fmtDistance } from '../lib/discovery.js'
 import { reach } from '../lib/reach.js'
 import { notifyState, enableNotify } from '../lib/notify.js'
+import { subscribePush } from '../lib/push.js'
 import { el, clear, avatar, fmtDay } from '../lib/ui.js'
 
 const NEARBY_ROWS = 6            // active-nearby rows shown before "See all"
@@ -110,7 +111,18 @@ export function render (root, ctx) {
     if (notifyState() === 'default') {
       bodyEl.appendChild(el('button', {
         class: 'nenable', type: 'button',
-        onclick: async () => { await enableNotify(); draw() }
+        /* Permission is only HALF of being reachable. Granting it lets the app
+         * raise a notification while it is running; being woken with the app
+         * closed needs a push subscription on top, and this button used to
+         * stop at the permission. The other two opt-in paths (boot and
+         * Settings) both follow through, so a user who enabled alerts HERE was
+         * left unsubscribed until the next launch re-claimed it — the button
+         * promising exactly the thing it had not done. */
+        onclick: async () => {
+          const result = await enableNotify()
+          if (result === 'granted') await subscribePush().catch(() => {})
+          draw()
+        }
       }, [
         el('span', { class: 'nic', html: ICON.bell }),
         el('span', { class: 'nw' }, [

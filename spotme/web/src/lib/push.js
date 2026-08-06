@@ -24,6 +24,9 @@
 import { db } from './db.js'
 
 import { API_BASE as API_ORIGIN } from './api.js'
+// `/api/push` derives the subscriber from the token now, not from a userId in
+// the body — an unauthenticated POST there could unsubscribe anyone by id.
+import { authHeaders } from './auth-headers.js'
 
 const ENDPOINT = `${API_ORIGIN}/api/push`
 
@@ -56,6 +59,30 @@ export const isNative = () => Boolean(globalThis.Capacitor?.isNativePlatform?.()
  * The plugin is imported lazily so the browser build never pulls in native
  * code it cannot run.
  */
+/**
+ * Hand the FCM/APNs token to the server.
+ *
+ * `register-device`, NOT `subscribe`. The controller's subscribe branch demands
+ * a `subscription` object and 400s on a bare token, so sending the wrong verb
+ * here breaks native push entirely while looking correct.
+ *
+ * Split out so the listener cleanup below can sit in a `finally` without
+ * wrapping the network call in it too.
+ */
+async function sendToken (token, me) {
+  const response = await fetch(ENDPOINT, {
+    method: 'POST',
+    headers: await authHeaders(),
+    body: JSON.stringify({
+      action: 'register-device',
+      userId: me,
+      token,
+      platform: globalThis.Capacitor?.getPlatform?.() === 'ios' ? 'ios' : 'android'
+    })
+  })
+  return { ok: response.ok, reason: response.ok ? null : 'server', native: true }
+}
+
 export async function registerNativePush () {
   const me = db.profile()?.id
   if (!me) return { ok: false, reason: 'no-profile' }
@@ -66,29 +93,88 @@ export async function registerNativePush () {
     if (permission.receive !== 'granted') permission = await PushNotifications.requestPermissions()
     if (permission.receive !== 'granted') return { ok: false, reason: 'no-permission' }
 
-    // The token arrives asynchronously via an event, so registration is only
-    // complete once it has been handed to the server — resolving earlier would
-    // report success for a device the server still cannot reach.
-    const token = await new Promise((resolve, reject) => {
-      const timer = setTimeout(() => reject(new Error('token-timeout')), 15000)
-      PushNotifications.addListener('registration', (t) => { clearTimeout(timer); resolve(t.value) })
-      PushNotifications.addListener('registrationError', (e) => { clearTimeout(timer); reject(new Error(String(e?.error || 'registration-error'))) })
-      PushNotifications.register()
-    })
-
-    const response = await fetch(ENDPOINT, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        action: 'register-device',
-        userId: me,
-        token,
-        platform: globalThis.Capacitor?.getPlatform?.() === 'ios' ? 'ios' : 'android'
+    /* The token arrives asynchronously via an event, so registration is only
+     * complete once it has been handed to the server — resolving earlier would
+     * report success for a device the server still cannot reach.
+     *
+     * TWO FAULTS LIVED IN THE OLD FOUR LINES.
+     *
+     * `addListener` returns a PROMISE in plugin v6+ (this is v8). It was not
+     * awaited, and `register()` fired on the next line — so the token event
+     * could land before the listener existed. The only symptom was
+     * `token-timeout` fifteen seconds later, which reads like a network fault
+     * rather than a race, and it would come and go with device speed.
+     *
+     * And the handles were never removed, while `subscribePush()` documents
+     * itself as safe to call repeatedly and runs from four call sites. Every
+     * native call leaked two more listeners, the timeout path included.
+     *
+     * Cleanup removes ONLY the two handles created here — deliberately not
+     * `removeAllListeners()`, which would also tear off the payload handlers
+     * `attachPushHandlers` installs and silently kill foreground alerts and
+     * tap-routing. That keeps the two functions order-independent. */
+    const handles = []
+    let timer = null
+    try {
+      const token = await new Promise((resolve, reject) => {
+        timer = setTimeout(() => reject(new Error('token-timeout')), 15000)
+        Promise.all([
+          PushNotifications.addListener('registration', (t) => resolve(t.value)),
+          PushNotifications.addListener('registrationError',
+            (e) => reject(new Error(String(e?.error || 'registration-error'))))
+        ])
+          .then((attached) => { handles.push(...attached); return PushNotifications.register() })
+          .catch(reject)
       })
-    })
-    return { ok: response.ok, reason: response.ok ? null : 'server', native: true }
+      return await sendToken(token, me)
+    } finally {
+      clearTimeout(timer)
+      await Promise.all(handles.map((h) => h?.remove?.())).catch(() => {})
+    }
   } catch (error) {
     return { ok: false, reason: String(error?.message || error?.name || 'failed') }
+  }
+}
+
+/**
+ * Consume the push payload — the half that was never built.
+ *
+ * `PushService.notifyNative` attaches `data:{title,body,tag}` to every FCM
+ * message, with the comment "the data block rides along so the app can route
+ * the tap when it IS alive", and `tag` IS the roomId. Nothing ever read it, so
+ * two states did nothing at all:
+ *
+ *   FOREGROUND — Android hands a notification to the running app instead of
+ *   drawing it in the tray, so an arriving message showed NOTHING while Spot Me
+ *   was open.
+ *   TAP — opening a tray notification launched the app on whatever screen it
+ *   was last on, never the chat the notification was about.
+ *
+ * Idempotent: called on every launch, attaches once. Web push does not come
+ * through here — the service worker owns those events (public/sw.js).
+ */
+let handlersAttached = false
+
+export async function attachPushHandlers ({ onForeground, onOpenRoom } = {}) {
+  if (!isNative() || handlersAttached) return false
+  try {
+    const { PushNotifications } = await import('@capacitor/push-notifications')
+    await PushNotifications.addListener('pushNotificationReceived', (n) => {
+      onForeground?.({
+        title: n?.title || 'New message',
+        body: n?.body || '',
+        roomId: n?.data?.tag || null
+      })
+    })
+    await PushNotifications.addListener('pushNotificationActionPerformed', (a) => {
+      const roomId = a?.notification?.data?.tag
+      if (roomId) onOpenRoom?.(roomId)
+    })
+    handlersAttached = true
+    return true
+  } catch {
+    // A missing plugin must never stop boot; push simply stays silent.
+    return false
   }
 }
 
@@ -137,13 +223,21 @@ export async function subscribePush () {
       })
     const response = await fetch(ENDPOINT, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: await authHeaders(),
       body: JSON.stringify({
         action: 'subscribe',
         userId: me,
-        // Only the endpoint travels. The p256dh/auth keys in the subscription
-        // are for encrypting payloads, and there are none.
-        subscription: { endpoint: subscription.endpoint }
+        /* THE KEYS MUST TRAVEL. This used to send the endpoint alone, on the
+         * stated grounds that "the p256dh/auth keys are for encrypting
+         * payloads, and there are none" — which is simply not true of this
+         * server: `notifyWeb` sends `JSON.stringify({title, body, tag})` as a
+         * real body, so web-push encrypts it and needs both halves.
+         *
+         * `PushService.subscribe` therefore threw `incomplete subscription` on
+         * EVERY browser registration, which is why production has never held a
+         * single web-push subscription. `toJSON()` is the spec-defined shape:
+         * { endpoint, expirationTime, keys: { p256dh, auth } }. */
+        subscription: subscription.toJSON()
       })
     })
     return { ok: response.ok, reason: response.ok ? null : 'server' }
@@ -163,7 +257,7 @@ export async function unsubscribePush () {
   if (!me) return
   await fetch(ENDPOINT, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: await authHeaders(),
     body: JSON.stringify({ action: 'unsubscribe', userId: me })
   }).catch(() => {})
 }
@@ -177,9 +271,11 @@ export async function unsubscribePush () {
  */
 export function pokePeer (userId) {
   if (!userId) return
-  fetch(ENDPOINT, {
+  // Still fire-and-forget, just with the token attached — hence the .then
+  // rather than an await, which this function's signature cannot take.
+  authHeaders().then((headers) => fetch(ENDPOINT, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers,
     body: JSON.stringify({ action: 'notify', toUserId: userId })
-  }).catch(() => {})
+  })).catch(() => {})
 }

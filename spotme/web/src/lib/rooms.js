@@ -12,6 +12,9 @@
 import { createNet, randomId } from '../net.js'
 import { createStore } from '../store.js'
 import { db, ROOM_PREFIX } from './db.js'
+// For the receiving half of the "Last seen & online" setting — discovery does
+// not import rooms, so this direction is acyclic.
+import { lobby } from './discovery.js'
 import { alertMessage } from './notify.js'
 import { pokePeer } from './push.js'
 /* DELIBERATELY NOT ROUTED THROUGH THE TRANSPORT SEAM. This is key material, and
@@ -19,8 +22,12 @@ import { pokePeer } from './push.js'
  * be handed a key is an adapter that will eventually derive one, which is how
  * V-19 survived its first fix. Rooms come from transport/room.js; keys are
  * installed here, directly, and never cross an adapter. See ADR-002 §2 and the
- * header of transport/socketio-adapter.js. */
-import { setRoomKeyProvider, freshTokens } from './socket-transport.js'
+ * header of transport/socketio-adapter.js.
+ *
+ * `clearRoomKey`/`clearRoomCursor` join it for the same reason: they are the
+ * teardown half of that key material, and `leave()` must be able to reset a room
+ * or deleting a chat reuses its dead key. */
+import { setRoomKeyProvider, freshTokens, clearRoomKey, clearRoomCursor } from './socket-transport.js'
 import {
   objectStorageEnabled, uploadAttachment, downloadAttachment,
 } from './media-transfer.js'
@@ -31,6 +38,14 @@ import { E2E_V2 } from './crypto/e2e-v2.js'
  * that never runs unless a device has opted in, so with the flag off this
  * costs one localStorage lookup per call and changes no behaviour. */
 import { livekitCalls, groupCalls } from './calls/select.js'
+/* A5. `maySend` is SYNCHRONOUS on purpose — reading a trust record is not, and
+ * putting IndexedDB between a keypress and a bubble is the objection that made
+ * `identityStatus()` synchronous too. The verdict is computed where trust is
+ * already being consulted, below, and merely read here. */
+import {
+  maySend, reportBlocked, markKeyProposed, setRoomTrust,
+} from './crypto/identity-enforcement.js'
+import { readRecord } from './crypto/identity-pin-store.js'
 
 /** Attachments bigger than this never ride the history backlog — the bytes
  * are lazily fetched on demand instead, so reconnects stay instant. */
@@ -100,12 +115,36 @@ function bufferToDataURL (payload, mime) {
   return `data:${mime};base64,${btoa(binary)}`
 }
 
+/**
+ * May we record when this peer was last online?
+ *
+ * Their announcement carries the answer (`seen`), set from their own
+ * "Last seen & online" row. Unknown peers default to yes — a peer we have never
+ * seen in the lobby has expressed no preference, and refusing by default would
+ * silently break the header for everyone on an older build.
+ *
+ * 'contacts' is honoured symmetrically: we record only if they are in OUR
+ * contacts, which is the closest a client can get without asking the server who
+ * is in theirs. Cooperative by design, as the setting's own subtitle says.
+ */
+function peerAllowsSeen (peerId) {
+  if (!peerId) return true
+  const announced = lobby.peers().find((p) => p.id === peerId)?.seen
+  if (announced === 'nobody') return false
+  if (announced === 'contacts') return db.contacts().some((c) => c.id === peerId)
+  return true
+}
+
 /** Legacy demo conversations in old storage — inert, never networked. */
 function inertNet () {
   const noop = () => {}
   return {
     sendMessage: noop, sendReaction: noop, sendProfile: noop, sendDelete: noop,
-    sendTyping: noop, sendRead: noop, sendSeen: noop, sendCall: noop, sendLocup: noop,
+    // `sendEdit` was the one member of createNet's surface missing here, and
+    // `editMessage` calls it AFTER it has already patched the store — so
+    // editing your own text in a legacy demo convo threw a TypeError with the
+    // text already changed and the sheet still open, saying nothing.
+    sendTyping: noop, sendRead: noop, sendSeen: noop, sendCall: noop, sendLocup: noop, sendEdit: noop,
     sendBinary: () => Promise.resolve(),
     sendBinAck: noop,
     fetchFrom: () => Promise.resolve(null),
@@ -177,12 +216,14 @@ function createConnection (convo) {
     readUpTo: 0,
     seenByPeer,
     openingByPeer,
-    // `media` is which path carries audio/video: 'p2p' (peer connections, the
-    // default everywhere) or 'livekit' (SFU), agreed per call. ADR-003.
     // `remotes` is a Map of participant identity -> MediaStream: one entry per
     // person on the call, which is what lets the same code carry 1:1 and group.
+    // Media rides the LiveKit SFU (ADR-003) — the P2P track path is deleted.
     call: { state: 'idle', video: false, local: null, remotes: new Map() },
-    on (fn) { listeners.add(fn); return () => listeners.delete(fn) }
+    on (fn) { listeners.add(fn); return () => listeners.delete(fn) },
+    /* So a message can be placed into an already-open thread from outside this
+     * closure — `reach()` doing exactly that for the line carried by a knock. */
+    emit (event) { emit(event) }
   }
 
   function emit (event) { for (const fn of listeners) fn(event) }
@@ -383,10 +424,51 @@ function createConnection (convo) {
       seenByPeer.add(payload.id)
       emit({ type: 'seen', id: payload.id })
     },
+    /* The peer is sending and this device can open none of it, and re-agreeing
+     * the key did not rescue it. Deliberately NOT persisted onto the convo
+     * record: this is a live property of the key agreement, and a stale
+     * "broken" flag outliving a repair would be its own bug — the kind that
+     * makes a working chat permanently accuse itself. The view holds it while
+     * the screen is open, and an incoming message that DOES decrypt clears it. */
+    /* `type` LAST, not first. `info` carries the FRAME's type ('msg', 'read',
+     * …), so spreading it after `type: 'undecryptable'` overwrote the event
+     * type with the frame type — the event arrived as `{type:'msg'}`, the
+     * `case 'undecryptable'` in chat.js never matched, and the banner this was
+     * built for was dead code that its own test could not catch, because that
+     * test asserts at the transport boundary and never crosses this file. */
+    onUndecryptable (info) { emit({ ...info, type: 'undecryptable' }) },
+
+    /**
+     * A send threw, so the bubble must stop claiming it was sent.
+     *
+     * `sendAttachment` has patched `failed` since the voice-note work, and
+     * `buildReadRow` has drawn "Not delivered" for it just as long — but TEXT
+     * went out through `sendMessage`, which is fire-and-forget, so nothing ever
+     * set the flag on it. `read ? 'Read' : 'Sent'` is a DEFAULT, not a receipt:
+     * a text message that never left the device still rendered a tick.
+     *
+     * That is precisely the case ADR-001 created, as net.js's own comment says:
+     * an e2e_v2 room has no password fallback, so a room whose key cannot be
+     * agreed REFUSES to encrypt — correct behaviour, reported to the user as a
+     * tick and silence.
+     *
+     * Scoped to 'message'. Typing, read receipts and presence fail all the time
+     * on a flaky link and mean nothing to a user; marking a bubble undelivered
+     * because a typing indicator died would be noise dressed as information.
+     */
+    onSendError (what, error, id) {
+      if (what !== 'message' || !id) return
+      if (!conn.store.patch(id, { delivered: false, failed: true })) return
+      emit({ type: 'sendfailed', id })
+    },
+
     onPeers (count) {
       // Track when the peer was last connected, so the header can say
-      // "Last seen 14:32" instead of a vague waiting message.
-      if (count > 0 || conn.peerCount > 0) {
+      // "Last seen 14:32" instead of a vague waiting message — unless they
+      // asked us not to. `peerAllowsSeen` is the receiving half of the
+      // "Last seen & online" setting; without it the choice never left the
+      // device that made it.
+      if ((count > 0 || conn.peerCount > 0) && peerAllowsSeen(convo.peer?.id)) {
         db.upsertConvo({ roomId: convo.roomId, peerSeen: Date.now() })
       }
       /* Every successful connection files them as a contact — reach.js already
@@ -922,7 +1004,72 @@ function createConnection (convo) {
      * not open. Without this the fix evaporated on the first page reload, and
      * silently, because both peers degraded identically. */
     if (convo.e2eVersion === E2E_V2) {
-      setRoomKeyProvider(convo.roomId, () => roomKeyForConvo(convo, freshTokens))
+      /* `opts` carries `forceRefetch` down from the transport's self-heal.
+       *
+       * TWO CALLBACKS, AND THE DIFFERENCE BETWEEN THEM IS THE POINT.
+       *
+       * `onPeerKeyChanged` fires only for a FIRST key — nothing is being
+       * replaced, so caching it is safe. It writes to BOTH the record and the
+       * captured `convo` object: the record so a reload does not repeat the
+       * fetch, and the object because this closure is what the next re-derive
+       * reads; persisting to only one leaves the room repairing itself forever.
+       *
+       * `onPeerKeyProposed` fires when the server returns a key that is NOT the
+       * one this device trusts. It deliberately persists NOTHING. Until this
+       * change that case went through the same path as a first key and was
+       * written straight over the pin, so a server that could provoke a decrypt
+       * failure — which is exactly what drives `forceRefetch` — could rotate the
+       * key it serves and have every client adopt it silently. The proposal is
+       * recorded in the trust store by `roomKeyForConvo` and surfaced; it is not
+       * adopted, and the room keeps deriving against the pinned key. */
+      setRoomKeyProvider(convo.roomId, (opts) => roomKeyForConvo(convo, freshTokens, {
+        ...opts,
+        onPeerKeyChanged: (peerKey) => {
+          convo.peerKey = peerKey
+          db.upsertConvo({ roomId: convo.roomId, peerKey })
+        },
+        /* F2: a key change PROVEN by undecryptable frames is adopted so the
+         * conversation continues — persisted to record and closure exactly
+         * like a first key, and logged. The trust store has already recorded
+         * the change (server-refetch provenance), so Verify shows it. */
+        onPeerKeyAdopted: ({ adopted, previous }) => {
+          convo.peerKey = adopted
+          db.upsertConvo({ roomId: convo.roomId, peerKey: adopted })
+          console.warn(
+            `spotme identity: adopted ${convo.peer?.name || 'this contact'}'s changed key after ` +
+            `decrypt failure (healed). previous=${String(previous).slice(0, 12)}… adopted=${String(adopted).slice(0, 12)}…`
+          )
+        },
+        onPeerKeyProposed: ({ proposed, pinned }) => {
+          /* A5. Still no write — the pin is untouched and the room keeps
+           * deriving against it. What changes is that the room is marked
+           * blocking IMMEDIATELY, here, rather than after a store read: this
+           * callback already knows the answer, and the gap between knowing a
+           * substituted key exists and refusing to send to it is precisely the
+           * window an attacker provoking a decrypt failure is operating in.
+           *
+           * With enforcement OFF this records an advisory verdict and nothing
+           * is refused, which is today's behaviour. */
+          markKeyProposed(convo.roomId)
+          console.warn(
+            `spotme identity: ${convo.peer?.name || 'this contact'} is publishing a ` +
+            'different key than the one this device trusts. It has NOT been adopted. ' +
+            `pinned=${String(pinned).slice(0, 12)}… proposed=${String(proposed).slice(0, 12)}…`
+          )
+        }
+      }))
+
+      /* Seed the room's verdict from what is already stored. FIRE AND FORGET
+       * for the same reason `observePeerKey` is: a room must not wait on
+       * IndexedDB to open, and a room with no verdict yet is ALLOWED — it has
+       * not sent anything either. A `Changed` peer therefore blocks a moment
+       * after the room appears rather than before it, which is the right
+       * trade: the alternative is a chat list that stalls on a wedged origin. */
+      if (convo.peer?.id) {
+        void readRecord(convo.peer.id)
+          .then((record) => setRoomTrust(convo.roomId, record))
+          .catch(() => { /* store unavailable — see identity-enforcement.js: not a block */ })
+      }
     }
     // History backlog: never offer opened view-once photos, and strip heavy
     // attachment bytes (they'd re-ship megabytes on every reconnect — the
@@ -932,7 +1079,13 @@ function createConnection (convo) {
         .filter((m) => !(m.viewOnce && seenByPeer.has(m.id)))
         .map((m) => (m.data && m.data.length > DETACH_BYTES
           ? { ...m, data: null, detached: true, mime: m.data.slice(5, m.data.indexOf(';')) }
-          : m)))
+          : m)),
+      /* The peer's id, so the server can verify this device belongs in a DM
+       * room instead of taking the room id as proof. A DM id is a pure function
+       * of two PUBLIC ids, so it was never proof of anything. Harmless to send
+       * — the server already stores both ids and never trusts this one on its
+       * own; it only checks that it re-derives the room. */
+      convo.peer?.id)
   }
 
   /**
@@ -1028,9 +1181,43 @@ export const rooms = {
   },
 
   /** Build + persist + send a message. Returns the full envelope. */
+  /**
+   * Put a message into a room's thread without sending anything.
+   *
+   * THE BUG THIS EXISTS FOR. The first line of a new chat travels INSIDE the
+   * knock — `reach()` puts it in the payload, and both sides wrote it to the
+   * convo's `last` preview and fired a push notification with it. Neither side
+   * ever added it to the message store. So the notification quoted the text,
+   * the inbox row quoted the text, and opening the chat showed an empty thread:
+   * "it shows in notifications but not the actual message", reported from two
+   * real handsets. `inbox.js` states the intent plainly — the typed line is
+   * "what both sides see as the first message once the chat opens" — so this is
+   * a gap between the two, not a design choice.
+   *
+   * Idempotent by id, which is what makes it safe on the receiving side: a
+   * knock can arrive live over P2P AND again from the relay, and `store.add`
+   * refuses a duplicate id (and honours tombstones, so a deleted first message
+   * does not come back).
+   */
+  injectLocal (roomId, message) {
+    const conn = this.ensure(roomId)
+    if (!conn || !message?.id) return false
+    if (!conn.store.add(message)) return false
+    db.bump(roomId, { text: preview(message), ts: message.ts, fromMe: message.from === db.profile()?.id })
+    conn.emit({ type: 'message', message })
+    return true
+  },
+
   sendMessage (roomId, partial) {
     const conn = this.ensure(roomId)
     if (!conn) return null
+    /* A5. THE CHOKE POINT. `views/chat.js` calls this from a dozen places —
+     * text, location, reactions, partials, timers — so the gate belongs here
+     * and not at each caller, where the thirteenth would forget it. Returning
+     * null is the existing failure contract; `reportBlocked` is what stops a
+     * refusal being indistinguishable from a message that quietly went
+     * nowhere. OFF by default: `maySend` is true unless enforcement is on. */
+    if (!maySend(roomId)) { reportBlocked(roomId); return null }
     const p = db.profile()
     const message = {
       id: randomId(8),
@@ -1063,6 +1250,9 @@ export const rooms = {
   sendAttachment (roomId, partial, onProgress) {
     const conn = this.ensure(roomId)
     if (!conn || !partial?.data) return null
+    // The other choke point. A photo to a peer whose key changed is the same
+    // decision as a message to them, and a gate on only one of the two is not a gate.
+    if (!maySend(roomId)) { reportBlocked(roomId); return null }
     const p = db.profile()
     const message = {
       id: randomId(8),
@@ -1104,6 +1294,32 @@ export const rooms = {
    * it does not do yet; duplicate slices are already harmless (the receiver
    * ignores a seq it holds, and the log now reports DISTINCT seqs held).
    */
+  /**
+   * Send a failed TEXT message again.
+   *
+   * `retryAttachment` below refuses text explicitly, and the "Not delivered"
+   * row only offered a Retry button for attachments — so a text message that
+   * failed to send was the end of the road. There was no queue behind it
+   * either: `sendAction` recovers only a `not joined` error, and socket.io
+   * splices a packet out of its send buffer once the ack times out, so a
+   * fifteen-second outage discarded the message for good.
+   *
+   * The text never left this device. It is sitting in the store, fully intact,
+   * one call away from being sent — the only thing missing was the offer.
+   */
+  retryMessage (roomId, id) {
+    const conn = this.ensure(roomId)
+    if (!conn) return false
+    const message = conn.store.list().find((m) => m.id === id)
+    if (!message || (message.kind && message.kind !== 'text')) return false
+    conn.store.patch(id, { failed: false })
+    // `onSendError` flips it back if this attempt fails too, exactly as the
+    // first attempt did — so a retry that fails is honest rather than silent.
+    conn.net.sendMessage(message)
+    wakeIfUnreachable(conn, roomId)
+    return true
+  },
+
   retryAttachment (roomId, id, onProgress) {
     const conn = this.ensure(roomId)
     if (!conn) return false
@@ -1280,11 +1496,29 @@ export const rooms = {
     conn.store.remove(id)
   },
 
+  /**
+   * Delete this conversation's live state. Every caller pairs this with
+   * `db.removeConvo`, so it is the "this chat is gone" path, not teardown.
+   *
+   * THE KEY AND CURSOR HAVE TO GO WITH IT, and until now neither did.
+   * `clearRoomKey` had no production caller at all, so the registered provider
+   * — a closure over the convo record that was about to be deleted, holding its
+   * dead `peerKey` — outlived the conversation. A DM roomId is a pure function
+   * of the two account ids (`reach.js` `directRoom`), so re-starting the chat
+   * lands on the SAME room and `roomKey()` finds that orphan still installed:
+   * deleting and starting again derived from the dead key and failed exactly as
+   * before. That made the app's own repair advice self-defeating.
+   *
+   * The cursor goes too, or the re-created chat resumes mid-history with a hole
+   * where the messages it never managed to open used to be.
+   */
   leave (roomId) {
     const conn = connections.get(roomId)
     if (conn) {
       conn.net.leave()
       connections.delete(roomId)
     }
+    clearRoomKey(roomId)
+    clearRoomCursor(roomId)
   }
 }

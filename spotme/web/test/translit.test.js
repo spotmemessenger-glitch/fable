@@ -25,7 +25,7 @@ const { transliterate, isSupported, supportedScripts } = engine
 
 const results = {}
 const check = (name, fn) => {
-  try { results[name] = fn() === true } catch (e) { results[name] = false }
+  try { results[name] = fn() === true } catch { results[name] = false }
 }
 const is = (input, lang, want) => {
   const got = transliterate(input, lang)

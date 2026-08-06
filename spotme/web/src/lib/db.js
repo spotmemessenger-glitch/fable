@@ -58,6 +58,14 @@ const DEFAULT_SETTINGS = {
  * deletes nothing from the server, and it cannot revoke the refresh token
  * server-side because there is no endpoint for that yet.
  */
+/**
+ * Clear all data on this device.
+ *
+ * Returns a promise for `{ ok, failures }`. The localStorage sweep is still
+ * synchronous and immediate; the IndexedDB stores cannot be, so a caller that
+ * needs to TELL THE USER whether the wipe worked has to await this. A caller
+ * that ignores it behaves exactly as before.
+ */
 export function wipeDevice () {
   const profileId = db.profile()?.id
   // No profile means no way to tell this slot's cursors from another's — and a
@@ -76,13 +84,114 @@ export function wipeDevice () {
     if (key.startsWith(ROOM_PREFIX) && !key.slice(ROOM_PREFIX.length).includes(':')) doomed.push(key)
   }
   doomed.forEach((key) => localStorage.removeItem(key))
+
+  /* THE IDENTITY KEY IS NOT IN localStorage, AND IT IS THE ONE THING A WIPE MOST
+   * HAS TO REMOVE. The loop above walks localStorage only, so "Clear all data"
+   * left the X25519 private key sitting in IndexedDB. The next launch minted a
+   * NEW random account id and then published that SAME old key against it —
+   * anyone who recorded the old public key could link the erased identity to the
+   * fresh one, and the key that opens the server's retained ciphertext for the
+   * supposedly-erased conversations was still on the device.
+   *
+   * Deleting the database is not enough on its own: identity-store caches the
+   * record in a module variable, so without `forgetIdentity()` the key stays
+   * live in memory for the rest of the page and gets written straight back. */
+  // Imported lazily so db.js stays a leaf module: it is imported by nearly
+  // every view, and a static import of the crypto tree would pull api.js and
+  // e2e-v2.js in behind it for every one of them.
+  const cleared = import('./crypto/identity-store.js')
+    .then((m) => { m.forgetIdentity?.(); return null })
+    .catch(() => 'identity cache')
+
+  /* A5 keeps a synchronous per-room verdict cache, and it outlives the
+   * database exactly as the identity cache does. Left behind, the next account
+   * on this device inherits the last one's blocks — and, worse, its
+   * ALLOWS. */
+  const clearedTrust = import('./crypto/identity-enforcement.js')
+    .then((m) => { m.forgetAllTrust?.(); return null })
+    .catch(() => 'trust verdict cache')
+
   /* Media lives in IndexedDB, not localStorage, so a prefix sweep cannot reach
-   * it. Without this line "Clear all data" would leave every photo and voice
-   * note this device ever received on disk — a worse leak than the one the
-   * button exists to fix, and an invisible one. Imported lazily and never
-   * awaited so db.js keeps no load-time dependency on a browser API that the
-   * packaged WebView, private mode, or the Node tests may not provide. */
-  void import('./blobstore.js').then((blobs) => blobs.clearAll()).catch(() => {})
+   * it. Without this, "Clear all data" would leave every photo and voice note
+   * this device ever received on disk — a worse leak than the one the button
+   * exists to fix, and an invisible one. Imported lazily so db.js keeps no
+   * load-time dependency on a browser API that the packaged WebView, private
+   * mode, or the Node tests may not provide. */
+  const media = import('./blobstore.js')
+    .then((blobs) => blobs.clearAll())
+    .then((ok) => (ok === false ? 'media' : null))
+    .catch(() => 'media')
+
+  /* `spotme-identity-pins` is a SEPARATE database (ADR-005 §4 explains why it
+   * has to be). It holds, per peer: their user id, their public key, and a
+   * timestamped history of every time that key changed — a record of who this
+   * device talked to and when. A1 created it; A2 is what first writes to it, so
+   * this is the change that makes leaving it behind a real leak rather than an
+   * empty one. */
+  /* The SIGNING identity (ADR-008) is the third database, and its module
+   * cache is the third cache — same two halves as the agreement identity
+   * above: delete the bytes AND forget the live handle, or the "wiped" device
+   * keeps signing as the old identity for the rest of the page. */
+  const clearedSigning = import('./crypto/signing-key-store.js')
+    .then((m) => { m.forgetSigningIdentity?.(); return null })
+    .catch(() => 'signing key cache')
+
+  return Promise.all([
+    cleared,
+    clearedTrust,
+    clearedSigning,
+    media,
+    dropDatabase('spotme-e2e'),
+    dropDatabase('spotme-identity-pins'),
+    dropDatabase('spotme-signing'),
+  ]).then((results) => {
+    const failures = results.filter(Boolean)
+    return { ok: failures.length === 0, failures }
+  })
+}
+
+/**
+ * Delete one IndexedDB database, and actually find out whether it worked.
+ *
+ * WHY THIS IS NOT `try { indexedDB.deleteDatabase(name) } catch {}`. That was
+ * the previous shape, and it cannot detect the failure that matters:
+ * `deleteDatabase` returns a REQUEST, so a synchronous try/catch sees only the
+ * call succeeding to be *issued*. The realistic failure is `onblocked` — another
+ * tab still holds the database open, and the delete simply never happens. A wipe
+ * that silently no-ops is worse than one that fails loudly, because the user is
+ * told their data is gone while it is still on disk.
+ *
+ * `onblocked` does NOT end the request; the delete may still complete once the
+ * other connection closes. It is reported as a failure anyway, because at the
+ * moment we answer the user we cannot honestly say it is gone.
+ *
+ * Resolves to null on success, or the database name on failure — never rejects,
+ * so one failing store cannot hide the others.
+ */
+const DROP_TIMEOUT_MS = 5000
+
+function dropDatabase (name) {
+  return new Promise((resolve) => {
+    let req
+    try {
+      req = indexedDB.deleteDatabase(name)
+    } catch {
+      resolve(name)                     // no IndexedDB at all
+      return
+    }
+    if (!req || typeof req !== 'object') { resolve(null); return }
+    /* BOUNDED. A request that never fires any handler would leave the caller
+     * waiting forever, and a wipe that hangs is no better than one that lies —
+     * the user is still left without an answer. Timing out reports FAILURE
+     * rather than success, because an unanswered delete is precisely the case
+     * where we cannot honestly say the data is gone. */
+    const done = (v) => { clearTimeout(timer); resolve(v) }
+    const timer = setTimeout(() => resolve(name), DROP_TIMEOUT_MS)
+    timer?.unref?.()
+    req.onsuccess = () => done(null)
+    req.onerror = () => done(name)
+    req.onblocked = () => done(name)
+  })
 }
 
 function randomHex (bytes = 8) {
@@ -138,7 +247,10 @@ function createDb () {
         name: '',
         lang: 'en',
         avatar: null,
-        translit: true,
+        // OFF by default (owner decision, Fix-the-Foundation F3): the 文A chat
+        // toggle reads this only for chats never toggled; a per-chat choice
+        // (convo.xlit) always wins and persists.
+        translit: false,
         autoTranslate: true,
         // Proof this device owns its username claim. Local-only: it is never
         // put in an announcement or a request (both list their fields

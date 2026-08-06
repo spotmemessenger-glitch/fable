@@ -101,6 +101,20 @@ model User {
   ageVerified   Boolean  @default(false)
   ageVerifiedAt DateTime?
   ageVerifyRef  String? // third-party verification provider's reference id only
+  // Wave 1B (owner decision D6): the self-declared birth YEAR-MONTH ('YYYY-MM')
+  // behind the 18+ gate — deliberately never a full date of birth (data
+  // minimization; see src/policy/age.ts). Immutable once set except via the
+  // documented support path. NEVER selected into any API response or log; the
+  // only age fact a client sees is the `ageVerified` boolean.
+  birthYearMonth   String?
+  // Version of the policy text shown when the declaration was made (B2).
+  agePolicyVersion String?
+  // Wave 1C (owner decision, D6 addendum): EXPLICIT account status — never a
+  // side-effect of other fields. 'active' | 'frozen_minor'. A frozen account
+  // keeps its data (read-only wind-down: can read existing conversations and
+  // the policy notice; cannot start conversations, send, be messaged anew, or
+  // reach any new surface). Reversal is the documented support path only.
+  accountStatus    String  @default("active")
 
   passwordHash  String? // unset when the account only ever used OTP
   // SHA-256 of the device-held claim secret for guest (no-account) identities —
@@ -129,6 +143,14 @@ model User {
   deviceTokens     DeviceToken[]
   stories          Story[]
   storyViews       StoryView[]
+  signingKeys      SigningKey[]
+  signedPreKeys    SignedPreKey[]
+  oneTimePreKeys   OneTimePreKey[]
+  discoveryVisibility DiscoveryVisibility?
+  discoveryProfile    DiscoveryPublicProfileProjection?
+  exchangeIntents     ExchangeIntent[]  @relation("ExchangeIntentOwner")
+  moments             Moment[]          @relation("MomentAuthor")
+  momentStories       MomentStory[]     @relation("MomentStoryAuthor")
 
   @@index([city])
   @@index([createdAt])
@@ -561,4 +583,582 @@ model CrashReport {
   ts           DateTime @default(now())
 
   @@index([signature, ts])
+}
+
+// The published SIGNING-key lifecycle (ADR-008 Phase 2B). A table, not a User
+// column, because a trust anchor's history IS the product: the agreement key's
+// single-column precedent is exactly what made its lifecycle unauditable — an
+// overwrite leaves no trace, and "no key" and "never had a key" are the same
+// NULL. Rows are NEVER deleted: a withdrawn key is a served tombstone, since a
+// key that silently disappears is indistinguishable from one that never
+// existed — the substituting server's preferred posture. At most one 'active'
+// row per user, enforced transactionally in the service.
+model SigningKey {
+  id                 String    @id @default(cuid())
+  userId             String
+  user               User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  publicKeyB64       String
+  algo               String // 'Ed25519' | 'ECDSA-P-256'
+  status             String // 'active' | 'superseded' | 'withdrawn'
+  createdAt          DateTime  @default(now())
+  withdrawnAt        DateTime?
+  // Supersession: the OLD key signs a length-prefixed transcript naming its
+  // replacement; the signature is stored on the RETIRED row so the chain is
+  // checkable by any client that fetches it.
+  supersededById     String?
+  supersessionSigB64 String?
+
+  @@unique([userId, publicKeyB64])
+  @@index([userId, status])
+}
+
+// X3DH prekey infrastructure (ADR-004 §8, e2e_v3). Additive and independent of
+// the message path — no existing table changes. A bundle is what a peer fetches
+// to open a session WITHOUT the recipient online: the signed prekey proves the
+// bundle came from the identity (Ed25519 over IK||SPK, verified before any DH),
+// and the one-time prekeys give the FIRST message forward secrecy.
+//
+// The identity key itself is NOT stored here — it is the published signing key
+// (SigningKey) plus the X25519 agreement key (User.publicKey). This table holds
+// only the rotating prekeys that hang off that identity.
+model SignedPreKey {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  deviceId     String   // 16-byte device id, hex — which device published this
+  keyId        Int      // client-assigned, monotonic per device; names the SPK in a header (SPKID)
+  pub          String   // raw X25519 public key, base64
+  sig          String   // Ed25519 signature over (IK || SPK), base64 — verified by the fetcher
+  createdAt    DateTime @default(now())
+  // Exactly one active SPK per (user, device): rotation replaces, it does not
+  // accumulate. Kept (not deleted) so in-flight initial messages naming an old
+  // SPKID can still resolve until they expire.
+  retiredAt    DateTime?
+
+  @@unique([userId, deviceId, keyId])
+  @@index([userId, deviceId])
+}
+
+// One-time prekeys — consumed ATOMICALLY and single-use. The server deletes the
+// row in the same transaction that serves the bundle, so two fetchers never get
+// the same OPKID. Exhaustion is not an error: the bundle is served without one
+// (OPKID = 0xFFFFFFFF on the wire), weaker but functional, and the sentinel
+// makes the degradation visible rather than silent.
+model OneTimePreKey {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  deviceId  String
+  keyId     Int      // names the OPK in a header (OPKID)
+  pub       String   // raw X25519 public key, base64
+  createdAt DateTime @default(now())
+
+  @@unique([userId, deviceId, keyId])
+  @@index([userId, deviceId])
+}
+
+// ---------------------------------------------------------------------------
+// Smart Nearby Discovery Map (Platform Phase 2, checkpoint 3) — DARK.
+// Additive tables only; minimum persistence for discovery. No precise GPS
+// (coarse cell + coarse point only, produced on-device — ADR-018/019/024).
+// No sensitive attribute is projected (P6/A3: no age, no gender). The
+// canonical user profile is NOT duplicated — the projection holds approved
+// public fields only and is derived, rebuildable, and deleted with the user
+// (A9; FK ON DELETE CASCADE).
+
+/// My discovery presence/visibility (P3: opt-in, reversible, auto-expiring).
+model DiscoveryVisibility {
+  userId            String   @id
+  enabled           Boolean  @default(false)
+  /// Coarse privacy-cell identifier (ADR-018); opaque.
+  coarseCell        String
+  /// Coarse public point ONLY — the on-device approximation, never a fix.
+  coarseLat         Float
+  coarseLon         Float
+  /// PostGIS geography for spatial indexing; written by the repository from
+  /// (coarseLon, coarseLat) — same coarse data, spatially indexable.
+  geog              Unsupported("geography(Point, 4326)")?
+  updatedAt         DateTime @updatedAt
+  /// Presence expires; expired rows are unqueryable (threat model C-EXPIRE).
+  expiresAt         DateTime
+  /// Monotonic — realtime consumers drop stale versions (C-REPLAY).
+  visibilityVersion Int      @default(1)
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([expiresAt])
+  @@index([enabled, expiresAt])
+}
+
+/// Approved PUBLIC projection for discovery. References the canonical handle
+/// but is NEVER the authority for handle uniqueness/ownership/lifecycle (A9)
+/// — hence no unique constraint here; the identity model stays authoritative.
+model DiscoveryPublicProfileProjection {
+  userId           String   @id
+  handle           String?
+  /// Normalized (lowercased/folded) search projection of the handle.
+  normalizedHandle String?
+  displayName      String
+  avatarRef        String?
+  discoverable     Boolean  @default(false)
+  updatedAt        DateTime @updatedAt
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([normalizedHandle])
+  @@index([discoverable])
+}
+
+/// Block projection for discovery-time filtering, BOTH directions indexed
+/// (threat model C-BLOCK). Derived from the canonical Block model; kept as a
+/// projection so discovery queries never join the full social graph.
+model DiscoveryBlockProjection {
+  ownerUserId   String
+  blockedUserId String
+  createdAt     DateTime @default(now())
+
+  @@id([ownerUserId, blockedUserId])
+  @@index([blockedUserId])
+}
+
+// ============================================================================
+// SpotMe Exchange (Platform Phase 3B) — DARK.
+//
+// ADDITIVE ONLY. No existing model is touched. The ExchangeModule that reads
+// these tables is NOT imported by AppModule — nothing reaches them until an
+// owner-authorized activation change. Locations are the on-device COARSE public
+// position only (ADR-018/019) — never a precise fix. No age/gender/sensitive
+// column exists (A3). No payment/escrow column exists; an informational price
+// is a display label only. Business participation is a DARK SEAM (D4): the
+// table exists but no business flow is reachable — v1 posture is individuals-only.
+// ============================================================================
+
+/// An Exchange intent (need / offer / service). Coarse location + geography for
+/// spatial matching; keyset-paginated; expiry makes stale intents unqueryable.
+model ExchangeIntent {
+  id                    String   @id @default(cuid())
+  ownerId               String
+  /// 'user' | 'business' — a REFERENCE to canonical identity; Exchange owns no
+  /// identity lifecycle (A9). Business is a dark seam (D4).
+  ownerKind             String   @default("user")
+  /// 'need' | 'offer' | 'service'
+  kind                  String
+  /// draft|active|paused|matched|fulfilled|expired|withdrawn|removed
+  status                String   @default("draft")
+  category              String
+  title                 String
+  text                  String
+  tags                  String[]
+  budgetBand            String?
+  /// Display-only price label; NOT a payment field.
+  informationalPrice    String?
+  /// 'window' | 'recurring' | 'unknown'
+  availabilityState     String   @default("unknown")
+  availabilityFrom      DateTime?
+  availabilityTo        DateTime?
+  availabilitySchedule  String?
+  /// Coarse public point ONLY (ADR-018); never a precise fix.
+  coarseLat             Float
+  coarseLon             Float
+  coarseCell            String
+  /// PostGIS geography for spatial matching; written from the coarse point.
+  geog                  Unsupported("geography(Point, 4326)")?
+  radiusKm              Float    @default(5)
+  maxRadiusKm           Float    @default(25)
+  /// 'hidden' | 'discoverable'
+  visibility            String   @default("hidden")
+  /// 'clear' | 'pending-review' | 'restricted' | 'removed'
+  moderationState       String   @default("clear")
+  /// Optimistic concurrency — bumped on every mutation.
+  versionSeq            Int      @default(1)
+  /// Client-supplied idempotency key, unique per owner (replay-safe mutations).
+  idempotencyKey        String
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  expiresAt             DateTime?
+  owner                 User     @relation("ExchangeIntentOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  lifecycle             ExchangeLifecycleEvent[]
+  matchesAsNeed         ExchangeMatchProjection[] @relation("ExchangeMatchNeed")
+  matchesAsOffer        ExchangeMatchProjection[] @relation("ExchangeMatchOffer")
+
+  @@unique([ownerId, idempotencyKey])
+  @@index([ownerId, status])
+  @@index([kind, status])
+  @@index([status, expiresAt])
+  @@index([expiresAt])
+}
+
+/// Sanitized PUBLIC projection for search/index — labels only, NEVER
+/// coordinates, private profile, message content, or age/gender (threat model
+/// T-EX-19). Derived, rebuildable, deleted with the intent.
+model ExchangeSearchProjection {
+  intentId         String   @id
+  kind             String
+  category         String
+  title            String
+  /// Normalized (folded) searchable text projection.
+  normalizedText   String
+  /// Authorized intent labels (future Exchange-compatible), never free PII.
+  intentLabels     String[]
+  /// Coarse cell only — discretized, never a precise point.
+  coarseCell       String
+  updatedAt        DateTime @updatedAt
+
+  @@index([kind, category])
+}
+
+/// Append-only lifecycle audit. Closed reason codes only — no free text.
+model ExchangeLifecycleEvent {
+  id          String   @id @default(cuid())
+  intentId    String
+  fromStatus  String
+  toStatus    String
+  /// 'owner' | 'moderation' | 'system-expiry'
+  byKind      String
+  /// owner-action|ttl|moderation-removed|fulfilled-confirmed|superseded
+  reasonCode  String?
+  createdAt   DateTime @default(now())
+  intent      ExchangeIntent @relation(fields: [intentId], references: [id], onDelete: Cascade)
+
+  @@index([intentId, createdAt])
+}
+
+/// Match projection between a need and an offer (supersede-guarded via epoch).
+model ExchangeMatchProjection {
+  id            String   @id @default(cuid())
+  needId        String
+  offerId       String
+  /// proposed|viewed|accepted|declined|dismissed|superseded|expired
+  status        String   @default("proposed")
+  score         Float
+  epoch         Int      @default(1)
+  /// Distance is a BAND — never metres between two parties.
+  distanceBand  String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  need          ExchangeIntent @relation("ExchangeMatchNeed", fields: [needId], references: [id], onDelete: Cascade)
+  offer         ExchangeIntent @relation("ExchangeMatchOffer", fields: [offerId], references: [id], onDelete: Cascade)
+
+  @@unique([needId, offerId])
+  @@index([needId, status, score])
+  @@index([offerId, status])
+}
+
+/// Business participation — DARK SEAM ONLY (D4). The table exists so the
+/// contract is complete, but NO business flow is reachable in v1 (individuals
+/// only). Never authoritative for identity.
+model ExchangeBusinessParticipation {
+  businessId      String   @id
+  displayName     String
+  verified        Boolean  @default(false)
+  categoryLabels  String[]
+  coarseCell      String?
+  updatedAt       DateTime @updatedAt
+}
+
+/// ─────────────────────────────────────────────────────────────────────────
+/// Live Nearby Events (Platform Phase 4B) — DARK. `EventsModule` is NOT imported
+/// by `AppModule`; no `/v1/events` route exists until an owner-gated activation.
+/// All models are additive; no existing table is touched. Instants are stored as
+/// UTC `DateTime` and surfaced as epoch-ms at the boundary; the source timezone
+/// is preserved for display only. Raw provider payloads are NEVER persisted.
+/// ─────────────────────────────────────────────────────────────────────────
+
+/// A stored public event from a provider feed. Location is the COARSE public
+/// venue point only (never a precise fix); there is no user-origin column.
+model Event {
+  /// `${provider}:${providerEventId}`.
+  id                String    @id
+  provider          String
+  providerEventId   String
+  providerSourceId  String?
+  /// Canonical organizer reference (stable across a provider's events).
+  organizerRef      String?
+  sourceName        String?
+  url               String?
+  /// Source's last revision/update instant.
+  revisionAt        DateTime?
+  /// Source-supplied confidence 0..1; null = unknown.
+  confidence        Float?
+  category          String    @default("other")
+  title             String
+  description       String?
+  /// UTC instants; null = tbd (e.g. postponed). end < start is rejected before write.
+  startAt           DateTime?
+  endAt             DateTime?
+  /// IANA timezone id, preserved for DISPLAY only.
+  timezone          String?
+  allDay            Boolean   @default(false)
+  /// Recurrence occurrence id — PROVIDER-SUPPLIED ONLY, never inferred.
+  occurrenceId      String?
+  /// scheduled|cancelled|postponed (source-asserted; overrides the clock).
+  lifecycle         String    @default("scheduled")
+  /// Provenance for a source-asserted cancel/postpone.
+  provenanceBy      String?
+  provenanceAt      DateTime?
+  provenanceNote    String?
+  /// Coarse public venue point ONLY; never a precise fix.
+  coarseLat         Float
+  coarseLon         Float
+  coarseCell        String
+  /// PostGIS geography for spatial queries; written from the coarse point.
+  geog              Unsupported("geography(Point, 4326)")?
+  /// Sourced popularity 0..1; null = unknown (ranks as omitted, never invented).
+  popularity        Float?
+  /// Dedup: the canonical event id this row folds into (null/self = canonical).
+  canonicalId       String?
+  /// Retrieval instant (freshness).
+  fetchedAt         DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  /// Retention sweep target (ended + retention window).
+  expiresAt         DateTime?
+
+  @@unique([provider, providerEventId])
+  @@index([canonicalId])
+  @@index([startAt])
+  @@index([coarseCell])
+}
+
+/// An EXPLAINABLE dedup decision (C4). Exact provider identity folds
+/// automatically; a cross-provider merge records the evidence that justified it.
+model EventDedupDecision {
+  id           String   @id @default(cuid())
+  /// The surviving canonical event id.
+  canonicalId  String
+  /// The event id folded into the canonical.
+  mergedId     String
+  /// exact-provider-identity | cross-provider-match
+  basis        String
+  /// Cross-provider evidence — ALL four must hold to merge; carried for audit.
+  titleMatch   Boolean  @default(false)
+  venueMatch   Boolean  @default(false)
+  timeOverlap  Boolean  @default(false)
+  areaMatch    Boolean  @default(false)
+  createdAt    DateTime @default(now())
+
+  @@unique([mergedId])
+  @@index([canonicalId])
+}
+
+/// Sanitized public search projection — labels + coarse cell only, NEVER
+/// coordinates or raw payload (T-EV-5/6). Rebuildable from Event.
+model EventSearchProjection {
+  /// The event id.
+  id             String    @id
+  category       String
+  title          String
+  normalizedText String
+  /// Coarse cell ONLY — no lat/lon field exists on the projection.
+  coarseCell     String
+  startAt        DateTime?
+  /// Derived state at projection time (upcoming|happening-now|ended|cancelled|postponed).
+  state          String
+  updatedAt      DateTime  @updatedAt
+
+  @@index([category, startAt])
+}
+
+/// ─────────────────────────────────────────────────────────────────────────
+/// Nearby Moments — media assets (Platform Phase 5B) — DARK. MediaModule is NOT
+/// imported by AppModule. Only METADATA-STRIPPED bytes are ever persisted
+/// (exif-strip boundary); originals never touch storage. Content-hash dedup;
+/// refCount-driven deletion cascade (5C moments hold the references).
+/// ─────────────────────────────────────────────────────────────────────────
+model MomentMediaAsset {
+  id           String    @id @default(cuid())
+  /// image | video
+  kind         String
+  mimeType     String
+  sizeBytes    Int       @default(0)
+  /// sha256 of the STRIPPED bytes — dedup key.
+  contentHash  String    @unique
+  /// Object key on the Phase 1 storage seam (IStorageAdapter).
+  storageKey   String
+  thumbnailKey String?
+  width        Int?
+  height       Int?
+  durationMs   Int?
+  /// References held by moments/stories; asset deletes when this hits zero.
+  refCount     Int       @default(0)
+  /// INVARIANT: true always — only stripped bytes are persisted.
+  exifStripped Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+  /// Story retention stamp (24h [PROPOSED]); null for regular post media.
+  expiresAt    DateTime?
+  /// M3 transcode output. `variants` is a JSON array of {name,bytes,storageKey};
+  /// posterKey is the first-frame image; durationSeconds drives the HLS
+  /// boundary decision. All nullable: an asset is usable before the worker runs.
+  variants        String?
+  posterKey       String?
+  durationSeconds Float?
+}
+
+/// ─────────────────────────────────────────────────────────────────────────
+/// Nearby Moments (Platform Phase 5C) — DARK. MomentsModule is NOT imported by
+/// AppModule. PRIVACY (M5/ADR-028): location is an OPT-IN coarse cell on
+/// nearby/public posts only — never a precise fix, and there is NO viewer/
+/// origin column anywhere. 'private' posts never enter any feed query (SQL
+/// carries the tier filter). No engagement counters are stored per-viewer.
+/// ─────────────────────────────────────────────────────────────────────────
+
+model Moment {
+  id              String    @id @default(cuid())
+  authorId        String
+  /// photo | video | text
+  kind            String
+  text            String?
+  /// MomentMediaAsset ids (refCount managed by the media service).
+  mediaIds        String[]
+  /// private | friends | nearby | public (M5; per-post, poster-controlled)
+  visibility      String    @default("private")
+  /// Poster-opted COARSE attach — nearby/public tiers only (ADR-028 §2).
+  coarseLat       Float?
+  coarseLon       Float?
+  coarseCell      String?
+  /// Server-derived 1-decimal (~11 km) city cell — never finer.
+  cityCell        String?
+  geog            Unsupported("geography(Point, 4326)")?
+  /// visible | reported | limited | removed
+  moderationState String    @default("visible")
+  versionSeq      Int       @default(1)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  deletedAt       DateTime?
+  author          User      @relation("MomentAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  comments        MomentComment[]
+  reactions       MomentReactionRow[]
+
+  @@index([authorId, createdAt])
+  @@index([cityCell])
+  @@index([visibility, moderationState])
+}
+
+/// 24h stories (M3 six-state lifecycle). Named MomentStory — the legacy
+/// client-E2E `Story` model (ciphertext stories) is untouched and unrelated.
+model MomentStory {
+  id              String   @id @default(cuid())
+  authorId        String
+  mediaId         String
+  /// friends | nearby | public (private stories are unrepresentable)
+  visibility      String   @default("friends")
+  /// active | expired | deleted | archived | hidden | moderation-hidden (M3)
+  state           String   @default("active")
+  versionSeq      Int      @default(1)
+  createdAt       DateTime @default(now())
+  /// 24h from publish ([PROPOSED]); the {story-expiry} sweep flips state.
+  expiresAt       DateTime
+  author          User     @relation("MomentStoryAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([state, expiresAt])
+  @@index([authorId, state])
+}
+
+/// Flat, parent-REFERENCED comments (M4) — nesting is render-side only.
+model MomentComment {
+  id              String   @id @default(cuid())
+  momentId        String
+  /// Parent comment id or null; NEVER nested storage (M4).
+  parentId        String?
+  authorId        String
+  text            String
+  /// visible | reported | limited | removed
+  moderationState String   @default("visible")
+  createdAt       DateTime @default(now())
+  moment          Moment   @relation(fields: [momentId], references: [id], onDelete: Cascade)
+
+  @@index([momentId, createdAt])
+}
+
+/// One reaction per (moment, user); the registry is CLOSED (M4) — service +
+/// a raw CHECK constraint both enforce membership.
+model MomentReactionRow {
+  momentId  String
+  userId    String
+  /// like | love | laugh | wow | support (closed, M4)
+  reaction  String
+  createdAt DateTime @default(now())
+  moment    Moment   @relation(fields: [momentId], references: [id], onDelete: Cascade)
+
+  @@id([momentId, userId])
+}
+
+/// Explicit follows (M2 'explicitFollows' signal + the friends feed source).
+model MomentFollow {
+  followerId String
+  targetId   String
+  createdAt  DateTime @default(now())
+
+  @@id([followerId, targetId])
+  @@index([targetId])
+}
+
+/// Two-way block: either direction removes content from every read path.
+model MomentBlock {
+  blockerId String
+  blockedId String
+  createdAt DateTime @default(now())
+
+  @@id([blockerId, blockedId])
+  @@index([blockedId])
+}
+
+/// Sanitized reports (ids + closed reason codes; note optional, bounded).
+model MomentReport {
+  id         String   @id @default(cuid())
+  reporterId String
+  /// moment | comment | story
+  targetKind String
+  targetId   String
+  reason     String
+  note       String?
+  /// open | actioned | dismissed
+  status     String   @default("open")
+  createdAt  DateTime @default(now())
+  /// D7: when the report was handed to the moderation sink (durable delivery
+  /// marker). NULL means the report exists but no delivery was recorded —
+  /// which is exactly the state the fixture-only queue used to leave behind.
+  queuedAt   DateTime?
+
+  @@index([targetKind, targetId])
+  @@index([reason, status])
+}
+
+/// Append-only, SANITIZED moderation audit (ids + closed codes, never content).
+model MomentModerationEvent {
+  id         String   @id @default(cuid())
+  targetKind String
+  targetId   String
+  fromState  String
+  toState    String
+  reason     String?
+  /// reporter | moderation | system
+  byKind     String
+  createdAt  DateTime @default(now())
+
+  @@index([targetId, createdAt])
+}
+
+/// WAVE-1A R7 — the activation kill-switch registry. One row per dark domain
+/// (discovery, exchange, events, moments, assistant). MISSING ROW == DISABLED:
+/// the gate fails dark, so a domain that was never flipped on cannot answer.
+/// Flipping is ONE row UPDATE — no migration, no redeploy, no restart — and the
+/// gate's short cache makes rollback-to-dark propagate in seconds (R7 bar: <60s).
+model RuntimeFlag {
+  key       String   @id
+  enabled   Boolean  @default(false)
+  updatedAt DateTime @default(now()) @updatedAt
+}
+
+/// WAVE-1C C7 — the Stage-A allowlist. INDEPENDENT of RuntimeFlag: a domain can
+/// be served to a specific, auditable set of accounts while its RuntimeFlag row
+/// stays absent (the production posture). Composite (domain,userId) is an EXACT
+/// match — no wildcards. `note` + `addedAt` make every entry auditable; deleting
+/// the row is the trivial removal. Empty table == nobody allowlisted.
+model DomainAllowlist {
+  domain  String
+  userId  String
+  note    String?
+  addedAt DateTime @default(now())
+
+  @@id([domain, userId])
+  @@index([domain])
 }

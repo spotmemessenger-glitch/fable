@@ -1,8 +1,9 @@
-import { Body, Controller, Delete, Get, NotFoundException, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Delete, Get, NotFoundException, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { CurrentUser, AuthenticatedPrincipal } from '../common/decorators/current-user.decorator';
 import { UsersService } from './users.service';
 import { UpdateProfileDto, UpdatePresenceDto } from './dto/update-profile.dto';
+import { DeclareAgeDto } from './dto/declare-age.dto';
 
 @UseGuards(JwtAuthGuard)
 @Controller('users/me')
@@ -17,6 +18,17 @@ export class UsersController {
   @Patch()
   update(@CurrentUser() principal: AuthenticatedPrincipal, @Body() dto: UpdateProfileDto) {
     return this.users.updateProfile(principal.id, dto);
+  }
+
+  /**
+   * Wave 1B, B2: the one-time age declaration for accounts that predate the
+   * gate. Immutable once recorded — a second call answers 409 regardless of
+   * payload; changing a declaration is a documented SUPPORT path, not an API.
+   * The response carries only the `ageVerified` boolean, never the declaration.
+   */
+  @Post('age')
+  declareAge(@CurrentUser() principal: AuthenticatedPrincipal, @Body() dto: DeclareAgeDto) {
+    return this.users.declareAge(principal.id, dto.birthYearMonth);
   }
 
   @Post('presence')
@@ -43,8 +55,20 @@ export class UsersLookupController {
   constructor(private users: UsersService) {}
 
   @Get('lookup')
-  async lookup(@Query('username') username: string) {
-    const user = await this.users.findByUsername(username);
+  async lookup(@Query('username') username?: string) {
+    /* A MISSING PARAMETER MUST NOT BECOME A MISSING FILTER.
+     *
+     * `@Query` with nothing to bind yields `undefined`, Prisma strips undefined
+     * values out of a `where`, and `findFirst` was left with nothing but
+     * `deletedAt: null` — so `GET /api/users/lookup`, with no query string at
+     * all, returned an arbitrary real account. Verified against the live
+     * database, not inferred.
+     *
+     * This is the general shape worth watching for: any `@Query`/`@Param` that
+     * reaches a Prisma filter unvalidated degenerates to "match anything". */
+    const name = String(username ?? '').trim().toLowerCase();
+    if (!/^[a-z0-9_]{3,16}$/.test(name)) throw new BadRequestException('invalid username');
+    const user = await this.users.findByUsername(name);
     if (!user) throw new NotFoundException('no user with that username');
     return user;
   }

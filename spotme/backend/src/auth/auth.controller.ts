@@ -1,6 +1,6 @@
 import { Body, Controller, Post } from '@nestjs/common';
 import { AuthService } from './auth.service';
-import { SignupDto, GuestAuthDto, RequestOtpDto, VerifyOtpDto, RefreshDto, EmployeeLoginDto } from './dto/auth.dto';
+import { SignupDto, GuestAuthDto, GuestRecoverDto, RequestOtpDto, VerifyOtpDto, RefreshDto, EmployeeLoginDto } from './dto/auth.dto';
 
 @Controller('auth')
 export class AuthController {
@@ -8,7 +8,7 @@ export class AuthController {
 
   @Post('signup')
   signup(@Body() dto: SignupDto) {
-    return this.auth.signup(dto.username, dto.email, dto.name);
+    return this.auth.signup(dto.username, dto.email, dto.birthYearMonth, dto.name);
   }
 
   /** No-account identity for the web client: create-or-reauth in one call. */
@@ -22,7 +22,15 @@ export class AuthController {
       dto.publicKey,
       dto.platform,
       dto.appVersion,
+      dto.birthYearMonth,
     );
+  }
+
+  /** Fix-the-Foundation F1: a device that lost its local state signs back in
+   *  with @username + recovery code and ADOPTS the account's id. */
+  @Post('guest/recover')
+  guestRecover(@Body() dto: GuestRecoverDto) {
+    return this.auth.recoverGuest(dto.username, dto.secret);
   }
 
   @Post('otp/request')
