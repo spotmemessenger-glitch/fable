@@ -36,9 +36,22 @@ FROM node:22-slim
 # M3: ffmpeg/ffprobe are the {moment-media} transcode worker. Without them the
 # worker fails every job and a feed serves raw phone video (HEVC, trailing
 # moov) that Android Chrome often cannot play at all.
+#
+# libheif is the iPhone-photo half of the same story. HEIC has no byte-level
+# stripper, so `normalize.ts` converts it to JPEG before the EXIF boundary sees
+# it. That needs `heif-convert`, which ffmpeg cannot stand in for — this ffmpeg
+# has no HEIF demuxer at all. Without it the service still REFUSES HEIC safely;
+# it just cannot accept it.
+#
+# `libheif-examples` alone is correct here and the decoder plugin package is
+# deliberately NOT listed: bookworm ships libheif 1.15, which predates the
+# 1.17 plugin split, so `libheif-plugin-libde265` does not exist in this suite
+# and naming it fails the build. 1.15's libheif1 links libde265 directly —
+# verified in this exact base image, not assumed.
 WORKDIR /app
 ENV NODE_ENV=production
-RUN apt-get update -y && apt-get install -y --no-install-recommends openssl ca-certificates ffmpeg \
+RUN apt-get update -y && apt-get install -y --no-install-recommends \
+      openssl ca-certificates ffmpeg libheif-examples \
   && rm -rf /var/lib/apt/lists/*
 COPY --from=build /app/dist ./dist
 COPY --from=build /app/node_modules ./node_modules

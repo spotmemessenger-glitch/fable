@@ -19,11 +19,19 @@ import {
   MediaUploadPort, MediaTransformPort, ThumbnailPort, StoryMediaPort, MomentMediaPort,
 } from './media.ports';
 import { stripImageMetadata, UnsupportedImageError } from './exif-strip';
+import { heicToJpeg, isHeic, normaliseVideoToMp4 } from './normalize';
 import { FixtureMomentWorkers, TranscodeJob, ThumbnailJob } from './media.queues';
 import type { TranscodeQueue, TranscodeIO, TranscodeResult } from './transcode.worker';
 
 const MAX_UPLOAD_BYTES = 50 * 1024 * 1024; // [PROPOSED] ceiling
-const ALLOWED_MIME = new Set(['image/jpeg', 'image/png', 'video/mp4', 'video/webm']);
+/* iPhone formats are accepted ONLY because `normalize.ts` converts them into a
+ * format the strip boundary can clean, before anything is persisted. Do not add
+ * a MIME type here without giving `normaliseForStorage()` a path for it — that
+ * is the difference between "accepted" and "stored unstripped". */
+const ALLOWED_MIME = new Set([
+  'image/jpeg', 'image/png', 'image/heic', 'image/heif',
+  'video/mp4', 'video/webm', 'video/quicktime',
+]);
 const SLOT_TTL_MS = 15 * 60 * 1000;
 
 @Injectable()
@@ -56,20 +64,14 @@ export class MomentMediaService implements MomentMediaPort, MediaUploadPort, Med
     if (!ALLOWED_MIME.has(mimeType)) return { state: 'refused', reason: 'bad-mime' };
     if (bytes.length > MAX_UPLOAD_BYTES) return { state: 'refused', reason: 'too-large' };
 
-    // THE BOUNDARY: strip BEFORE hash, BEFORE dedup, BEFORE any persistence.
+    // THE BOUNDARY: clean BEFORE hash, BEFORE dedup, BEFORE any persistence.
     let clean: Buffer;
-    if (mimeType.startsWith('image/')) {
-      try {
-        clean = stripImageMetadata(bytes, mimeType);
-      } catch (e) {
-        if (e instanceof UnsupportedImageError) return { state: 'refused', reason: 'unsupported-format' };
-        throw e;
-      }
-    } else {
-      // Video container metadata handling is a transcode-worker duty (the
-      // {moment-media} job CONTRACT includes `-map_metadata -1`); dark phase
-      // stores nothing for videos beyond the job contract itself.
-      clean = bytes;
+    let storedMime: string;
+    try {
+      ({ bytes: clean, mimeType: storedMime } = await this.normaliseForStorage(bytes, mimeType));
+    } catch (e) {
+      if (e instanceof UnsupportedImageError) return { state: 'refused', reason: 'unsupported-format' };
+      throw e;
     }
 
     const contentHash = `sha256:${createHash('sha256').update(clean).digest('hex')}`;
@@ -77,7 +79,11 @@ export class MomentMediaService implements MomentMediaPort, MediaUploadPort, Med
     if (existing) {
       return { state: 'deduplicated', mediaId, contentHash, deduplicated: true, canonicalMediaId: existing.id };
     }
-    const kind = mimeType.startsWith('video/') ? 'video' : 'image';
+    /* Everything below records the format that was actually STORED, not the one
+     * that was uploaded: a HEIC arrives and a JPEG is persisted, a .mov arrives
+     * and an mp4 is persisted. Recording the upload's MIME here would hand
+     * clients a content-type that does not describe the bytes behind it. */
+    const kind = storedMime.startsWith('video/') ? 'video' : 'image';
     /* WRITE THE STRIPPED BYTES, AND ONLY THE STRIPPED BYTES (M1 activation).
      *
      * The dark phase recorded an asset row and stored nothing, which was fine
@@ -88,11 +94,11 @@ export class MomentMediaService implements MomentMediaPort, MediaUploadPort, Med
      * leaving a row pointing at an object that was never written. */
     const storageKey = buildMomentObjectKey(ownerId, mediaId);
     if (this.storage) {
-      const stored = await this.storage.putObject(storageKey, clean, mimeType);
+      const stored = await this.storage.putObject(storageKey, clean, storedMime);
       if (!stored) return { state: 'refused', reason: 'storage-unavailable' };
     }
     await this.prisma.momentMediaAsset.create({
-      data: { id: mediaId, kind, mimeType, sizeBytes: clean.length, contentHash, storageKey, exifStripped: true },
+      data: { id: mediaId, kind, mimeType: storedMime, sizeBytes: clean.length, contentHash, storageKey, exifStripped: true },
     });
     // Enqueue the processing CONTRACTS (fixture record — nothing connects).
     if (kind === 'video') {
@@ -100,6 +106,35 @@ export class MomentMediaService implements MomentMediaPort, MediaUploadPort, Med
     }
     await this.enqueueThumbnail({ mediaId, maxDim: 512, argsTemplate: 'vipsthumbnail {in} --size 512x512 -o {out}[Q=82,strip]' });
     return { state: 'stored', mediaId, contentHash, deduplicated: false };
+  }
+
+  /**
+   * Turn an accepted upload into bytes the strip boundary has actually cleaned,
+   * and report the format those bytes are in. THE ONLY ROUTE TO PERSISTENCE.
+   *
+   * Every branch either returns cleaned bytes or throws {@link
+   * UnsupportedImageError} — there is deliberately no path that returns the
+   * input untouched, because that is how unstripped bytes reach a bucket.
+   */
+  private async normaliseForStorage(bytes: Buffer, mimeType: string): Promise<{ bytes: Buffer; mimeType: string }> {
+    if (mimeType.startsWith('video/')) {
+      /* Videos used to be stored EXACTLY as uploaded, on the reasoning that
+       * metadata was the transcode worker's job. But the worker only cleans the
+       * DERIVED variants; the original it read from was already in the bucket
+       * with its container tags — GPS included — and reachable by presigned GET.
+       * Normalising here is what makes "the original is never what gets served"
+       * true for the stored object too, and it is why .mov can be accepted at
+       * all. mp4 and webm go through the same remux rather than being trusted. */
+      return { bytes: await normaliseVideoToMp4(bytes), mimeType: 'video/mp4' };
+    }
+    /* HEIC has no byte-level stripper, so it becomes a JPEG first and is then
+     * cleaned by the SAME boundary every other image goes through. The second
+     * step is load-bearing: heif-convert copies the source EXIF into its
+     * output, so the intermediate JPEG still carries the GPS IFD. */
+    if (isHeic(mimeType)) {
+      return { bytes: stripImageMetadata(await heicToJpeg(bytes), 'image/jpeg'), mimeType: 'image/jpeg' };
+    }
+    return { bytes: stripImageMetadata(bytes, mimeType), mimeType };
   }
 
   /** Set by MediaModule at init; absent means "no queue", never "pretend". */

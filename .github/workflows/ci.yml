@@ -147,6 +147,14 @@ jobs:
       - name: Apply migrations (prod parity — creates raw-SQL-managed objects)
         run: npx prisma migrate deploy
 
+      # The moments ingest boundary converts iPhone formats into ones the EXIF
+      # stripper can clean, so the proof that GPS is gone from the STORED bytes
+      # needs the real converters. ffmpeg is preinstalled on ubuntu-latest;
+      # heif-convert is not, and without it the HEIC legs SKIP rather than fail
+      # — which would quietly stop proving anything.
+      - name: Install libheif (HEIC decode for the media-normalise proof)
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq libheif-examples
+
       # Ordered cheapest-first so an obvious break fails in seconds.
       - name: Type-check
         run: npx tsc --noEmit

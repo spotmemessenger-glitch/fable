@@ -125,6 +125,14 @@ cache/
 *.mkv
 *.webm
 
+# …except the media-pipeline test fixtures. These are deliberately tiny
+# (a couple of seconds, ~17 KB) and they are the whole point of the iPhone
+# media proof: without a real GPS-tagged .mov in the tree, the test that
+# asserts the stored bytes carry no location has nothing to assert against
+# and would pass vacuously.
+!spotme/backend/test/fixtures/*.mov
+!spotme/backend/test/fixtures/*.mp4
+
 # ---------------------------------------------------------------
 # Logs
 # ---------------------------------------------------------------
