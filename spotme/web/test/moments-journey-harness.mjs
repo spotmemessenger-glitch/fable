@@ -40,7 +40,7 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const WEB = process.env.WEB || 'http://127.0.0.1:5199';
 const STORE = process.env.STORE || '/tmp/spotme-store';
 const BACKEND = resolve(HERE, '..', '..', process.env.BACKEND || 'backend');
-const FIX = resolve(BACKEND, 'test', 'fixtures');
+const FIX = resolve(BACKEND, 'test', 'fixtures', 'media');
 const CHROMIUM_PATH = process.env.CHROMIUM_PATH || undefined;
 const SCRATCH = mkdtempSync(join(osTmpdir(), 'moments-journey-'));
 
@@ -160,7 +160,7 @@ const LAUNCH = {
   // to 'nearby' visibility, and the nearby feed query filters on
   // `geog IS NOT NULL` + ST_DWithin — so a post made with no location fix gets
   // a NULL geog and is invisible in every feed, to everyone, permanently.
-  permissions: ['geolocation'],
+  permissions: ['geolocation', 'clipboard-read', 'clipboard-write'],
   geolocation: { latitude: 12.9716, longitude: 77.5946 },
 };
 
@@ -316,7 +316,7 @@ const main = async () => {
   });
 
   await step('post a HEIC — stored as JPEG, no EXIF/GPS in the stored bytes', async () => {
-    const src = join(FIX, 'iphone-gps.heic');
+    const src = join(FIX, 'gps-iphone.heic');
     const raw = readFileSync(src);
     if (!raw.includes(EXIF) || !raw.includes(GPSTAG)) throw new Error('HEIC fixture is not GPS-tagged — vacuous');
     const added = await postFile(src, 'heic from the drive');
@@ -331,7 +331,7 @@ const main = async () => {
   });
 
   await step('post an iPhone .mov — stored as mp4, no location tag in the stored bytes', async () => {
-    const src = join(FIX, 'iphone-gps.mov');
+    const src = join(FIX, 'gps-iphone.mov');
     if (!probe(src).includes('location')) throw new Error('.mov fixture has no location tag — vacuous');
     const added = await postFile(src, 'mov from the drive');
     // The ORIGINAL object, not a derived variant: derived keys carry -720p/-480p/-poster.
@@ -353,20 +353,47 @@ const main = async () => {
     return `${n} card(s) in the feed`;
   });
 
-  let firstId = null;
-  await step('share deeplink #/posts?m=<id> opens THAT post', async () => {
-    firstId = await page.locator('.mo-card').first().getAttribute('data-moment-id');
-    if (!firstId) throw new Error('no data-moment-id on the card');
-    await page.goto(`${WEB}/#/posts?m=${encodeURIComponent(firstId)}`, { waitUntil: 'domcontentloaded' });
+  await step('share deeplink: the Share button\'s link opens THAT post alone', async () => {
+    // Use the real affordance rather than synthesising a URL: with
+    // navigator.share absent (as here), the button copies the link, so the
+    // clipboard IS what a user would paste.
+    const card = page.locator('.mo-card').first();
+    await card.locator('[aria-label="Share"]').first().scrollIntoViewIfNeeded();
+    await card.locator('[aria-label="Share"]').first().click();
+    await page.waitForTimeout(2000);
+    const url = await page.evaluate(() => navigator.clipboard.readText().catch(() => ''));
+    if (!/#\/posts\?m=/.test(url)) throw new Error(`Share did not produce a post link: "${url}"`);
+
+    await page.goto(url, { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(7000);
+    const title = await page.locator('.mo-title').first().textContent().catch(() => null);
+    const cards = await page.locator('.mo-card').count();
+    const back = await page.locator('[aria-label="Back to posts"]').count();
     const lit = await page.locator('.nv[aria-current="page"]').getAttribute('data-path').catch(() => null);
-    const focused = await page.locator(`.mo-card[data-moment-id="${firstId}"]`).count();
-    if (!focused) throw new Error('the shared post is not present on the surface');
-    if (lit !== '#/posts') throw new Error(`landed with the wrong tab lit: ${lit}`);
-    return `lit tab ${lit}; the shared card is on screen (id ${firstId.slice(0, 12)}…)`;
+    if (title !== 'Post') throw new Error(`not the single-post view (title "${title}")`);
+    if (cards !== 1) throw new Error(`single-post view shows ${cards} cards, expected exactly 1`);
+    if (!back) throw new Error('no back affordance out of the single-post view');
+    if (lit !== '#/posts') throw new Error(`wrong tab lit: ${lit}`);
+    return `Share gave ${url.replace(/^https?:\/\/[^/]+/, '')} → title "${title}", exactly ${cards} card, back present, tab ${lit}`;
+  });
+
+  await step('a share link to a post that does not exist says so', async () => {
+    await page.goto(`${WEB}/#/posts?m=mo-definitely-not-a-real-id`, { waitUntil: 'domcontentloaded' });
+    await page.waitForTimeout(7000);
+    const body = await page.locator('body').innerText();
+    if (await page.locator('.mo-card').count()) throw new Error('a bogus id rendered a post');
+    if (!/no longer available|not available|couldn|isn/i.test(body)) {
+      throw new Error(`no clear "unavailable" message: "${body.slice(0, 140).replace(/\n/g, ' ')}"`);
+    }
+    return 'bogus id renders no card and says the post is unavailable';
   });
 
   await step('react to a post', async () => {
+    // The previous leg left the browser on a single-post view for an id that
+    // does not exist, so come back to the feed before looking for a card.
+    await page.goto(`${WEB}/#/posts`, { waitUntil: 'domcontentloaded' });
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await page.waitForTimeout(6000);
     const card = page.locator('.mo-card').first();
     const btn = card.locator('[aria-label="React"]').first();
     if (!(await btn.count())) throw new Error('no React control on the card');
@@ -457,7 +484,7 @@ const main = async () => {
 
   console.log('\n— console —');
   await step('no uncaught page errors (gate 404s excluded — they are the gate working)', async () => {
-    const real = errors.filter((e) => !/favicon|fonts\.googleapis|404|Failed to load resource/i.test(e));
+    const real = errors.filter((e) => !/favicon|fonts\.googleapis|404|Failed to load resource|Manifest|icon-192/i.test(e));
     if (real.length) throw new Error(`${real.length}: ${real.slice(0, 3).join(' | ')}`);
     return `0 uncaught errors (${errors.length} filtered: gate 404s + font CDN)`;
   });

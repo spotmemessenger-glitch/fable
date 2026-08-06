@@ -66,6 +66,26 @@ export class MomentsService {
     if (this.media) for (const m of row.mediaIds) await this.media.releaseReference(m);
   }
 
+  /**
+   * One moment, by id, for a viewer who arrived on a SHARE LINK rather than
+   * through a feed. The whole point of a shared `#/posts?m=<id>` is that it
+   * works for someone whose nearby feed does not contain that post, so this
+   * cannot be served by filtering a feed page client-side.
+   *
+   * The tier check is `findViewable`, the same SQL gate the comment and
+   * reaction paths already trust: private ⇒ author only, friends ⇒ author or
+   * follower, nearby/public ⇒ any non-blocked viewer, and blocked (either
+   * direction) or removed content returns null. A link therefore grants no
+   * access the feed would not have granted — it only saves the scrolling.
+   * Absent and forbidden are the SAME 404, so a link cannot be used to probe
+   * whether a given moment id exists.
+   */
+  async getViewable(viewerId: string, id: string): Promise<{ moment: MomentRow; myReaction: MomentReaction | null }> {
+    const moment = await this.repo.findViewable(viewerId, id);
+    if (!moment) throw notFound(); // uniform: unknown and forbidden are one answer
+    return { moment, myReaction: await this.repo.myReaction(id, viewerId) };
+  }
+
   async getOwn(authorId: string, id: string): Promise<MomentRow> {
     const row = await this.repo.findById(id);
     if (!row || row.authorId !== authorId) throw notFound(); // uniform

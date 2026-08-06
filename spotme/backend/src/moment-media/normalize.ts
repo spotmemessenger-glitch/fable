@@ -1,123 +1,251 @@
 /**
- * Nearby Moments — format normalisation at the ingest boundary (iPhone media).
+ * Nearby Moments — the FORMAT NORMALISATION boundary (iPhone media support).
  *
- * WHY THIS EXISTS. iPhones shoot HEIC photos and QuickTime `.mov` video. The
- * EXIF stripper in `exif-strip.ts` is a deterministic byte-parser that only
- * understands JPEG and PNG, so both formats were refused outright — correctly,
- * because the alternative was persisting bytes nothing had cleaned.
+ * WHY THIS EXISTS, AND WHY IT IS NOT IN THE ASYNC WORKER. An iPhone shoots
+ * photos as HEIC and videos as QuickTime `.mov`, and both carry GPS. The
+ * byte-level stripper next door (`exif-strip.ts`) only understands JPEG and
+ * PNG, so both formats were correctly REFUSED rather than stored unstripped.
+ * Widening the accept-list without a transcode would have stored the original,
+ * location-bearing file — the exact failure the upload route exists to prevent.
  *
- * Widening `ALLOWED_MIME` on its own would have been the wrong fix for exactly
- * that reason. So instead each new format is CONVERTED into one the existing
- * boundary already knows how to clean, *before* anything is persisted:
+ * The transcode therefore runs HERE, synchronously, at the ingest boundary —
+ * BEFORE hashing, dedup or persistence. It cannot run in the `{moment-media}`
+ * BullMQ worker, because that worker is drained after the bytes are already
+ * stored and it writes DERIVED renditions alongside an original that would
+ * still be sitting in the bucket with its coordinates intact. A promise of
+ * "the stored bytes have no GPS" is only keepable before the write.
  *
- *   HEIC/HEIF → JPEG (libheif) → stripImageMetadata()   ← the existing boundary
- *   .mov      → mp4, `-map_metadata -1`                 ← container tags dropped
+ * MEASURED, NOT ASSUMED — `heif-convert` COPIES EXIF INTO ITS JPEG OUTPUT.
+ * Converting HEIC→JPEG does not by itself remove anything: the GPS IFD is
+ * carried straight across (verified with exiftool on a real GPS-tagged HEIC).
+ * That is why every image path here ends by handing its output to
+ * `stripImageMetadata`, which drops APP1/Exif. Transcode changes the CONTAINER;
+ * the stripper is still what removes the metadata.
  *
- * THE HEIC RE-STRIP IS NOT BELT-AND-BRACES. `heif-convert` copies the source
- * EXIF — GPS IFD and all — into the JPEG it writes. Measured, not assumed: a
- * converted-but-unstripped JPEG still contains the `Exif\0\0` marker and tag
- * 0x8825. Converting without re-stripping would have shipped the precise leak
- * this module exists to close, which is why the strip runs on the *output*.
+ * Note for anyone verifying this by hand: GPS in EXIF and in a QuickTime
+ * `udta` atom is stored as binary rationals / a packed ISO-6709 string, so
+ * `strings file | grep 12.9716` prints nothing even on a file that is full of
+ * coordinates. Grep is not a proof. Use exiftool, or
+ * `containsMetadataMarkers` / `containsContainerLocationTags` below.
  *
- * Video is normalised here too, not just on the worker. The worker's ladder
- * already carries `-map_metadata -1`, but that only cleans the DERIVED
- * variants — `ingest()` stored the uploaded original verbatim, so a GPS-tagged
- * upload sat in the bucket with its tags intact and reachable by presigned GET.
- * Normalising at the boundary closes that for `.mov` and for the `video/mp4`
- * path that was already accepted.
- *
- * RUNTIME DEPENDENCIES: `heif-convert` (libheif-examples) with a HEVC decoder
- * plugin (libde265), and `ffmpeg`. Absent tooling is a typed refusal, never a
- * pass-through of unstripped bytes.
+ * Failure is always REFUSAL, never pass-through: a missing binary, a timeout,
+ * a magic-byte mismatch and a non-zero exit all end as a typed refusal with
+ * nothing persisted.
  */
 
 import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
 import { mkdtemp, writeFile, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { UnsupportedImageError } from './exif-strip';
 
-const run = promisify(execFile);
+/** A transcode tool is absent from the runtime image. Refuse — never store raw. */
+export class TranscodeUnavailableError extends Error {
+  constructor(tool: string) {
+    super(`transcode tool unavailable: ${tool} — upload refused (never persisted unnormalised)`);
+    this.name = 'TranscodeUnavailableError';
+  }
+}
 
-/** Formats an iPhone produces that the byte-level stripper cannot parse. */
-export const HEIC_MIME_TYPES = new Set(['image/heic', 'image/heif']);
-export const QUICKTIME_MIME_TYPES = new Set(['video/quicktime']);
+/** The transcode ran and failed (bad input, timeout, non-zero exit). */
+export class NormalizeFailedError extends Error {
+  constructor(detail: string) {
+    super(`media normalisation failed: ${detail} — refused (never persisted unnormalised)`);
+    this.name = 'NormalizeFailedError';
+  }
+}
 
-export const isHeic = (mimeType: string): boolean => HEIC_MIME_TYPES.has(mimeType);
-export const isQuickTime = (mimeType: string): boolean => QUICKTIME_MIME_TYPES.has(mimeType);
+/** Wall-clock ceiling for one transcode. A remux is fast; a re-encode fallback
+ *  on a 50 MB clip is the slow case this bounds. */
+const TRANSCODE_TIMEOUT_MS = 120_000;
 
-/** Run a converter in a scratch dir that is always removed. */
-async function inScratch<T>(fn: (dir: string) => Promise<T>): Promise<T> {
+/** MIME types accepted at the edge. The ones marked `via` are transcoded to a
+ *  format the metadata stripper actually understands before anything is
+ *  stored; the stored mime is `to`. */
+export const ACCEPTED_INPUT_MIME: Record<string, { kind: 'image' | 'video'; to: string }> = {
+  'image/jpeg': { kind: 'image', to: 'image/jpeg' },
+  'image/png': { kind: 'image', to: 'image/png' },
+  'image/heic': { kind: 'image', to: 'image/jpeg' },
+  'image/heif': { kind: 'image', to: 'image/jpeg' },
+  'video/mp4': { kind: 'video', to: 'video/mp4' },
+  'video/quicktime': { kind: 'video', to: 'video/mp4' },
+  'video/webm': { kind: 'video', to: 'video/webm' },
+};
+
+/** Formats whose bytes must be rewritten by a tool before they can be stored. */
+export const TRANSCODED_MIME = new Set(['image/heic', 'image/heif', 'video/quicktime']);
+
+export interface NormalizedMedia {
+  bytes: Buffer;
+  /** The mime of `bytes` — NOT necessarily the uploaded mime. */
+  mimeType: string;
+  kind: 'image' | 'video';
+  /** The uploaded mime when a transcode happened, else null. Audit trail. */
+  transcodedFrom: string | null;
+}
+
+function run(bin: string, args: string[]): Promise<void> {
+  return new Promise((resolve, reject) => {
+    execFile(bin, args, { timeout: TRANSCODE_TIMEOUT_MS, maxBuffer: 4 * 1024 * 1024 }, (err) => {
+      if (!err) return resolve();
+      const e = err as NodeJS.ErrnoException & { killed?: boolean };
+      if (e.code === 'ENOENT') return reject(new TranscodeUnavailableError(bin));
+      if (e.killed) return reject(new NormalizeFailedError(`${bin} timed out after ${TRANSCODE_TIMEOUT_MS}ms`));
+      reject(new NormalizeFailedError(`${bin} exited non-zero: ${String(e.message).slice(0, 200)}`));
+    });
+  });
+}
+
+/* ---------------------------------------------------------------- magic bytes
+ * The `content-type` header is caller-controlled, so it decides only which
+ * BRANCH runs; the bytes themselves have to agree before a tool is spawned.
+ * An ISO-BMFF file (HEIC, MP4, MOV) names its flavour in the `ftyp` box brand
+ * at offset 4. */
+
+function ftypBrand(buf: Buffer): string | null {
+  if (buf.length < 12) return null;
+  if (buf.subarray(4, 8).toString('latin1') !== 'ftyp') return null;
+  return buf.subarray(8, 12).toString('latin1');
+}
+
+const HEIC_BRANDS = new Set(['heic', 'heix', 'heim', 'heis', 'hevc', 'hevx', 'mif1', 'msf1']);
+const MP4_BRANDS = new Set(['isom', 'iso2', 'iso4', 'iso5', 'iso6', 'mp41', 'mp42', 'avc1', 'dash', 'M4V ']);
+const MOV_BRANDS = new Set(['qt  ']);
+
+/** True when the bytes plausibly ARE the declared type. Refusal on mismatch. */
+export function magicMatches(bytes: Buffer, mimeType: string): boolean {
+  const brand = ftypBrand(bytes);
+  switch (mimeType) {
+    case 'image/jpeg':
+      return bytes.length > 3 && bytes.readUInt16BE(0) === 0xffd8;
+    case 'image/png':
+      return bytes.length > 8 && bytes.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
+    case 'image/heic':
+    case 'image/heif':
+      return brand !== null && HEIC_BRANDS.has(brand);
+    case 'video/quicktime':
+      // Some cameras write a `.mov` with an mp4 brand; accept either, the
+      // remux handles both and the OUTPUT is what gets stored.
+      return brand !== null && (MOV_BRANDS.has(brand) || MP4_BRANDS.has(brand));
+    case 'video/mp4':
+      return brand !== null && (MP4_BRANDS.has(brand) || MOV_BRANDS.has(brand));
+    case 'video/webm':
+      return bytes.length > 4 && bytes.subarray(0, 4).equals(Buffer.from([0x1a, 0x45, 0xdf, 0xa3]));
+    default:
+      return false;
+  }
+}
+
+/* ------------------------------------------------------------------- ffmpeg
+ * `-map_metadata -1` drops the global metadata dictionary, which is where a
+ * QuickTime recording keeps `com.apple.quicktime.location.ISO6709`. The two
+ * per-stream forms drop the same thing at stream scope, which `-1` alone does
+ * not reach. `-c copy` keeps this a REMUX — no re-encode, so a 40 MB clip is
+ * rewritten in about a second and the picture is bit-identical. The browser
+ * playability problem (HEVC) is deliberately left to the async ladder in
+ * `transcode.worker.ts`; this step's single job is that the STORED bytes carry
+ * no location. */
+export function remuxArgs(input: string, output: string, format: 'mp4' | 'webm'): string[] {
+  return [
+    '-hide_banner', '-loglevel', 'error', '-y',
+    '-i', input,
+    '-map_metadata', '-1',
+    '-map_metadata:s:v', '-1',
+    '-map_metadata:s:a', '-1',
+    '-c', 'copy',
+    ...(format === 'mp4' ? ['-movflags', '+faststart'] : []),
+    '-f', format === 'mp4' ? 'mp4' : 'webm',
+    output,
+  ];
+}
+
+/** Used only when `-c copy` refuses the codec pair for the target container. */
+export function reencodeArgs(input: string, output: string): string[] {
+  return [
+    '-hide_banner', '-loglevel', 'error', '-y',
+    '-i', input,
+    '-map_metadata', '-1',
+    '-map_metadata:s:v', '-1',
+    '-map_metadata:s:a', '-1',
+    '-c:v', 'libx264', '-profile:v', 'high', '-preset', 'veryfast', '-crf', '23',
+    '-pix_fmt', 'yuv420p',
+    '-c:a', 'aac', '-b:a', '128k', '-ac', '2',
+    '-movflags', '+faststart',
+    '-f', 'mp4',
+    output,
+  ];
+}
+
+/**
+ * Rewrite uploaded bytes into a format the metadata stripper understands,
+ * with container metadata removed. Throws on anything unexpected — the caller
+ * turns that into a typed refusal.
+ *
+ * IMAGES ARE NOT FINISHED WHEN THIS RETURNS. The JPEG produced from a HEIC
+ * still has its EXIF (heif-convert copies it). `ingest()` runs
+ * `stripImageMetadata` on the result, and that is what removes the GPS.
+ */
+export async function normalizeForStorage(bytes: Buffer, mimeType: string): Promise<NormalizedMedia> {
+  const spec = ACCEPTED_INPUT_MIME[mimeType];
+  if (!spec) throw new NormalizeFailedError(`mime ${mimeType} is not accepted`);
+  if (!magicMatches(bytes, mimeType)) throw new NormalizeFailedError(`${mimeType} magic-byte mismatch`);
+
+  // JPEG and PNG need no rewrite — the stripper reads them directly.
+  if (mimeType === 'image/jpeg' || mimeType === 'image/png') {
+    return { bytes, mimeType, kind: 'image', transcodedFrom: null };
+  }
+
   const dir = await mkdtemp(join(tmpdir(), 'spotme-norm-'));
   try {
-    return await fn(dir);
+    const input = join(dir, 'in');
+    await writeFile(input, bytes);
+
+    if (mimeType === 'image/heic' || mimeType === 'image/heif') {
+      const out = join(dir, 'out.jpg');
+      // -q 92: high enough that a re-encode is not visible next to the JPEGs
+      // an Android phone uploads directly.
+      await run('heif-convert', ['-q', '92', input, out]);
+      const jpeg = await readFile(out);
+      if (jpeg.length === 0) throw new NormalizeFailedError('heif-convert produced an empty file');
+      return { bytes: jpeg, mimeType: 'image/jpeg', kind: 'image', transcodedFrom: mimeType };
+    }
+
+    const format = mimeType === 'video/webm' ? 'webm' : 'mp4';
+    const out = join(dir, `out.${format}`);
+    try {
+      await run('ffmpeg', remuxArgs(input, out, format));
+    } catch (e) {
+      // A missing binary is not something a re-encode can fix.
+      if (e instanceof TranscodeUnavailableError) throw e;
+      if (format !== 'mp4') throw e;
+      await run('ffmpeg', reencodeArgs(input, out));
+    }
+    const video = await readFile(out);
+    if (video.length === 0) throw new NormalizeFailedError('ffmpeg produced an empty file');
+    return {
+      bytes: video,
+      mimeType: format === 'mp4' ? 'video/mp4' : 'video/webm',
+      kind: 'video',
+      transcodedFrom: TRANSCODED_MIME.has(mimeType) ? mimeType : null,
+    };
   } finally {
     await rm(dir, { recursive: true, force: true }).catch(() => undefined);
   }
 }
 
 /**
- * HEIC/HEIF → JPEG bytes. The caller MUST still run the result through
- * {@link stripImageMetadata} — see the file header for why that is load-bearing
- * rather than defensive.
+ * True when a video container still carries a location/device tag. The video
+ * counterpart of `containsMetadataMarkers`, used by the tests to assert on the
+ * bytes that were actually STORED rather than on a tool's say-so.
+ *
+ * QuickTime keeps location in a `udta` atom under either the Apple reverse-DNS
+ * key or the `©xyz` short key (0xA9 'x' 'y' 'z').
  */
-export async function heicToJpeg(bytes: Buffer): Promise<Buffer> {
-  return inScratch(async (dir) => {
-    const input = join(dir, 'in.heic');
-    const output = join(dir, 'out.jpg');
-    await writeFile(input, bytes);
-    try {
-      await run('heif-convert', ['-q', '88', input, output]);
-    } catch (e) {
-      throw new UnsupportedImageError(`HEIC decode failed: ${(e as Error).message?.slice(0, 120)}`);
-    }
-    const jpeg = await readFile(output).catch(() => null);
-    if (!jpeg || jpeg.length < 8 || jpeg.readUInt16BE(0) !== 0xffd8) {
-      throw new UnsupportedImageError('HEIC decode produced no JPEG');
-    }
-    return jpeg;
-  });
-}
-
-/** ffmpeg args to move a video into mp4 with every container tag dropped. */
-export function normaliseVideoArgs(input: string, output: string, copy: boolean): string[] {
-  return [
-    '-hide_banner', '-loglevel', 'error', '-y',
-    '-i', input,
-    // The whole point: GPS and every other container tag, gone — before the
-    // bytes are persisted, not just on the derived variants.
-    '-map_metadata', '-1',
-    // A stream copy is a remux: no re-encode, so it is fast and lossless. An
-    // iPhone's H.264/HEVC + AAC is already mp4-legal, so this is the normal
-    // path; the re-encode below is only for containers that refuse to copy.
-    ...(copy ? ['-c', 'copy'] : ['-c:v', 'libx264', '-preset', 'veryfast', '-c:a', 'aac']),
-    '-movflags', '+faststart',
-    output,
-  ];
-}
-
-/**
- * Any accepted video container → mp4 with container metadata stripped.
- * Tries a stream copy first and falls back to a re-encode, so an odd codec
- * combination degrades to "slower" rather than "refused".
- */
-export async function normaliseVideoToMp4(bytes: Buffer): Promise<Buffer> {
-  return inScratch(async (dir) => {
-    const input = join(dir, 'in');
-    const output = join(dir, 'out.mp4');
-    await writeFile(input, bytes);
-    try {
-      await run('ffmpeg', normaliseVideoArgs(input, output, true));
-    } catch {
-      try {
-        await run('ffmpeg', normaliseVideoArgs(input, output, false));
-      } catch (e) {
-        throw new UnsupportedImageError(`video normalise failed: ${(e as Error).message?.slice(0, 120)}`);
-      }
-    }
-    const mp4 = await readFile(output).catch(() => null);
-    if (!mp4 || mp4.length === 0) throw new UnsupportedImageError('video normalise produced no output');
-    return mp4;
-  });
+export function containsContainerLocationTags(bytes: Buffer): boolean {
+  const hay = bytes.toString('latin1');
+  return (
+    hay.includes('com.apple.quicktime.location') ||
+    hay.includes('\xa9xyz') ||
+    /ISO6709/.test(hay) ||
+    hay.includes('location.ISO6709')
+  );
 }

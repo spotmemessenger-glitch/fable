@@ -19,7 +19,7 @@
 
 import {
   BadRequestException, Body, Controller, Get, Headers, NotFoundException,
-  Param, Post, Req, UseGuards,
+  Param, Post, Req, ServiceUnavailableException, UseGuards,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { DomainGate } from '../flags/domain-gate.guard';
@@ -65,8 +65,16 @@ export class MomentMediaController {
     const mediaId = `mm-${randomUUID()}`;
     const result = await this.media.ingest(mediaId, bytes, mime, u.id);
     if (result.state === 'refused') {
-      // The reason is safe to relay: it describes the CALLER's input, never
-      // anything about storage internals or another user's data.
+      /* One refusal is not the caller's fault. `transcode-unavailable` means
+       * the format IS accepted but this runtime image has no ffmpeg/libheif to
+       * normalise it with — a 400 would tell the user to pick a different
+       * photo, which would not help. 503 says "retry later", and the operator
+       * gets an alertable status code instead of a silent stream of 400s. */
+      if (result.reason === 'transcode-unavailable') {
+        throw new ServiceUnavailableException({ error: 'media_refused', reason: result.reason });
+      }
+      // The other reasons are safe to relay: they describe the CALLER's input,
+      // never anything about storage internals or another user's data.
       throw new BadRequestException({ error: 'media_refused', reason: result.reason });
     }
     // A dedup hands back the canonical id — the caller attaches THAT to the

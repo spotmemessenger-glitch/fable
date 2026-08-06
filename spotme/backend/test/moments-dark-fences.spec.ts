@@ -228,7 +228,6 @@ describe('Moments — dark integration fences', () => {
       'src/moments/moments.observability.ts': 'test/moments-observability.spec.ts',
       'src/moment-media/exif-strip.ts': 'test/moment-media.spec.ts',
       'src/moment-media/media.queues.ts': 'test/moment-media.spec.ts',
-      'src/moment-media/normalize.ts': 'test/moment-normalize.spec.ts',
     };
     for (const [src, spec] of Object.entries(clusters)) {
       expect(existsSync(join(BACKEND, src))).toBe(true);

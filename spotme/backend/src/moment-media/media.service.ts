@@ -19,19 +19,19 @@ import {
   MediaUploadPort, MediaTransformPort, ThumbnailPort, StoryMediaPort, MomentMediaPort,
 } from './media.ports';
 import { stripImageMetadata, UnsupportedImageError } from './exif-strip';
-import { heicToJpeg, isHeic, normaliseVideoToMp4 } from './normalize';
+import {
+  ACCEPTED_INPUT_MIME, normalizeForStorage, NormalizeFailedError, TranscodeUnavailableError,
+} from './normalize';
 import { FixtureMomentWorkers, TranscodeJob, ThumbnailJob } from './media.queues';
 import type { TranscodeQueue, TranscodeIO, TranscodeResult } from './transcode.worker';
 
 const MAX_UPLOAD_BYTES = 50 * 1024 * 1024; // [PROPOSED] ceiling
-/* iPhone formats are accepted ONLY because `normalize.ts` converts them into a
- * format the strip boundary can clean, before anything is persisted. Do not add
- * a MIME type here without giving `normaliseForStorage()` a path for it — that
- * is the difference between "accepted" and "stored unstripped". */
-const ALLOWED_MIME = new Set([
-  'image/jpeg', 'image/png', 'image/heic', 'image/heif',
-  'video/mp4', 'video/webm', 'video/quicktime',
-]);
+/* The accept-list now includes the two formats an iPhone actually produces —
+ * HEIC photos and QuickTime `.mov` video — because `normalize.ts` rewrites
+ * them into JPEG/MP4 at the ingest boundary BEFORE anything is persisted. It
+ * is the transcode that earns the widening: without it these bytes would be
+ * stored with their GPS intact, which is what the earlier refusal prevented. */
+const ALLOWED_MIME = new Set(Object.keys(ACCEPTED_INPUT_MIME));
 const SLOT_TTL_MS = 15 * 60 * 1000;
 
 @Injectable()
@@ -64,13 +64,42 @@ export class MomentMediaService implements MomentMediaPort, MediaUploadPort, Med
     if (!ALLOWED_MIME.has(mimeType)) return { state: 'refused', reason: 'bad-mime' };
     if (bytes.length > MAX_UPLOAD_BYTES) return { state: 'refused', reason: 'too-large' };
 
-    // THE BOUNDARY: clean BEFORE hash, BEFORE dedup, BEFORE any persistence.
+    /* THE BOUNDARY: normalise, then strip — BEFORE hash, dedup or persistence.
+     *
+     * Two steps, and both are load-bearing:
+     *
+     *   1. NORMALISE. A HEIC becomes a JPEG and a `.mov` becomes a faststart
+     *      MP4 with `-map_metadata -1`. JPEG/PNG pass through untouched.
+     *   2. STRIP. Every image — including one that has just come out of a
+     *      HEIC — goes through the byte-level stripper. This is not belt and
+     *      braces: `heif-convert` COPIES the EXIF block into its JPEG output,
+     *      GPS included, so step 1 alone would store the coordinates.
+     *
+     * Video used to be stored verbatim here, with the comment that container
+     * metadata was the async worker's duty. It was not, and could not be: the
+     * worker writes DERIVED renditions and runs after this write, so the
+     * original — the object `GET :mediaId/url` actually serves — kept its GPS.
+     * The remux in step 1 closes that, for `video/mp4` and `video/webm`
+     * uploads as much as for the new `.mov` path. */
     let clean: Buffer;
     let storedMime: string;
+    let kind: 'image' | 'video';
     try {
-      ({ bytes: clean, mimeType: storedMime } = await this.normaliseForStorage(bytes, mimeType));
+      const normalized = await normalizeForStorage(bytes, mimeType);
+      kind = normalized.kind;
+      storedMime = normalized.mimeType;
+      clean = normalized.kind === 'image'
+        ? stripImageMetadata(normalized.bytes, normalized.mimeType)
+        : normalized.bytes;
     } catch (e) {
-      if (e instanceof UnsupportedImageError) return { state: 'refused', reason: 'unsupported-format' };
+      if (e instanceof TranscodeUnavailableError) {
+        // The runtime image is missing ffmpeg or libheif. Refuse loudly rather
+        // than quietly storing an unnormalised original.
+        return { state: 'refused', reason: 'transcode-unavailable' };
+      }
+      if (e instanceof NormalizeFailedError || e instanceof UnsupportedImageError) {
+        return { state: 'refused', reason: 'unsupported-format' };
+      }
       throw e;
     }
 
@@ -79,11 +108,6 @@ export class MomentMediaService implements MomentMediaPort, MediaUploadPort, Med
     if (existing) {
       return { state: 'deduplicated', mediaId, contentHash, deduplicated: true, canonicalMediaId: existing.id };
     }
-    /* Everything below records the format that was actually STORED, not the one
-     * that was uploaded: a HEIC arrives and a JPEG is persisted, a .mov arrives
-     * and an mp4 is persisted. Recording the upload's MIME here would hand
-     * clients a content-type that does not describe the bytes behind it. */
-    const kind = storedMime.startsWith('video/') ? 'video' : 'image';
     /* WRITE THE STRIPPED BYTES, AND ONLY THE STRIPPED BYTES (M1 activation).
      *
      * The dark phase recorded an asset row and stored nothing, which was fine
@@ -94,6 +118,9 @@ export class MomentMediaService implements MomentMediaPort, MediaUploadPort, Med
      * leaving a row pointing at an object that was never written. */
     const storageKey = buildMomentObjectKey(ownerId, mediaId);
     if (this.storage) {
+      /* `storedMime`, not the uploaded mime: a HEIC upload is a JPEG by the
+       * time it reaches here, and serving it as `image/heic` would hand the
+       * browser a content-type that contradicts the bytes. */
       const stored = await this.storage.putObject(storageKey, clean, storedMime);
       if (!stored) return { state: 'refused', reason: 'storage-unavailable' };
     }
@@ -106,35 +133,6 @@ export class MomentMediaService implements MomentMediaPort, MediaUploadPort, Med
     }
     await this.enqueueThumbnail({ mediaId, maxDim: 512, argsTemplate: 'vipsthumbnail {in} --size 512x512 -o {out}[Q=82,strip]' });
     return { state: 'stored', mediaId, contentHash, deduplicated: false };
-  }
-
-  /**
-   * Turn an accepted upload into bytes the strip boundary has actually cleaned,
-   * and report the format those bytes are in. THE ONLY ROUTE TO PERSISTENCE.
-   *
-   * Every branch either returns cleaned bytes or throws {@link
-   * UnsupportedImageError} — there is deliberately no path that returns the
-   * input untouched, because that is how unstripped bytes reach a bucket.
-   */
-  private async normaliseForStorage(bytes: Buffer, mimeType: string): Promise<{ bytes: Buffer; mimeType: string }> {
-    if (mimeType.startsWith('video/')) {
-      /* Videos used to be stored EXACTLY as uploaded, on the reasoning that
-       * metadata was the transcode worker's job. But the worker only cleans the
-       * DERIVED variants; the original it read from was already in the bucket
-       * with its container tags — GPS included — and reachable by presigned GET.
-       * Normalising here is what makes "the original is never what gets served"
-       * true for the stored object too, and it is why .mov can be accepted at
-       * all. mp4 and webm go through the same remux rather than being trusted. */
-      return { bytes: await normaliseVideoToMp4(bytes), mimeType: 'video/mp4' };
-    }
-    /* HEIC has no byte-level stripper, so it becomes a JPEG first and is then
-     * cleaned by the SAME boundary every other image goes through. The second
-     * step is load-bearing: heif-convert copies the source EXIF into its
-     * output, so the intermediate JPEG still carries the GPS IFD. */
-    if (isHeic(mimeType)) {
-      return { bytes: stripImageMetadata(await heicToJpeg(bytes), 'image/jpeg'), mimeType: 'image/jpeg' };
-    }
-    return { bytes: stripImageMetadata(bytes, mimeType), mimeType };
   }
 
   /** Set by MediaModule at init; absent means "no queue", never "pretend". */

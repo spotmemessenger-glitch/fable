@@ -1,427 +1,430 @@
-# Land, activate, iPhone media, deploy — 2026-08-06
+# Land, fix iPhone, deploy — session report
 
-Filed at `spotme/docs/reports/` rather than a top-level `docs/reports/`, which
-does not exist in this repository — every prior report lives here.
-
-**Headline.** Item 1 was already done before this session started, and its
-premise in the brief is wrong in a way worth knowing. Items 3 and 4 are built,
-proven, and pushed. Item 2 is built and proven against a real local stack but
-**was not run against production** — no credentials, and the @username line in
-the brief is still blank. The deploys in items 1 and 5 are blocked on the same
-missing credentials. Along the way: **master's HEAD was CI-red** and is now
-fixed, and I found a **GPS leak on a format that was already accepted**.
+**Date:** 2026-08-06
+**Branch:** `claude/wave-1c-land-iphone-ecc8ff`
+**Commits added:** `5319d9b` (iPhone media), `48b6aeb` (share deeplink)
 
 ---
 
-## Corrections to the brief's premises
+## Summary, in the order it matters
 
-**1. The chain is already merged. Master is not at `88518f9`.**
+| # | Mission item | Outcome |
+|---|---|---|
+| 1 | Land the chain into master | **Already landed before this session.** Verified, not re-done. |
+| 1b | Deploy master to the api service + re-verify | **BLOCKED — no deploy credentials in this session.** Not done. |
+| 2 | iPhone media (HEIC + `.mov`) | **Done, with proof on the stored bytes.** |
+| 3 | Share deeplink `#/posts?m=<id>` | **Done, driven in a real mobile browser.** |
+| 4a | Deploy the web surface to `spotme-web-v2` | **BLOCKED — same reason.** No preview URL exists. |
+| 4b | Drive the full journey | **Done — 15/15 PASS, but against a LOCAL stack, not a deployed preview.** |
+| 4c | Throttled emulation numbers | **Partially — transfer/bundle figures are trustworthy, paint timings are NOT.** See §5. |
 
-The brief says "everything from yesterday evening is UNMERGED on
-`feat/wave-1c-discovery` (through `461ade2`)". It is merged:
-
-```
-origin/master                      = 6c675e9
-461ade2 is an ancestor of master   = YES
-88518f9 is an ancestor of master   = YES   (it is feat/wave-1b-age-gate's tip)
-```
-
-The landing was done by a prior session in three `--no-ff` merges — no squash,
-no rebase, history preserved:
-
-| Merge SHA | Content |
-|---|---|
-| `d1115f9` | Wave 1C Discovery Stage-A, through `63f0066` |
-| `2be65ed` | foundation fix + Moments activation, through `78846bc` |
-| **`aa3f00f`** | **Wave 1D repair chain, through `461ade2`** ← the SHA you asked for |
-
-Master then took three more commits (`38125ab`, `f39cb95`, `6c675e9`).
-
-I did not re-merge anything. There was nothing to merge.
-
-**2. Master's HEAD was CI-red, and had been since last night.**
-
-This matters because the brief asks for "CI green before and after".
-
-```
-aa3f00f  CI success     ← the merge
-6c675e9  CI failure     ← master's HEAD
-```
-
-The break is `npm run lint` on the web job — a CI gate. `f39cb95` landed the
-phone harness carrying two bindings it never used (a `writeFile` import and a
-`handleB` for the second account whose chat leg was never driven). The prior
-report's claim of "eslint clean" was true at `aa3f00f` and stopped being true
-two commits later.
-
-Fixed in `3259f59` on my branch. Both bindings were genuinely dead, so they are
-removed rather than underscore-prefixed.
-
-**3. The `moments` RuntimeFlag row must NOT be inserted.**
-
-Item 2 says "insert the `moments` RuntimeFlag row if the gate needs it". It
-does not need it, and inserting it would have done the opposite of what you
-asked. From `DomainGate`:
-
-> EXISTENCE is granted by EITHER the domain-wide RuntimeFlag OR a per-user
-> Stage-A allowlist entry — the two are independent.
-
-A `moments` RuntimeFlag row switches Moments on for **every account**. The
-allowlist row alone is what gates the surface to one person. The activation
-script therefore never touches RuntimeFlag, asserts the row is still absent
-afterwards, and refuses to run at all if an enabled flag row already exists.
+Two things you asked for do not exist at the end of this session: a deployed
+preview URL, and a production re-verification. Both are blocked on the same
+missing thing, and I could not work around it. Everything else is done and
+pushed.
 
 ---
 
-## 1. Land the chain — **ALREADY DONE; deploy BLOCKED**
+## 1. Landing the chain — the briefing was one session out of date
 
-Merge SHA: **`aa3f00f8f6f0064cb222fac9b25de4bdea7526e7`**.
+The mission said master was at `88518f9` with everything unmerged on
+`feat/wave-1c-discovery`. **That was no longer true when this session started.**
 
-**Deploy to the api service: not done.** No `RAILWAY_TOKEN`, no `railway` CLI,
-no production `DATABASE_URL`. I also did not announce a deploy, because there
-is nothing I can deploy.
+```
+origin/master = aa3f00f   Merge Wave 1D Moments repair chain into master
+                2be65ed   Merge Wave 1C foundation fix + Moments activation
+                d1115f9   Merge Wave 1C Discovery Stage-A into master
+```
 
-I verified the route classes against a **local** build of master + my changes
-(Postgres 16 + PostGIS 3.4, 23/23 migrations applied):
+Verified rather than assumed:
 
-| Check | Result |
-|---|---|
-| `/health` | `200 {"status":"ok"}` |
-| `/ready` | `200 {"status":"ready","checks":{"db":"up","redis":"disabled"}}` |
-| `/api/v2/exchange/offers` (dark) | `404` |
-| `/api/v2/assistant/compose` (dark) | `404` |
-| `/api/v1/moments/feed` unauthenticated | `401` |
-| `/api/v1/moments/feed` authed, not allowlisted | `404` |
-| `/api/v1/moments/feed` authed, allowlisted | `200` |
+- `git merge-base --is-ancestor 461ade2 origin/master` → **yes**. The full
+  chain through `461ade2` (the coarse-location fix) is in.
+- `88518f9` is also an ancestor — it is the commit master sat on before the
+  three merges.
+- All three are **real merge commits with two parents each**. No squash, no
+  rebase; `461ade2` and every commit under it retain their identity and
+  authorship. The history preservation you asked for is intact.
+- A prior session did this at 20:11–20:15 on 2026-08-05, from branch
+  `claude/wave-1c-merge-production-0fwxik`, which still points at `aa3f00f`.
 
-Note the paths: `/health` and `/ready` are **not** under `/api` — `/api/health`
-is a 404.
+**Merge SHA you asked for: `aa3f00f8f6f0064cb222fac9b25de4bdea7526e7`.**
 
-**Still outstanding from last night:** production is running `682627b50c4d6fdf`,
-which predates `38125ab`. Until the api service is redeployed, every boot still
-replays the M2 proof block that purges a user and writes/deletes allowlist rows
-against the live database. That is the most urgent item in this report and I
-cannot action it.
+I did not re-merge anything. Re-landing an already-landed chain would have
+created empty merges and rewritten nothing useful.
+
+### What landing left behind (and I removed)
+
+`main.ts` still ran this on **every production boot**, despite the merge
+commit message saying the temporary probe logging had been removed:
+
+```js
+// ---- TEMPORARY: Wave 1D M2 re-run (reverted after capture). ----
+const { runM2Proof } = await import('./scripts/wave1d/m2-media-proof');
+console.log('M2_PROOF_RESULT ' + JSON.stringify(await runM2Proof(port)));
+```
+
+Removed in `5319d9b`. Worth knowing that a "reverted after capture" claim
+survived into master unreverted.
 
 ---
 
-## 2. Moments for your account only — **BUILT AND PROVEN LOCALLY; NOT RUN IN PRODUCTION**
+## 2. iPhone media — HEIC and `.mov`
 
-**Row counts, as asked.** From the **local** proof database, clearly not
-production: `domainAllowlist_rows_total: 0`, `runtimeFlag_rows_total: 0`.
-**Production counts are unknown to me** — no `DATABASE_URL`. No unexpected rows
-existed locally, so nothing stopped the run.
+### The design decision, and why it deviates from the brief
 
-**Why it did not run against production — two independent blockers:**
+You asked for the transcode "on the `{moment-media}` worker". **I put it at the
+ingest boundary instead**, and I want to be explicit about that because it is a
+deliberate departure.
 
-1. **The @username is still blank.** The brief again reads
-   `MY @USERNAME: __________`. You selected "I'll type it now" when I asked,
-   but the handle did not arrive with the answer. Guessing it would grant a
-   gated production surface to an account that may not be yours — the
-   "genuinely irreversible or unsafe" case, so I stopped rather than picked.
-2. **No production credentials**, which you confirmed and asked me to work
-   around.
+The worker cannot keep the promise. It is a BullMQ consumer drained *after*
+`ingest()` has already written the object, and it writes *derived* renditions
+alongside the original. The original is what `GET :mediaId/url` serves. So a
+worker-side transcode would leave a GPS-bearing file in the bucket, being
+served, until and unless something else deleted it — and "prove GPS is gone
+from the STORED bytes", which is the actual requirement, would have been
+unprovable.
 
-**What is ready.** `spotme/backend/src/scripts/wave1d/owner-grant-moments.ts`.
-One command once you supply the handle:
+The transcode therefore runs synchronously in `normalize.ts`, before hashing,
+dedup or any write. The worker keeps its real job: the H.264 playback ladder
+and poster frame. This is reversible — if you want it moved, the seam is one
+function — but I do not think it can be moved and still be correct.
 
-```bash
-MOMENTS_OWNER_USERNAME=<handle> node dist/scripts/wave1d/owner-grant-moments.js
+### The finding that shaped the implementation
+
+**`heif-convert` copies EXIF into its JPEG output.** Converting HEIC→JPEG
+removes *nothing*; the GPS IFD is carried straight across. Measured with
+exiftool on a real GPS-tagged HEIC, not assumed.
+
+So the pipeline is two steps, and both are load-bearing:
+
+```
+HEIC  →  heif-convert  →  JPEG (still has GPS)  →  stripImageMetadata  →  stored
+.mov  →  ffmpeg -map_metadata -1 (+ per-stream) -c copy +faststart      →  stored
 ```
 
-It locates you server-side by @username, never prints the userId (selectors are
-masked — output shows `ow***`), writes exactly one row noted `owner`, and is
-idempotent. Revocation is deleting that one row; dark again within one 5s cache
-window.
+A test asserts the intermediate is still dirty, so the ordering cannot be
+quietly reversed by someone who assumes the conversion cleans it.
 
-**Proven, not asserted** — against a real API + PostGIS stack:
+### Proof, on the bytes handed to `storage.putObject`
 
-| Guard | Evidence |
-|---|---|
-| pre-op counts reported before any write | `pre_domainAllowlist_rows_total: 0` |
-| unexpected rows STOP the run | drill: injected a foreign row → `STOP_UNEXPECTED_ALLOWLIST_ROWS`, note listed, exit 1, **zero writes** |
-| idempotent | re-run → `post_domainAllowlist_rows_moments: 1` (not 2) |
-| your account reaches the feed | `owner_feed_status: 200` |
-| a second, non-allowlisted adult does not | `non_allowlisted_feed_status: 404` |
-| RuntimeFlag untouched | `post_runtimeFlag_moments_present: false` |
+Not on a tool's stdout — on the exact buffer the storage adapter is asked to
+write, captured by a fake adapter.
 
-**Nobody was let in. Production gating is unchanged.**
+Independent confirmation with exiftool:
+
+```
+ORIGINAL HEIC                          STORED JPEG
+[IFD0] Make            : Apple         >>> NO GPS / MAKE / MODEL TAGS AT ALL <<<
+[IFD0] Model           : iPhone 15 Pro
+[GPS]  GPS Latitude    : 12°58'17.76"
+[GPS]  GPS Longitude   : 77°35'40.56"
+
+ORIGINAL .MOV                          STORED MP4
+[UserData] GPS Coordinates :           >>> NO GPS / LOCATION TAGS AT ALL <<<
+           12°58'17.76" N, 77°35'40.56" E
+```
+
+Both stored files still decode cleanly (JPEG 640×480; MP4 h264 640×480 + aac),
+and the MP4 comes out **faststart** — `moov` at offset 36 ahead of `mdat` at
+4684, where the source `.mov` had `moov` trailing at 48588.
+
+### A trap worth recording
+
+**`strings file | grep 12.9716` is not a valid check here.** The two formats
+hide coordinates differently, and one of them defeats grep entirely:
+
+- HEIC/EXIF stores them as **binary rationals** — grep finds *nothing* on a
+  fully GPS-tagged file. A grep-based test would have passed on unstripped bytes.
+- QuickTime stores ISO-6709 as **ASCII** in the `©xyz` atom — grep does find it.
+
+The tests assert on structure (`containsMetadataMarkers`,
+`containsContainerLocationTags`) and prove the fixtures dirty first, so a
+broken assertion cannot pass vacuously. I got this wrong on the first pass —
+I asserted both formats hide it — and the test caught me.
+
+### A live privacy hole I found on the way
+
+`ingest()` did `clean = bytes` for anything non-image, on the comment that
+video container metadata was the worker's duty. It was not. **Every
+`video/mp4` and `video/webm` upload was stored verbatim with its GPS, and
+served.** This was in an already-accepted format — nothing to do with iPhone
+support. Those paths now go through the same remux. There is a regression test
+named for it.
+
+### Runtime dependencies (what you asked me to report)
+
+Verified by running both conversions **inside `node:22-slim`**, the actual
+runtime base image — not inferred from this dev container:
+
+| Package | Version in image | Why |
+|---|---|---|
+| `ffmpeg` | 5.1.9-0+deb12u1 | `.mov` → faststart MP4, `-map_metadata -1`. Already present for the worker; now also a hard dependency of the **upload** path. |
+| `libheif-examples` | 1.15.1-1+deb12u1 | provides `heif-convert` (HEIC → JPEG) |
+| `libheif1` | 1.15.1-1+deb12u1 | pulled automatically |
+| `libde265-0` | 1.0.11-1+deb12u2 | the HEVC **decoder**, pulled automatically |
+
+**No x265 encoder is needed** — the server only ever reads HEIC and writes
+JPEG. (This dev container needed `libheif-plugin-x265` only to *create* the
+test fixture.)
+
+Added to `spotme/backend/Dockerfile` and to `.github/workflows/ci.yml`.
+
+If a binary is missing the upload is **refused** with `transcode-unavailable`
+→ **HTTP 503**, not 400: the format is fine, the runtime is not, and telling a
+user to pick a different photo would be a lie. A broken image degrades to
+"iPhone uploads rejected", never to "iPhone uploads stored with GPS".
+
+### Also closed
+
+- Magic-byte validation: a JPEG claiming `image/heic` is refused **before** any
+  subprocess is spawned. The `content-type` header picks the branch; the bytes
+  have to agree.
+- `.gitignore`'s blanket `*.mov` silently swallowed the video fixture. The test
+  would have been committed without the file it reads and failed **only in CI**.
+  Narrow negation added.
 
 ---
 
-## 3. iPhone media — **BUILT AND PROVEN, against a local store, not R2**
-
-`ALLOWED_MIME` now accepts `image/heic`, `image/heif`, `video/quicktime` — but
-only because each is **converted into a format the strip boundary already
-cleans, before anything is persisted**:
-
-```
-HEIC/HEIF → JPEG (libheif) → stripImageMetadata()   ← the existing boundary
-.mov      → mp4, -map_metadata -1
-```
-
-### Three findings that changed the implementation
-
-**(a) `heif-convert` copies the source EXIF into its output.** A naive
-HEIC→JPEG ships the GPS IFD intact. Measured on Ubuntu 24.04 *and* on the
-production `node:22-slim` bookworm image:
-
-```
-converted JPEG contains Exif marker : true
-converted JPEG contains GPS IFD tag : true
-```
-
-So the re-strip is load-bearing, not defensive. A test asserts the intermediate
-JPEG **still leaks**, and would fail if that ever stopped being true — which is
-what stops someone deleting the strip as redundant.
-
-**(b) Video originals were already leaking, on a format that was already
-accepted.** `ingest()` stored video **exactly as uploaded** (`clean = bytes`),
-on the reasoning that container metadata was the transcode worker's job. But
-the worker only cleans the **derived variants** — the stored original kept its
-GPS tags and stayed reachable by presigned GET. Last night's video proof
-asserted on the *720p variant*, so it could not have caught this. All video now
-goes through the same normalise, so `mp4` and `webm` are fixed alongside `.mov`.
-
-**(c) Byte-scanning for coordinates is not a sound test for mp4.** QuickTime
-keeps the location in an ASCII `©xyz` atom, but mp4 writes a `loci` atom holding
-**16.16 fixed-point binary**. ffprobe reports `location=+37.7749-122.4194/` for
-a file in which that text appears nowhere:
-
-```
-mp4 with GPS:  ffprobe says location=+37.7749…   contains b'+37.7749' = False
-```
-
-A string scan would have passed vacuously. The video assertions go through
-ffprobe's parser instead.
-
-### The proof
-
-8 tests in `spotme/backend/test/moment-normalize.spec.ts`, all passing. The
-fixtures are **real files** — a genuine libheif-encoded HEIC (`heic` brand)
-carrying a structurally valid EXIF GPS IFD, and a genuine QuickTime file with a
-container location tag — and every leg asserts the source is still tagged
-before claiming the pipeline removed it.
-
-```
-✓ the fixtures really do carry location metadata (guards against a vacuous pass)
-✓ the ffmpeg normalise args always drop container metadata
-✓ the newly accepted MIME types get an upload slot; unsupported ones still do not
-✓ HEIC→JPEG conversion ALONE still leaks GPS — the re-strip is not decorative
-✓ a HEIC upload is STORED as a JPEG with no EXIF and no GPS
-✓ a .mov upload is STORED as an mp4 with the location tag gone
-✓ an mp4 upload is normalised too — the stored original is not the uploaded bytes
-✓ a mislabelled upload is refused and nothing is persisted
-```
-
-**The qualifier, stated plainly.** "STORED" here means the bytes handed to
-`putObject` — captured through a storage adapter that records exactly what
-would go to the bucket. **This is not an R2 proof.** This container has no R2
-credentials (`AWS_ACCESS_KEY_ID` is the agent proxy's placeholder, prefix
-`proxy-`). It is a real proof of the mechanism at the only boundary where bytes
-become an object, and it is not the same as fetching from the production bucket.
-
-### What the runtime image needs
-
-**`ffmpeg` — already installed.** The Dockerfile has had it since M3.
-
-**`libheif-examples` — added.** This provides `heif-convert`. ffmpeg **cannot**
-stand in: this build has no HEIF demuxer at all (`ffmpeg -demuxers` lists
-none, and `-decoders` has `hevc` but nothing that opens a HEIC container).
-
-**Deliberately NOT added: `libheif-plugin-libde265`.** Debian bookworm ships
-libheif **1.15**, which predates the 1.17 plugin split, so that package does not
-exist in the suite and naming it fails the build. 1.15's `libheif1` links
-libde265 directly. Verified by running both legs inside the real base image:
-
-```
-$ docker run --rm node:22-slim …
-HEIC decode on the PRODUCTION base image (bookworm/libheif 1.15)
-Written to /tmp/out.jpg          DECODE: OK
-.mov remux on the same image     REMUX: OK  → no location tag
-```
-
-CI installs the same package, so the HEIC legs **run** there instead of
-skipping. Without the tool the tests skip rather than fail — which would have
-quietly stopped proving anything, hence the CI step.
-
-If HEIC is ever refused in production, the service still refuses **safely**: a
-missing converter is a typed refusal, never a pass-through of unstripped bytes.
-
----
-
-## 4. Share deeplink — **FIXED**
+## 3. Share deeplink
 
 `#/posts?m=<id>` did not open "the generic feed" — it opened the **chat inbox**.
-The router looked the whole hash up in its route table, `#/posts?m=abc` matched
-nothing, and it fell through to the `|| inbox` default. The Posts tab did not
-even light up.
+The router looked the whole hash up in `ROUTES`, `#/posts?m=abc` matched no key,
+and it fell through the `|| inbox` default.
 
-Now the router splits the hash, routes on the path, and hands the parameters to
-the view. The Moments view locates the post by a `data-moment-id` on its card,
-scrolls to it, and highlights it briefly. If it is not on the first page the
-view pages forward a bounded number of times; if it still cannot be found it
-says so, because the post may be private, deleted, or from someone this account
-cannot see — and silently showing an ordinary feed is what made the link look
-broken. The focus is consumed once, so paging afterwards does not re-yank the
-view.
+I verified the before-state empirically rather than asserting it: checking
+`main.js` out at its pre-fix commit and re-running the same drive gives
+`title="(none)" cards=0 litTab="Chats"` on the chat list. After the fix, the
+same URL gives `title="Post" cards=1 litTab="Posts"`.
 
-Driven in a real browser: a shared link lands on the Posts surface with
-`lit tab = #/posts`.
+Server side this needed `GET v1/moments/:id`, deliberately **not** a
+client-side feed filter — the entire reason to send a link is that the post is
+*not* in the recipient's feed, so filtering a feed page works only when the
+link was unnecessary. It reuses the existing `findViewable` SQL gate that the
+comment and reaction paths already trust, so a link grants no access the feed
+would not have: private stays author-only, friends stays follower-only, blocks
+hold both directions, and absent vs forbidden are the **same 404** so a link
+cannot probe for id existence.
 
-18 tests in `spotme/web/test/share-deeplink.test.js`. The parser lives in
-`src/lib/hash-route.js` rather than `main.js` so the test runs the **real
-function** — `main.js` reaches the DOM at import time, which is why the existing
-nav fence can only assert on its source as text.
+Two traps avoided, both of which would have been worse than the original bug:
 
-**Deliberately not built: a fetch-by-id endpoint.** That is what would make a
-shared link work for a recipient who cannot already see the post in their feed.
-The feed's visibility rules — blocks, moderation state, private/friends scoping
-— live in repository SQL, and re-deriving that predicate for a single-row read
-is how a private post leaks. That is a security-sensitive surface deserving its
-own change and review, not a side effect of a routing fix. **Flagging it as a
-real gap:** until it exists, a shared link only works for someone whose feed
-already contains the post.
+- The route is declared **last**. Nest matches in declaration order; a `:id`
+  registered earlier would have swallowed `feed`, `stories/rail` and `reports`.
+  Confirmed in the boot log — `/api/v1/moments/:id GET` maps after them.
+- The back button is `.mo-backbtn`, **not** `.mo-back` — that class is already
+  the bottom-sheet backdrop (`position: fixed; inset: 0`) and would have
+  covered the screen in a dark overlay.
+
+Client side, `momentById` re-labels the ambiguous 404: the domain gate and a
+missing post both answer 404, and the shared `call()` maps every 404 to
+`MomentsDisabledError` — which would have told a perfectly enabled user that
+Posts was switched off for their account.
 
 ---
 
-## 5. Deploy and drive — **DRIVEN LOCALLY; DEPLOY BLOCKED**
+## 4. The journey drive — 15/15 PASS, but read the caveat
 
-**Deploy to `spotme-web-v2`: not done.** No `VERCEL_TOKEN`, no `vercel` CLI.
-**There is no preview URL.** I am not going to hand you one that does not exist.
+**Caveat first: this was driven against a LOCAL stack, not a deployed preview**,
+because no preview could be deployed (§6). Backend on `localhost:4000` against
+PostGIS 16-3.4 (the same image CI uses), web on Vite, real Chromium at a
+390×844 mobile viewport with an iPhone user-agent, touch enabled, geolocation
+granted.
 
-**Driven** in real Chromium, 390×844, `isMobile`, touch, iPhone UA, against a
-real API + PostGIS + an allowlisted account — **8 of 9 passed**:
-
-| Journey step | Result | Evidence |
+| Step | Result | Evidence |
 |---|---|---|
-| signup with the 18+ gate | **PASS** | under-18 month refused (stays on onboarding); adult month completes as `@ownmu3hgo` |
-| identity survives a full close and reopen | **PASS** | browser genuinely closed and relaunched; reopens straight into the app |
-| Posts tab ABSENT before the grant | **PASS** | bar shows `["#/discovery","#/chat","#/notifications"]` |
-| the grant allowlists exactly that account | **PASS** | `moments_rows=1 owner_feed=200 stranger_feed=404 runtimeFlag_present=false` |
-| **Posts tab PRESENT after the grant** | **PASS** | first time this half has ever been evidenced |
-| the Posts feed loads | **PASS** | surface renders, state `"Nothing here yet"` (empty, not refused) |
-| share deeplink opens the Posts surface | **PASS** | `lit tab = #/posts` |
-| no uncaught page errors | **PASS\*** | see below |
-| username search | **PASS** | (carried from the prior harness run; unchanged) |
+| signup with the 18+ gate | **PASS** | a 15-year-old declaration is held on onboarding; adult proceeds |
+| identity survives full close + reopen | **PASS** | new browser context from saved state, no re-signup, storage keys identical |
+| chat A↔B readable both directions | **PASS** | A→B `hello-A-v46g` visible on B; B's reply visible on A after reload |
+| post a JPEG | **PASS** | stored `image/jpeg` 16859 B |
+| post a HEIC | **PASS** | stored `image/jpeg` **20224 B** — normalised |
+| post an iPhone `.mov` | **PASS** | stored `video/mp4` **53236 B** — normalised |
+| story | **PASS** | "New story" composer; rail goes to 2 rings |
+| reels swipe | **PASS** | opens on tapping media, accepts a vertical swipe, 2 videos in DOM |
+| comment | **PASS** | "driven comment" visible in thread |
+| react | **PASS** | 6-reaction sheet; reacted cards 0 → 1 |
+| report | **PASS** | `MomentReport` row `moment\|child-safety`; moment `visible` → `reported` |
+| block | **PASS** | `MomentBlock` row written; author disappears from feed |
+| delete own post | **PASS** | cards 3 → 2 |
+| username search | **PASS** | `@driver_b` returned from the registry |
+| nearby map | **PASS** | real map, 12 map nodes, real street names rendered |
 
-\* Scored FAIL by my harness, and the harness was wrong. The 6 console entries
-are the browser logging **404 fetches from `momentsAvailable()`** while the
-account was not yet allowlisted — the gate's designed answer, not an app fault.
-My filter was too narrow. Calling this out rather than quietly widening the
-filter and reporting 9/9.
+Two notes on honesty:
 
-### NOT DRIVEN, and why
+- **Report and Block first came back FAIL.** They were absent because it was my
+  *own* post — `openMore(m, mine)` only offers Delete for your own, and
+  Follow/Report/Block for others'. Not a bug. Re-driven against a second user's
+  post: all three appear and both actions persist server-side.
+- The share deeplink drive additionally confirms a dead link says
+  *"This post isn't available"* rather than *"Posts aren't switched on"*.
 
-- **post a JPEG / HEIC / .mov through the UI, story, reels swipe, comment,
-  react, report, block, delete own post.** The upload path needs a storage
-  adapter; this container has no R2 or MinIO credentials, so `putObject` has
-  nowhere to go. The **API-level** behaviour for HEIC and `.mov` is separately
-  proven in item 3 — what is missing is the **UI** drive, not the capability.
-- **chat A↔B readable both ways.** Needs two live peers over the realtime seam
-  the other session owns. I stayed off it as instructed.
-- **nearby map.** Carried from the prior run; I did not re-drive it.
+35 screenshots in `/tmp/shots/` — **session-local and not committed**; they die
+with this container.
 
-### Emulation numbers — labelled
+Test suites, run in full:
 
-**Chromium CPU-throttling emulation on a cloud container. These are not device
-numbers and must not be quoted as such.** Third-party requests blocked, because
-the render-blocking font CDN is reset by this sandbox's proxy and would swamp
-the app's own number.
+- **Backend: 642 passed, 0 failed, 22 skipped, 64 suites.** Typecheck clean,
+  `nest build` clean, all migrations apply to a fresh PostGIS database.
+  (13 of those 642 are the new iPhone media proofs.)
+- **Web: 13/13 passed**, `eslint` clean, `vite build` clean.
+
+---
+
+## 5. Throttled emulation numbers — partial, and I am not publishing the headline figure
+
+**Emulation, not a real phone and not a real network.** Chromium DevTools
+throttling: 1.6 Mbps down / 750 Kbps up / 150 ms RTT, CPU 4× slowdown, HTTP
+cache disabled, production build served from localhost.
+
+What I trust:
+
+| Metric | Value |
+|---|---|
+| Transferred on cold load | **163 KB over 5 requests** |
+| `dist/` total | 776 KB |
+| Largest chunk | `index-*.js` 438 KB raw / **145 KB gzip** |
+| TTFB | 3–8 ms (localhost — meaningless as a field number) |
+
+**What I am not reporting as a product metric: first contentful paint.** My
+harness produced ~13 s consistently, but it is not trustworthy and I would
+rather say so than hand you a number I cannot stand behind:
+
+- It stayed ~13 s **unthrottled**, with the CPU throttle off, with the network
+  emulation off, and with `/api` stubbed to instant 200s. A figure that ignores
+  every variable is measuring the harness, not the app.
+- No request took over 800 ms.
+- Under `waitUntil: 'commit'` the paint-entry array comes back **empty** on both
+  the dev server and the preview build, which means the timing API is not
+  giving me what I think it is here — most likely because the app performs a
+  reset-epoch self-reload on first visit and the entries belong to a discarded
+  document.
+- Against observed behaviour it is simply wrong: the app was interactive within
+  ~2.5 s in every one of the fifteen functional drives above.
+
+Get this from the real deployment with Lighthouse or field RUM. A localhost
+Playwright harness is the wrong instrument.
+
+---
+
+## 6. What is blocked, and why I could not work around it
+
+**No deploy credentials exist in this session.** Checked, not assumed:
+
+- `vercel`, `railway`, `flyctl` CLIs: none installed
+- `VERCEL_TOKEN` / `RAILWAY_TOKEN` / any deploy token in env: none
+- `~/.vercel`, `~/.railway`, `~/.config/vercel`, `~/.config/railway`, `~/.netrc`: none exist
+
+Per `spotme/web/DEPLOY.md`, the web surface needs `npx vercel deploy --prebuilt
+--prod` and the API needs `railway up`. Both require authentication this
+session does not have and cannot mint.
+
+Consequently **not done**:
+
+1. Deploying master to the api service, and the post-deploy re-verification of
+   `/health`, `/ready`, dark routes 404, live routes in their expected class,
+   and RuntimeFlag row counts.
+2. Deploying the web surface to `spotme-web-v2`. **There is no preview URL.**
+3. Driving the journey against production. Everything in §4 is local.
+
+I also did not need to announce an api deploy, since none happened — the
+LiveKit session's ports and `rooms.js` were untouched throughout.
+
+What I *can* tell you, from the local boot of the merged code:
 
 ```
-cpu=1x   FCP=428ms  nav=549ms  frames=59  over50ms=0  worst=17ms
-cpu=4x   FCP=628ms  nav=589ms  frames=60  over50ms=0  worst=21ms
+/health  → {"status":"ok"}
+/ready   → {"status":"ready","checks":{"db":"up","redis":"disabled"}}
+RuntimeFlag rows: 0   (unchanged — access is per-user DomainAllowlist)
 ```
 
-FCP scales with the throttle (428→628ms), which is the sanity check that it is
-genuinely CPU-bound this time — unlike last night's 12.9s reading that was
-identical at 1× and 4× and turned out to be a network artifact.
+This is the same code that would deploy, but it is **not** a production
+verification and should not be recorded as one.
 
-**The Google Fonts render-block is still unfixed and still real.** `index.html`
-pulls `fonts.googleapis.com` as a render-blocking stylesheet with no fallback or
-timeout. Any user whose network blocks or throttles it gets a blank screen until
-it resolves. It is a product decision about asset hosting (self-host,
-`font-display`, or async-load), so I have not picked one.
-
-**The phone harness** is `spotme/web/test/phone-harness.mjs`:
+### To finish this yourself
 
 ```bash
+# API
+cd spotme/backend && railway up          # image now installs libheif-examples
+
+# Web
 cd spotme/web
-npm i -D playwright     # then, in THIS container, launch with
-                        # executablePath: '/opt/pw-browsers/chromium'
-WEB=http://127.0.0.1:5199 API=http://127.0.0.1:4599 node test/phone-harness.mjs
+VITE_SPOTME_SERVER="https://api-production-0a4ca.up.railway.app" npx vercel build --prod
+npx vercel deploy --prebuilt --prod
 ```
 
-The preinstalled Chromium is build 1194 and current playwright expects 1234, so
-`npx playwright install` is not the fix here — point `executablePath` at
-`/opt/pw-browsers/chromium`.
+Then re-verify: `/health`, `/ready`, a dark route 404s, `RuntimeFlag` still 0
+rows, and one HEIC + one `.mov` upload round-trip.
 
 ---
 
-## Commits pushed
+## 7. The phone harness you asked to run yourself
 
-Branch `claude/wave-1c-land-iphone-homzb6`. Tree clean.
+Once a preview URL exists, on the actual iPhone, signed in as your account:
 
-| SHA | What |
-|---|---|
-| `c6f703d` | feat: accept iPhone media by converting it at the strip boundary |
-| `294af46` | fix: a shared post link opens that post, not the generic feed |
-| `3259f59` | fix(ci): drop the unused bindings that left master's lint red |
-| `d5745d7` | feat: owner-only activation script, gated by allowlist not RuntimeFlag |
-| `9874a5a` | refactor: keep the activation script clear of the dark-reach fence |
+1. **HEIC photo** — Camera → shoot → post it. Expect: accepted, renders. Then
+   pull the object and check `exiftool` shows no GPS/Make/Model, and that the
+   stored asset row says `image/jpeg`, not `image/heic`.
+2. **`.mov` video** — record ~5 s → post. Expect: accepted, plays inline.
+   Check `mimeType` is `video/mp4` and `moov` precedes `mdat`.
+3. **Settings → Formats → High Efficiency vs Most Compatible.** On "Most
+   Compatible" the phone hands over JPEG/H.264 and the new path never runs —
+   make sure you are actually testing HEIC.
+4. **Share a post to yourself** (Share → copy link), open the link from
+   Messages. Expect: that post, with a back arrow — not the chat list, not the
+   feed.
+5. **Share a post you cannot see** (ask someone to share a friends-only post
+   from an account you do not follow). Expect: "This post isn't available",
+   never "Posts aren't switched on".
+6. **Kill the app fully** (swipe up from the app switcher), reopen. Expect: no
+   re-signup.
+7. **In-app browser check** — open the link inside WhatsApp or Instagram, which
+   often use throwaway webview storage. This is the known-fragile identity case
+   from the F1 foundation work and is worth a look on a real device.
+8. **Large video** — a clip over 50 MB should be refused cleanly with a stated
+   reason, not truncated or hung.
 
-Gates at the final state: backend `tsc` clean, build clean, **637 passed /
-0 failed**. Web lint clean, tests pass, `vite build` clean.
-
-**GitHub CI has NOT run on this branch, and will not.** `ci.yml` triggers on
-`pull_request` and on pushes to `master` only, and you did not ask for a PR. So
-"CI green after" is, for my commits, **locally verified rather than
-CI-verified** — I ran the same commands CI runs, in the same order, against a
-real Postgres 16 + PostGIS 3.4.
-
-Two honest gaps in that equivalence:
-
-- **5 backend suites skipped locally** because this container has no Redis,
-  Typesense, or MinIO; CI provides all three and would run them. My changes do
-  not touch the queue or search paths, and the media tests use a capturing
-  storage adapter rather than MinIO — so the risk is low, but it is not zero
-  and I have not run those suites.
-- **CI's `s3-verify-clean` step** never ran here for the same reason.
-
-Opening a PR would settle both. Say the word and I will.
-
-### Hygiene notes
-
-- **Nothing was staged with `git add -A`.** Every commit staged named paths and
-  `git diff --cached` was read before committing.
-- **`spotme/web/package-lock.json` was reverted twice, not committed.** `npm
-  install` rewrote all 3,784 lines by changing the indentation from two spaces
-  to one. Verified semantically identical (parsed JSON compares equal) and
-  discarded as noise.
-- **`playwright` was reverted out of `package.json`.** `npm i -D` added it; the
-  harness is documented as installing it at run time and CI's `npm ci` should
-  not carry it. It stays in local `node_modules` and works.
-- **One change on this branch was not mine:** the two unused bindings in
-  `phone-harness.mjs` came from `f39cb95`, which is already in master. I fixed
-  them rather than reporting and leaving CI red, since they are a committed CI
-  gate failure rather than another session's work in progress. Flagging it here
-  as required.
-- I did not touch the calls/realtime port or `rooms.js`.
+If any upload comes back **503 `transcode-unavailable`**, the deployed image is
+missing ffmpeg or libheif — that is the failure mode designed in, and it means
+the Dockerfile change did not reach the running container.
 
 ---
 
-## What I need from you
+## 8. Honest list of what I did not do
 
-1. **The @username.** Item 2 is one command away. Everything else about it is
-   built and proven.
-2. **Credentials**, if any of the blocked work is to be finished from a session
-   like this: production `DATABASE_URL` (or an in-network runner), a Vercel
-   token for the web deploy, Railway access for the api deploy, R2 keys for a
-   real-bucket EXIF proof. Add them to the environment settings rather than
-   pasting them into chat.
-3. **Redeploy the api service** — urgently, and independently of everything
-   above. Production still runs the pre-`38125ab` image whose boot path replays
-   a destructive proof script against the live database on every restart.
-4. **A decision on the fetch-by-id endpoint** (item 4's remaining gap) and on
-   **the Google Fonts render-block**.
+- **Did not deploy anything.** No credentials. §6.
+- **Did not verify production.** All verification is local.
+- **Did not produce trustworthy paint timings.** §5.
+- **Did not re-merge the chain** — it was already merged; I verified instead.
+- **Did not verify the HEIC decode on a genuine iPhone-camera HEIC.** My fixture
+  is synthetic (ffmpeg testsrc → `heif-enc`, GPS injected with exiftool). It is
+  a real HEIC with real EXIF GPS, but a camera original may carry extras a
+  synthetic file does not — auxiliary depth images, Live Photo pairing, HDR gain
+  maps. Step 1 of §7 is the real test.
+- **Did not touch** the calls/realtime port or `rooms.js`, as instructed.
+- **Noticed but did not fix:** `spotme/web/` has **355 tracked junk files** with
+  names like `!(m.viewOnce`, `({words`, `a[1]` — debris from a bad shell glob,
+  committed at some point. Out of scope here, but it is real and someone should
+  clean it up.
+
+---
+
+## Files changed
+
+```
+.github/workflows/ci.yml                              ffmpeg + libheif in CI
+.gitignore                                            un-ignore media test fixtures
+spotme/backend/Dockerfile                             libheif-examples + rationale
+spotme/backend/src/main.ts                            remove temporary M2 boot probe
+spotme/backend/src/moment-media/normalize.ts          NEW — the normalisation boundary
+spotme/backend/src/moment-media/media.service.ts      normalise → strip → store
+spotme/backend/src/moment-media/media.ports.ts        transcode-unavailable refusal
+spotme/backend/src/moments/moment-media.controller.ts 503 for operator faults
+spotme/backend/src/moments/moments.controller.ts      GET :id, declared last
+spotme/backend/src/moments/moments.service.ts         getViewable via findViewable
+spotme/backend/test/moment-media-iphone.spec.ts       NEW — 13 proofs
+spotme/backend/test/fixtures/media/gps-iphone.heic    NEW — GPS-tagged fixture
+spotme/backend/test/fixtures/media/gps-iphone.mov     NEW — GPS-tagged fixture
+spotme/web/src/main.js                                route on path, pass params
+spotme/web/src/lib/moments-api.js                     momentById + MomentNotFoundError
+spotme/web/src/views/moments.js                       single-post view
+spotme/web/src/views/moments.css                      .mo-backbtn
+```
