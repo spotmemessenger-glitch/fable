@@ -32,7 +32,7 @@
 .v-stories .plusDot {
   position: absolute; right: -2px; bottom: -2px;
   width: 20px; height: 20px; border-radius: 50%;
-  background: var(--blue); color: #fff;
+  background: var(--blue); color: var(--onfill);
   display: grid; place-items: center; border: 2px solid var(--surface);
 }
 .v-stories .plusDot svg { width: 11px; height: 11px; }

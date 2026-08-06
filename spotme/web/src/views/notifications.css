@@ -13,7 +13,7 @@
 .v-notif .nsHead { display: flex; align-items: center; gap: 8px; padding: 12px 18px 5px; }
 .v-notif .nsChip {
   font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
-  color: #fff; border-radius: 6px; padding: 2px 8px; line-height: 1.7; flex: none;
+  color: var(--onfill); border-radius: 6px; padding: 2px 8px; line-height: 1.7; flex: none;
 }
 /* Requests demand attention (red); new chats are information (teal). */
 .v-notif .nsChip[data-sec="req"] { background: var(--red); }
@@ -68,7 +68,7 @@
 .v-notif .nbdg {
   min-width: 20px; height: 20px; border-radius: 999px; padding: 0 6px;
   display: grid; place-items: center; font-size: 11px; font-weight: 700;
-  color: #fff; background: var(--blue); flex: none;
+  color: var(--onfill); background: var(--blue); flex: none;
   font-variant-numeric: tabular-nums;
 }
 
@@ -99,7 +99,7 @@
 .v-notif .nenable {
   display: flex; align-items: center; gap: 12px; width: 100%;
   margin: 0 0 14px; padding: 12px 14px; border: 0; border-radius: 16px;
-  background: var(--blue); color: #fff; text-align: left; cursor: pointer;
+  background: var(--blue); color: var(--onfill); text-align: left; cursor: pointer;
 }
 .v-notif .nenable .nic { flex: none; width: 26px; height: 26px; }
 .v-notif .nenable .nic svg { width: 100%; height: 100%; }

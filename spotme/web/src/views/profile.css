@@ -60,14 +60,14 @@
   height: 32px;
   border-radius: 50%;
   background: var(--ink);
-  color: #fff;
+  color: var(--onfill);
   border: 3px solid var(--surface);
   display: grid;
   place-items: center;
   pointer-events: none;
 }
 
-.v-profile .pav:hover .cam { background: #000; }
+.v-profile .pav:hover .cam { background: var(--ink-press); }
 .v-profile .pav .cam svg { width: 14px; height: 14px; }
 
 .v-profile .pname-row {
@@ -254,7 +254,7 @@
   width: 17px;
   height: 17px;
   border-radius: 50%;
-  background: #fff;
+  background: var(--surface);
   box-shadow: 0 1px 3px rgba(0, 0, 0, .24);
   transition: transform .2s cubic-bezier(.34, 1.4, .5, 1);
 }
@@ -344,7 +344,7 @@
   border: 1px solid var(--line);
   border-radius: 16px;
   padding: 14px 15px;
-  background: linear-gradient(160deg, #fbfcff, #f5f7fb);
+  background: linear-gradient(160deg, var(--vcard-top), var(--vcard-bottom));
 }
 
 .v-profile .vtop {
@@ -359,7 +359,7 @@
   height: 38px;
   border-radius: 12px;
   background: var(--ink);
-  color: #fff;
+  color: var(--onfill);
   display: grid;
   place-items: center;
   flex: none;
@@ -391,7 +391,7 @@
   font-family: var(--font);
   font-size: 12.5px;
   font-weight: 700;
-  color: #fff;
+  color: var(--onfill);
   background: var(--ink);
   border-radius: 10px;
   padding: 9px 0;
@@ -401,7 +401,7 @@
   gap: 6px;
 }
 
-.v-profile .vbtn:hover { background: #000; }
+.v-profile .vbtn:hover { background: var(--ink-press); }
 .v-profile .vbtn svg { width: 14px; height: 14px; }
 
 /* ------------------------------------------------------------ footer */
@@ -572,7 +572,7 @@
   transition: all .15s ease;
 }
 
-.v-profile .vc-del:hover { background: var(--red); color: #fff; }
+.v-profile .vc-del:hover { background: var(--red); color: var(--onfill); }
 
 /* Record sheet — same bottom-sheet pattern as ls-/ai- sheets. */
 .v-profile .vc-back {
@@ -640,7 +640,7 @@
   border: none;
   border-radius: 50%;
   background: var(--red);
-  color: #fff;
+  color: var(--onfill);
   cursor: pointer;
   transition: transform .15s ease;
 }
@@ -697,13 +697,13 @@
   font-family: var(--font);
   font-size: 13.5px;
   font-weight: 700;
-  color: #fff;
+  color: var(--onfill);
   background: var(--ink);
   border-radius: 12px;
   padding: 12px 0;
 }
 
-.v-profile .vc-create:hover:not(:disabled) { background: #000; }
+.v-profile .vc-create:hover:not(:disabled) { background: var(--ink-press); }
 .v-profile .vc-create:disabled { opacity: .35; cursor: default; }
 
 /* ------------------------------------------------- profile field card */

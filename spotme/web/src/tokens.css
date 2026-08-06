@@ -41,6 +41,36 @@
   --water: #d6e4f0;
   --ghost-on: #16a34a;
   --ghost-off: #d97757;
+
+  /* ---- Roles extracted from the view CSS (2026-08-06) -------------------
+   * These name colours that were already shipping as raw hex in the view
+   * files. Every value below is the literal it replaced, so nothing about
+   * the locked palette moves — this only gives the existing colours the one
+   * job each that section 1 of the design system says a colour must have. */
+
+  /* Text and icons sitting ON a filled ground (ink, blue, red, amber fills).
+   * NOT --surface: a white pill on a page is a surface, white lettering on a
+   * blue badge is a foreground, and the two stop being interchangeable the
+   * moment a dark theme is ever added as a P3 extension. */
+  --onfill: #fff;
+  /* The hover/pressed deepening of an ink fill. Deliberately pure black,
+   * one step past --ink (#0f0f10) — that half-step IS the affordance. */
+  --ink-press: #000;
+  /* Archive, in the inbox swipe vocabulary — sits beside --red for delete.
+   * Its own green: neither --live (presence) nor --green (status). */
+  --arch: #3aa981;
+
+  /* Bluetooth radar palette — the one dark scene in a light-only app,
+   * named like the discovery map palette above rather than left inline. */
+  --bt-scope-core: #10203a;
+  --bt-scope-mid: #0b1526;
+  --bt-scope-edge: #081020;
+  --bt-blip: #5eead4;        /* hub and sweep blips on the dark scope */
+
+  /* Verification card ground — a near-white lift off --bg, not a surface. */
+  --vcard-top: #fbfcff;
+  --vcard-bottom: #f5f7fb;
+
   --shadow: 0 1px 2px rgba(15, 15, 16, .05), 0 14px 38px rgba(15, 15, 16, .10);
   --font: "Sora", "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont,
     "Segoe UI", system-ui, sans-serif;
