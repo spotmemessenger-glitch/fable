@@ -34,6 +34,30 @@ const GPS_IFD_TAG = Buffer.from([0x88, 0x25]);
 /** The literal coordinate written into the .mov container tag. */
 const MOV_COORDS = Buffer.from('+37.7749', 'latin1');
 
+/**
+ * The marker segments a JPEG carries before SOS.
+ *
+ * SCANNING FOR 0x8825 IS NOT A SOUND TEST ON ITS OWN. It is two bytes, so it
+ * turns up by chance inside entropy-coded pixel data — measured on a real
+ * drive, a correctly stripped 16 KB JPEG contained 0x8825 once at offset
+ * 15175, well past SOS at 329. Asserting its absence over whole-file bytes
+ * therefore fails at random depending on how the fixture happens to compress.
+ * What actually proves the strip is structural: no APP1..APP15 and no COM
+ * segment survived. That is the guarantee `stripJpeg` makes, so that is what
+ * these tests assert.
+ */
+function jpegMetadataSegments(d: Buffer): string[] {
+  const meta: string[] = [];
+  let i = 2;
+  while (i + 4 <= d.length && d[i] === 0xff) {
+    const m = d[i + 1];
+    if (m === 0xd9 || m === 0xda) break; // EOI / SOS — entropy data follows
+    if ((m >= 0xe1 && m <= 0xef) || m === 0xfe) meta.push(`0x${m.toString(16)}`);
+    i += 2 + d.readUInt16BE(i + 2);
+  }
+  return meta;
+}
+
 const has = (tool: string): boolean => {
   try { execFileSync('which', [tool], { stdio: 'ignore' }); return true; } catch { return false; }
 };
@@ -143,7 +167,8 @@ describe('iPhone media — HEIC and .mov are normalised before anything is store
     expect(stored.contentType).toBe('image/jpeg');
     expect(stored.bytes.readUInt16BE(0)).toBe(0xffd8);
     expect(stored.bytes.includes(EXIF_MARKER)).toBe(false);
-    expect(stored.bytes.includes(GPS_IFD_TAG)).toBe(false);
+    // Structural, not a byte scan — see jpegMetadataSegments for why.
+    expect(jpegMetadataSegments(stored.bytes)).toEqual([]);
     expect(containsMetadataMarkers(stored.bytes)).toBe(false);
     // No HEIC byte ever reached the store.
     expect(stored.bytes.includes(Buffer.from('ftyp', 'latin1'))).toBe(false);
