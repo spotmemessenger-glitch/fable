@@ -231,3 +231,8 @@ spotme/e2e/test-results/
 spotme/e2e/playwright-report/
 spotme/e2e/playwright/.cache/
 .env*
+
+# Redis snapshot written by a locally-started redis-server during testing.
+# Never a build input; committing it would ship a stale local dataset.
+dump.rdb
+**/dump.rdb
