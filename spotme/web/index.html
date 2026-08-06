@@ -35,8 +35,30 @@
   <title>Spot Me</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link rel="stylesheet"
+  <!--
+    LOADED ASYNCHRONOUSLY, ON PURPOSE — first paint must never wait on a font CDN.
+
+    `display=swap` was already in the URL and it is NOT enough: it governs the
+    FONT FILES once this stylesheet has arrived. The stylesheet itself was a
+    render-blocking request to a third party, so a user whose network cannot
+    reach fonts.googleapis.com — a privacy blocker, a corporate proxy, a censored
+    region, or simply a bad mobile link — got a BLANK SCREEN until it resolved or
+    timed out. The overnight harness measured ~12.9s to first paint, identically
+    at 1x and 4x CPU throttle; identical across throttle rates is what proves it
+    was never CPU-bound. It was this request.
+
+    `media="print"` lets the browser fetch without blocking rendering; the onload
+    handler promotes it to `all` once it lands. Text paints immediately in the
+    system stack (`--font` already falls back to -apple-system/Segoe/Roboto) and
+    swaps to Sora when the webfont is ready. The <noscript> copy keeps the font
+    for scripted-off browsers, where the async promotion cannot run.
+  -->
+  <link rel="stylesheet" media="print" onload="this.media='all'; this.onload=null"
         href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" />
+  <noscript>
+    <link rel="stylesheet"
+          href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" />
+  </noscript>
 </head>
 <body>
   <div id="app"></div>
