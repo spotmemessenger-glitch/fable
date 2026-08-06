@@ -183,7 +183,8 @@ uncovered.join() === SYSTEM_RENDERED.join())
 
 /* Named-but-not-vendored is the other half of the same failure: a family in
  * the stack that no @font-face defines silently falls through to the next. */
-const stack = (tokens.match(/--font:\s*([^;]+);/) || [, ''])[1]
+const fontDecl = tokens.match(/--font:\s*([^;]+);/)
+const stack = fontDecl ? fontDecl[1] : ''
 const quoted = [...stack.matchAll(/"([^"]+)"/g)].map((m) => m[1])
 const vendored = new Set([...fontsCss.matchAll(/font-family:\s*'([^']+)'/g)].map((m) => m[1]))
 
