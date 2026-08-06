@@ -372,8 +372,24 @@ Branch `claude/wave-1c-land-iphone-homzb6`. Tree clean.
 | `9874a5a` | refactor: keep the activation script clear of the dark-reach fence |
 
 Gates at the final state: backend `tsc` clean, build clean, **637 passed /
-0 failed** (22 skipped, 5 suites skipped — they need MinIO/R2). Web lint clean,
-tests pass, `vite build` clean.
+0 failed**. Web lint clean, tests pass, `vite build` clean.
+
+**GitHub CI has NOT run on this branch, and will not.** `ci.yml` triggers on
+`pull_request` and on pushes to `master` only, and you did not ask for a PR. So
+"CI green after" is, for my commits, **locally verified rather than
+CI-verified** — I ran the same commands CI runs, in the same order, against a
+real Postgres 16 + PostGIS 3.4.
+
+Two honest gaps in that equivalence:
+
+- **5 backend suites skipped locally** because this container has no Redis,
+  Typesense, or MinIO; CI provides all three and would run them. My changes do
+  not touch the queue or search paths, and the media tests use a capturing
+  storage adapter rather than MinIO — so the risk is low, but it is not zero
+  and I have not run those suites.
+- **CI's `s3-verify-clean` step** never ran here for the same reason.
+
+Opening a PR would settle both. Say the word and I will.
 
 ### Hygiene notes
 
