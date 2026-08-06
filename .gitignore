@@ -125,6 +125,15 @@ cache/
 *.mkv
 *.webm
 
+# …EXCEPT the media test fixtures. The rules above are meant to keep stray
+# recordings out of the repo, but they also silently swallowed the GPS-tagged
+# .mov that moment-media-iphone.spec.ts asserts against — the test would have
+# been committed without the file it reads and failed only in CI. These two
+# fixtures are small, deliberate, and synthetic (ffmpeg testsrc + exiftool
+# tags); they contain no real location and no real footage.
+!spotme/backend/test/fixtures/media/*.mov
+!spotme/backend/test/fixtures/media/*.mp4
+
 # ---------------------------------------------------------------
 # Logs
 # ---------------------------------------------------------------

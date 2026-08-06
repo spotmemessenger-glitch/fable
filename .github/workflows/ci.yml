@@ -99,6 +99,16 @@ jobs:
 
       - run: npm ci
 
+      # The media pipeline SHELLS OUT, so the tests need the same binaries the
+      # runtime image installs (see spotme/backend/Dockerfile):
+      #   ffmpeg           — `.mov` → faststart MP4, `-map_metadata -1`
+      #   libheif-examples — `heif-convert`, HEIC → JPEG (pulls libde265)
+      # moment-media-iphone.spec.ts FAILS rather than skips when these are
+      # missing: a silent skip on the suite that proves GPS is stripped would
+      # let a regression ship looking green.
+      - name: Install media transcode tools
+        run: sudo apt-get update -y && sudo apt-get install -y --no-install-recommends ffmpeg libheif-examples
+
       # MINIO AS A STEP, NOT A SERVICE. The official image needs `server /data`
       # as its command, and Actions service containers cannot specify one —
       # `bitnami/minio:latest`, which can, no longer exists ("manifest unknown").

@@ -19,11 +19,19 @@ import {
   MediaUploadPort, MediaTransformPort, ThumbnailPort, StoryMediaPort, MomentMediaPort,
 } from './media.ports';
 import { stripImageMetadata, UnsupportedImageError } from './exif-strip';
+import {
+  ACCEPTED_INPUT_MIME, normalizeForStorage, NormalizeFailedError, TranscodeUnavailableError,
+} from './normalize';
 import { FixtureMomentWorkers, TranscodeJob, ThumbnailJob } from './media.queues';
 import type { TranscodeQueue, TranscodeIO, TranscodeResult } from './transcode.worker';
 
 const MAX_UPLOAD_BYTES = 50 * 1024 * 1024; // [PROPOSED] ceiling
-const ALLOWED_MIME = new Set(['image/jpeg', 'image/png', 'video/mp4', 'video/webm']);
+/* The accept-list now includes the two formats an iPhone actually produces —
+ * HEIC photos and QuickTime `.mov` video — because `normalize.ts` rewrites
+ * them into JPEG/MP4 at the ingest boundary BEFORE anything is persisted. It
+ * is the transcode that earns the widening: without it these bytes would be
+ * stored with their GPS intact, which is what the earlier refusal prevented. */
+const ALLOWED_MIME = new Set(Object.keys(ACCEPTED_INPUT_MIME));
 const SLOT_TTL_MS = 15 * 60 * 1000;
 
 @Injectable()
@@ -56,20 +64,43 @@ export class MomentMediaService implements MomentMediaPort, MediaUploadPort, Med
     if (!ALLOWED_MIME.has(mimeType)) return { state: 'refused', reason: 'bad-mime' };
     if (bytes.length > MAX_UPLOAD_BYTES) return { state: 'refused', reason: 'too-large' };
 
-    // THE BOUNDARY: strip BEFORE hash, BEFORE dedup, BEFORE any persistence.
+    /* THE BOUNDARY: normalise, then strip — BEFORE hash, dedup or persistence.
+     *
+     * Two steps, and both are load-bearing:
+     *
+     *   1. NORMALISE. A HEIC becomes a JPEG and a `.mov` becomes a faststart
+     *      MP4 with `-map_metadata -1`. JPEG/PNG pass through untouched.
+     *   2. STRIP. Every image — including one that has just come out of a
+     *      HEIC — goes through the byte-level stripper. This is not belt and
+     *      braces: `heif-convert` COPIES the EXIF block into its JPEG output,
+     *      GPS included, so step 1 alone would store the coordinates.
+     *
+     * Video used to be stored verbatim here, with the comment that container
+     * metadata was the async worker's duty. It was not, and could not be: the
+     * worker writes DERIVED renditions and runs after this write, so the
+     * original — the object `GET :mediaId/url` actually serves — kept its GPS.
+     * The remux in step 1 closes that, for `video/mp4` and `video/webm`
+     * uploads as much as for the new `.mov` path. */
     let clean: Buffer;
-    if (mimeType.startsWith('image/')) {
-      try {
-        clean = stripImageMetadata(bytes, mimeType);
-      } catch (e) {
-        if (e instanceof UnsupportedImageError) return { state: 'refused', reason: 'unsupported-format' };
-        throw e;
+    let storedMime: string;
+    let kind: 'image' | 'video';
+    try {
+      const normalized = await normalizeForStorage(bytes, mimeType);
+      kind = normalized.kind;
+      storedMime = normalized.mimeType;
+      clean = normalized.kind === 'image'
+        ? stripImageMetadata(normalized.bytes, normalized.mimeType)
+        : normalized.bytes;
+    } catch (e) {
+      if (e instanceof TranscodeUnavailableError) {
+        // The runtime image is missing ffmpeg or libheif. Refuse loudly rather
+        // than quietly storing an unnormalised original.
+        return { state: 'refused', reason: 'transcode-unavailable' };
       }
-    } else {
-      // Video container metadata handling is a transcode-worker duty (the
-      // {moment-media} job CONTRACT includes `-map_metadata -1`); dark phase
-      // stores nothing for videos beyond the job contract itself.
-      clean = bytes;
+      if (e instanceof NormalizeFailedError || e instanceof UnsupportedImageError) {
+        return { state: 'refused', reason: 'unsupported-format' };
+      }
+      throw e;
     }
 
     const contentHash = `sha256:${createHash('sha256').update(clean).digest('hex')}`;
@@ -77,7 +108,6 @@ export class MomentMediaService implements MomentMediaPort, MediaUploadPort, Med
     if (existing) {
       return { state: 'deduplicated', mediaId, contentHash, deduplicated: true, canonicalMediaId: existing.id };
     }
-    const kind = mimeType.startsWith('video/') ? 'video' : 'image';
     /* WRITE THE STRIPPED BYTES, AND ONLY THE STRIPPED BYTES (M1 activation).
      *
      * The dark phase recorded an asset row and stored nothing, which was fine
@@ -88,11 +118,14 @@ export class MomentMediaService implements MomentMediaPort, MediaUploadPort, Med
      * leaving a row pointing at an object that was never written. */
     const storageKey = buildMomentObjectKey(ownerId, mediaId);
     if (this.storage) {
-      const stored = await this.storage.putObject(storageKey, clean, mimeType);
+      /* `storedMime`, not the uploaded mime: a HEIC upload is a JPEG by the
+       * time it reaches here, and serving it as `image/heic` would hand the
+       * browser a content-type that contradicts the bytes. */
+      const stored = await this.storage.putObject(storageKey, clean, storedMime);
       if (!stored) return { state: 'refused', reason: 'storage-unavailable' };
     }
     await this.prisma.momentMediaAsset.create({
-      data: { id: mediaId, kind, mimeType, sizeBytes: clean.length, contentHash, storageKey, exifStripped: true },
+      data: { id: mediaId, kind, mimeType: storedMime, sizeBytes: clean.length, contentHash, storageKey, exifStripped: true },
     });
     // Enqueue the processing CONTRACTS (fixture record — nothing connects).
     if (kind === 'video') {

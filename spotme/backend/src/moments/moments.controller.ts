@@ -117,4 +117,24 @@ export class MomentsController {
   report(@CurrentUser() u: Principal, @Body() body: { targetKind: 'moment' | 'comment' | 'story'; targetId: string; reason: string; note?: string }) {
     return this.moments.report(this.uid(u), body);
   }
+
+  /**
+   * One moment by id — what a shared `#/posts?m=<id>` link resolves against.
+   *
+   * DECLARED LAST ON PURPOSE. Nest matches routes in declaration order, so a
+   * `:id` pattern registered any earlier would swallow `feed`, `stories/rail`
+   * and `reports` — the share link would work and the feed would 404, which is
+   * a worse bug than the one being fixed. Every literal path above wins.
+   *
+   * Serialised through the SAME feed serializer, so a linked post arrives in
+   * the identical shape as a post scrolled to, and the client needs no second
+   * rendering path for it.
+   */
+  @Get(':id')
+  async byId(@CurrentUser() u: Principal, @Param('id') id: string) {
+    const uid = this.uid(u);
+    const { moment, myReaction } = await this.moments.getViewable(uid, id);
+    const [view] = await this.serialize.feed(uid, [{ moment, ranking: null, myReaction }]);
+    return view;
+  }
 }

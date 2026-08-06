@@ -68,6 +68,9 @@ export interface MomentMediaPort {
 export type IngestResult =
   | { state: 'stored'; mediaId: string; contentHash: string; deduplicated: false }
   | { state: 'deduplicated'; mediaId: string; contentHash: string; deduplicated: true; canonicalMediaId: string }
-  | { state: 'refused'; reason: 'unsupported-format' | 'too-large' | 'bad-mime' | 'storage-unavailable' };
+  /** `transcode-unavailable` is an OPERATOR fault, not a caller fault: the
+   *  format is accepted, but the runtime image has no ffmpeg/libheif to
+   *  normalise it with, so the upload is refused rather than stored raw. */
+  | { state: 'refused'; reason: 'unsupported-format' | 'too-large' | 'bad-mime' | 'storage-unavailable' | 'transcode-unavailable' };
 
 export const MOMENT_MEDIA_PORT = Symbol('MOMENT_MEDIA_PORT');
