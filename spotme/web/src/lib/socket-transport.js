@@ -768,7 +768,6 @@ function serverRoom (config, roomId) {
 
   function removePeer (peerId) {
     if (!peers.delete(peerId)) return
-    closePc(peerId)
     onPeerLeaveHandler?.(peerId)
   }
 
