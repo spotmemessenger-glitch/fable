@@ -1,40 +1,21 @@
 /**
- * Spot Me web — peer-to-peer transport.
+ * Spot Me web — the room API every screen consumes.
  *
- * WebRTC via Trystero. Browsers cannot open raw UDP sockets, so the Hyperswarm
- * stack used by the native app physically cannot run here; this is a different
- * transport carrying the same product.
+ * Server-backed transport (ADR-033): rooms live on the Spot Me backend with a
+ * persistent, ciphertext-only event log — which is what gives the web app
+ * offline delivery. Payloads are AES-GCM sealed client-side with the room
+ * secret (URL fragment / local storage, never sent to the server); the server
+ * stores and relays ciphertext and observes only who is in which room, when.
  *
- * ---------------------------------------------------------------------------
- * WHAT IS AND IS NOT PRIVATE
- *
- * Messages travel directly browser-to-browser over WebRTC data channels, which
- * are DTLS-encrypted, and Trystero additionally encrypts payloads with the room
- * secret. No message passes through a server we or anyone else runs.
- *
- * Peer DISCOVERY is public infrastructure — BitTorrent trackers see that some
- * peer is looking for a room topic. They never see message content, and the
- * room secret lives in the URL fragment, which browsers never transmit to a
- * server. Metadata leaks; content does not.
- *
- * NOT carried over from the native app: offline delivery and 24-word recovery.
- * Both need the append-only Hypercore log. If every peer is offline here, the
- * conversation is simply gone — say so in the UI rather than implying otherwise.
- * ------------------------------------------------------------------------- */
-// Trystero 0.25 split each discovery strategy into its own package; the old
-// `trystero/torrent` subpath is now a stub that throws a deprecation error.
-// Swap this import for @trystero-p2p/nostr or /mqtt if tracker discovery is
-// ever unreliable — the API is identical across strategies.
-// Server-backed transport (2026-07-30): same API surface, but rooms live on
-// the Spot Me backend with a persistent, ciphertext-only event log — which is
-// what finally gives the web app offline delivery. Trystero remains available
-// behind localStorage['spotme.transport'] = 'p2p'.
+ * This file kept the old Trystero-era API surface (createNet / actions /
+ * peers) so no screen had to change when the P2P stack was removed — the
+ * shape survives, the transport underneath is the server.
+ */
 // The transport SEAM, not a transport: it reads localStorage['spotme.transport']
 // in one place and hands back a room. See lib/transport/room.js for why chat
 // still runs on Socket.IO underneath and what Phase 3 has to move first.
 import { joinRoom, selfId } from './lib/transport/room.js'
 
-/** Namespaces our rooms so we never collide with another Trystero app. */
 /**
  * WebRTC needs help crossing carrier-grade NAT. Indian mobile networks (Jio,
  * Airtel) share one public address between many subscribers, so two phones on
@@ -84,7 +65,8 @@ const APP_ID = 'io.ysnapai.spotme'
 /**
  * How much backlog a peer offers to someone who has just joined.
  *
- * There is no server holding history, so it comes from whoever is online. Too
+ * Peer-offered backlog predates the server log and still runs alongside its
+ * replay. It comes from whoever is online. Too
  * large and a join floods a mobile connection; this is roughly a screen or two
  * of conversation.
  */
@@ -111,7 +93,8 @@ export { selfId }
 export function createNet (roomId, secret, handlers, getHistory, peerId) {
   const room = joinRoom({ appId: APP_ID, password: secret, rtcConfig: RTC_CONFIG, peerId }, roomId)
 
-  // Trystero 0.25 API notes, all of which differ from older documentation:
+  // Action-API notes (shape inherited from the Trystero era, served by
+  // socket-transport now):
   //   - makeAction returns an OBJECT, not a [send, receive] tuple
   //   - send takes an options object: send(data, {target}), not (data, peerId)
   //   - onMessage / onPeerJoin / onPeerLeave are SETTERS, not methods
@@ -134,8 +117,10 @@ export function createNet (roomId, secret, handlers, getHistory, peerId) {
     kind: 'request',
     onRequest: (data, context) => handlers.onFetch ? handlers.onFetch(data, context) : null
   })
-  // Call signalling: {type:'offer'|'accept'|'decline'|'end', video:bool}.
-  // The media itself rides WebRTC tracks via addStream, not this action.
+  // Call RINGING: {type:'offer'|'accept'|'decline'|'end', video:bool}.
+  // This is the only part of a call that touches this transport. The media
+  // itself is published to the LiveKit SFU (ADR-004); the peer-to-peer track
+  // path this action used to accompany has been deleted.
   const call = room.makeAction('call')
   // Live-location updates: {id, lat, lon} while sharing; {id, stop:true} ends.
   const locup = room.makeAction('locup')
@@ -160,9 +145,6 @@ export function createNet (roomId, secret, handlers, getHistory, peerId) {
   bin.onReceiveProgress = (progress, context) => handlers.onBinaryProgress?.(progress, context)
   call.onMessage = (payload, meta) => handlers.onCall?.(payload, meta?.peerId)
   locup.onMessage = (payload, meta) => handlers.onLocup?.(payload, meta?.peerId)
-
-  room.onPeerStream = (stream, peerId, metadata) =>
-    handlers.onStream?.(stream, peerId, metadata)
 
   // Backlog from an existing peer. Merging is the store's job — it may already
   // hold some of these, and several peers may answer the same join.
@@ -260,9 +242,6 @@ export function createNet (roomId, secret, handlers, getHistory, peerId) {
     fetchFrom: (data, options) => fetchAction.request(data, { timeoutMs: FETCH_TIMEOUT_MS, ...options }),
     sendCall: (data, options) => msgSafe(call.send(data, options)),
     sendLocup: (data) => msgSafe(locup.send(data)),
-    addStream: (stream, options) => room.addStream(stream, options),
-    removeStream: (stream, options) => room.removeStream(stream, options),
-    replaceTrack: (oldTrack, newTrack, options) => room.replaceTrack(oldTrack, newTrack, options),
     peerIds: () => Object.keys(room.getPeers()),
     peerCount: () => Object.keys(room.getPeers()).length,
     /**

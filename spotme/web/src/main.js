@@ -764,7 +764,7 @@ function boot () {
     window.addEventListener(event, primeAudio, { once: true, passive: true })
   }
   /**
-   * Relay credentials FIRST. Trystero reads the connection config once, at
+   * Relay credentials FIRST. The room transport reads the connection config once, at
    * join time, so a conversation that joins before the relay arrives is stuck
    * on a direct-only path for its whole lifetime — which on Indian mobile
    * networks means presence works while messages silently never arrive.

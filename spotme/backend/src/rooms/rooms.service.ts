@@ -28,8 +28,15 @@ const PERSISTED = new Set([
  * Lives here rather than in the gateway because the HTTP publish proxy needs
  * the same answer, and two lists of what may cross the wire would drift.
  */
+/* `rtc` is deliberately absent. It carried peer-to-peer WebRTC offers, answers
+ * and ICE candidates for calls; that path is deleted (ADR-004) and media now
+ * goes to the LiveKit SFU. `call` stays — ringing is still a message.
+ *
+ * Dropping it from this list means the server REFUSES the frame rather than
+ * relaying a signalling type nothing speaks any more. An accepted-but-unhandled
+ * action is a surface, and an unused surface is still a surface. */
 const EPHEMERAL = new Set([
-  'typing', 'call', 'locup', 'rtc', 'history', 'fetchreq', 'fetchres', 'hello',
+  'typing', 'call', 'locup', 'history', 'fetchreq', 'fetchres', 'hello',
 ]);
 
 /** Replay never carries attachment bytes — envelopes only, bytes on demand. */

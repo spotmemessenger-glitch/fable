@@ -101,13 +101,34 @@ jobs:
 
       # The media pipeline SHELLS OUT, so the tests need the same binaries the
       # runtime image installs (see spotme/backend/Dockerfile):
-      #   ffmpeg           — `.mov` → faststart MP4, `-map_metadata -1`
-      #   libheif-examples — `heif-convert`, HEIC → JPEG (pulls libde265)
+      #   ffmpeg                     — `.mov` → faststart MP4, `-map_metadata -1`
+      #   libheif-examples           — `heif-convert`, the HEIC → JPEG decode
+      #   libheif-plugin-libde265    — the HEVC DECODER heif-convert needs
+      #
+      # THE PLUGIN IS LISTED EXPLICITLY, and it has to be. This comment used to
+      # say libheif-examples "pulls libde265", which was true on the older
+      # runner image. libheif 1.17 (Ubuntu 24.04, which `ubuntu-latest` now is)
+      # SPLIT the decoders into separate plugin packages and made them a
+      # Recommends rather than a Depends — and `--no-install-recommends` drops
+      # exactly that. The result was the worst shape a dependency can take:
+      # `heif-convert` present and on PATH, but unable to decode a single HEIC
+      # ("Unsupported feature: Unsupported codec"), so the suite that proves
+      # GPS is stripped from iPhone photos failed for a reason that looked
+      # nothing like a missing package.
+      #
       # moment-media-iphone.spec.ts FAILS rather than skips when these are
       # missing: a silent skip on the suite that proves GPS is stripped would
       # let a regression ship looking green.
       - name: Install media transcode tools
-        run: sudo apt-get update -y && sudo apt-get install -y --no-install-recommends ffmpeg libheif-examples
+        run: sudo apt-get update -y && sudo apt-get install -y --no-install-recommends ffmpeg libheif-examples libheif-plugin-libde265
+
+      # Prove the decoder actually decodes, rather than trusting that a package
+      # named after it was installed. That assumption is what broke above.
+      - name: Verify heif-convert can decode HEVC
+        run: |
+          heif-convert --list-decoders 2>&1 | tee /tmp/decoders.txt
+          grep -qi 'libde265\|HEVC' /tmp/decoders.txt \
+            || (echo "::error::heif-convert has no HEVC decoder — HEIC tests would fail misleadingly" && exit 1)
 
       # MINIO AS A STEP, NOT A SERVICE. The official image needs `server /data`
       # as its command, and Actions service containers cannot specify one —

@@ -268,7 +268,7 @@ Called directly by the web client. All CORS-open, keys held server-side in env v
 GET /api/turn → { iceServers: [...], relay: true|false }
 ```
 
-Mints short-lived Cloudflare TURN credentials (6-hour TTL, response cacheable for half that). If `CF_TURN_KEY_ID`/`CF_TURN_TOKEN` are unset or Cloudflare fails, degrades to STUN-only (`relay: false`) rather than failing the connection. A TURN relay forwards encrypted bytes and cannot read call content, but does observe that two addresses are exchanging data. **P2:** self-hosted coturn fleet behind the same response shape.
+Mints short-lived TURN credentials, trying Metered first (`METERED_TURN_SUBDOMAIN`/`METERED_TURN_API_KEY`), then Cloudflare (`CF_TURN_KEY_ID`/`CF_TURN_TOKEN`, 6-hour TTL, response cacheable for half that), then degrading to STUN-only (`relay: false`) rather than failing the connection. Metered leads because it returns `turns:` on TCP/443, which survives networks that drop UDP; the response names the provider that answered. Used for NAT traversal to the LiveKit SFU (ADR-004) and by the peer-to-peer discovery lobby. A TURN relay forwards encrypted bytes and cannot read call content, but does observe that two addresses are exchanging data. **P2:** self-hosted coturn fleet behind the same response shape.
 
 ### 5.2 Translation & transliteration (`translate.js`) — P1, stays
 

@@ -128,6 +128,25 @@ export const storiesRail = () => call('/stories/rail')
 export const comments = (momentId) => call(`/${encodeURIComponent(momentId)}/comments`)
 export const assetUrl = (mediaId) => call(`/media/${encodeURIComponent(mediaId)}/url`)
 
+/**
+ * Record the composer's trim / cover choices for a video and re-run the
+ * transcode. The cut happens on the SERVER — see the route's own note: doing
+ * it here would mean re-encoding on the phone, which is slow on mid-range
+ * Android, lossy, and dependent on which codecs the browser exposes.
+ *
+ * Milliseconds throughout, because that is what a <video> currentTime gives
+ * once you multiply, and rounding to seconds would visibly move a chosen frame.
+ */
+export const editMedia = (mediaId, { trimStartMs, trimEndMs, coverAtMs } = {}) =>
+  call(`/media/${encodeURIComponent(mediaId)}/edit`, {
+    method: 'POST',
+    body: {
+      ...(trimStartMs != null ? { trimStartMs: Math.round(trimStartMs) } : {}),
+      ...(trimEndMs != null ? { trimEndMs: Math.round(trimEndMs) } : {}),
+      ...(coverAtMs != null ? { coverAtMs: Math.round(coverAtMs) } : {})
+    }
+  })
+
 /* ----------------------------------------------------------------- write */
 
 /**

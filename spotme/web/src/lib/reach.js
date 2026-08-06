@@ -53,7 +53,7 @@
 // Rooms come from the transport seam; setRoomKey stays a direct import because
 // it is KEY MATERIAL, which no adapter may carry (ADR-002 §2, FORBIDDEN_KEY_SURFACE).
 import { joinRoom } from './transport/room.js'
-import { setRoomKey, freshTokens, serverMode } from './socket-transport.js'
+import { setRoomKey, freshTokens } from './socket-transport.js'
 import { RTC_CONFIG, readyRTC } from '../net.js'
 import { db } from './db.js'
 import { rooms } from './rooms.js'
@@ -326,13 +326,10 @@ function createReach () {
        *
        * A knock that disagrees with the transport is not a knock.
        *
-       * ONLY IN SERVER MODE, and the distinction is not pedantic. `selfId` is
-       * `db.profile().id` on the socket transport but `torrent.selfId` — a
-       * per-session connection id — under the `spotme.transport = p2p` escape
-       * hatch. There, peer ids are not account ids and never claimed to be, so
-       * comparing them would reject every legitimate knock. Enforce the rule
-       * where the guarantee exists; do not invent one where it does not. */
-      if (serverMode && meta?.peerId && payload?.from?.id !== meta.peerId) return
+       * Peer ids ARE account ids on the server transport (`selfId` is
+       * `db.profile().id`), which is what makes this comparison meaningful.
+       * (ADR-033 removed the p2p escape hatch where that wasn't true.) */
+      if (meta?.peerId && payload?.from?.id !== meta.peerId) return
       const status = receiveKnock(payload)
       if (status === 'invalid' || status === 'blocked') return
       // The ack must self-identify as US (the one who just received the

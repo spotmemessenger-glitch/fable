@@ -1,14 +1,13 @@
 /**
- * Which transport this device is set to. ADR-002 §1.
+ * Which transport this device is set to. ADR-002 §1, superseded by ADR-033.
  *
- * The flag is `localStorage['spotme.transport']`, which ALREADY EXISTS: it is
- * how a device reverts to the old Trystero P2P stack. Extending it beats
- * inventing a second mechanism — two switches for one decision is how a device
- * ends up in a state neither switch describes.
+ * The flag is `localStorage['spotme.transport']`.
  *
  *   socketio   (default) the NestJS Socket.IO gateway
  *   centrifugo           opt-in, requires VITE_CENTRIFUGO_URL and the broker
- *   p2p                  legacy Trystero, handled in socket-transport.js
+ *
+ * ADR-033 (2026-08-06): the `p2p` (Trystero) option has been removed — Spot Me
+ * is server-side transport only, with no P2P fallback.
  *
  * WHY THIS IS ITS OWN FILE AND NOT PART OF index.js. `transport/room.js` — the
  * seam every screen goes through — needs the selection and nothing else.
@@ -20,7 +19,7 @@
  * so the fix is to stop dragging it in, not to externalise it and ship an
  * import that 404s at runtime. One definition, imported by both.
  */
-export const TRANSPORT_KEYS = Object.freeze(['socketio', 'centrifugo', 'p2p'])
+export const TRANSPORT_KEYS = Object.freeze(['socketio', 'centrifugo'])
 
 const STORAGE_KEY = 'spotme.transport'
 const DEFAULT = 'socketio'

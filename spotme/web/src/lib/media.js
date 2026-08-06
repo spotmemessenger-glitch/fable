@@ -2,7 +2,7 @@
  * Spot Me — media helpers: images, voice notes, files, location.
  *
  * Everything is serialised to data URLs and travels as JSON over the data
- * channel — Trystero chunks large payloads internally. Wasteful next to raw
+ * channel — the transport chunks large payloads internally. Wasteful next to raw
  * binary (+33%), but it removes an API ambiguity and keeps the store/persist
  * path uniform. Attachments are size-capped instead.
  */

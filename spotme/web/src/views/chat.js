@@ -15,6 +15,7 @@ import { compressImage, fileToDataURL, recordVoice, currentLocation, mapLink, fi
 import { openPhotoEditor, closePhotoEditor } from '../lib/photoedit.js'
 import { el, clear, avatar, fmtTime, fmtDay, actionSheet } from '../lib/ui.js'
 import { isPlainEnglish } from '../lib/english.js'
+import { livekitCalls } from '../lib/calls/select.js'
 import { identityStatus } from '../lib/crypto/identity-store.js'
 import { transliterate, supportedScripts } from 'spotme-core/core/translit.js'
 
@@ -433,7 +434,11 @@ export function render (root, ctx, roomId) {
   avBtn.addEventListener('click', () => openContactSheet())
 
   function beginCall (video) {
-    if (conn.peerCount === 0) {
+    /* A GROUP call does not wait for anyone. The initiator opens the room and
+     * rings everybody; whoever is there joins, late joiners join later, and
+     * nobody being online yet is a normal start rather than a refusal. The
+     * "they are offline" guard is a 1:1 fact and would be a lie here. */
+    if (convo.kind !== 'group' && conn.peerCount === 0) {
       ctx.toast('They are offline — calls connect while you are both online')
       return
     }
@@ -1481,7 +1486,7 @@ export function render (root, ctx, roomId) {
    * taps on the player itself keep working the native controls. */
   function openVideoView (data) {
     const overlay = el('div', { class: 'imgview' }, [
-      el('video', { src: data, controls: '', autoplay: '', playsinline: '' })
+      el('video', { src: data, controls: '', autoplay: '', playsinline: '', 'webkit-playsinline': '' })
     ])
     overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove() })
     root.appendChild(overlay)
@@ -1528,7 +1533,7 @@ export function render (root, ctx, roomId) {
     // Kind-agnostic: a private VIDEO used to fall through to the ordinary
     // player — permanent, replayable, and listed in the media gallery.
     const img = m.kind === 'video'
-      ? el('video', { src: m.data, autoplay: '', playsinline: '', loop: '' })
+      ? el('video', { src: m.data, autoplay: '', playsinline: '', 'webkit-playsinline': '', loop: '' })
       : el('img', { src: m.data, alt: '' })
     const count = el('span', { class: 'bcount', text: String(secs) })
     const ringFg = document.createElementNS('http://www.w3.org/2000/svg', 'circle')
@@ -1762,7 +1767,7 @@ export function render (root, ctx, roomId) {
     if (m.kind === 'video') {
       // A wrapper div, not the <video> itself, so the progress ring has a home.
       return el('div', { class: 'vid' }, [
-        el('video', { src: m.data, controls: '', playsinline: '', preload: 'metadata' })
+        el('video', { src: m.data, controls: '', playsinline: '', 'webkit-playsinline': '', preload: 'metadata' })
       ])
     }
     if (m.kind === 'voice') return buildVoice(m)
@@ -2151,7 +2156,10 @@ export function render (root, ctx, roomId) {
     const v2 = e2eVersionNow() === 'e2e_v2'
     return el('div', { class: 'sys firstrun', html: IC.spark }, [
       v2
-        ? 'Encrypted with keys made on your devices. Translation runs on-device when possible.'
+        /* "Messages", not a bare "Encrypted": this line sits in a chat that also
+         * offers a call button, and calls are NOT end-to-end encrypted (ADR-004).
+         * An unqualified claim here would be read as covering them. */
+        ? 'Messages are encrypted with keys made on your devices. Translation runs on-device when possible.'
         : 'Older chat — its key came from both account IDs, so the server could read it.',
       /* Only a v2 room has a device identity to compare, so only a v2 room gets
        * the link — see views/verify.js. It sits HERE, on the line that already
@@ -2774,7 +2782,7 @@ export function render (root, ctx, roomId) {
               'aria-label': isVideo ? 'Open video' : 'Open photo'
             }, [
               isVideo
-                ? el('video', { src: m.data, muted: '', playsinline: '', preload: 'metadata' })
+                ? el('video', { src: m.data, muted: '', playsinline: '', 'webkit-playsinline': '', preload: 'metadata' })
                 : el('img', { src: m.data, alt: '' }),
               isVideo ? el('span', { class: 'cp-vplay', html: IC.play }) : null
             ])
@@ -2915,7 +2923,17 @@ export function render (root, ctx, roomId) {
         text: e2eVersionNow() === 'e2e_v2'
           ? '🔒 Encrypted with keys created on your device and your contact\'s. The server carries the messages but holds no key to them.'
           : '⚠️ This is an older chat. Its key was derived from both account IDs, so the server could read it. Start a new chat for device-held keys.'
-      })
+      }),
+      /* CALLS ARE NOT COVERED BY THE LINE ABOVE, and a privacy panel that
+       * mentions only the good half is the kind of omission people are right to
+       * be angry about. Shown only where calls can actually be placed — with the
+       * flag off there are no calls to make a claim about. */
+      livekitCalls()
+        ? el('p', {
+          class: 'cp-enc warn',
+          text: 'Calls are not end-to-end encrypted. Audio and video pass through a media server, which can see them, so that calls connect on mobile networks.'
+        })
+        : null
     ]))
     root.appendChild(back)
   }
@@ -4332,21 +4350,55 @@ export function render (root, ctx, roomId) {
     const kind = call.video ? 'Video call' : 'Voice call'
     const parts = []
 
-    if (call.state === 'active' && call.remote) {
+    /* ONE TILE PER REMOTE PARTICIPANT.
+     *
+     * `call.remotes` is a Map of identity -> MediaStream, so 1:1 and group are
+     * the same code path with a different count — a group call is not a mode
+     * here, it is a longer map. The grid class carries the count so CSS can lay
+     * out two people differently from six without this knowing how.
+     *
+     * A <video> element plays its own audio track, so video tiles deliberately
+     * get no companion <audio>: that would play the same samples twice. */
+    const remotes = [...(call.remotes?.entries() ?? [])]
+    if (call.state === 'active' && remotes.length > 0) {
       if (call.video) {
-        const remote = el('video', { class: 'callremote', autoplay: '', playsinline: '' })
-        remote.srcObject = call.remote
-        parts.push(remote)
+        const grid = el('div', { class: `callgrid n${Math.min(remotes.length, 6)}` })
+        for (const [identity, stream] of remotes) {
+          /* BOTH playsinline SPELLINGS, as attribute AND property.
+           *
+           * The group grid arrived on one branch and the webkit-playsinline
+           * fix on another, and the naive merge kept the grid while dropping
+           * the second spelling — which on iOS means every remote tile hands
+           * the call to the native fullscreen player. Same reasoning as
+           * lib/video.js, which exists so these cannot drift apart again.
+           *
+           * videoEl() from that module is deliberately NOT reused here: it is
+           * built for feed clips and sets muted, loop and preload. A muted
+           * call tile is a call you cannot hear. */
+          const tile = el('video', {
+            class: 'callremote', autoplay: '', playsinline: '', 'webkit-playsinline': '',
+          })
+          tile.playsInline = true
+          tile.srcObject = stream
+          // Identity is the sender's user id; it is what the SFU knows them by
+          // and the only stable handle we have for a tile.
+          tile.dataset.identity = identity
+          grid.appendChild(tile)
+        }
+        parts.push(grid)
         if (call.local) {
-          const localV = el('video', { class: 'callpip', autoplay: '', playsinline: '', muted: '' })
+          const localV = el('video', { class: 'callpip', autoplay: '', playsinline: '', 'webkit-playsinline': '', muted: '' })
           localV.muted = true
           localV.srcObject = call.local
           parts.push(localV)
         }
       } else {
-        const remoteA = el('audio', { autoplay: '' })
-        remoteA.srcObject = call.remote
-        parts.push(remoteA)
+        for (const [identity, stream] of remotes) {
+          const remoteA = el('audio', { autoplay: '' })
+          remoteA.srcObject = stream
+          remoteA.dataset.identity = identity
+          parts.push(remoteA)
+        }
       }
     }
 
@@ -4379,7 +4431,25 @@ export function render (root, ctx, roomId) {
           muteBtn.classList.toggle('on', muted)
         }
       })
-      actions.push(muteBtn,
+      /* VIDEO IS OPT-IN, PER PARTICIPANT. A group call starts audio-only —
+       * six cameras is the expensive case and rarely the wanted one — so this
+       * is how someone turns theirs on, and it is theirs alone: it publishes
+       * one more track and asks nothing of anybody else. */
+      const camBtn = el('button', {
+        class: 'callmute' + (call.videoOn ? ' on' : ''), type: 'button',
+        text: call.videoOn ? 'Camera off' : 'Camera',
+        onclick () {
+          camBtn.disabled = true
+          conn.toggleVideo()
+            .then((on) => {
+              camBtn.textContent = on ? 'Camera off' : 'Camera'
+              camBtn.classList.toggle('on', on)
+            })
+            .catch((e) => ctx.toast(e.message || 'Camera permission needed'))
+            .finally(() => { camBtn.disabled = false })
+        }
+      })
+      actions.push(muteBtn, camBtn,
         el('button', { class: 'pill no big', type: 'button', text: 'End', onclick: () => conn.endCall() }))
     }
 
@@ -4520,6 +4590,10 @@ export function render (root, ctx, roomId) {
       case 'call':
         if (event.declined) ctx.toast(event.busy ? 'They are on another call' : 'Call declined')
         if (event.ended) ctx.toast('Call ended')
+        // There is no peer-to-peer path left to quietly fall back to, so a
+        // media failure has to be said out loud rather than left as a call that
+        // never leaves "Connecting…".
+        if (event.failed) ctx.toast(event.failed)
         if (conn.call.state === 'idle') callStartedAt = 0
         renderCall()
         break

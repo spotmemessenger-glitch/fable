@@ -31,9 +31,12 @@ globalThis.localStorage = {
 mock.module(`${SRC}lib/api.js`, {
   namedExports: { API_BASE: 'http://api.test', apiUrl: (p) => `http://api.test/${String(p).replace(/^\//, '')}` }
 })
-mock.module('@trystero-p2p/torrent', {
-  namedExports: { selfId: 'unused', joinRoom: () => { throw new Error('p2p unused') } }
-})
+/* The @trystero-p2p/torrent stub that used to sit here is gone with the
+ * package (ADR-033, server-side transport only). It was defensive — it threw
+ * if the P2P path was ever reached — and mock.module() must RESOLVE a
+ * specifier to stub it, so once the dependency was dropped the stub itself
+ * was what broke the suite. The guarantee it stood for is now structural:
+ * the module does not exist, and transport.test.js fences it. */
 mock.module('socket.io-client', {
   namedExports: { io: () => ({ on () {}, once () {}, emit () {}, timeout: () => ({ emitWithAck: async () => ({}) }) }) }
 })
