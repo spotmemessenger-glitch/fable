@@ -95,6 +95,23 @@ export function transcodeArgs(input: string, output: string, v: (typeof VARIANTS
     '-map_metadata', '-1',
     '-c:v', 'libx264', '-profile:v', 'high', '-preset', 'veryfast',
     '-b:v', v.videoBitrate, '-maxrate', v.videoBitrate, '-bufsize', '2M',
+    /* THE GUARD THAT KEEPS `-profile:v high` HONEST.
+     *
+     * H.264 High profile is 8-bit 4:2:0 ONLY. Hand libx264 anything else and
+     * it does not degrade — it REFUSES, and the job dies before a byte is
+     * written ("high profile doesn't support 4:4:4" / "…doesn't support
+     * 10-bit"). To the person who shot the clip that is simply "my video
+     * didn't post", with nothing on screen to explain it.
+     *
+     * Two real sources hit this, and the second is not an edge case:
+     *   - 4:4:4 footage from screen recorders and some pro capture apps
+     *   - 10-bit HDR, which is what an iPhone 12 or newer SHOOTS BY DEFAULT
+     *     with Dolby Vision on (yuv420p10le)
+     *
+     * Forcing the pixel format converts both to what the profile can encode
+     * instead of failing on them. It must come BEFORE the scale filter's
+     * output is handed to the encoder, which is where ffmpeg applies it. */
+    '-pix_fmt', 'yuv420p',
     // Scale to the rung's height, keep the aspect, force even dimensions
     // (H.264 requires them; an odd width is a hard encoder failure).
     '-vf', `scale=-2:'min(${v.height},ih)'`,

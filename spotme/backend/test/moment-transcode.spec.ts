@@ -38,6 +38,23 @@ describe('M3 — transcode arguments', () => {
     expect(vf).toContain('scale=-2:');   // -2 keeps aspect AND rounds to even
   });
 
+  /* H.264 High profile is 8-bit 4:2:0 only, and libx264 REFUSES anything else
+   * rather than degrading — the job dies before a byte is written and the
+   * person who shot the clip just sees that it never posted.
+   *
+   * Measured against real ffmpeg, both of these fail without the guard:
+   *   yuv444p      -> "high profile doesn't support 4:4:4"
+   *   yuv420p10le  -> "high profile doesn't support a bit depth of 10"
+   * The second is not exotic: it is what an iPhone 12 or newer records by
+   * default with Dolby Vision HDR on. */
+  it('pins the pixel format — 10-bit HDR and 4:4:4 sources must not fail the encoder', () => {
+    expect(args).toContain('-pix_fmt');
+    expect(args[args.indexOf('-pix_fmt') + 1]).toBe('yuv420p');
+    for (const v of VARIANTS) {
+      expect(transcodeArgs('i', 'o', v).join(' ')).toContain('-pix_fmt yuv420p');
+    }
+  });
+
   it('never upscales: the ladder caps at the source height', () => {
     for (const v of VARIANTS) {
       expect(transcodeArgs('i', 'o', v).join(' ')).toContain(`min(${v.height},ih)`);
