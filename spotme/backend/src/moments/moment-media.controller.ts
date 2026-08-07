@@ -26,6 +26,7 @@ import { DomainGate } from '../flags/domain-gate.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { MomentMediaService } from '../moment-media/media.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { parseMomentObjectKey } from '../storage/storage.interface';
 import { randomUUID } from 'node:crypto';
 
 /* The principal the app's JWT strategy actually provides ({ id, role, kind } —
@@ -111,12 +112,45 @@ export class MomentMediaController {
    */
   @Post(':mediaId/edit')
   async edit(
-    @CurrentUser() _u: Principal,
+    @CurrentUser() u: Principal,
     @Param('mediaId') mediaId: string,
     @Body() body: { trimStartMs?: unknown; trimEndMs?: unknown; coverAtMs?: unknown },
   ) {
     const asset = await this.prisma.momentMediaAsset.findUnique({ where: { id: mediaId } });
-    if (!asset || asset.refCount < 1) throw new NotFoundException();
+    if (!asset) throw new NotFoundException();
+
+    /* AUTHORISED BY UPLOADER, NOT BY refCount.
+     *
+     * This route used to require `refCount >= 1`, borrowed from the read route
+     * below where it is the correct rule: an asset nobody has posted is an
+     * asset nobody may fetch. Applied to EDITING it was exactly backwards. The
+     * composer records trim and cover BEFORE creating the moment — deliberately,
+     * so the first transcode already carries them — and an asset that no moment
+     * references yet has refCount 0 BY CONSTRUCTION. So the one moment this
+     * route is ever called at was the one moment it refused, and every video
+     * whose trim or cover was touched 404ed on Post. The client reads a 404 on
+     * this domain as "the feature is switched off", so the failure surfaced as
+     * "moments is not available" — a defect reported as the whole product
+     * being unavailable.
+     *
+     * The replacement rule is the one that was actually wanted, and it is
+     * STRICTER: only the uploader may edit. Before this, `u` was unused and any
+     * authenticated account could rewrite the trim and cover of any referenced
+     * asset, including someone else's. Ownership comes off the storage key
+     * (`moments/<ownerId>/<mediaId>`), which is where ingest records it.
+     *
+     * A non-owner gets 404 rather than 403, matching the read route: an
+     * unknown id and someone else's id must be indistinguishable.
+     *
+     * KNOWN SHARP EDGE, not introduced here: identical bytes DEDUPLICATE to one
+     * row, so a second uploader of the same clip is handed the first uploader's
+     * mediaId and is refused here. That is the safe direction — the alternative
+     * is letting them re-cut a clip someone else posted — but it means their
+     * trim is silently not applied. Recorded rather than papered over; the real
+     * answer is per-reference edits, which is a schema change. */
+    const owner = parseMomentObjectKey(asset.storageKey)?.ownerId;
+    if (!owner || owner !== u.id) throw new NotFoundException();
+
     if (asset.kind !== 'video') {
       throw new BadRequestException({ error: 'not_video', reason: 'only video assets carry trim or cover points' });
     }

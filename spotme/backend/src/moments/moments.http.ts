@@ -54,6 +54,15 @@ export interface MomentMediaView {
 export interface MomentAuthorView {
   userId: string;
   displayName: string;
+  /* THE HANDLE, CARRIED SEPARATELY FROM THE DISPLAY NAME.
+   *
+   * `displayName` is the profile name and falls back to `@username` only when
+   * that name is unset, so a client wanting to show the handle could not
+   * recover it — it had `userId` (an internal cuid, never for display) and a
+   * string that might or might not be a handle. Stories name people by handle,
+   * which is what this field is for. Null for an account with no claimed
+   * username; the client falls back to the display name. */
+  username: string | null;
 }
 export interface MomentView {
   id: string;
@@ -91,8 +100,9 @@ export class MomentSerializer {
       this.prisma.momentMediaAsset.findMany({ where: { id: { in: mediaIds } }, select: { id: true, kind: true } }),
     ]);
     const nameOf = new Map(authors.map((a) => [a.id, a.name || (a.username ? `@${a.username}` : 'Someone')]));
+    const handleOf = new Map(authors.map((a) => [a.id, a.username ?? null]));
     const kindOf = new Map(assets.map((a) => [a.id, a.kind === 'video' ? 'video' : 'image'] as const));
-    return rows.map((r) => this.one(viewerId, r.moment, r.myReaction, r.ranking, nameOf, kindOf));
+    return rows.map((r) => this.one(viewerId, r.moment, r.myReaction, r.ranking, nameOf, handleOf, kindOf));
   }
 
   /** One row (used by create, which has no batch to amortise). */
@@ -102,8 +112,9 @@ export class MomentSerializer {
       this.prisma.momentMediaAsset.findMany({ where: { id: { in: moment.mediaIds } }, select: { id: true, kind: true } }),
     ]);
     const nameOf = new Map([[moment.authorId, author?.name || (author?.username ? `@${author.username}` : 'Someone')]]);
+    const handleOf = new Map([[moment.authorId, author?.username ?? null]]);
     const kindOf = new Map(assets.map((a) => [a.id, a.kind === 'video' ? 'video' : 'image'] as const));
-    return this.one(viewerId, moment, myReaction, null, nameOf, kindOf);
+    return this.one(viewerId, moment, myReaction, null, nameOf, handleOf, kindOf);
   }
 
   private one(
@@ -112,11 +123,16 @@ export class MomentSerializer {
     myReaction: string | null,
     ranking: unknown,
     nameOf: Map<string, string>,
+    handleOf: Map<string, string | null>,
     kindOf: Map<string, 'image' | 'video'>,
   ): MomentView {
     return {
       id: m.id,
-      author: { userId: m.authorId, displayName: nameOf.get(m.authorId) ?? 'Someone' },
+      author: {
+        userId: m.authorId,
+        displayName: nameOf.get(m.authorId) ?? 'Someone',
+        username: handleOf.get(m.authorId) ?? null,
+      },
       kind: m.kind,
       text: m.text,
       media: m.mediaIds.map((mediaId) => ({ mediaId, kind: kindOf.get(mediaId) ?? 'image', posterUrl: null })),
@@ -154,10 +170,15 @@ export class MomentSerializer {
     const ids = [...new Set(rows.map((s) => s.authorId))];
     const users = await this.prisma.user.findMany({ where: { id: { in: ids } }, select: { id: true, name: true, username: true } });
     const nameOf = new Map(users.map((u) => [u.id, u.name || (u.username ? `@${u.username}` : 'Someone')]));
+    const handleOf = new Map(users.map((u) => [u.id, u.username ?? null]));
     return {
       results: rows.map((s) => ({
         id: s.id,
-        author: { userId: s.authorId, displayName: nameOf.get(s.authorId) ?? 'Someone' },
+        author: {
+          userId: s.authorId,
+          displayName: nameOf.get(s.authorId) ?? 'Someone',
+          username: handleOf.get(s.authorId) ?? null,
+        },
         mediaId: s.mediaId,
         expiresAtUTC: s.expiresAtUTC,
       })),

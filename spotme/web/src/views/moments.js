@@ -193,6 +193,18 @@ export function render (root, ctx, params) {
 
   /* ------------------------------------------------------------- helpers */
 
+  /**
+   * How a person is NAMED on a story.
+   *
+   * The handle, not the profile name. A story is a claim about who posted it,
+   * and `@username` is the identifier that is unique, stable and searchable in
+   * this app — a display name is neither, and two people may share one. Falls
+   * back to the display name when an account has claimed no username, and never
+   * to `userId`, which is an internal id nobody should be shown.
+   */
+  const handleOf = (author) =>
+    (author?.username ? `@${author.username}` : null) || author?.displayName || 'Someone'
+
   /** Resolve one asset to its short-lived URL bundle, once. */
   function assetFor (mediaId) {
     if (assetCache.has(mediaId)) return assetCache.get(mediaId)
@@ -360,7 +372,7 @@ export function render (root, ctx, params) {
     ])
     railWrap.appendChild(mine)
     for (const s of stories) {
-      const who = s.author?.displayName || s.author?.userId || 'Someone'
+      const who = handleOf(s.author)
       /* THE RING SHOWS THE STORY, not a letter.
        *
        * It rendered a name-derived avatar and nothing else, so a story you had
@@ -369,7 +381,7 @@ export function render (root, ctx, params) {
        * author avatar stays underneath as the placeholder, and the story's own
        * frame replaces it as soon as the asset lookup lands (the poster for a
        * video, the picture itself for a photo). */
-      const ringImg = el('span', { class: 'mo-ringimg live' }, [avatar({ name: who, avatar: s.author?.avatar }, 56)])
+      const ringImg = el('span', { class: 'mo-ringimg live' }, [avatar({ name: s.author?.displayName || who, avatar: s.author?.avatar }, 56)])
       railWrap.appendChild(el('button', { class: 'mo-ring', type: 'button', onclick: () => openStory(s) }, [
         ringImg,
         el('span', { class: 'mo-ringname', text: who })
@@ -785,33 +797,55 @@ export function render (root, ctx, params) {
    * thumbnails. Trimming still works; you just cannot see what you are cutting.
    * The alternative, an editor that refuses to open at all, is worse.
    */
-  async function filmstrip (url, count = 8) {
+  async function filmstrip (url, count = 4) {
     // Through the same factory as every other video, even though this one is
     // never shown: one place decides what a <video> is in this app, and an
     // offscreen exception is how that stops being true.
-    const v = videoEl('mo-offscreen', { loop: false, preload: 'auto' })
+    //
+    // `preload: 'metadata'`, NOT 'auto'. This element exists to be seeked, not
+    // played, and 'auto' pulled the whole clip into memory on a phone that was
+    // simultaneously reading the same file for the upload — two full copies of
+    // a 50 MB video, which is where the composer stopped responding.
+    const v = videoEl('mo-offscreen', { loop: false, preload: 'metadata' })
+    v.muted = true
     v.src = url
     const shots = []
+    /* A HARD CEILING ON THE WHOLE JOB, not just on each step. Eight frames at
+     * a 1.2 s per-seek timeout was a 9.6 s worst case that read as a hang, and
+     * every `toDataURL` in between blocks the main thread — so a slow decoder
+     * produced a composer that looked frozen while it was merely working. Four
+     * frames still describes the clip; the deadline bounds the rest. */
+    const deadline = Date.now() + 6000
     try {
       await new Promise((res, rej) => {
         v.addEventListener('loadedmetadata', res, { once: true })
         v.addEventListener('error', () => rej(new Error('undecodable')), { once: true })
-        setTimeout(() => rej(new Error('timeout')), 8000)
+        setTimeout(() => rej(new Error('timeout')), 4000)
       })
+      // A stream with no seekable duration (some phone recordings report
+      // Infinity until fully buffered) cannot be sampled at all — bail to the
+      // plain bar rather than seeking to Infinity eight times.
+      if (!isFinite(v.duration) || v.duration <= 0) throw new Error('unseekable')
       const c = document.createElement('canvas')
       c.height = 56
       c.width = Math.max(1, Math.round(56 * ((v.videoWidth / v.videoHeight) || 0.56)))
       const g = c.getContext('2d')
       for (let i = 0; i < count; i++) {
+        if (Date.now() > deadline) break          // keep what we have
         const t = (v.duration * (i + 0.5)) / count
         await new Promise((res) => {
           v.addEventListener('seeked', res, { once: true })
           // A seek that never lands must not hang the composer forever.
-          setTimeout(res, 1200)
-          v.currentTime = Math.min(t, Math.max(0, v.duration - 0.05))
+          setTimeout(res, 900)
+          try { v.currentTime = Math.min(t, Math.max(0, v.duration - 0.05)) } catch { res() }
         })
         g.drawImage(v, 0, 0, c.width, c.height)
-        shots.push(c.toDataURL('image/jpeg', 0.6))
+        shots.push(c.toDataURL('image/jpeg', 0.5))
+        // Hand the main thread back between frames. drawImage + toDataURL are
+        // synchronous and land on the same thread as the upload's progress and
+        // every touch event — without this yield the trim window stops
+        // responding for as long as the strip takes to build.
+        await new Promise((r) => setTimeout(r, 0))
       }
     } catch { /* no thumbnails; the bar below still trims */ }
     v.removeAttribute('src')
@@ -823,6 +857,8 @@ export function render (root, ctx, params) {
     let picked = null
     let uploaded = null
     let composerObjectUrl = null
+    /** The in-flight upload, so a new pick can cancel the last one. */
+    let uploadAbort = null
     /* Video edit state, in MILLISECONDS — the unit the edit route takes, and
      * fine enough that a chosen cover frame lands where it was chosen. */
     let durMs = 0
@@ -859,9 +895,26 @@ export function render (root, ctx, params) {
 
     /** Send the currently-picked bytes. Called again after an edit replaces them. */
     async function upload () {
+      /* A SECOND UPLOAD MUST CANCEL THE FIRST. Editing a photo re-uploads it,
+       * and picking a new file while the last one is still going used to leave
+       * two requests racing — whichever landed second won, so a cancelled pick
+       * could overwrite the one on screen. */
+      uploadAbort?.abort()
+      const ac = new AbortController()
+      uploadAbort = ac
       status.textContent = 'Uploading…'
       try {
-        uploaded = await M.uploadMedia(picked)
+        uploaded = await M.uploadMedia(picked, {
+          signal: ac.signal,
+          // Percent, not a spinner. The composer had no way to distinguish a
+          // slow upload from a dead one, which is what made a large video read
+          // as "stuck" — it was moving, and said nothing about it.
+          onProgress: (p) => {
+            if (ac.signal.aborted) return
+            status.textContent = p >= 1 ? 'Finishing…' : `Uploading… ${Math.round(p * 100)}%`
+          }
+        })
+        if (ac.signal.aborted) return
         /* ONE QUIET WORD. This line used to report the upload duration and
          * announce "location data removed" — processing detail and privacy
          * narration aimed at whoever wrote it, not at the person posting.
@@ -870,6 +923,9 @@ export function render (root, ctx, params) {
          * The status exists to say the picture is ready, and nothing else. */
         status.textContent = 'Ready'
       } catch (e) {
+        // A cancel is not a failure and must not paint one: the run that
+        // cancelled this one owns the status line now.
+        if (e.message === 'canceled' || ac.signal.aborted) return
         uploaded = null
         status.textContent = e.message === 'too-large' ? 'That file is too large.' : (e.message || 'Upload failed.')
       }
@@ -1035,6 +1091,11 @@ export function render (root, ctx, params) {
 
     const post = async () => {
       if (postBtn.disabled) return
+      /* Say WHY, when a file is picked but not yet up. This used to fall
+       * through to "A story needs a photo or video" while the reader was
+       * looking at the photo they had just chosen — the app disagreeing with
+       * the screen, which reads as the post being broken. */
+      if (picked && !uploaded) { status.textContent = 'Still uploading — one moment.'; return }
       if (!uploaded && !caption.value.trim()) { status.textContent = 'Add a photo, a video, or something to say.'; return }
       if (story && !uploaded) { status.textContent = 'A story needs a photo or video.'; return }
       setBusy(true)
@@ -1085,7 +1146,13 @@ export function render (root, ctx, params) {
       // The button leads; the upload note is secondary text underneath it.
       postBtn,
       status
-    ].filter(Boolean), () => { if (composerObjectUrl) { URL.revokeObjectURL(composerObjectUrl); composerObjectUrl = null } })
+    ].filter(Boolean), () => {
+      // Dismissing the composer must stop the upload too. A 50 MB request left
+      // running for a post that was abandoned costs the reader their data and
+      // keeps the connection busy for whatever they do next.
+      uploadAbort?.abort()
+      if (composerObjectUrl) { URL.revokeObjectURL(composerObjectUrl); composerObjectUrl = null }
+    })
   }
 
   /* -------------------------------------------------------------- reels */
@@ -1402,7 +1469,7 @@ export function render (root, ctx, params) {
    * returned that field, so it was dead weight hiding the real path.)
    */
   function openStory (s) {
-    const who = s.author?.displayName || 'Story'
+    const who = handleOf(s.author)
     const stage = el('div', { class: 'mo-stostage' })
     const layer = el('div', { class: 'mo-stolayer' }, [
       stage,
@@ -1411,7 +1478,7 @@ export function render (root, ctx, params) {
         'aria-label': 'Back', onclick: () => close()
       }),
       el('div', { class: 'mo-stowho' }, [
-        avatar({ name: who, avatar: s.author?.avatar }, 32),
+        avatar({ name: s.author?.displayName || who, avatar: s.author?.avatar }, 32),
         el('b', { text: who })
       ])
     ])

@@ -82,14 +82,32 @@ export function setSoundOn (on, current) {
   explicit = soundOn ? 'on' : 'off'
   unlocked = true                    // the press itself is the gesture
   writeChoice(explicit)
-  if (current) {
-    current.muted = !soundOn
-    // A muted element that is already rolling will not become audible on its
-    // own; nudging play() inside the gesture is what actually opens the
-    // speaker on iOS.
-    if (soundOn && current.paused) { try { current.play() } catch { /* refused */ } }
-  }
+  if (current) unmuteNow(current)
   emit()
+}
+
+/**
+ * Make an element audible FROM INSIDE A GESTURE.
+ *
+ * Clearing `.muted` on an element that is already rolling does not reliably
+ * route audio: it was started muted, the output is detached, and iOS Safari
+ * only re-attaches it when a play() is issued with user activation on the
+ * stack. Setting the flag alone leaves a video that plays in silence — which
+ * is exactly the bug where sound "only works after you mute it and replay".
+ * Muting and replaying worked because the replay WAS a gesture.
+ *
+ * So: unmute, then call play() unconditionally — not only when paused. Calling
+ * play() on an already-playing element is a no-op for playback and is
+ * precisely what re-attaches the audio track.
+ */
+function unmuteNow (v) {
+  if (!v) return
+  v.muted = !soundOn
+  if (!soundOn) return
+  try {
+    const p = v.play()
+    if (p && typeof p.catch === 'function') p.catch(() => { /* policy refused */ })
+  } catch { /* refused */ }
 }
 
 /**
@@ -103,10 +121,10 @@ export function unlockAudio () {
   unlocked = true
   if (explicit === 'off') return     // they said no; the default does not argue
   soundOn = true
-  if (current) {
-    current.muted = false
-    if (current.paused) { try { current.play() } catch { /* refused */ } }
-  }
+  // Same rule as the control: unmute AND play, inside this gesture. The
+  // element is almost always already rolling muted at this point, which is the
+  // exact case where clearing `.muted` alone produces no sound.
+  if (current) unmuteNow(current)
   emit()
 }
 
