@@ -20,6 +20,8 @@
   "jsqr": "^1.4.0",
   "livekit-client": "^2.21.0",
   "qrcode-generator": "^2.0.4",
+  "react": "19.2.8",
+  "react-dom": "19.2.8",
   "socket.io-client": "^4.8.3",
   "spotme-core": "file:vendor/spotme-core"
  },
