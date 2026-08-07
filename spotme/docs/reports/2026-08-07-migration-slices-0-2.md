@@ -145,7 +145,29 @@ cd ../../backend && npx jest test/assistant-dark-fences test/discovery-dark-fenc
 
 ## Blockers and carried risk
 
-**No blocker stopped this run.** Two items the next session must not trip over:
+**One blocker hit at push time**, plus two carried items.
+
+### BLOCKER — `.github/workflows/ci.yml` could not be pushed
+
+```
+! [remote rejected] refusing to allow an OAuth App to create or update
+  workflow .github/workflows/ci.yml without `workflow` scope
+```
+
+The CI change is **required** -- without it CI runs `working-directory:
+spotme/web`, which no longer exists, and every web job fails. It is reverted on
+this branch so the rest could push. **Someone with `workflow` scope must apply
+these four lines before this PR can go green:**
+
+| Line | From | To |
+|---|---|---|
+| `working-directory` (x2) | `spotme/web` | `spotme/apps/web` |
+| `cache-dependency-path` | `spotme/web/package-lock.json` | `spotme/apps/web/package-lock.json` |
+| comment | `spotme/web/eslint.config.mjs` | `spotme/apps/web/eslint.config.mjs` |
+
+### Carried
+
+Two items the next session must not trip over:
 
 1. **Vercel Root Directory is still `spotme/web` on both projects and this PR
    does not change it** (hard stop: no Vercel settings change). **Merging this
