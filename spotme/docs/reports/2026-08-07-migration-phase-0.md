@@ -1,6 +1,6 @@
 # Migration Phase 0 — what I read, what I found, what I recommend
 
-**Date:** 2026-08-07 · **Branch:** `master` · **Verified at:** `772a92a`
+**Date:** 2026-08-07 · **Branch:** `master` · **Verified at:** `acf48bc`
 **Deliverable:** [ADR-035 — Frontend migration to React + TypeScript](../adr/035-frontend-migration-plan.md) (Status: **PROPOSED**)
 **Mission constraints honoured:** no application code, no `package.json`
 changes, no new dependencies, no merges, `claude/vercel-token-connection-bj4d21`
@@ -23,8 +23,22 @@ about the transport layer, wrong about the design system, and wrong about the
 next free ADR number.
 
 Per CLAUDE.md bootstrap step 8 I stopped, reported, and fast-forwarded
-(`git merge --ff-only`, no merge commit, tracked tree was clean) to `772a92a`.
-**Everything below is measured at `772a92a`.**
+(`git merge --ff-only`, no merge commit, tracked tree was clean) to `acf48bc`.
+**Everything below is measured at `acf48bc`.**
+
+**And it happened again mid-mission.** While the ADR was being written,
+PR #136 (moments media fixes, reels viewer, Vercel devDependencies) landed
+upstream — six commits that grew `views/moments.js` by 267 lines and 20 `el()`
+calls, grew `moments.css`, `lib/video.js` and `lib/moments-api.js`, and added a
+57th test suite. The commit was rebased onto `097bc78` and **every affected
+figure in both documents was re-measured**, not carried forward. Final numbers
+are at `acf48bc`.
+
+The lesson is worth recording for the migration itself: this repository moves
+fast enough that an inventory has a shelf life measured in hours. Any slice
+that reasons from a file listing must re-measure at merge time, and the
+`03-IMPLEMENTATION-STATUS.md` row for a slice should carry the SHA it was
+verified against.
 
 Second, smaller mismatch: `docs/adr/README.md` is **stale**. Its index table
 ends at ADR-028 and does not list ADR-029 (18+ age gate), ADR-033 (server-only
@@ -45,12 +59,12 @@ index needs a separate repair PR.
 | `docs/adr/033-server-only-transport-migration.md` | Made `spotme/app` legible as dead code |
 | `spotme/web-next/` — README, `package.json`, `App.tsx`, `src/discovery/*`, `scripts/check-boundaries.mjs` | What the beachhead actually is (and is not) |
 | `spotme/web/src/` — all 80 non-empty files | The inventory |
-| `spotme/web/test/` — all 56 suites | Coverage mapping, test-kind classification |
+| `spotme/web/test/` — all 57 suites | Coverage mapping, test-kind classification |
 | `spotme/packages/contracts/`, `spotme/web/vercel.json`, `spotme/app/`, `spotme/mobile/` | Layout, deployment, the mobile question |
 | PR #132 (via `gh pr view`) | The design-token contract the migration must carry |
 
-Verification run, not assumed: `npm test --prefix spotme/web` → **1,077
-assertions, exit 0**, 56 suites.
+Verification run, not assumed: `npm test --prefix spotme/web` → **1,085
+assertions, exit 0**, 57 suites.
 
 ---
 
@@ -58,7 +72,7 @@ assertions, exit 0**, 56 suites.
 
 ### 2.1 The framework-free layer is bigger and cleaner than expected
 
-**~5,518 lines move to a shared package with no edit at all.** I verified this
+**~5,572 lines move to a shared package with no edit at all.** I verified this
 two ways rather than by inspection: a DOM-reference grep, and an import-graph
 trace proving these modules reach only `../api.js`, `../auth-headers.js`,
 `../socket-transport.js` and their own siblings — never `lib/ui.js`, never
@@ -68,7 +82,7 @@ trace proving these modules reach only `../api.js`, `../auth-headers.js`,
 |---|---:|---:|
 | `lib/crypto/*` (x3dh, ratchet, safety-number, signing-*, identity-*, e2e-v2) | 13 | ~3,767 |
 | `lib/transport/*` (ITransportAdapter, socketio, centrifugo, index, room) | 5 | 597 |
-| API clients (`api`, `auth-headers`, `moments-api`, `discovery-api`, `groups-api`, `group-perms`) | 6 | 482 |
+| API clients (`api`, `auth-headers`, `moments-api`, `discovery-api`, `groups-api`, `group-perms`) | 6 | 536 |
 | `lib/calls/livekit-media.js` | 1 | 327 |
 | `lib/ai/*` | 4 | 162 |
 | Pure logic (`english`, `photos`, `voice`) | 3 | 183 |
@@ -82,9 +96,9 @@ tested code in the repository.
 
 ### 2.2 There is no view-level test coverage anywhere
 
-All 14 views build DOM imperatively through `el()` from `lib/ui.js` — **950
-call sites**, 10,751 lines of view JS. Not one has a direct unit test. Every
-one of the 1,077 assertions sits either below the view layer or in a text
+All 14 views build DOM imperatively through `el()` from `lib/ui.js` — **963
+call sites**, 11,018 lines of view JS. Not one has a direct unit test. Every
+one of the 1,085 assertions sits either below the view layer or in a text
 fence.
 
 This is the dominant risk in the whole programme, and it is not visible from
@@ -170,7 +184,7 @@ Full rationale and rejected alternatives are in ADR-035; the short form:
 | **(c) Monorepo layout** | `apps/web` + `packages/{contracts,core,ui,search-bench}`. **web-next is dissolved, not promoted** — components → `packages/ui`, controllers/ports → `packages/core`, its harness deleted. No `apps/mobile` placeholder. |
 | **(d) Tailwind + #132 tokens** | **[PROPOSED]** Tailwind v4, tokens-first, `packages/ui` only. v4's `@theme` reads CSS custom properties natively, so `tokens.css` stays the single source; `--onfill`/`--surface`, `--ink-press`, the 15 vendored fonts and the discrete-weight decision all move verbatim, and the 29-assertion `design-tokens-fence` moves with them and keeps running. |
 | **(e) Slice order** | **Default kept: slice 1 = Discovery** — but scope-pinned to the *legacy live* surface. Chat and crypto last. A smaller pathfinder slice was considered and rejected (§4). |
-| **(f) Per-slice DoD** | Nine items: dark flag `spotme.ui.<slice>` (default off) · legacy view stays live and unmodified · 1,077-assertion floor holds · new package tests · **fence parity against the React build** · a flag-off/flag-on parity test · a11y parity · bundle budget recorded · docs updated in place (G9). |
+| **(f) Per-slice DoD** | Nine items: dark flag `spotme.ui.<slice>` (default off) · legacy view stays live and unmodified · 1,085-assertion floor holds · new package tests · **fence parity against the React build** · a flag-off/flag-on parity test · a11y parity · bundle budget recorded · docs updated in place (G9). |
 | **(g) Rollback** | Tier 1 flag-off (seconds, no deploy) · tier 2 revert the merge (slices are additive by construction) · tier 3 **prevented, not recovered**: a slice may not change any persisted shape — new data goes under a new key legacy ignores. Legacy deletion is a separate PR one release after 100% rollout. |
 
 ---
@@ -180,7 +194,7 @@ Full rationale and rejected alternatives are in ADR-035; the short form:
 **Slice 1 = Discovery, legacy live surface only.**
 
 **In scope**
-- Rewrite `views/discovery.js` (750 lines, 66 `el()` calls) as React, in
+- Rewrite `views/discovery.js` (750 lines, 65 `el()` calls) as React, in
   `packages/ui/discovery` + `packages/core/discovery`.
 - Reuse web-next Discovery as **architecture and components**: the controller
   shape, the five injected ports, `coarsen.ts`, the privacy-mutation battery,
@@ -269,9 +283,9 @@ Recorded so they are not silently absorbed:
 - `spotme/docs/reports/2026-08-07-migration-phase-0.md` — this report
 
 **Verified during the mission:**
-- `git merge --ff-only origin/master` → `772a92a` (no merge commit; tracked
+- `git merge --ff-only origin/master` → `772a92a`, then `git rebase origin/master` → `acf48bc` after PR #136 landed mid-mission (no merge commit; tracked
   tree was clean beforehand)
-- `npm test --prefix spotme/web` → **1,077 assertions, exit 0**, 56 suites
+- `npm test --prefix spotme/web` → **1,085 assertions, exit 0**, 57 suites
 
 **Not done, by constraint:** no application code, no `package.json` change, no
 new dependency, no merge of any branch or PR, no touch of

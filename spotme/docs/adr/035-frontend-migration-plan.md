@@ -1,6 +1,6 @@
 # ADR-035 — Frontend migration to React + TypeScript: the executable plan
 
-**Status: PROPOSED** · **Date:** 2026-08-07 · **Verified against `master` `772a92a`**
+**Status: PROPOSED** · **Date:** 2026-08-07 · **Verified against `master` `acf48bc`**
 
 **Relates to:** [ADR-015](015-compile-time-feature-flags.md) (compile-time
 flags), [ADR-016](016-dark-shipping.md) (dark shipping),
@@ -18,10 +18,10 @@ PR #132 (design tokens, self-hosted fonts), the Platform Phase 1–6 programmes.
 
 ## Context
 
-Spot Me ships one production frontend: `spotme/web` — ~10,751 lines of
-imperative view JavaScript across 14 screens, built by 950 `el()` calls into a
-hash router, plus ~7,446 lines of CSS. It works, it is the deployed product,
-and its suite is green (1,077 assertions, exit 0, verified 2026-08-07).
+Spot Me ships one production frontend: `spotme/web` — ~11,018 lines of
+imperative view JavaScript across 14 screens, built by 963 `el()` calls into a
+hash router, plus ~7,553 lines of CSS. It works, it is the deployed product,
+and its suite is green (1,085 assertions, exit 0, verified 2026-08-07).
 
 Alongside it sit React artifacts accumulated by the Platform Phase programme:
 `spotme/web-next` (React 18.3, five domain shells, 105 tests, **inert**),
@@ -40,7 +40,7 @@ shipped slice is taken back. This ADR supplies exactly that and nothing more.
 
 ### A. Every surface in `spotme/web/src`
 
-80 non-empty source files. Test coverage is stated per surface; "fence" means
+82 non-empty source files. Test coverage is stated per surface; "fence" means
 a test that reads source as **text** and asserts structure (these break on any
 file move and are called out again in §Consequences).
 
@@ -51,10 +51,10 @@ has a component model, none is unit-tested directly.
 
 | View | JS | CSS | `el()` | Direct test coverage |
 |---|---:|---:|---:|---|
-| `views/chat.js` | 4,672 | 2,844 | 308 | none direct; behaviour covered via `lib/rooms.js` in `media`/`requests`/`viewonce`/`send-failure-visible` |
-| `views/moments.js` | 1,196 | 272 | 98 | `moments-nav-fence` (fence), `moments-home` (fence) |
+| `views/chat.js` | 4,672 | 2,844 | 302 | none direct; behaviour covered via `lib/rooms.js` in `media`/`requests`/`viewonce`/`send-failure-visible` |
+| `views/moments.js` | 1,463 | 379 | 118 | `moments-nav-fence` (fence), `moments-home` (fence), `moments-media-url` |
 | `views/profile.js` | 1,097 | 825 | 140 | none |
-| `views/discovery.js` | 750 | 607 | 66 | none direct; `discovery-coarse-broadcast` covers `lib/discovery.js` |
+| `views/discovery.js` | 750 | 607 | 65 | none direct; `discovery-coarse-broadcast` covers `lib/discovery.js` |
 | `views/inbox.js` | 742 | 317 | 74 | none |
 | `views/verify.js` | 391 | — | 27 | none direct; `identity-verify` covers the underlying modules |
 | `views/group-manage.js` | 338 | 484¹ | 36 | none |
@@ -69,7 +69,7 @@ has a component model, none is unit-tested directly.
 ¹ the three group views share `views/groups.css`.
 
 **Finding: there is no view-level test coverage anywhere in the product.** All
-1,077 assertions sit below the view layer or in text fences. A React rewrite
+1,085 assertions sit below the view layer or in text fences. A React rewrite
 therefore has no behavioural safety net at the surface being rewritten — this
 is the single largest risk in the whole migration and drives the DoD in §(f).
 
@@ -77,7 +77,7 @@ is the single largest risk in the whole migration and drives the DoD in §(f).
 
 | Module | Lines | DOM refs | Coverage |
 |---|---:|---:|---|
-| `main.js` | 1,017 | 36 | `moments-home` (fence), `moments-nav-fence` (fence) |
+| `main.js` | 1,025 | 36 | `moments-home` (fence), `moments-nav-fence` (fence) |
 | `app.js` | 360 | 26 | none |
 | `store.js` | 530 | 25 | `store-quota` |
 | `net.js` | 291 | 3 | via `discovery-coarse-broadcast`, `requests` |
@@ -99,10 +99,10 @@ siblings — never `lib/ui.js`, never `views/`.
 | **`lib/transport/*`** — ITransportAdapter, socketio-adapter, centrifugo-adapter, index, room | 5 | 597 | `transport`, `transport-seam` |
 | **`lib/calls/livekit-media.js`** | 1 | 327 | `calls-flag` (covers `calls/select.js`); `livekit-call.harness.mjs`, `turn-relay.check.mjs` are opt-in harnesses |
 | **`lib/ai/*`** — baseline, gateway, index, ports | 4 | 162 | `ai-gateway`, `ai-gateway-not-shipped` (fence) |
-| **API clients** — `api.js`, `auth-headers.js`, `moments-api.js`, `discovery-api.js`, `groups-api.js`, `group-perms.js` | 6 | 482 | `member-search`, `groups-permissions`, `api-auth` |
+| **API clients** — `api.js`, `auth-headers.js`, `moments-api.js`, `discovery-api.js`, `groups-api.js`, `group-perms.js` | 6 | 536 | `member-search`, `groups-permissions`, `api-auth` |
 | **Pure logic** — `english.js`, `photos.js`, `voice.js` | 3 | 183 | `english-guard` |
 
-**~5,518 lines move with no edit.** Three modules
+**~5,572 lines move with no edit.** Three modules
 (`crypto/identity-store.js`, `crypto/signing-key-store.js`,
 `crypto/e2e-v2.js`) each matched the DOM grep once; all three hits are prose
 in comments explaining *why IndexedDB and not localStorage*. They are clean.
@@ -123,7 +123,7 @@ flag readers, not logic — §(c) gives them a one-function host shim.
 | `lib/media.js` | 288 | canvas/Image compression | `media`, `media-leakage` |
 | `lib/notify.js` | 266 | Notification API, audio priming | via 5 dynamic suites |
 | `lib/discovery.js` | 275 | lobby broadcast | **`discovery-coarse-broadcast` — the ADR-024 P0 privacy fence** |
-| `lib/blobstore.js`, `lib/media-transfer.js`, `lib/crop.js`, `lib/pullrefresh.js`, `lib/qr-scan.js`, `lib/ui.js`, `lib/push.js`, `lib/translate.js`, `lib/video.js`, `lib/demo.js` | 1,616 | IndexedDB / canvas / gesture / Capacitor / DOM helpers | `blobstore`, `media-transfer`, `qr-scan`, `translate-guards`, `translit`, `push*` |
+| `lib/blobstore.js`, `lib/media-transfer.js`, `lib/crop.js`, `lib/pullrefresh.js`, `lib/qr-scan.js`, `lib/ui.js`, `lib/push.js`, `lib/translate.js`, `lib/video.js`, `lib/demo.js` | 2,005 | IndexedDB / canvas / gesture / Capacitor / DOM helpers | `blobstore`, `media-transfer`, `qr-scan`, `translate-guards`, `translit`, `push*` |
 
 #### A.5 Design system
 
@@ -132,10 +132,10 @@ flag readers, not logic — §(c) gives them a one-function host shim.
 
 ### B. Test inventory
 
-56 suites in `npm test --prefix web`, 1,077 assertions, exit 0 at `772a92a`.
+57 suites in `npm test --prefix web`, 1,085 assertions, exit 0 at `acf48bc`.
 By kind:
 
-- **Behavioural, module-level (33):** import a `lib/` module directly or via
+- **Behavioural, module-level (34):** import a `lib/` module directly or via
   `--experimental-test-module-mocks`. These survive a move untouched provided
   import specifiers are updated.
 - **Text fences (9):** `signing-not-shipped`, `e2e-v3-not-shipped`,
@@ -317,7 +317,7 @@ in full:
 
 *Rejected — plain CSS Modules per component.* Workable, but every migrated
 slice would re-derive its own spacing and type scale from the raw tokens, and
-the 950 existing `el()` call sites already carry class strings that have no
+the 963 existing `el()` call sites already carry class strings that have no
 utility vocabulary to land on.
 
 *Rejected — CSS-in-JS (styled-components / emotion).* Runtime cost on a mobile
@@ -385,7 +385,7 @@ A slice is done when **all nine** hold. Any one missing means not done.
 2. **Both stacks live.** The legacy view stays in `ROUTES`, **unmodified and
    reachable**, for the whole slice lifetime and one full release after
    cutover. This is what makes §(g) tier 1 possible; it is not negotiable.
-3. **Legacy suite unchanged and green.** 1,077 assertions is the regression
+3. **Legacy suite unchanged and green.** 1,085 assertions is the regression
    floor. A slice that edits an existing assertion to make it pass must justify
    the edit in its PR body.
 4. **New tests in the slice's package.** vitest + Testing Library, matching
@@ -446,7 +446,7 @@ after the flag has been on at 100% with no rollback — never in the cutover PR.
 
 ## Consequences
 
-**Positive.** One React major across web and native (a). ~5,518 lines of
+**Positive.** One React major across web and native (a). ~5,572 lines of
 crypto, transport, calls, AI and API-client code move with **no edit and no
 retest** (A.3) — the highest-risk code in the product is the code the migration
 does not touch. Every slice is independently revertible in seconds (g). The
@@ -511,9 +511,9 @@ Named here so they are not silently absorbed into this plan:
 
 ## Evidence
 
-All verified against `master` `772a92a`, 2026-08-07:
+All verified against `master` `acf48bc`, 2026-08-07:
 
-- `npm test --prefix spotme/web` → **1,077 assertions, exit 0**, 56 suites.
+- `npm test --prefix spotme/web` → **1,085 assertions, exit 0**, 57 suites.
 - Surface inventory: `spotme/web/src`, 80 non-empty files; per-file line counts
   and `el()` counts in §A.
 - Framework-free classification: DOM-reference grep (`document.`, `window.`,
@@ -521,7 +521,7 @@ All verified against `master` `772a92a`, 2026-08-07:
   import-graph trace showing `lib/crypto`, `lib/transport`, `lib/calls`,
   `lib/ai` reach only `../api.js`, `../auth-headers.js`,
   `../socket-transport.js` and siblings.
-- View DOM coupling: all 14 views import `el()` from `lib/ui.js`; 950 call sites.
+- View DOM coupling: all 14 views import `el()` from `lib/ui.js`; 963 call sites.
 - `spotme/web-next`: `package.json` (react ^18.3.1), 34 source files,
   `App.tsx` mounting Discovery only, `scripts/check-boundaries.mjs`.
 - Isolation fences:
@@ -538,6 +538,6 @@ All verified against `master` `772a92a`, 2026-08-07:
 
 **Repository-state correction (Governance G9, CLAUDE.md bootstrap step 8):**
 the working tree began this mission 48 commits behind `origin/master` and was
-fast-forwarded to `772a92a` before any inventory was taken. The ADR index
+fast-forwarded to `acf48bc` before any inventory was taken. The ADR index
 `docs/adr/README.md` is **stale** — it ends at 028 and does not list ADR-029,
 033, or 034. Numbers 030–032 were never used; this ADR takes **035**.
