@@ -54,7 +54,31 @@ const ICONS = {
   more: `<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5.6" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="18.4" cy="12" r="1.5"/></svg>`,
   soundOff: `<svg ${STROKE}><path d="M4.5 9.4v5.2h3.2l4.1 3.3V6.1L7.7 9.4H4.5z"/><path d="M16.4 9.8l4.1 4.4M20.5 9.8l-4.1 4.4"/></svg>`,
   soundOn: `<svg ${STROKE}><path d="M4.5 9.4v5.2h3.2l4.1 3.3V6.1L7.7 9.4H4.5z"/><path d="M15.6 9.2a3.9 3.9 0 010 5.6"/><path d="M18.2 6.8a7.4 7.4 0 010 10.4"/></svg>`,
-  play: `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8.4 5.7a.9.9 0 011.36-.77l8.1 5.5a.9.9 0 010 1.5l-8.1 5.5a.9.9 0 01-1.36-.77V5.7z"/></svg>`
+  play: `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8.4 5.7a.9.9 0 011.36-.77l8.1 5.5a.9.9 0 010 1.5l-8.1 5.5a.9.9 0 01-1.36-.77V5.7z"/></svg>`,
+  pause: `<svg viewBox="0 0 24 24" fill="currentColor"><rect x="7" y="5" width="3.6" height="14" rx="1.2"/><rect x="13.4" y="5" width="3.6" height="14" rx="1.2"/></svg>`,
+  /* Back is a CHEVRON, not a cross. A cross says "dismiss this thing"; the
+   * reels viewer is a place you went from the feed, and a chevron is what says
+   * "the feed is still behind me" — which is where the gesture actually goes. */
+  back: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>`,
+  save: `<svg ${STROKE}><path d="M6.5 4.2h11a.8.8 0 01.8.8v14.3l-6.3-3.6-6.3 3.6V5a.8.8 0 01.8-.8z"/></svg>`,
+  saveOn: `<svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M6.5 4.2h11a.8.8 0 01.8.8v14.3l-6.3-3.6-6.3 3.6V5a.8.8 0 01.8-.8z"/></svg>`,
+  /* ±10s: an arrow that curls back on itself, with the number sitting inside
+   * the curl. The glyph carries the interval so the control needs no label. */
+  back10: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M11.8 6.2V2.9L7.4 6.2l4.4 3.3V6.2a6.4 6.4 0 11-6.3 7.5"/><text x="12" y="17.6" font-size="7.4" font-family="system-ui,sans-serif" font-weight="600" text-anchor="middle" fill="currentColor" stroke="none">10</text></svg>`,
+  fwd10: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12.2 6.2V2.9l4.4 3.3-4.4 3.3V6.2a6.4 6.4 0 106.3 7.5"/><text x="12" y="17.6" font-size="7.4" font-family="system-ui,sans-serif" font-weight="600" text-anchor="middle" fill="currentColor" stroke="none">10</text></svg>`
+}
+
+/* SAVED POSTS ARE DEVICE-LOCAL, and that is a limitation rather than a design
+ * choice: the Moments API has no save/bookmark route to call (no endpoint, no
+ * column). The control is in the rail because the reels contract asks for it,
+ * and it does the only honest thing available — remembers on this device. When
+ * a server-side collection exists this becomes a call and the key retires. */
+const SAVED_KEY = 'spotme.moments.saved'
+const readSaved = () => {
+  try { return new Set(JSON.parse(localStorage.getItem(SAVED_KEY) || '[]')) } catch { return new Set() }
+}
+const writeSaved = (set) => {
+  try { localStorage.setItem(SAVED_KEY, JSON.stringify([...set])) } catch { /* private mode */ }
 }
 
 const FEED_MODES = [
@@ -176,9 +200,6 @@ export function render (root, ctx, params) {
     assetCache.set(mediaId, p)
     return p
   }
-
-  /** Just the playable/renderable URL — images and stories want only this. */
-  const urlFor = (mediaId) => assetFor(mediaId).then((a) => (a ? a.url : null))
 
   /* THE LOCATION LINE.
    *
@@ -340,10 +361,27 @@ export function render (root, ctx, params) {
     railWrap.appendChild(mine)
     for (const s of stories) {
       const who = s.author?.displayName || s.author?.userId || 'Someone'
+      /* THE RING SHOWS THE STORY, not a letter.
+       *
+       * It rendered a name-derived avatar and nothing else, so a story you had
+       * just posted looked exactly like a story you had not — which is a large
+       * part of what "posting a story produces an empty story" describes. The
+       * author avatar stays underneath as the placeholder, and the story's own
+       * frame replaces it as soon as the asset lookup lands (the poster for a
+       * video, the picture itself for a photo). */
+      const ringImg = el('span', { class: 'mo-ringimg live' }, [avatar({ name: who, avatar: s.author?.avatar }, 56)])
       railWrap.appendChild(el('button', { class: 'mo-ring', type: 'button', onclick: () => openStory(s) }, [
-        el('span', { class: 'mo-ringimg live' }, [avatar({ name: who }, 56)]),
+        ringImg,
         el('span', { class: 'mo-ringname', text: who })
       ]))
+      if (s.mediaId) {
+        assetFor(s.mediaId).then((a) => {
+          const src = a && (a.kind === 'video' ? a.posterUrl : a.url)
+          if (!src || disposed || !ringImg.isConnected) return
+          clear(ringImg)
+          ringImg.appendChild(el('img', { class: 'mo-ringthumb', alt: '', src }))
+        })
+      }
     }
   }
 
@@ -441,7 +479,9 @@ export function render (root, ctx, params) {
         feedVids[i].v.preload = 'auto'
         // No source yet means the asset call is still out; its `then` will
         // start playback instead, using the set this just joined.
-        if (feedVids[i].v.src) playExclusive(feedVids[i].v)
+        if (feedVids[i].v.src) {
+          playExclusive(feedVids[i].v).then((ok) => feedVids[i]?.slot.classList.toggle('failed', !ok))
+        }
       },
       (node) => {
         const i = at(node)
@@ -543,10 +583,24 @@ export function render (root, ctx, params) {
         })
         mediaSlot.appendChild(sound)
         mediaSlot.appendChild(el('span', { class: 'mo-play', html: ICONS.play }))
-        // The play glyph is a STATE, not decoration: it marks a card that is
-        // holding still, and gets out of the way the moment one is running.
-        v.addEventListener('playing', () => mediaSlot.classList.add('on'))
+        /* NO PLAY AFFORDANCE AT REST.
+         *
+         * A feed video is supposed to simply begin: muted autoplay over its
+         * own poster, nothing on top. The glyph used to be painted on every
+         * card and merely faded out once `playing` fired, so any clip that had
+         * not started yet — including every clip in the deployed build, whose
+         * source never loaded at all — sat under a play button. That is what
+         * reads as lag: the control says "you have to do something", when in
+         * fact the video is either about to start or is broken.
+         *
+         * So it is now strictly a FAILURE state. `failed` is set only when
+         * playback was actually refused (iOS Low Power Mode, Android battery
+         * saver) or the source errored, and it is cleared the moment anything
+         * plays. At rest the reader sees the poster and nothing else. */
+        const failed = (on) => mediaSlot.classList.toggle('failed', on)
+        v.addEventListener('playing', () => { mediaSlot.classList.add('on'); failed(false) })
         v.addEventListener('pause', () => mediaSlot.classList.remove('on'))
+        v.addEventListener('error', () => failed(true))
 
         assetFor(media.mediaId).then((a) => {
           if (!a || disposed) return
@@ -565,7 +619,7 @@ export function render (root, ctx, params) {
            * on a source-less element — a guaranteed rejection that leaves the
            * card frozen on its poster with nothing to retry it. So the arrival
            * of the source is itself a trigger. */
-          if (inView.has(mediaSlot)) playExclusive(v)
+          if (inView.has(mediaSlot)) playExclusive(v).then((ok) => failed(!ok))
         })
 
         feedVids.push({ m, v, slot: mediaSlot })
@@ -807,13 +861,14 @@ export function render (root, ctx, params) {
     async function upload () {
       status.textContent = 'Uploading…'
       try {
-        const t0 = performance.now()
         uploaded = await M.uploadMedia(picked)
-        const ms = Math.round(performance.now() - t0)
-        // The stripping claim is the SERVER's, echoed only when it says so.
-        status.textContent = uploaded?.exifStripped
-          ? `Ready — location data removed (${ms} ms).`
-          : `Ready (${ms} ms).`
+        /* ONE QUIET WORD. This line used to report the upload duration and
+         * announce "location data removed" — processing detail and privacy
+         * narration aimed at whoever wrote it, not at the person posting.
+         * Stripping EXIF is what the product always does; saying so at the
+         * moment of posting invites the reader to wonder when it does not.
+         * The status exists to say the picture is ready, and nothing else. */
+        status.textContent = 'Ready'
       } catch (e) {
         uploaded = null
         status.textContent = e.message === 'too-large' ? 'That file is too large.' : (e.message || 'Upload failed.')
@@ -1044,16 +1099,70 @@ export function render (root, ctx, params) {
     if (!videos.length) return
     const track = el('div', { class: 'mo-reeltrack' })
     const nodes = []
+    const saved = readSaved()
+
+    /* THE ACTION RAIL — icons only, hard right, vertically stacked.
+     *
+     * NO COUNTS, on any of them, for the same reason the feed card has none
+     * (see the header note): a tally is what turns posting into scorekeeping.
+     * The rail is react · comment · share · save · ⋯ and every one of them is
+     * a glyph with an accessible name and nothing else. */
+    const railFor = (m) => {
+      const mine = m.author?.userId === db.profile()?.id
+      const reactBtn = el('button', {
+        class: 'mo-reelact' + (m.myReaction ? ' on' : ''), type: 'button',
+        html: reactFace(m.myReaction), 'aria-label': 'React',
+        'aria-pressed': m.myReaction ? 'true' : 'false',
+        onclick: () => openReactions(m, reactBtn)
+      })
+      const saveBtn = el('button', {
+        class: 'mo-reelact' + (saved.has(m.id) ? ' on' : ''), type: 'button',
+        html: saved.has(m.id) ? ICONS.saveOn : ICONS.save,
+        'aria-label': saved.has(m.id) ? 'Saved' : 'Save',
+        'aria-pressed': saved.has(m.id) ? 'true' : 'false',
+        onclick: () => {
+          const on = !saved.has(m.id)
+          if (on) saved.add(m.id); else saved.delete(m.id)
+          writeSaved(saved)
+          saveBtn.innerHTML = on ? ICONS.saveOn : ICONS.save
+          saveBtn.classList.toggle('on', on)
+          saveBtn.setAttribute('aria-label', on ? 'Saved' : 'Save')
+          saveBtn.setAttribute('aria-pressed', on ? 'true' : 'false')
+          ctx.toast(on ? 'Saved' : 'Removed from saved')
+        }
+      })
+      return el('div', { class: 'mo-reelrail' }, [
+        reactBtn,
+        el('button', {
+          class: 'mo-reelact', type: 'button', html: ICONS.comment,
+          'aria-label': 'Comments', onclick: () => openComments(m)
+        }),
+        el('button', {
+          class: 'mo-reelact', type: 'button', html: ICONS.share,
+          'aria-label': 'Share', onclick: () => shareMoment(m)
+        }),
+        saveBtn,
+        el('button', {
+          class: 'mo-reelact', type: 'button', html: ICONS.more,
+          'aria-label': 'More', onclick: () => openMore(m, mine)
+        })
+      ])
+    }
+
     for (const m of videos) {
       const v = videoEl('mo-reelvideo', { preload: 'none' })
       const media = (m.media || [])[0]
-      const pane = el('section', { class: 'mo-reel' }, [
-        v,
-        el('div', { class: 'mo-reelmeta' }, [
-          el('b', { text: m.author?.displayName || 'Someone' }),
-          m.text ? el('p', { text: m.text }) : null
-        ].filter(Boolean))
-      ])
+      /* Bottom-left identity: avatar, then name, then the caption underneath —
+       * the same reading order as the feed card's header, so the post does not
+       * re-introduce itself differently just because it got bigger. */
+      const meta = el('div', { class: 'mo-reelmeta' }, [
+        el('div', { class: 'mo-reelwho' }, [
+          avatar({ name: m.author?.displayName || 'Someone', avatar: m.author?.avatar }, 32),
+          el('b', { text: m.author?.displayName || 'Someone' })
+        ]),
+        m.text ? el('p', { text: m.text }) : null
+      ].filter(Boolean))
+      const pane = el('section', { class: 'mo-reel' }, [v, meta, railFor(m)])
       nodes.push({ m, v, pane, mediaId: media?.mediaId })
       track.appendChild(pane)
     }
@@ -1066,7 +1175,10 @@ export function render (root, ctx, params) {
     let activeIdx = startIdx
     let resumed = false
 
-    const closeBtn = el('button', { class: 'mo-reelclose', type: 'button', text: '✕', onclick: () => closeReels() })
+    const backBtn = el('button', {
+      class: 'mo-reelback', type: 'button', html: ICONS.back,
+      'aria-label': 'Back', onclick: () => closeReels()
+    })
     /* The same shared sound state the cards use, so opening a reel from a card
      * you had already unmuted does not silently start over in silence. */
     const soundBtn = el('button', {
@@ -1080,7 +1192,97 @@ export function render (root, ctx, params) {
         soundBtn.setAttribute('aria-label', on ? 'Mute' : 'Unmute')
       }
     })
-    const layer = el('div', { class: 'mo-reellayer' }, [track, closeBtn, soundBtn])
+
+    /* ------------------------------------------------------- transport */
+
+    /* ⟲10 · ▶/❚❚ · 10⟳ over a scrub bar. Three rules shape this:
+     *
+     *  - 44px targets. Anything smaller is below the tap size everyone's
+     *    accessibility guidance sets, and a 10-second skip that misses is
+     *    worse than no skip at all.
+     *  - AUTO-HIDE after 2.5s, because the point of a reel is the picture.
+     *  - EXCEPT WHILE PAUSED. A paused video with hidden controls is a still
+     *    image with no way out, which is the state people describe as frozen.
+     */
+    const HIDE_MS = 2500
+    const mmss = (s) => {
+      if (!(s >= 0) || !isFinite(s)) return '0:00'
+      const m = Math.floor(s / 60)
+      return `${m}:${String(Math.floor(s % 60)).padStart(2, '0')}`
+    }
+    const elapsedEl = el('span', { class: 'mo-reeltime', text: '0:00' })
+    const totalEl = el('span', { class: 'mo-reeltime', text: '0:00' })
+    const scrub = el('input', {
+      class: 'mo-reelscrub', type: 'range', min: '0', max: '1000', value: '0',
+      'aria-label': 'Seek'
+    })
+    const playBtn = el('button', {
+      class: 'mo-reelbig', type: 'button', html: ICONS.pause, 'aria-label': 'Pause'
+    })
+    const skip = (delta) => {
+      const v = nodes[activeIdx]?.v
+      if (!v || !isFinite(v.duration)) return
+      v.currentTime = Math.min(Math.max(0, v.currentTime + delta), v.duration || 0)
+      showControls()
+    }
+    const backSkip = el('button', {
+      class: 'mo-reelskip', type: 'button', html: ICONS.back10,
+      'aria-label': 'Back 10 seconds', onclick: () => skip(-10)
+    })
+    const fwdSkip = el('button', {
+      class: 'mo-reelskip', type: 'button', html: ICONS.fwd10,
+      'aria-label': 'Forward 10 seconds', onclick: () => skip(10)
+    })
+    const controls = el('div', { class: 'mo-reelctrls' }, [
+      el('div', { class: 'mo-reeltransport' }, [backSkip, playBtn, fwdSkip]),
+      el('div', { class: 'mo-reelbar' }, [elapsedEl, scrub, totalEl])
+    ])
+
+    let hideTimer = null
+    const paused = () => !!nodes[activeIdx]?.v?.paused
+    function showControls () {
+      controls.classList.add('on')
+      clearTimeout(hideTimer)
+      // Paused keeps them up: there must always be a visible way to resume.
+      if (!paused()) hideTimer = setTimeout(() => controls.classList.remove('on'), HIDE_MS)
+    }
+    playBtn.addEventListener('click', () => {
+      const v = nodes[activeIdx]?.v
+      if (!v) return
+      if (v.paused) playExclusive(v); else pause(v)
+      syncPlayBtn()
+      showControls()
+    })
+    function syncPlayBtn () {
+      const p = paused()
+      playBtn.innerHTML = p ? ICONS.play : ICONS.pause
+      playBtn.setAttribute('aria-label', p ? 'Play' : 'Pause')
+      if (p) { clearTimeout(hideTimer); controls.classList.add('on') }
+    }
+    let scrubbing = false
+    scrub.addEventListener('input', () => {
+      scrubbing = true
+      const v = nodes[activeIdx]?.v
+      if (v && isFinite(v.duration)) elapsedEl.textContent = mmss((Number(scrub.value) / 1000) * v.duration)
+      showControls()
+    })
+    scrub.addEventListener('change', () => {
+      const v = nodes[activeIdx]?.v
+      if (v && isFinite(v.duration)) v.currentTime = (Number(scrub.value) / 1000) * v.duration
+      scrubbing = false
+      showControls()
+    })
+
+    const layer = el('div', { class: 'mo-reellayer' }, [track, backBtn, soundBtn, controls])
+    /* A tap on the picture reveals the controls (and hides them again), which
+     * is how every video surface people already use behaves. The rail, the
+     * transport and the meta block stop the event themselves, so this only
+     * fires for taps on the video itself. */
+    track.addEventListener('click', (e) => {
+      if (e.target.closest('.mo-reelrail, .mo-reelctrls, .mo-reelmeta')) return
+      if (controls.classList.contains('on') && !paused()) controls.classList.remove('on')
+      else showControls()
+    })
     root.appendChild(layer)
     const perf = perfHarness(layer)
     nodes.forEach((n, i) => perf.attach(n.v, `reel${i + 1}`))
@@ -1120,6 +1322,29 @@ export function render (root, ctx, params) {
       else v.addEventListener('loadedmetadata', go, { once: true })
     }
 
+    /* The transport follows whichever pane is active. Listeners are attached
+     * ONCE per element (`wired`) — re-attaching on every activation is how a
+     * scroll up and back leaves four `timeupdate` handlers fighting over one
+     * scrub bar. */
+    function wireTransport (v) {
+      if (v.dataset.wired === '1') return
+      v.dataset.wired = '1'
+      const paint = () => {
+        if (v !== nodes[activeIdx]?.v) return
+        const d = isFinite(v.duration) ? v.duration : 0
+        totalEl.textContent = mmss(d)
+        if (!scrubbing) {
+          elapsedEl.textContent = mmss(v.currentTime)
+          scrub.value = String(d ? Math.round((v.currentTime / d) * 1000) : 0)
+        }
+      }
+      v.addEventListener('timeupdate', paint)
+      v.addEventListener('loadedmetadata', paint)
+      v.addEventListener('durationchange', paint)
+      v.addEventListener('play', () => { if (v === nodes[activeIdx]?.v) { syncPlayBtn(); showControls() } })
+      v.addEventListener('pause', () => { if (v === nodes[activeIdx]?.v) syncPlayBtn() })
+    }
+
     async function activate (i) {
       activeIdx = i
       perf.activated(`reel${i + 1}`)
@@ -1128,10 +1353,13 @@ export function render (root, ctx, params) {
       ensureSrc(i + 1, 'metadata'); ensureSrc(i - 1, 'metadata')
       const n = nodes[i]
       if (!n || !n.v.src) return
+      wireTransport(n.v)
       // Only the pane the tap came from resumes, and only the first time it is
       // activated — scrolling back to it later should start it fresh.
       if (i === startIdx && !resumed) { resumed = true; seekTo(n.v, startAt) }
       const ok = await playExclusive(n.v)
+      syncPlayBtn()
+      showControls()
       if (!ok && !n.pane.querySelector('.mo-reeltap')) {
         // Autoplay refused even muted (iOS Low Power Mode / Android saver).
         // Offer a tap rather than a dead black screen; the tap is a user
@@ -1147,6 +1375,7 @@ export function render (root, ctx, params) {
 
     function closeReels () {
       io.disconnect()
+      clearTimeout(hideTimer)
       for (const n of nodes) { pause(n.v); n.v.removeAttribute('src'); n.v.load() }
       layer.remove()
       reelsCleanup = null
@@ -1157,15 +1386,53 @@ export function render (root, ctx, params) {
     activate(startIdx)
   }
 
+  /**
+   * A story, full-bleed on its own layer.
+   *
+   * Two things were wrong here and both produced the same empty rectangle.
+   * The media URL arrives RELATIVE from the local storage adapter and was
+   * assigned raw, so it resolved against the static host and never decoded
+   * (fixed at the API boundary — see `assetUrl` in moments-api.js). And the
+   * viewer only ever built an `<img>`, so a VIDEO story — which the composer
+   * has always accepted — could not render at all.
+   *
+   * The rail row carries no `kind`, so the element is chosen from the asset
+   * lookup's own `kind`, which is the only place the answer actually exists.
+   * (`s.thumbnailUrl` used to be probed first; no server route has ever
+   * returned that field, so it was dead weight hiding the real path.)
+   */
   function openStory (s) {
-    const img = el('img', { class: 'mo-storyimg', alt: '' })
-    const close = sheet([
-      el('div', { class: 'mo-sheethead' }, [el('b', { text: s.author?.displayName || 'Story' })]),
-      img
+    const who = s.author?.displayName || 'Story'
+    const stage = el('div', { class: 'mo-stostage' })
+    const layer = el('div', { class: 'mo-stolayer' }, [
+      stage,
+      el('button', {
+        class: 'mo-reelback', type: 'button', html: ICONS.back,
+        'aria-label': 'Back', onclick: () => close()
+      }),
+      el('div', { class: 'mo-stowho' }, [
+        avatar({ name: who, avatar: s.author?.avatar }, 32),
+        el('b', { text: who })
+      ])
     ])
-    void close
-    if (s.thumbnailUrl) img.src = s.thumbnailUrl
-    else if (s.mediaId) urlFor(s.mediaId).then((u) => { if (u) img.src = u })
+    let vid = null
+    const close = () => { if (vid) pause(vid); layer.remove() }
+    layer.addEventListener('click', (e) => { if (e.target === layer || e.target === stage) close() })
+    root.appendChild(layer)
+
+    if (!s.mediaId) return
+    assetFor(s.mediaId).then((a) => {
+      if (!a || !a.url || disposed) return
+      if (a.kind === 'video') {
+        vid = videoEl('mo-stovideo', { loop: false })
+        if (a.posterUrl) vid.poster = a.posterUrl
+        vid.src = a.url
+        stage.appendChild(vid)
+        playExclusive(vid)
+      } else {
+        stage.appendChild(el('img', { class: 'mo-stoimg', alt: '', src: a.url }))
+      }
+    })
   }
 
   /* --------------------------------------------------------------- sheet */

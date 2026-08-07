@@ -15,14 +15,49 @@
 
 /* ------------------------------------------------------------------ sound */
 
-/* Muted until the reader asks otherwise, then the choice STICKS for the rest
- * of the session and follows them from a card into the reels viewer. Sound
- * that resets on every scroll is the behaviour people describe as "it keeps
- * muting itself"; sound that persists is the one they read as working. */
+/* SOUND ON BY DEFAULT, AS FAR AS THE PLATFORM ALLOWS.
+ *
+ * Video is meant to arrive with its sound. What stops that is not a preference
+ * but a browser rule: audible playback is refused until the page has been
+ * touched, on every mobile browser and most desktop ones. So the honest shape
+ * is not "start unmuted" (which silently fails and leaves a muted video and a
+ * confused reader) but:
+ *
+ *   1. start MUTED, so the first frames actually roll rather than being
+ *      refused outright;
+ *   2. the reader's FIRST TAP ANYWHERE in the app is the gesture that unlocks
+ *      audio — it does not have to be aimed at a video, or at anything;
+ *   3. from that moment sound defaults ON for the session, in the feed and in
+ *      the reels viewer alike;
+ *   4. and an EXPLICIT choice — actually pressing mute or unmute — outranks
+ *      the default and PERSISTS across app opens.
+ *
+ * The distinction in (4) is the whole reason `explicit` exists. Someone who
+ * mutes a video is telling us something; the unlock must never talk over it,
+ * on this open or the next one. Someone who has never touched the control gets
+ * sound, because that is what the product wants to do by default.
+ */
+const SOUND_KEY = 'spotme.sound'
+
+const readChoice = () => {
+  try {
+    const v = localStorage.getItem(SOUND_KEY)
+    return v === 'on' || v === 'off' ? v : null
+  } catch { return null }            // private mode / storage disabled
+}
+const writeChoice = (v) => { try { localStorage.setItem(SOUND_KEY, v) } catch { /* not fatal */ } }
+
+/** An explicit stored choice, or null if they have never pressed the control. */
+let explicit = readChoice()
+/* Audible playback needs a gesture, so the SESSION always begins muted — even
+ * when the stored choice is 'on'. The first tap promotes it. */
 let soundOn = false
+let unlocked = false
 const listeners = new Set()
 
 export const isSoundOn = () => soundOn
+/** Has a real user gesture happened yet? Exposed for tests and diagnostics. */
+export const isAudioUnlocked = () => unlocked
 
 /** Subscribe to sound changes. Returns an unsubscribe. */
 export function onSoundChange (fn) {
@@ -30,16 +65,65 @@ export function onSoundChange (fn) {
   return () => listeners.delete(fn)
 }
 
+const emit = () => { for (const fn of listeners) fn(soundOn) }
+
 /**
- * Flip the shared sound state. MUST be called from a user gesture the first
- * time it turns sound on — every browser refuses audible playback otherwise,
- * and refuses it silently, which is why an unmute button that "does nothing"
- * is the usual symptom of calling this from a timer or an observer.
+ * Flip the shared sound state. This is the EXPLICIT path — pressing the
+ * control — so it records the choice durably and the first-tap default will
+ * never override it again.
+ *
+ * MUST be called from a user gesture the first time it turns sound on: every
+ * browser refuses audible playback otherwise, and refuses it SILENTLY, which
+ * is why an unmute button that "does nothing" is the usual symptom of calling
+ * this from a timer or an observer.
  */
 export function setSoundOn (on, current) {
   soundOn = !!on
-  if (current) current.muted = !soundOn
-  for (const fn of listeners) fn(soundOn)
+  explicit = soundOn ? 'on' : 'off'
+  unlocked = true                    // the press itself is the gesture
+  writeChoice(explicit)
+  if (current) {
+    current.muted = !soundOn
+    // A muted element that is already rolling will not become audible on its
+    // own; nudging play() inside the gesture is what actually opens the
+    // speaker on iOS.
+    if (soundOn && current.paused) { try { current.play() } catch { /* refused */ } }
+  }
+  emit()
+}
+
+/**
+ * The first-tap unlock. Idempotent, and deliberately NOT tied to the video
+ * controls — the gesture that buys audible playback can be any tap in the app.
+ *
+ * Respects an explicit 'off': someone who muted stays muted.
+ */
+export function unlockAudio () {
+  if (unlocked) return
+  unlocked = true
+  if (explicit === 'off') return     // they said no; the default does not argue
+  soundOn = true
+  if (current) {
+    current.muted = false
+    if (current.paused) { try { current.play() } catch { /* refused */ } }
+  }
+  emit()
+}
+
+/**
+ * Listen for the first gesture anywhere in the app. Called once from the shell
+ * so a tap on ANY screen — a chat, a tab, a button — unlocks audio before the
+ * reader ever reaches a video.
+ *
+ * `pointerdown` alone is not enough: iOS Safari grants activation on
+ * touchend/click, and some in-app WebViews never emit pointer events at all.
+ * All three are registered and the first one wins.
+ */
+export function installAudioUnlock (target = document) {
+  const go = () => unlockAudio()
+  for (const evt of ['pointerdown', 'touchend', 'click', 'keydown']) {
+    target.addEventListener(evt, go, { once: true, capture: true, passive: true })
+  }
 }
 
 /* --------------------------------------------------------------- elements */

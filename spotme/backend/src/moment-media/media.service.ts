@@ -198,10 +198,19 @@ export class MomentMediaService implements MomentMediaPort, MediaUploadPort, Med
     return { enqueued: true };
   }
 
-  /** A short-lived URL for a stored asset, or null with no storage configured. */
-  async downloadUrl(storageKey: string): Promise<string | null> {
+  /**
+   * A short-lived URL for a stored asset, or null with no storage configured.
+   *
+   * `contentType` is what lets the browser DECODE the result. Moments objects
+   * are plaintext media bound for an `<img>`/`<video>`, and a store that serves
+   * everything as `application/octet-stream` (which is correct for the chat
+   * ciphertext it was built for) makes that impossible. Passing the asset's own
+   * mime type through — allow-listed at both the signing and serving ends —
+   * is what turns a downloaded blob back into a picture.
+   */
+  async downloadUrl(storageKey: string, contentType?: string): Promise<string | null> {
     if (!this.storage) return null;
-    try { return await this.storage.getDownloadUrl(storageKey); } catch { return null; }
+    try { return await this.storage.getDownloadUrl(storageKey, contentType); } catch { return null; }
   }
 
   async stampStoryRetention(mediaId: string, expiresAtUTC: number): Promise<void> {

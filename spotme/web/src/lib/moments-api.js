@@ -126,7 +126,41 @@ export const momentById = async (id) => {
 
 export const storiesRail = () => call('/stories/rail')
 export const comments = (momentId) => call(`/${encodeURIComponent(momentId)}/comments`)
-export const assetUrl = (mediaId) => call(`/media/${encodeURIComponent(mediaId)}/url`)
+
+/**
+ * MEDIA URLS ARE RESOLVED AGAINST THE API ORIGIN, NOT THE PAGE.
+ *
+ * The local storage adapter hands back a PATH — `/api/v2/media/local?key=…` —
+ * and the S3 adapter hands back an absolute presigned URL. The client used to
+ * assign whichever it got straight to `img.src`/`video.src`, which is correct
+ * only when the app and the API share an origin.
+ *
+ * They do not. The app is static on Vercel and the API is on Railway, and
+ * `vercel.json` carries no `/api` rewrite — so a path-relative media URL
+ * resolved against the STATIC host, which serves no media. Every photo, every
+ * video and every story rendered empty, and nothing failed loudly: the SPA host
+ * answers those paths with `index.html`, so the request "succeeded" and only
+ * the decode failed.
+ *
+ * It never showed in development because the Vite dev server proxies `/api` to
+ * the backend, making the relative URL correct there and only there.
+ *
+ * Absolutising HERE — at the one boundary every asset crosses — fixes it for
+ * both storage adapters at once and cannot be forgotten by a future caller.
+ * An already-absolute URL is returned untouched.
+ */
+const absolutise = (u) => {
+  if (!u || typeof u !== 'string') return u || null
+  if (/^(?:https?:|blob:|data:)/i.test(u)) return u
+  if (!API_BASE) return u                       // same-origin: already correct
+  return `${API_BASE}${u.startsWith('/') ? '' : '/'}${u}`
+}
+
+export const assetUrl = async (mediaId) => {
+  const r = await call(`/media/${encodeURIComponent(mediaId)}/url`)
+  if (!r) return r
+  return { ...r, url: absolutise(r.url), posterUrl: absolutise(r.posterUrl) }
+}
 
 /**
  * Record the composer's trim / cover choices for a video and re-run the
