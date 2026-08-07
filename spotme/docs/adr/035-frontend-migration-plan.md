@@ -1,7 +1,7 @@
 # ADR-035 — Frontend migration to React + TypeScript: the executable plan
 
 **Status: ACCEPTED (plan) — P5 and P6 PENDING owner confirmation; host CURRENCY
-settled, AUDIENCE open as P10. Amended twice 2026-08-07** · **Date:** 2026-08-07
+settled, AUDIENCE open as P10; **slice 1 amended to EXCHANGE**. Amended 2026-08-07** · **Date:** 2026-08-07
 **Verified against `master` `acf48bc`**
 
 > **Acceptance adopts the PLAN. It activates nothing.** P4 (Tailwind) is
@@ -185,7 +185,7 @@ unreferenced by the entry point on purpose.
 suites actively assert that it imports nothing from `spotme/web`, appears in
 no Vercel config, and that `App.tsx` mounts none of the four dark shells.
 
-**The trap this sets for slice 1** is recorded in §(e): web-next's Discovery is
+**The trap this sets for Discovery's slice** is recorded in §(e): web-next's Discovery is
 built against the **Phase 2 backend**, and `DiscoveryModule` is not imported by
 `AppModule` — it is dark, has no live route, and its selected search engine
 (Typesense) is unwired and unpaid for. Shipping web-next Discovery *as-is* is
@@ -479,41 +479,93 @@ token into JavaScript. Same objection, more typing.
 **This is a new dependency and therefore cannot be executed under the
 constraints of the mission that wrote this ADR.** It needs its own PR.
 
-### (e) Slice order — Discovery first, with its scope pinned
+### (e) Slice order — EXCHANGE first (amended 2026-08-07)
 
-**Decision: the default holds — slice 1 is Discovery — but scoped to the
-LEGACY live Discovery surface, explicitly excluding any Phase 2 activation.**
+**Decision: slice 1 is EXCHANGE. Discovery moves to slice 5.** This reverses
+the original "Discovery first (beachhead exists)" call recorded below.
 
 | # | Slice | Why here |
 |---|---|---|
-| 0 | **Dark-fence rewrite FIRST**, then monorepo move + `packages/core` extraction + React 19 + island host + tokens | Infrastructure. No user-visible change. Ships alone. **Task order inside the PR is load-bearing** — see below. |
-| 1 | **Discovery** (`views/discovery.js`, `lib/discovery.js`) | The beachhead's architecture exists, and this is the first step of the fixed Discovery execution order (ADR-022) — migration effort lands where product effort already points. |
+| 0 | **Dark-fence rewrite FIRST**, then monorepo move + React 19 + tokens | Infrastructure. No user-visible change. Ships alone. **Task order inside the PR is load-bearing** — see below. |
+| 1 | **Exchange** (`packages/ui/exchange`) + the **island host** | **Greenfield — see below.** |
 | 2 | Contacts · Notifications · Stories | Small, low-coupling, no realtime. Widens the component library cheaply. |
 | 3 | Groups (list · new · manage) | Self-contained; `group-perms` already framework-free and tested. |
 | 4 | Profile · Settings | Large but shallow; forces the media/crop/photoedit port boundaries. |
-| 5 | Inbox | Chat-adjacent; the last step before chat. |
-| 6 | Moments | Live product surface (PR #126) with two structural fences to re-satisfy. |
-| **last** | **Chat, and every crypto-facing surface (verify, safety numbers)** | Per mission constraint, and independently correct: chat is 4,672 lines with 308 `el()` calls and **no view-level tests**, and crypto UI regressions are the class of bug this product can least afford. |
+| 5 | **Discovery** (`views/discovery.js`, `lib/discovery.js`) | Moved here from slice 1. A working screen with **no view-level tests**, carrying the ADR-024 P0 privacy fence. |
+| 6 | Inbox | Chat-adjacent; the last step before chat. |
+| 7 | Moments | Live product surface (PR #126) with two structural fences to re-satisfy. |
+| **last** | **Chat, and every crypto-facing surface (verify, safety numbers)** | Chat is 4,672 lines with 302 `el()` calls and **no view-level tests**; crypto UI regressions are the class of bug this product can least afford. |
 
-**The slice-1 trap, stated plainly.** `web-next/src/discovery/` is built against
-the **Phase 2** Discovery backend: PostGIS people-search, a Typesense
-`SearchPort`, place/directions provider ports. `DiscoveryModule` is **not
-imported by `AppModule`** — there is no live route, no provisioned Typesense,
-and the mandatory production-hardware re-benchmark has not been run. Shipping
-that code to a user is a **Phase 2 activation with new spend**, which is
-owner-retained and **[PROPOSED]** at most.
+#### Why Exchange, and why the original reasoning was wrong
 
-So slice 1 reuses web-next Discovery as **architecture and components**
-(controller shape, port injection, `coarsen.ts`, the privacy-mutation battery,
-the a11y bar), re-pointed at the **endpoints `views/discovery.js` calls
-today**. No new backend, no new provider, no new spend.
+**There is no vanilla Exchange screen anywhere in the web app.** No
+`views/exchange.js`, no route in `ROUTES`, no nav entry. Slice 1 is therefore
+**greenfield**, and every risk the migration is built to manage simply does not
+arise:
 
-**Slice-1 hard gate:** `test/discovery-coarse-broadcast.test.js` — the ADR-024
-P0 fence proving precise GPS never reaches the broadcast — must pass **against
-the React implementation**, not merely continue passing against the legacy one.
-This is the one slice that carries a P0 privacy fence, and it is deliberately
-first so the fence-parity mechanism is proven while the blast radius is one
-screen.
+- **No legacy path to keep alive.** DoD #2 ("legacy view stays in `ROUTES`,
+  unmodified and reachable") has nothing to preserve.
+- **No flag-off fallback to get right.** With the flag off the surface is
+  simply absent, exactly as today.
+- **No persisted-shape risk.** The §(g) rollback rule — a slice may never
+  change a persisted shape — is trivially satisfied when nothing was ever
+  persisted for this surface.
+- **No rewrite risk.** Nothing is being replaced, so there is no behaviour to
+  regress and no missing characterization tests to regret (§A.1).
+
+That leaves slice 1 proving exactly what a first slice should prove — the
+island host, the flag mechanism, the package boundary, the DoD, the rollback
+drill — **against a surface where a mistake costs nothing a user can see.**
+
+**What the original Discovery-first argument got wrong.** It reasoned from
+"the beachhead exists" and from ADR-022's product ordering. Both are true and
+neither is about migration risk. Discovery is a *working, shipped* screen with
+**zero view-level test coverage** (§A.1) and it carries the **ADR-024 P0
+coarse-broadcast fence** — so it combined the highest rewrite risk in the
+programme with the only P0 privacy gate, and put both in the slice where the
+mechanism itself was still unproven. Sequencing product priority ahead of
+migration risk was the error; the two are independent axes.
+
+**Discovery at slice 5 is a known and separately accepted risk.** It still
+requires: scope pinned to today's live endpoints (no Phase 2 backend, no
+Typesense — P7 remains **no**); legacy Discovery intact and rendering with the
+flag off; and `test/discovery-coarse-broadcast.test.js` passing against
+**both** implementations in one CI job. Moving it later does not soften any of
+that — it means the mechanism enforcing it has four slices of evidence behind
+it first.
+
+#### The island host lands with slice 1
+
+Deferred in slice 0 for a concrete reason: with `packages/ui` dark, a mount
+point has nothing to mount, and `liveEntryDarkPackageImports()` fails the
+moment `apps/web/src/main.js` imports `@spotme/ui`. Building it early would
+have meant weakening a fence slice 0 had just strengthened. Slice 1 is its
+first real consumer, so it arrives there — behind `spotme.ui.exchange`,
+default off.
+
+#### Unchanged by this amendment
+
+The **per-slice definition of done** (§(f), nine items) and the **rollback
+rule** (§(g), three tiers, with "a migrated slice MUST NOT change any
+persisted shape" load-bearing) apply to every slice exactly as written.
+
+<details>
+<summary>Superseded: the original Discovery-first decision (kept for the record)</summary>
+
+The original text read: *"the default holds — slice 1 is Discovery — but
+scoped to the LEGACY live Discovery surface, explicitly excluding any Phase 2
+activation."* Its supporting argument was that `web-next/src/discovery/` is
+built against the **Phase 2** backend — PostGIS people-search, a Typesense
+`SearchPort`, provider ports — while `DiscoveryModule` is not imported by
+`AppModule`, so shipping it as-is would be a Phase 2 activation with new spend.
+**That trap analysis remains correct and still governs slice 5.** What changed
+is the ordering: greenfield before rewrite.
+
+A smaller pathfinder slice was also considered and rejected at the time, on the
+grounds that anything small enough to be a pathfinder proves nothing. Exchange
+answers that objection properly — it is greenfield *and* a full surface.
+
+</details>
 
 **Slice 0's internal order is part of the decision, not an implementation
 detail (owner answers, 2026-08-07):**
@@ -677,7 +729,7 @@ Named here so they are not silently absorbed into this plan:
 | P4 | Tailwind v4 adoption | **DEFERRED** — slices 0–1 ship on plain CSS + tokens; revisit at slice 2 against the countable drift test (§(d)) |
 | P5 | Retire `spotme/app` | **PENDING EXPLICIT OWNER CONFIRMATION** — a deletion, relayed as a recommendation and over-recorded as a decision. Do not execute. Also subject to the STOP in §(b): never touch `spotme/core`, `spotme/package.json`, or `web/vendor/spotme-core/` |
 | P6 | Commit or remove `spotme/mobile` | **PENDING EXPLICIT OWNER CONFIRMATION** — a deletion with **no git safety net** (0 tracked files, so `rm` is unrecoverable). Do not execute |
-| P7 | Phase 2 Discovery activation (Typesense) | **NO, not now** — spend + activation; slice 1 is pinned to live endpoints to avoid it |
+| P7 | Phase 2 Discovery activation (Typesense) | **NO, not now** — spend + activation. Discovery is now slice 5 (§(e)) and stays pinned to live endpoints |
 | P8 | Flag flips to real users | **NOT YET** — nothing flips until a slice passes all nine DoD items |
 
 ### Still open after P1–P8
