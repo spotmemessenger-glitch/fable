@@ -2,7 +2,7 @@
   "name": "spotme-backend",
   "version": "0.1.0",
   "private": true,
-  "description": "Spot Me — client-server backend (auth, chat relay, moderation, admin API). Companion to spotme/web (P2P) and spotme/server (P2P relay peer) — this is the new server-tier rewrite.",
+  "description": "Spot Me — client-server backend (auth, chat relay, moderation, admin API). Companion to spotme/apps/web (P2P) and spotme/server (P2P relay peer) — this is the new server-tier rewrite.",
   "scripts": {
     "build": "nest build",
     "start": "node dist/main.js",

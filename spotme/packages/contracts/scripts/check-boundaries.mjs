@@ -3,7 +3,7 @@
  * Import-boundary fence for @spotme/contracts.
  *
  * The package's whole value is that it depends on NOTHING: no browser globals,
- * no NestJS, no Prisma, no runtime dependency on spotme/web, no generated API
+ * no NestJS, no Prisma, no runtime dependency on spotme/apps/web, no generated API
  * clients, no runtime dependencies at all. A contracts package that quietly
  * grows a dependency stops being a contract and starts being an implementation.
  * This script fails the build the day that happens.
@@ -64,7 +64,7 @@ check('no NestJS / Prisma / generated-client imports', importHits.length === 0,
 // 3. No reaching into other Spot Me surfaces — contracts flow OUT, never in.
 const CROSS_SURFACE = /(spotme\/web|\.\.\/\.\.\/web|\.\.\/\.\.\/backend|spotme-core)/;
 const crossHits = imports.filter((i) => CROSS_SURFACE.test(i.specifier));
-check('no imports from spotme/web, spotme/backend, or spotme-core', crossHits.length === 0,
+check('no imports from spotme/apps/web, spotme/backend, or spotme-core', crossHits.length === 0,
   crossHits.map((i) => `${i.path} → ${i.specifier}`).join(', '));
 
 // 4. All imports are internal and type-only (types cannot smuggle runtime).

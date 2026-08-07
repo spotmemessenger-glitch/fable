@@ -71,7 +71,7 @@ const firstExisting = (...cands: string[]) => cands.find((c) => existsSync(c)) ?
  * before it. Throws if neither -- the live app always exists.
  */
 export function liveWebRoot(): string {
-  const r = firstExisting(join(REPO, 'apps/web'), join(REPO, 'spotme/web'));
+  const r = firstExisting(join(REPO, 'spotme/apps/web'), join(REPO, 'spotme/web'));
   if (!r) throw new Error('FENCE BROKEN: no live web root (apps/web | spotme/web)');
   return r;
 }
@@ -98,12 +98,16 @@ export function clientDomainRoots(domain: string): string[] {
 }
 
 /** Every client-side root, across all surfaces. */
+export const CLIENT_DOMAINS = ['discovery', 'exchange', 'events', 'moments', 'assistant'];
+
+/**
+ * Every client-side DOMAIN root. Deliberately the domain directories, not the
+ * package root: after dissolution `packages/ui` also contains `test/`, and
+ * scanning tests made the privacy fences fire on their own assertions (a test
+ * that proves coordinates never escape necessarily mentions coordinates).
+ */
 export function clientAllRoots(): string[] {
-  return [
-    join(REPO, 'spotme/web-next/src'),
-    join(REPO, 'spotme/packages/ui'),
-    join(REPO, 'spotme/packages/core'),
-  ].filter((d) => existsSync(d));
+  return CLIENT_DOMAINS.flatMap((d) => clientDomainRoots(d));
 }
 
 /**

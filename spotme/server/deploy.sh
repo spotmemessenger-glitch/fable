@@ -9,7 +9,7 @@
 # before claiming success.
 #
 # Secrets: the API needs vendor keys, which are NOT in this repo and must never
-# be. Put them in spotme/web/.env.local (already gitignored) as KEY=value lines
+# be. Put them in spotme/apps/web/.env.local (already gitignored) as KEY=value lines
 # and this copies them to the instance as root-readable /srv/spotme/.env. If
 # that file is absent the deploy still runs — the app serves, and the language
 # and voice endpoints answer with errors until keys arrive.
@@ -49,7 +49,7 @@ say "Building"
 # and scp -r makes a round trip per file, which is slow for a hashed asset dir.
 say "Uploading site"
 tar czf - -C "$WEB_SRC/dist" . | "${SSH[@]}" \
-  "rm -rf /srv/spotme/web.new && mkdir -p /srv/spotme/web.new && tar xzf - -C /srv/spotme/web.new"
+  "rm -rf /srv/spotme/apps/web.new && mkdir -p /srv/spotme/apps/web.new && tar xzf - -C /srv/spotme/apps/web.new"
 
 say "Uploading API"
 # The handlers are the SAME files the Vercel functions use — one behaviour, one
