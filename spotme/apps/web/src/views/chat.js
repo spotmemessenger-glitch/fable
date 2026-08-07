@@ -16,6 +16,7 @@ import { sttBlob, ttsClone } from '../lib/voice.js'
 import { compressImage, fileToDataURL, recordVoice, currentLocation, mapLink, fileFromDataURL, downloadFile, shareOut, maskDataURL, VIDEO_CAP_BYTES } from '../lib/media.js'
 import { openPhotoEditor, closePhotoEditor } from '../lib/photoedit.js'
 import { el, clear, avatar, fmtTime, fmtDay, actionSheet } from '../lib/ui.js'
+import { reactChat } from './chat-island.js'
 import { isPlainEnglish } from '../lib/english.js'
 import { livekitCalls } from '../lib/calls/select.js'
 import { identityStatus } from '../lib/crypto/identity-store.js'
@@ -358,6 +359,8 @@ const audioDuration = (src, fallback) => new Promise((resolve) => {
 })
 
 export function render (root, ctx, roomId) {
+  const island = reactChat(root, ctx, roomId) // ADR-035 final slice s1, default OFF
+  if (island) return island
   if (!db.convo(roomId)) {
     ctx.toast('Conversation not found')
     ctx.nav('#/chat')
