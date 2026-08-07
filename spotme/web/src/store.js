@@ -333,6 +333,32 @@ export function createStore (roomId, prefix = STORAGE_PREFIX, options = {}) {
   function stripDerived (message) {
     const { reactions: _ignored, ...rest } = message
     if (rest.viewOnce && typeof rest.data === 'string') return shedMedia(rest)
+    /* MEDIA BYTES NEVER REACH localStorage. NOT ONCE, ON ANY PATH.
+     *
+     * A data URL is base64: ~1.33x the file, against a quota of 5–10 MB. One
+     * 40 MB video serialises to ~53 MB, so `setItem` threw, and the shedding
+     * ladder below existed to recover from a write we should never have
+     * attempted. That ladder is a good failure handler for a bad plan: it
+     * still had to drop somebody's video, and it only ran AFTER the whole
+     * conversation had failed to persist once.
+     *
+     * The bytes are already in `list()` in memory and stay there for this
+     * session, so nothing on screen changes. What changes is that we stop
+     * asking a 5 MB store to hold 53 MB. When IndexedDB is available
+     * `offloadMedia()` makes them durable and `mediaRef` picks them up on the
+     * next write; when it is not, they are memory-only and the message says so
+     * rather than taking the conversation down with it.
+     *
+     * `pendingBytes` is the distinction the reader sees: "still loading" for a
+     * transfer in flight, not "gone". */
+    if (typeof rest.data === 'string' && rest.data.startsWith('data:') && !offloaded.has(rest.id)) {
+      return {
+        ...rest,
+        data: null,
+        memoryOnly: true,
+        mime: rest.mime || mimeOf(rest.data)
+      }
+    }
     /* Bytes are durable in IndexedDB, so localStorage keeps a reference rather
      * than ~1.33x the file as base64. NOT `detached`: that means "the bytes are
      * on a peer, tap to fetch them", and these are already here — `rehydrate()`

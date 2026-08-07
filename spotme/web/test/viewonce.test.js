@@ -175,13 +175,30 @@ async function main () {
     !JSON.stringify(onDisk()).includes(PHOTO.slice(30, 120)))
   check('the mask travels instead, and is a fraction of the size',
     inMemory.mask === MASK && MASK.length * 20 < PHOTO.length)
-  check('an ordinary photo is still persisted in full', (() => {
+  /* THE EXEMPTION MUST NOT BE VACUOUS.
+   *
+   * This used to be proved by showing an ordinary photo WAS written to
+   * localStorage in full. That is no longer true of any photo: media bytes are
+   * never base64'd into a 5-10 MB store on any path, because one video
+   * serialised to ~53 MB, blew the quota, and took the whole conversation's
+   * persistence down with it.
+   *
+   * So the proof moves to the distinction that still exists and still matters.
+   * An ordinary photo is persisted as a RECOVERABLE reference — `memoryOnly`,
+   * mime intact, so the bytes can come back from IndexedDB or a peer. A
+   * view-once photo is `detached` with nothing to come back to. If the
+   * exemption were vacuous the two would be indistinguishable on disk, and
+   * this asserts they are not. */
+  check('an ordinary photo is still persisted as a recoverable reference', (() => {
     receiveAttachment({ id: 'plain1', from: 'bob-id', ts: Date.now(), kind: 'image' }, PHOTO)
     return true
   })())
   await settle()
-  check('…proving the exemption is view-once and not "no photo is saved"',
-    diskMessage('plain1')?.data === PHOTO)
+  check('…proving the exemption is view-once, not "no photo is recoverable"', (() => {
+    const plain = diskMessage('plain1')
+    const vo = diskMessage('vo1')
+    return plain?.memoryOnly === true && plain?.mime && vo?.memoryOnly !== true
+  })())
 
   /* ------------------------------------------------------------------ 2 */
   /* THE OPEN. Everything durable happens here, before a pixel is drawn —

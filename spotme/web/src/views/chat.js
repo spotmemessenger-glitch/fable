@@ -6,6 +6,7 @@
  * thread rebuild happens only on 'history' merges.
  */
 import './chat.css'
+import { precheckAttachment } from '../lib/media-precheck.js'
 import { db } from '../lib/db.js'
 import { rooms } from '../lib/rooms.js'
 import { lobby, distanceM, fmtDistance } from '../lib/discovery.js'
@@ -1684,6 +1685,24 @@ export function render (root, ctx, roomId) {
     return wrap
   }
 
+  /**
+   * The bytes existed this session and this device cannot store them.
+   *
+   * Not a "tap to load" button: there is nothing to load. Saying "tap to load"
+   * for something that will never load is the failure this replaces — it read
+   * as a broken download rather than as a device limitation, so people tapped
+   * it repeatedly and reported the app as broken.
+   */
+  function buildMemoryOnly (m) {
+    const label = m.kind === 'voice' ? 'Voice note'
+      : m.kind === 'file' ? (m.fileName || 'File')
+      : m.kind === 'video' ? 'Video' : 'Photo'
+    return el('div', { class: 'detached memoryonly' }, [
+      el('span', { class: 'dlico', html: IC.doc }),
+      el('span', { text: `${label} — not saved on this device` })
+    ])
+  }
+
   /** History gave us the envelope but not the bytes — fetch on tap. */
   function buildDetached (m) {
     const label = m.kind === 'voice' ? 'Voice note'
@@ -1753,6 +1772,12 @@ export function render (root, ctx, roomId) {
         })
       ])
     }
+    /* MEMORY-ONLY: the bytes were here this session and were never written to
+     * disk, because this device has no IndexedDB and localStorage is far too
+     * small to hold media. Distinct from `detached`, which means "a peer has
+     * them, tap to fetch". Tapping this would fetch nothing, so it is not a
+     * button — it is a statement of what happened. */
+    if (m.data === null && m.memoryOnly && m.kind !== 'text') return buildMemoryOnly(m)
     if (m.data === null && m.detached && m.kind !== 'text') return buildDetached(m)
     if (m.kind === 'image') {
       const img = el('img', { src: m.data, alt: 'Photo' })
@@ -3783,11 +3808,15 @@ export function render (root, ctx, roomId) {
       .catch(() => { stopEarlyActivity(); ctx.toast('Could not read that photo') })
   })
 
-  fileInput.addEventListener('change', () => {
+  fileInput.addEventListener('change', async () => {
     const file = fileInput.files?.[0]
     fileInput.value = ''
     if (!file) { stopEarlyActivity(); return }
     pickerArmed = false
+    // Same pre-check as video: a 40 MB "file" fails the same way for the same
+    // reason, and used to fail just as slowly and just as mutely.
+    const verdict = await precheckAttachment(file).catch(() => ({ ok: true }))
+    if (!verdict.ok) { stopEarlyActivity(); ctx.toast(verdict.message); return }
     fileToDataURL(file)
       .then(({ dataURL, name, size }) => {
         sendAttachmentWithUI({ kind: 'file', data: dataURL, fileName: name, fileSize: size })
@@ -3798,6 +3827,22 @@ export function render (root, ctx, roomId) {
   /** Video: whole-clip send over the existing chunked binary path. No fake
    * trimmer — trimming honestly waits for the native app. */
   function sendVideo (file) {
+    /* REFUSE BEFORE THE FIRST BYTE MOVES.
+     *
+     * Without this the clip was read, base64'd, chunked and pushed 128 KB at a
+     * time for minutes before failing — and the refusal, when it came, said
+     * only "That transfer did not complete — try again", which is advice to
+     * repeat something that cannot work. Everything needed to know it was
+     * doomed is readable in the first millisecond. */
+    precheckAttachment(file)
+      .then((verdict) => {
+        if (!verdict.ok) { stopEarlyActivity(); ctx.toast(verdict.message); return }
+        sendVideoChecked(file)
+      })
+      .catch(() => sendVideoChecked(file))   // never block a send on the check itself
+  }
+
+  function sendVideoChecked (file) {
     fileToDataURL(file, VIDEO_CAP_BYTES)
       .then(({ dataURL, name, size }) => {
         sendAttachmentWithUI({ kind: 'video', data: dataURL, fileName: name, fileSize: size })

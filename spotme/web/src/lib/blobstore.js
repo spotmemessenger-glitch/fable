@@ -31,6 +31,8 @@
  * undo that. The guard lives at the call site AND is restated in `put()`.
  */
 
+import { recordOpenFailure, recordOpenSuccess, isUsable, probeIndexedDb } from './storage-health.js'
+
 const DB_NAME = 'spotme-media'
 const DB_VERSION = 1
 const STORE = 'blobs'
@@ -38,14 +40,33 @@ const STORE = 'blobs'
 /** Cached open handle; null while closed, a Promise while opening. */
 let dbPromise = null
 
-/** True when this browser will actually give us a store. */
+/**
+ * True when this browser will actually give us a store.
+ *
+ * THIS USED TO TEST WHETHER THE GLOBAL EXISTED, WHICH IS A DIFFERENT QUESTION.
+ * In iOS private mode `indexedDB` is defined and every `open()` on it fails, so
+ * this returned true on precisely the devices where it was false. `store.js`
+ * gates `offloadMedia()` on it, so on those devices the offload ran, quietly
+ * did nothing, and left ~1.33x the file as base64 in a 5–10 MB localStorage —
+ * which is the quota blowout that sheds the video.
+ *
+ * It stays SYNCHRONOUS because its callers paint with it. Once a real open has
+ * been attempted the recorded verdict wins; before that, the global check is
+ * all we have, and it is optimistic in the safe direction — `put()` returning
+ * false is handled everywhere. `warmAvailability()` closes the gap at boot.
+ */
 export function available () {
+  const known = isUsable()
+  if (known !== null) return known
   try {
     return typeof indexedDB !== 'undefined' && indexedDB !== null
   } catch {
     return false
   }
 }
+
+/** Settle the real answer once, at boot, before anything relies on it. */
+export const warmAvailability = () => probeIndexedDb()
 
 function open () {
   if (!available()) return Promise.resolve(null)
@@ -54,18 +75,28 @@ function open () {
     let req
     try {
       req = indexedDB.open(DB_NAME, DB_VERSION)
-    } catch {
+    } catch (err) {
+      recordOpenFailure(DB_NAME, err)
       return resolve(null)
     }
     req.onupgradeneeded = () => {
       const db = req.result
       if (!db.objectStoreNames.contains(STORE)) db.createObjectStore(STORE)
     }
-    req.onsuccess = () => resolve(req.result)
+    /* Settle ALWAYS. An open that fires none of these — iOS suspending the tab
+     * mid-open — left this promise pending forever, and `tx()` awaits it, so
+     * every read and write queued behind it hung silently. */
+    const settle = (db, err, phase) => {
+      clearTimeout(timer)
+      if (db) recordOpenSuccess(); else recordOpenFailure(DB_NAME, err, phase)
+      resolve(db)
+    }
+    const timer = setTimeout(() => settle(null, new Error('open did not settle within 3000ms'), 'timeout'), 3000)
+    req.onsuccess = () => settle(req.result)
     // A refused or blocked open is "unavailable", not a crash. Private mode
     // and storage-pressure eviction both land here.
-    req.onerror = () => resolve(null)
-    req.onblocked = () => resolve(null)
+    req.onerror = () => settle(null, req.error, 'open')
+    req.onblocked = () => settle(null, new Error('open blocked by another tab'), 'blocked')
   })
   // Never cache a failure: a later attempt may succeed once a competing tab
   // closes, and a cached null would keep the app on localStorage forever.

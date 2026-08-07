@@ -87,20 +87,30 @@ const onDisk = (key) => JSON.parse(localStorage.getItem(key) || '{"messages":[]}
 
 async function main () {
   /* ------------------------------------------------------------------ 1 */
-  /* THE HEART OF IT. A voice-heavy room that cannot fit: eight 30-second
-   * notes, four from each side, against a 5 MB quota. Something must be shed.
-   * It must not be the four this device recorded. */
+  /* THE RULE THAT REPLACED THE SHEDDING LADDER: media bytes never reach
+   * localStorage at all.
+   *
+   * This suite used to assert that when a voice-heavy room overran the quota,
+   * the ladder shed THEIR media before MINE. That ordering was right and the
+   * premise was wrong. A data URL is base64 — ~1.33x the file — against a
+   * quota of 5-10 MB, so one 40 MB video serialised to ~53 MB, `setItem` threw,
+   * and the ladder existed to recover from a write that should never have been
+   * attempted. It still had to destroy somebody's recording to succeed, and it
+   * only ran after the entire conversation had failed to persist once.
+   *
+   * Now the bytes are held in memory and made durable in IndexedDB. The
+   * persisted copy carries a reference. Nothing is shed because nothing
+   * oversized is ever written.
+   *
+   * The ladder itself is NOT deleted — a room can still overrun on text alone,
+   * and private mode still refuses IndexedDB — but it is no longer reachable
+   * by media, and this asserts exactly that. */
   const shed = []
   const roomA = createStore('quota-a', 'spotme:test:', {
     selfId: () => ME,
     onShed: (info) => shed.push(info)
   })
 
-  /* Sizes at the measured 16 KB/s: ~55s of mine, ~30s of theirs, base64'd.
-   * MINE IS DELIBERATELY THE HEAVIEST — that is the whole failure. The old
-   * rule was "shed heaviest first", so the longer the note you recorded, the
-   * surer it was to be the one thrown away. Eight of these overrun 5 MB, which
-   * is the only condition under which any of this code runs at all. */
   const MINE_BYTES = 900_000
   const THEIRS_BYTES = 500_000
   for (let i = 1; i <= 8; i++) {
@@ -110,26 +120,32 @@ async function main () {
   await settle()
 
   const stored = onDisk('spotme:test:quota-a')
-  const survived = (from) => stored.filter((m) => m.from === from && typeof m.data === 'string').length
-  const detached = (from) => stored.filter((m) => m.from === from && m.detached === true).length
+  const rawDisk = localStorage.getItem('spotme:test:quota-a') || ''
 
-  check('the conversation still persists when it does not fit', stored.length === 8)
-  check('something had to be shed', detached(ME) + detached(THEM) > 0)
-  check('THE BUG: not one of the notes recorded on this device is shed', detached(ME) === 0)
-  check('all four of my own recordings keep their audio', survived(ME) === 4)
-  check('their media is what gets sacrificed', detached(THEM) > 0)
+  check('the conversation persists in full', stored.length === 8)
+  check('THE INVARIANT: not one base64 payload reached localStorage',
+    !rawDisk.includes('data:'))
+  check('…and the persisted copy is small enough that the quota is not in play',
+    rawDisk.length < 200_000)
+  check('every media message is kept as a reference, not deleted',
+    stored.filter((m) => m.memoryOnly === true).length === 8)
+  check('each reference keeps its id, so the bytes can be matched back',
+    stored.every((m) => typeof m.id === 'string'))
+  check('each reference keeps its mime, so a fetch is not left guessing',
+    stored.every((m) => m.mime === 'audio/webm'))
+  check('nothing was shed, because nothing overflowed', shed.length === 0)
+  check('NOBODY LOSES A RECORDING — not theirs, and not mine',
+    stored.every((m) => m.detached !== true))
 
-  /* The shed is invisible in memory by design — that is why it has to be
-   * announced. Both halves are asserted: memory intact, and somebody told. */
+  /* The bytes are still on screen for this session; only the disk copy is a
+   * reference. A reader mid-conversation sees no change at all. */
   check('memory keeps every byte, so the tab shows nothing wrong',
     roomA.list().every((m) => typeof m.data === 'string'))
-  check('a shed is reported rather than discovered on the next reload', shed.length > 0)
-  check('the report says how much went', shed.at(-1)?.count > 0)
-  check('the report says none of it was mine', shed.at(-1)?.own === 0)
 
   /* ------------------------------------------------------------------ 2 */
-  /* Only when there is nothing of theirs left may it touch mine — and then it
-   * must say THAT, because it is a different sentence to the user. */
+  /* Symmetry: a room of only MY OWN media behaves identically. Under the old
+   * ladder this was the painful case — my own recordings were the heaviest, so
+   * heaviest-first ate them first. Now there is no ladder to run. */
   mem.clear()
   const mineOnly = []
   const roomB = createStore('quota-b', 'spotme:test:', {
@@ -140,28 +156,19 @@ async function main () {
   await settle()
 
   const storedB = onDisk('spotme:test:quota-b')
-  check('a room of only my own media still persists', storedB.length === 8)
-  check('mine is shed when there is nothing else to give',
-    storedB.some((m) => m.detached === true))
-  check('the newest recordings are the ones kept',
-    typeof storedB.at(-1).data === 'string')
-  check('losing my own recording is reported as mine', mineOnly.at(-1)?.own > 0)
-
-  /* A shed that does not get worse must not nag on every subsequent write. */
-  const announced = mineOnly.length
-  roomB.add({ id: 'text-1', from: ME, ts: 99, kind: 'text', text: 'hello' })
-  await settle()
-  check('a room parked at the quota does not re-announce', mineOnly.length === announced)
+  check('a room of only my own media persists in full', storedB.length === 8)
+  check('not one of my own recordings is shed', storedB.every((m) => m.detached !== true))
+  check('and nothing is announced, because nothing was lost', mineOnly.length === 0)
 
   /* ------------------------------------------------------------------ 3 */
-  /* A shed message keeps everything except the bytes, so "tap to load" can
-   * actually go and get them back. Losing the mime would leave the fetch
-   * guessing image/jpeg for a voice note. */
-  const shedRow = storedB.find((m) => m.detached === true)
-  check('a shed message keeps its id', typeof shedRow.id === 'string')
-  check('a shed message keeps its mime so it can be fetched back',
-    shedRow.mime === 'audio/webm')
-  check('a shed message is marked detached, not deleted', shedRow.data === null)
+  /* A reference keeps everything except the bytes, so recovery can find them. */
+  const refRow = storedB[0]
+  check('a reference keeps its id', typeof refRow.id === 'string')
+  check('a reference keeps its mime', refRow.mime === 'audio/webm')
+  check('a reference carries no payload', refRow.data === null)
+  check('a reference is marked memory-only, NOT detached',
+    refRow.memoryOnly === true && refRow.detached !== true)
+
 
   /* ------------------------------------------------------------------ 4 */
   /* Write coalescing. Twenty adds in one tick used to mean twenty full

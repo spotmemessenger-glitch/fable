@@ -15,12 +15,13 @@ import { db, wipeDevice } from './lib/db.js'
 import { lobby } from './lib/discovery.js'
 import { reach } from './lib/reach.js'
 import { rooms } from './lib/rooms.js'
-import { publishIdentity, identityStatus } from './lib/crypto/identity-store.js'
+import { publishIdentity, identityStatus, identityFailure } from './lib/crypto/identity-store.js'
 import { freshTokens, setTerminalAuthHandler } from './lib/socket-transport.js'
 import { setBlockedSendHandler } from './lib/crypto/identity-enforcement.js'
 import { readyRTC } from './net.js'
 import { attachPullRefresh } from './lib/pullrefresh.js'
 import { installAudioUnlock } from './lib/video.js'
+import { warmAvailability } from './lib/blobstore.js'
 import { el, clear, toast, avatar, actionSheet } from './lib/ui.js'
 import { compressImage, shrinkDataURL, AVATAR_EDGE, AVATAR_QUALITY } from './lib/media.js'
 import { openCrop } from './lib/crop.js'
@@ -50,6 +51,10 @@ const app = document.getElementById('app')
  * tab — rather than a second tap they have to spend on a video control after
  * already arriving at one. See lib/video.js for the full rule. */
 installAudioUnlock(document)
+/* Settle whether IndexedDB actually OPENS before anything gates on it.
+ * `blobstore.available()` can only guess until a real open has been tried, and
+ * its guess was the optimistic one on exactly the devices where it was wrong. */
+void warmAvailability()
 
 /**
  * A reset was asked for via ?fresh — read once, before anything can navigate
@@ -840,7 +845,27 @@ function boot () {
       if (state === 'ephemeral') {
         toast('This device can’t save its encryption key — messages you send can’t be read.')
       } else if (state === 'unavailable') {
-        toast('This device can’t store encryption keys — private browsing is the usual cause.')
+        /* SAY WHAT ACTUALLY HAPPENED, AND SAY IT ONCE.
+         *
+         * This line used to read "private browsing is the usual cause" for
+         * every failure mode there is — a guess, printed as a diagnosis. It was
+         * wrong for an evicted store, wrong for a blocked open, wrong for a
+         * full device, and there was no way to tell because the exception that
+         * knew the answer had already been discarded. `identityFailure()` now
+         * carries the real one.
+         *
+         * And it is honest about what still works: with no IndexedDB this
+         * device can still send and receive for as long as the tab is open. It
+         * just cannot remember any of it afterwards. Telling someone their app
+         * is broken when it is merely forgetful sends them to reinstall, which
+         * loses the very thing they were trying to keep. */
+        const why = identityFailure()
+        toast(why?.advice
+          ? `${why.advice} Messages will send, but this device can’t keep them after a reload.`
+          : 'This device can’t store anything. Messages will send, but nothing is kept after a reload.')
+        // Greppable, PII-free, and the only place the raw reason is recorded.
+        // eslint-disable-next-line no-console
+        console.warn('STORAGE_UNAVAILABLE', JSON.stringify(why || {}))
       }
     })
 
