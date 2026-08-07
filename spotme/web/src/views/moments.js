@@ -205,6 +205,37 @@ export function render (root, ctx, params) {
   const handleOf = (author) =>
     (author?.username ? `@${author.username}` : null) || author?.displayName || 'Someone'
 
+  /* A4 — ONE VOCABULARY FOR AUDIENCE, USED BY THE PICKER AND THE BADGE.
+   *
+   * `private` used to be offered in the picker and then rendered nowhere,
+   * because the feed query excluded it for every viewer INCLUDING THE AUTHOR —
+   * so choosing it silently threw the post away. It is now "Only you", which is
+   * what it does, and A1 makes that true in the query.
+   *
+   * `public` had no surface either: the city feed is the only thing that reads
+   * it and no tab reaches the city feed. Rather than remove a stored value the
+   * backend already supports — a deletion that would have to be undone the day
+   * the tab lands — it is labelled honestly as reaching beyond the local area,
+   * and the badge says `Public` so the choice is at least visible and
+   * reversible. Recorded in the report as the open half of A4.
+   */
+  const AUDIENCE = {
+    nearby: { label: 'Nearby', hint: 'People near you' },
+    friends: { label: 'Friends', hint: 'People who follow you' },
+    public: { label: 'Public', hint: 'Anyone, beyond your area' },
+    private: { label: 'Only you', hint: 'Nobody else can see this' }
+  }
+
+  const audienceBadge = (v) => {
+    const a = AUDIENCE[v] || AUDIENCE.nearby
+    return el('span', {
+      class: `mo-aud is-${v || 'nearby'}`,
+      text: a.label,
+      title: a.hint,
+      'aria-label': `Audience: ${a.label}. ${a.hint}`
+    })
+  }
+
   /** Resolve one asset to its short-lived URL bundle, once. */
   function assetFor (mediaId) {
     if (assetCache.has(mediaId)) return assetCache.get(mediaId)
@@ -544,7 +575,19 @@ export function render (root, ctx, params) {
     const head = el('header', { class: 'mo-cardhead' }, [
       avatar({ name: who, avatar: m.author?.avatar }, 36),
       el('div', { class: 'mo-whowrap' }, [
-        el('b', { class: 'mo-who', text: who }),
+        el('div', { class: 'mo-wholine' }, [
+          el('b', { class: 'mo-who', text: who }),
+          /* A2 — WHO CAN SEE THIS, ON THE CARD.
+           *
+           * The audience was chosen in the composer and then never shown
+           * again, so there was no way to tell a post you had sent to
+           * everyone from one you had sent to nobody — and the difference
+           * between 'public' and 'only you' is the whole reason the control
+           * exists. Shown on every card, including other people's: knowing a
+           * post is public is what tells you whether resharing it is
+           * reasonable. */
+          audienceBadge(m.visibility)
+        ]),
         el('span', { class: 'mo-meta', text: [place(m), when(m.createdAtUTC)].filter(Boolean).join(' · ') })
       ]),
       el('button', {
@@ -886,10 +929,11 @@ export function render (root, ctx, params) {
     caption.addEventListener('input', grow)
 
     const visBtn = el('button', {
-      class: 'pill', type: 'button', text: `Visible to: ${visibility}`,
+      class: 'pill', type: 'button', text: `Visible to: ${AUDIENCE[visibility].label}`,
       onclick: () => actionSheet(
         ['nearby', 'friends', 'public', 'private'].map((v) => ({
-          label: v, fn: () => { visibility = v; visBtn.textContent = `Visible to: ${visibility}` }
+          label: `${AUDIENCE[v].label} — ${AUDIENCE[v].hint}`,
+          fn: () => { visibility = v; visBtn.textContent = `Visible to: ${AUDIENCE[visibility].label}` }
         })), 'Who can see this?')
     })
 

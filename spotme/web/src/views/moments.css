@@ -377,3 +377,33 @@
   display: flex; align-items: center; gap: 9px; color: #fff;
   filter: drop-shadow(0 1px 6px rgba(0, 0, 0, .6));
 }
+
+/* ---------------------------------------------------------------- audience */
+/* A2 — who can see this post, on the card.
+ *
+ * Deliberately quiet: it sits beside the name as a fact, not a call to action.
+ * RED IS NOT AVAILABLE HERE (ADR-034 reserves it for destructive and SOS), so
+ * "Only you" — the most restrictive audience and the one most worth noticing —
+ * is distinguished by WEIGHT and a filled ground rather than by alarm colour. */
+.mo-wholine { display: flex; align-items: center; gap: 6px; min-width: 0 }
+.mo-wholine .mo-who { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+
+.mo-aud {
+  flex: none;
+  font-size: 11px;
+  line-height: 1;
+  font-weight: 600;
+  letter-spacing: .01em;
+  padding: 3px 7px;
+  border-radius: 999px;
+  color: var(--ink2);
+  background: var(--well);
+  border: 1px solid var(--hair);
+}
+/* Nearby is the default and needs no emphasis at all. */
+.mo-aud.is-nearby { color: var(--ink2) }
+.mo-aud.is-friends { color: var(--ink) }
+/* Public reaches furthest — the accent, which is teal, never red. */
+.mo-aud.is-public { color: var(--arch); border-color: color-mix(in srgb, var(--arch) 40%, transparent) }
+/* Only you: filled, so it reads at a glance without shouting. */
+.mo-aud.is-private { color: var(--onfill); background: var(--ink); border-color: transparent }
