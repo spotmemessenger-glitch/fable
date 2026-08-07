@@ -28,7 +28,12 @@ import { AppModule } from '../src/app.module';
 const prisma = new PrismaClient();
 const RUN = `ma${Date.now().toString(36)}`;
 const ADULT = `${new Date().getUTCFullYear() - 30}-01`;
-const HERE = { lat: 12.9766, lon: 77.5913 };
+/* THREE DECIMALS, NOT FOUR. The server refuses a finer fix outright rather
+ * than rounding it — the refusal is the privacy feature (~110 m grid), and the
+ * web client rounds before sending. My first run sent 12.9766/77.5913 and every
+ * create came back 400, which then cascaded into eleven confusing failures
+ * downstream. Matching the client's own round3(). */
+const HERE = { lat: 12.977, lon: 77.591 };
 let app: INestApplication;
 let url: string;
 let seq = 0;
@@ -46,12 +51,32 @@ async function account(tag: string): Promise<{ id: string; token: string }> {
   return { id: b.userId ?? id, token: b.accessToken ?? '' };
 }
 
-const post = (token: string, visibility: string, text: string) =>
-  fetch(`${url}/api/v1/moments`, {
+/* TWO SEPARATE REFUSALS, and my first run tripped both — which is why all four
+ * creates failed rather than the two I would have predicted:
+ *
+ *   1. `COORD_PRECISE = /\d{1,3}\.\d{4,}/` — a 4-decimal coordinate IS a
+ *      precise fix and is refused outright rather than rounded. The refusal is
+ *      the privacy feature. Hence 3 decimals, matching the client's round3().
+ *   2. `if (visibility === 'private' || visibility === 'friends') throw
+ *      locationTierRefused()` — a location may only ride on nearby/public.
+ *      Attaching one to a friends post is refused, not silently dropped.
+ *
+ * So the friends and private posts carry NO location at all. That makes the
+ * nearby-mode assertion below sharper, not weaker: the author's own friends
+ * post has no geography whatsoever, so its appearance in the nearby feed can
+ * only come from `isAuthor` short-circuiting the geo predicate — which is
+ * exactly what A1 claims. */
+const post = (token: string, visibility: string, text: string) => {
+  const canCarryLocation = visibility === 'nearby' || visibility === 'public';
+  return fetch(`${url}/api/v1/moments`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ kind: 'text', text, mediaIds: [], visibility, location: HERE }),
+    body: JSON.stringify({
+      kind: 'text', text, mediaIds: [], visibility,
+      ...(canCarryLocation ? { location: HERE } : {}),
+    }),
   });
+};
 
 async function feed(token: string, mode: string): Promise<Array<{ id: string; visibility: string }>> {
   const qs = mode === 'friends' ? '' : `&lat=${HERE.lat}&lon=${HERE.lon}`;
@@ -85,7 +110,13 @@ beforeAll(async () => {
   for (const v of ['nearby', 'friends', 'public', 'private']) {
     const res = await post(author.token, v, `${RUN} ${v}`);
     const body = (await res.json()) as { id?: string };
-    if (body.id) made[v] = body.id;
+    /* FAIL LOUDLY, HERE. Swallowing a failed create left `made[v]` undefined and
+     * turned ONE cause into eleven downstream assertion failures, none of which
+     * named it. A setup that cannot set up must say so in its own words. */
+    if (!res.ok || !body.id) {
+      throw new Error(`setup: creating a '${v}' moment failed with HTTP ${res.status}: ${JSON.stringify(body)}`);
+    }
+    made[v] = body.id;
   }
 }, 60_000);
 
