@@ -13,6 +13,8 @@ import { ContactsShell } from './contacts/ContactsShell';
 import { NotificationsShell } from './notifications/NotificationsShell';
 import { StoriesShell } from './stories/StoriesShell';
 import { InboxShell } from './inbox/InboxShell';
+import { ChatShell } from './chat/ChatShell';
+import type { ChatPort } from './chat/ports';
 import type { ContactsPort } from './contacts/ports';
 import type { InboxPort } from './inbox/ports';
 import type { NotificationsPort } from './notifications/ports';
@@ -85,4 +87,15 @@ export type { InboxPort, InboxSnapshot, ConvoRowView, UserMatch, InboxTab } from
 
 export function __mountInbox(port: InboxPort) {
   return createElement(InboxShell, { port });
+}
+
+/**
+ * Chat (final slice, session 1, `spotme.ui.chat`, default OFF). Message list
+ * + composer core only; the adapter in apps/web builds the port over
+ * rooms/db — the engine is reused, never rewritten.
+ */
+export type { ChatPort, ChatSnapshot, MessageRowView, MessageStatus } from './chat/ports';
+
+export function __mountChat(port: ChatPort) {
+  return createElement(ChatShell, { port });
 }
