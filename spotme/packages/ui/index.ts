@@ -12,7 +12,9 @@ import { ExchangeIsland } from './exchange/island';
 import { ContactsShell } from './contacts/ContactsShell';
 import { NotificationsShell } from './notifications/NotificationsShell';
 import { StoriesShell } from './stories/StoriesShell';
+import { InboxShell } from './inbox/InboxShell';
 import type { ContactsPort } from './contacts/ports';
+import type { InboxPort } from './inbox/ports';
 import type { NotificationsPort } from './notifications/ports';
 import type { StoriesPort } from './stories/ports';
 import { GroupsIsland, type GroupsIslandProps } from './groups/island';
@@ -72,4 +74,15 @@ export type { ProfilePort, ProfileSnapshot, ToggleKey, EditableFieldKey, Usernam
 
 export function __mountProfile(port: ProfilePort) {
   return createElement(ProfileShell, { port });
+}
+
+/**
+ * Slice-6 mount point (Inbox, behind spotme.ui.inbox). Same contract as
+ * slice 2: the app builds an InboxPort over db/lobby/rooms/reach and passes
+ * display-ready rows; the package stays framework-pure and storage-free.
+ */
+export type { InboxPort, InboxSnapshot, ConvoRowView, UserMatch, InboxTab } from './inbox/ports';
+
+export function __mountInbox(port: InboxPort) {
+  return createElement(InboxShell, { port });
 }

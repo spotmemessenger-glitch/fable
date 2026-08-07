@@ -13,6 +13,7 @@ import { lobby } from '../lib/discovery.js'
 import { reach } from '../lib/reach.js'
 import { rooms } from '../lib/rooms.js'
 import { el, clear, avatar, fmtDay, actionSheet } from '../lib/ui.js'
+import { reactInbox } from './inbox-island.js'
 
 const LONG_PRESS_MS = 420
 const SWIPE_COMMIT_PX = 60
@@ -82,6 +83,8 @@ function exportLine (message) {
 }
 
 export function render (root, ctx) {
+  const island = reactInbox(root, ctx) // ADR-035 slice 6, default OFF
+  if (island) return island
   root.classList.add('v-inbox')
 
   let tab = 'chats'

@@ -494,7 +494,7 @@ the original "Discovery first (beachhead exists)" call recorded below.
 | 3 | Groups (list · new · manage) — **BUILT (dark)**, PR `feat/slice-3-groups`: `packages/ui/groups/` behind `spotme.ui.groups` (default OFF, read only in `apps/web/src/views/groups-island.js`); legacy views unchanged except the one-line flag branch; `lib/group-perms.js` reused via an injected port | Self-contained; `group-perms` already framework-free and tested. |
 | 4 | Profile · Settings | Large but shallow; forces the media/crop/photoedit port boundaries. |
 | 5 | **Discovery** (`views/discovery.js`, `lib/discovery.js`) | Moved here from slice 1. A working screen with **no view-level tests**, carrying the ADR-024 P0 privacy fence. |
-| 6 | Inbox | Chat-adjacent; the last step before chat. |
+| 6 | Inbox — **BUILT (dark)**, PR `feat/slice-6-inbox`: `packages/ui/inbox/` behind `spotme.ui.inbox` (default OFF, read only in `apps/web/src/views/inbox-island.js`); legacy view unchanged except the one-line flag branch; `lib/rooms.js` reused via the injected port, realtime crosses the port as a subscription with pre-shaped rows | Chat-adjacent; the last step before chat. |
 | 7 | Moments | Live product surface (PR #126) with two structural fences to re-satisfy. |
 | **last** | **Chat, and every crypto-facing surface (verify, safety numbers)** | Chat is 4,672 lines with 302 `el()` calls and **no view-level tests**; crypto UI regressions are the class of bug this product can least afford. |
 
