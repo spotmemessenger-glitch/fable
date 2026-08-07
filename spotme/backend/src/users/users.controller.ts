@@ -48,7 +48,7 @@ export class UsersController {
 }
 
 // Separate path prefix ('users', not 'users/me') for the public-safe lookup
-// used to start a chat by username — matches spotme/web's username-search flow.
+// used to start a chat by username — matches spotme/apps/web's username-search flow.
 @UseGuards(JwtAuthGuard)
 @Controller('users')
 export class UsersLookupController {

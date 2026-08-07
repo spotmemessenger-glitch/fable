@@ -8,7 +8,7 @@
 import { join } from 'node:path';
 import { existsSync } from 'node:fs';
 import {
-  liveEntryDarkPackageImports, BACKEND, REPO, read, walk, inDir, requireNonEmpty, clientDomainRoots, clientAllRoots, appEntries, clientTestExists,
+  liveWebRoot, liveEntryDarkPackageImports, BACKEND, REPO, read, walk, inDir, requireNonEmpty, clientDomainRoots, clientAllRoots, appEntries, clientTestExists,
 } from './helpers/fence-paths';
 import { normalizeEvent } from '../src/events/events.normalize';
 
@@ -88,7 +88,7 @@ describe('Events — dark integration fences', () => {
     for (const f of files) {
       expect(read(f)).not.toMatch(/EVENTS[_A-Z]*ENABLED\s*=\s*true/);
     }
-    const signing = read(join(REPO, 'spotme/web/src/lib/crypto/signing-key-publication.js'));
+    const signing = read(join(liveWebRoot(), 'src/lib/crypto/signing-key-publication.js'));
     expect(signing).toContain('SIGNING_PUBLICATION_ENABLED = false');
   });
 

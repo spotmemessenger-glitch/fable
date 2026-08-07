@@ -21,7 +21,7 @@ interface SendPayload {
 }
 
 // One Socket.IO namespace per user id room — mirrors the "join your own inbox"
-// pattern spotme/web's reach.js already uses, just server-brokered instead of P2P.
+// pattern spotme/apps/web's reach.js already uses, just server-brokered instead of P2P.
 @WebSocketGateway({ cors: { origin: '*' }, namespace: '/chat' })
 export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer() server!: Server;

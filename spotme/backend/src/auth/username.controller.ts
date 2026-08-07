@@ -8,7 +8,7 @@ const normalize = (value: unknown) => String(value ?? '').trim().toLowerCase();
 
 /**
  * Same wire contract as the Vercel Blob registry this replaces
- * (spotme/web/api/username.js) — the web client's onboarding, search and
+ * (spotme/apps/web/api/username.js) — the web client's onboarding, search and
  * release flows keep working with zero client changes:
  *
  *   GET  /api/username?check=<name>  -> { available: boolean }

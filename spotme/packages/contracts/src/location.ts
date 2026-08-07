@@ -2,7 +2,7 @@
  * Location & privacy contracts.
  *
  * Mirrors the on-device coarsening contract in
- * `spotme/web/src/lib/discovery.js` (`coarse()`): the precise fix stays on the
+ * `spotme/apps/web/src/lib/discovery.js` (`coarse()`): the precise fix stays on the
  * device; only a coarsened projection — ~110 m rounding plus a stable
  * per-identity jitter — is ever shared (ADR-018, ADR-024). These types make
  * that boundary explicit so a caller cannot accidentally pass a precise fix

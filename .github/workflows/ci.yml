@@ -231,7 +231,7 @@ jobs:
 
     defaults:
       run:
-        working-directory: spotme/web
+        working-directory: spotme/apps/web
 
     steps:
       - uses: actions/checkout@v4
@@ -240,12 +240,12 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: spotme/web/package-lock.json
+          cache-dependency-path: spotme/apps/web/package-lock.json
 
       - run: npm ci
 
       # Cheapest first: lint fails in seconds, the suite takes longer.
-      # Correctness rules only — see spotme/web/eslint.config.mjs for why there
+      # Correctness rules only — see spotme/apps/web/eslint.config.mjs for why there
       # is no `tsc --checkJs` gate here.
       - name: Lint
         run: npm run lint
@@ -356,7 +356,7 @@ jobs:
             echo "::error::the started process did not report the built BUILD_ID"; tail -20 /tmp/warm.log; exit 1; }
 
       - name: Install web
-        working-directory: spotme/web
+        working-directory: spotme/apps/web
         run: npm ci
 
       - name: Install e2e

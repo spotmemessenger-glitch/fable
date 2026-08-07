@@ -49,7 +49,7 @@ describe('C12 — dark integration fences', () => {
   });
 
   it('NO LIVE spotme/web MODULE (src OR api) imports Phase 2 code (8.2)', () => {
-    // spotme/web/api holds the Vercel serverless functions bridged into the
+    // the live app api/ holds the Vercel serverless functions bridged into the
     // running backend — the most deploy-reachable web-tier code. Fence it too.
     const roots = liveWebScanRoots();
     const files = roots.flatMap((d) => walk(d, ['.js', '.mjs']));
