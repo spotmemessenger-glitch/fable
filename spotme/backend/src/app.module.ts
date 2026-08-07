@@ -20,6 +20,7 @@ import { HealthModule } from './health/health.module';
 import { FlagsModule } from './flags/flags.module';
 import { DiscoveryModule } from './discovery/discovery.module';
 import { MomentsModule } from './moments/moments.module';
+import { ExchangeModule } from './exchange/exchange.module';
 
 @Module({
   imports: [
@@ -61,6 +62,14 @@ import { MomentsModule } from './moments/moments.module';
      * DomainGate('moments'), which 404s while the RuntimeFlag row is absent
      * and no allowlist entry names the caller. Production keeps zero rows. */
     MomentsModule,
+    /* E1: Exchange is MOUNTED but DARK, on exactly the Moments terms — every
+     * route behind DomainGate('exchange', { requireAdult: true }), which 404s
+     * while the RuntimeFlag row is absent and no allowlist entry names the
+     * caller. Production keeps zero rows, so this mount changes nothing an
+     * unallowlisted caller can observe; the runtime proof is
+     * exchange-gate-runtime.spec.ts. requireAdult is not optional here: D5
+     * allows age-restricted goods precisely BECAUSE the 18+ gate holds. */
+    ExchangeModule,
 
   ],
 })

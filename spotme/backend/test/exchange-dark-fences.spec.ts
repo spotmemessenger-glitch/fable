@@ -36,15 +36,36 @@ const EXCHANGE_REACH = /['"][^'"]*\/exchange[\/.'"-]/;
 const stripComments = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/\/\/[^\n]*/g, ' ');
 
 describe('Exchange — dark integration fences', () => {
-  it('AppModule imports NEITHER ExchangeModule NOR the exchange subtree', () => {
+  /* E1 flipped this assertion, exactly as Wave 1D flipped the Moments one.
+   * Darkness is now proven by the GATE rather than by absence from the module
+   * graph: from outside, a gated domain and an unmounted one are the same 404,
+   * which is the property that actually matters. Asserting absence here would
+   * forbid the mount the owner authorised. The runtime proof — that a real
+   * caller receives 404 with no flag row — is exchange-gate-runtime.spec.ts. */
+  it('AppModule mounts ExchangeModule (E1) — and nothing else changed', () => {
     const src = read(join(BACKEND, 'src/app.module.ts'));
-    for (const banned of ['ExchangeModule', './exchange', '/exchange/']) {
+    expect(src).toContain('ExchangeModule');
+    // The still-dark domains stay OUT of the graph entirely.
+    for (const banned of ['EventsModule', 'AssistantModule']) {
       expect(src).not.toContain(banned);
     }
   });
 
-  it('no backend module OUTSIDE src/exchange imports the exchange code (static or dynamic)', () => {
-    const files = walk(join(BACKEND, 'src'), ['.ts']).filter((f) => !f.includes('/exchange/'));
+  it("EVERY exchange controller sits behind DomainGate('exchange') + requireAdult", () => {
+    const controllers = walk(join(BACKEND, 'src/exchange'), ['.ts']).filter((f) => f.endsWith('.controller.ts'));
+    expect(controllers.length).toBeGreaterThan(0);
+    for (const file of controllers) {
+      const src = read(file);
+      expect(src).toMatch(/DomainGate\('exchange'/);
+      // D5 permits legal age-restricted goods ONLY because this holds.
+      expect(src).toMatch(/requireAdult:\s*true/);
+    }
+  });
+
+  it('no backend module OUTSIDE src/exchange imports the exchange code, except the mount', () => {
+    const files = walk(join(BACKEND, 'src'), ['.ts'])
+      .filter((f) => !f.includes('/exchange/'))
+      .filter((f) => !f.endsWith('app.module.ts')); // the mount itself
     // Any quoted import specifier whose path reaches the exchange segment — as
     // `/exchange`, `/exchange/…`, or `/exchange.module` — at a path boundary.
     // Broadened (review IMPORTER-REGEX): the previous form required a trailing
