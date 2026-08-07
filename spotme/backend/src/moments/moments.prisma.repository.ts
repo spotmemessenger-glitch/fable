@@ -110,15 +110,30 @@ export class PrismaMomentsRepository implements MomentRepositoryPort {
     expectedVersion: number,
   ): Promise<boolean> {
     const keepsLocation = visibility === 'nearby' || visibility === 'public';
-    const res = await this.prisma.moment.updateMany({
-      where: { id, authorId, versionSeq: expectedVersion, deletedAt: null },
-      data: {
-        visibility,
-        versionSeq: { increment: 1 },
-        ...(keepsLocation ? {} : { coarseLat: null, coarseLon: null, coarseCell: null, cityCell: null, geog: null }),
-      },
-    });
-    return res.count > 0;
+    /* RAW SQL, NOT prisma.updateMany, FOR ONE REASON: `geog` is
+     * Unsupported("geography(Point, 4326)") and the typed client refuses to
+     * write it — "Unknown argument `geog`". The first version of this used
+     * updateMany and threw a PrismaClientValidationError at runtime, 500ing
+     * every narrow. `tsc` did NOT catch it: the fields are behind a conditional
+     * spread, which widens the inferred type and switches off excess-property
+     * checking, so the compiler had nothing to object to.
+     *
+     * Raw also makes "in the same statement" literally true rather than
+     * approximately: the visibility change and the location clear commit
+     * together, so there is no instant where the row is private and still
+     * carries where it was made. Two statements would have had one. */
+    const clearLocation = keepsLocation
+      ? Prisma.empty
+      : Prisma.sql`, "coarseLat" = NULL, "coarseLon" = NULL, "coarseCell" = NULL, "cityCell" = NULL, "geog" = NULL`;
+    const affected = await this.prisma.$executeRaw(Prisma.sql`
+      UPDATE "Moment"
+      SET "visibility" = ${visibility}, "versionSeq" = "versionSeq" + 1 ${clearLocation}
+      WHERE "id" = ${id}
+        AND "authorId" = ${authorId}
+        AND "versionSeq" = ${expectedVersion}
+        AND "deletedAt" IS NULL
+    `);
+    return affected > 0;
   }
 
   /** The three feeds. Exclusions ALL in SQL (M5 + block + moderation). */
