@@ -1,4 +1,7 @@
-# 2026-08-07 — Backend deploy drive (service `api`)
+# 2026-08-07 — Backend deploy FAILED (service `api`)
+
+> Not to be confused with `2026-08-07-deploy-drive.md` on PR #136, a separate
+> mission from the same day. See §6.
 
 **Outcome: FAILED — master `772a92a` is NOT deployed.** The production `api`
 service is still serving the previous build. No migrations were applied.
@@ -156,13 +159,41 @@ Socket.IO remains on Socket.IO; no transport was cut over to Centrifugo.
 `650bbd4d` — named in the mission as the current live deployment — is now
 `REMOVED` (superseded 09:06 UTC). The live deployment is
 `22072780-c2f9-4e52-8033-ffb638e46f58` (`SUCCESS`, created 09:05:01 UTC,
-`reason: redeploy`).
+`reason: redeploy`), which appeared between the baseline check and the upload
+and was not initiated by this session.
 
-**This redeploy was not initiated by this session** and appeared between the
-baseline check and the upload. Its source snapshot is unknown, and Railway
-snapshot deployments carry no git SHA, so **the SHA currently serving
-production cannot be determined from the API.** Worth confirming with whoever
-or whatever triggered it before the next attempt.
+**It shipped no new code.** The three most recent redeploys all carry the same
+image digest:
+
+| Deployment | Created (UTC) | reason | cliCaller | imageDigest |
+| --- | --- | --- | --- | --- |
+| `4edb4d60` | 06:45:17 | redeploy | `claude_code` | `sha256:130e5d08…` |
+| `650bbd4d` | 06:50:04 | redeploy | `claude_code` | `sha256:130e5d08…` |
+| `22072780` | 09:05:01 | redeploy | `claude_code` | `sha256:130e5d08…` |
+
+Identical digests mean `22072780` is a restart of the *same image*, not a new
+build. The code serving production is therefore byte-identical to what was
+running before — the swap changed the container, not the software.
+
+Attribution is only partial. `deployment.creator` resolves to the account that
+owns the project token (`Youvaraja` / `spotmemessenger@gmail.com`), which is
+what any token-authenticated CLI call attributes to, and `cliCaller` is
+`claude_code`. Together those identify *a* Claude Code CLI session
+authenticated as the owner, but not *which* one. Note that `4edb4d60` and
+`650bbd4d` carry the same fingerprint and predate this session entirely, so a
+Claude Code caller was already redeploying this service before this mission
+began.
+
+This session issued no deploy or redeploy call before `railway up` at
+09:06:47. Its earlier Railway calls were `status`, `run` (three times, reading
+variables into a local process), a failed `ssh` (aborted locally on a missing
+SSH key), and read-only MCP and GraphQL queries. None of those can trigger a
+redeploy.
+
+Because snapshot deployments carry no git SHA, the exact commit serving
+production still cannot be read from the API — but since the image is
+unchanged across all three, identifying the SHA of any one of them identifies
+all three.
 
 ---
 
@@ -178,13 +209,32 @@ or whatever triggered it before the next attempt.
   `claude/vercel-token-connection-bj4d21` included.
 - No environment variable value printed, logged, or committed.
 
-## 6. Report-location note
+## 6. Report-location note — and a correction
 
-The mission specified appending to this file as one that "already carries the
-BLOCKER section this closes." No such file existed — not in the working tree,
-not on `origin/master`, and not anywhere in git history — and no report under
-`spotme/docs/reports/` contains a BLOCKER section. This file was therefore
-created rather than appended to, and it closes nothing.
+The mission specified appending to `2026-08-07-deploy-drive.md`, "which already
+carries the BLOCKER section this closes."
+
+**An earlier revision of this report claimed that file did not exist anywhere in
+git history. That claim was wrong.** It exists on branch
+`claude/vercel-token-connection-bj4d21` at commit `4957ac3`, with its BLOCKER
+section at line 27. The search that produced the false negative ran
+`git log --all` at a point when only `master` and this session's own branch had
+been fetched, so `--all` covered a ref set that excluded the branch holding the
+file. The correct conclusion was "not in the refs fetched so far", not "not in
+history". Re-running the identical search after fetching that branch finds it.
+
+That BLOCKER records a *different* blocker from this one — that session had no
+`RAILWAY_TOKEN`, no `railway` CLI, and no stored credential. This session had a
+valid project token and a working CLI, and failed later, on build context. The
+two are not the same finding and this report does not close that one.
+
+**Filename collision, now avoided.** Writing this report to the same path would
+have produced two unrelated files named
+`spotme/docs/reports/2026-08-07-deploy-drive.md` — one on PR #136, one on
+PR #138 — neither on `master`, colliding on merge. This report was therefore
+renamed to `2026-08-07-backend-deploy-failed.md`, which also describes it more
+accurately: a different mission with a different outcome. `2026-08-07-deploy-drive.md`
+remains PR #136's, untouched.
 
 ## 7. Next actions
 
@@ -196,7 +246,15 @@ created rather than appended to, and it closes nothing.
    `spotme/backend`, or change `package.json`'s `deploy` script to upload from
    the repository root. As it stands, the documented `npm run deploy` path is
    broken.
-3. Confirm the provenance of redeploy `22072780`.
+3. Establish which Claude Code session issued the `claude_code` redeploys
+   (`4edb4d60`, `650bbd4d`, `22072780`). Lower urgency than it first appeared —
+   all three share one image digest, so none of them changed the running code —
+   but a production service being restarted by an unidentified caller is still
+   a loose thread. Railway's own attribution stops at the token owner, so this
+   has to be answered from the session side.
+4. Resolve the `ysnap` Vercel project, which fails on `master` itself and has
+   since April. A permanently red check trains everyone to ignore CI. Either
+   set its Root Directory to a real app or disconnect it from this repository.
 4. Let the boot-time `prisma migrate deploy` apply migrations, and read the
    applied names from the deploy logs — a local `railway run` cannot reach the
    private-network database.
