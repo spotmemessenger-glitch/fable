@@ -32,25 +32,53 @@ function Ticks({ status }: { status: MessageRowView['status'] }) {
   );
 }
 
-function Row({ row, port, onSheet }: {
-  row: MessageRowView; port: ChatPort; onSheet: (row: MessageRowView) => void;
+/** Swipe right past this many px to compose a reply (legacy gesture). */
+const SWIPE_REPLY_PX = 56;
+const SWIPE_MAX_PX = 72;
+
+function Row({ row, port, onSheet, onReply }: {
+  row: MessageRowView; port: ChatPort;
+  onSheet: (row: MessageRowView) => void;
+  onReply: (row: MessageRowView) => void;
 }) {
   const pressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const bubbleRef = useRef<HTMLDivElement>(null);
+  const swipe = useRef({ x: 0, y: 0, dx: 0 });
   if (row.kind === 'system') {
     return <div className="ch-sys" role="note">{row.text}</div>;
   }
   const cancelPress = () => {
     if (pressTimer.current) { clearTimeout(pressTimer.current); pressTimer.current = null; }
   };
+  const endSwipe = () => {
+    const { dx } = swipe.current;
+    if (bubbleRef.current) bubbleRef.current.style.transform = '';
+    swipe.current = { x: 0, y: 0, dx: 0 };
+    if (dx >= SWIPE_REPLY_PX) onReply(row);
+  };
   return (
     <div className={`ch-row${row.mine ? ' ch-mine' : ''}`}>
       <div
+        ref={bubbleRef}
         className="ch-bubble"
         onContextMenu={(e) => { e.preventDefault(); onSheet(row); }}
-        onTouchStart={() => { pressTimer.current = setTimeout(() => onSheet(row), LONG_PRESS_MS); }}
-        onTouchEnd={cancelPress}
-        onTouchMove={cancelPress}
-        onTouchCancel={cancelPress}
+        onDoubleClick={() => port.react(row.id, '❤️')}
+        onTouchStart={(e) => {
+          swipe.current = { x: e.touches[0].clientX, y: e.touches[0].clientY, dx: 0 };
+          pressTimer.current = setTimeout(() => onSheet(row), LONG_PRESS_MS);
+        }}
+        onTouchEnd={() => { cancelPress(); endSwipe(); }}
+        onTouchMove={(e) => {
+          cancelPress();
+          const dx = e.touches[0].clientX - swipe.current.x;
+          const dy = Math.abs(e.touches[0].clientY - swipe.current.y);
+          swipe.current.dx = dy > 40 ? 0 : Math.max(0, Math.min(dx, SWIPE_MAX_PX));
+          if (bubbleRef.current) {
+            bubbleRef.current.style.transform =
+              swipe.current.dx > 0 ? `translateX(${swipe.current.dx}px)` : '';
+          }
+        }}
+        onTouchCancel={() => { cancelPress(); endSwipe(); }}
       >
         {row.showName && !row.mine && <b className="ch-name">{row.name}</b>}
         {row.replyPreview && (
@@ -62,6 +90,12 @@ function Row({ row, port, onSheet }: {
         {row.kind === 'media' && row.media
           ? <MediaBubble row={row} media={row.media} port={port} />
           : <span className={row.kind === 'stub' ? 'ch-stub' : 'ch-text'}>{row.text}</span>}
+        {row.translation && (
+          <div className={`ch-trline${row.translation.pending ? ' ch-pend' : ''}`}>
+            <i className="ch-trtag">{row.translation.tag}</i>
+            <span className="ch-trtxt">{row.translation.text}</span>
+          </div>
+        )}
         <span className="ch-meta">
           {row.edited && <i className="ch-edited">edited</i>}
           <time>{row.timeLabel}</time>
@@ -93,6 +127,7 @@ export function ChatShell({ port }: { port: ChatPort }) {
   const typingRef = useRef(false);
 
   const rows = snap.rows;
+  const comp = snap.composer;
   const hidden = Math.max(0, rows.length - shown);
   const visible = hidden > 0 ? rows.slice(hidden) : rows;
 
@@ -142,6 +177,28 @@ export function ChatShell({ port }: { port: ChatPort }) {
           <b>{snap.header.name}</b>
           <span className="ch-presence">{snap.typingLabel || snap.header.presenceLabel}</span>
         </div>
+        {comp && (
+          <div className="ch-langbar">
+            <button type="button" className="ch-langsw" data-on={String(comp.translitOn)}
+              aria-pressed={comp.translitOn}
+              aria-label={comp.translitOn ? 'Transliteration · on' : 'Transliteration'}
+              title={comp.translitOn ? 'Transliteration · on' : 'Transliteration'}
+              onClick={() => port.toggleTranslit?.()}>文A</button>
+            {comp.translitOn && (
+              <button type="button" className="ch-langchip" aria-label="Language you type in"
+                onClick={() => port.pickTranslitLang?.()}>{comp.translitLangLabel} ▾</button>
+            )}
+            <button type="button" className="ch-langsw" data-on={String(comp.translateOn)}
+              aria-pressed={comp.translateOn}
+              aria-label={comp.translateOn ? `Translation · ${comp.translateLangLabel}` : 'Translation'}
+              title={comp.translateOn ? `Translation · ${comp.translateLangLabel}` : 'Translation'}
+              onClick={() => port.toggleTranslate?.()}>🌐</button>
+            {comp.translateOn && (
+              <button type="button" className="ch-langchip" aria-label="Translate their messages into"
+                onClick={() => port.pickTranslateLang?.()}>{comp.translateLangLabel} ▾</button>
+            )}
+          </div>
+        )}
       </header>
 
       <div className="ch-log" ref={logRef} role="log" aria-label="Messages">
@@ -154,7 +211,7 @@ export function ChatShell({ port }: { port: ChatPort }) {
           <section key={g.key}>
             <div className="ch-day"><span>{g.label}</span></div>
             {g.rows.map((row) => (
-              <Row key={row.id} row={row} port={port} onSheet={setSheetRow} />
+              <Row key={row.id} row={row} port={port} onSheet={setSheetRow} onReply={setReply} />
             ))}
           </section>
         ))}
@@ -169,6 +226,14 @@ export function ChatShell({ port }: { port: ChatPort }) {
           </div>
           <button type="button" className="ch-replybar-x" aria-label="Cancel reply"
             onClick={() => setReply(null)}>×</button>
+        </div>
+      )}
+
+      {comp?.preview && (
+        <div className="ch-tlprev">
+          <div className="ch-tltag">{comp.preview.tag}</div>
+          <div className="ch-tlmain">{comp.preview.main}</div>
+          {comp.preview.sub && <div className="ch-tlsub">{comp.preview.sub}</div>}
         </div>
       )}
 
@@ -187,7 +252,11 @@ export function ChatShell({ port }: { port: ChatPort }) {
             placeholder="Message"
             aria-label="Message"
             value={draft}
-            onChange={(e) => { setDraft(e.target.value); setTyping(Boolean(e.target.value.trim())); }}
+            onChange={(e) => {
+              setDraft(e.target.value);
+              setTyping(Boolean(e.target.value.trim()));
+              port.draftChanged?.(e.target.value.trim());
+            }}
             onBlur={() => setTyping(false)}
             onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }}
           />

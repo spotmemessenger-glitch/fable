@@ -12,7 +12,7 @@
  */
 import {
   compressImage, maskDataURL, fileToDataURL, recordVoice, currentLocation,
-  mapLink, PHOTO_STD
+  mapLink, PHOTO_STD, shareOut, fileFromDataURL, downloadFile
 } from '../lib/media.js'
 
 /** One-shot hidden file input; resolves null on cancel. */
@@ -54,6 +54,37 @@ export function browserMediaUI (root) {
       if (!file) return null
       const data = await fileToDataURL(file)
       return { kind: 'file', data, fileName: file.name, fileSize: file.size }
+    },
+
+    /**
+     * Session 3 — the legacy shareMessage grammar: the OS share sheet where
+     * it exists; otherwise the closest honest thing (save media / copy text)
+     * with a toast saying which happened.
+     */
+    async shareMessage (m, ctx) {
+      const title = 'Shared from Spot Me'
+      const isText = !m.kind || m.kind === 'text'
+      const file = !isText && m.data
+        ? fileFromDataURL(m.data, m.fileName || `spotme-${m.kind}`)
+        : null
+      const text = isText ? String(m.text || '')
+        : (m.kind === 'location' && m.live !== false ? mapLink(m.lat, m.lon) : '')
+
+      const result = await shareOut(file ? { title, file } : { title, text })
+      if (result === 'shared' || result === 'cancelled') return
+      if (file) {
+        ctx.toast(downloadFile(file)
+          ? `Sharing is not available here — saved ${file.name} instead`
+          : 'Sharing is not available on this device')
+        return
+      }
+      if (text) {
+        navigator.clipboard?.writeText(text)
+          .then(() => ctx.toast('Sharing is not available here — copied instead'))
+          .catch(() => ctx.toast('Sharing is not available on this device'))
+        return
+      }
+      ctx.toast('Nothing to share')
     },
 
     copy (text, ctx) {

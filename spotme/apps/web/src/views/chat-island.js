@@ -37,16 +37,32 @@ export function reactChat (root, ctx, roomId) {
 async function mount (root, ctx, roomId) {
   try {
     // Loaded only on the opted-in path: flag-off cost of this module is zero.
-    const [{ db }, { rooms }, { fmtTime, fmtDay }, { buildChatPort }, { browserMediaUI }] =
+    const [{ db }, { rooms }, uiLib, { buildChatPort }, { browserMediaUI }, translateLib, translitLib, { isPlainEnglish }] =
       await Promise.all([
         import('../lib/db.js'),
         import('../lib/rooms.js'),
         import('../lib/ui.js'),
         import('./chat-island-port.js'),
-        import('./chat-island-media.js')
+        import('./chat-island-media.js'),
+        // Session 3 — the SAME engines the legacy composer drives, injected
+        // app-side; the package never sees them (strings-only port).
+        import('../lib/translate.js'),
+        import('spotme-core/core/translit.js'),
+        import('../lib/english.js')
       ])
 
-    const port = buildChatPort({ db, rooms, fmtTime, fmtDay }, ctx, roomId, browserMediaUI(root))
+    const { fmtTime, fmtDay, actionSheet } = uiLib
+    const lang = {
+      translateText: translateLib.translateText,
+      transliterateRemote: translateLib.transliterateRemote,
+      detectLanguage: translateLib.detectLanguage,
+      langName: translateLib.langName,
+      transliterate: translitLib.transliterate,
+      supportedScripts: translitLib.supportedScripts,
+      isPlainEnglish,
+      actionSheet
+    }
+    const port = buildChatPort({ db, rooms, fmtTime, fmtDay, lang }, ctx, roomId, browserMediaUI(root))
     if (!port) {
       ctx.toast('Conversation not found')
       ctx.nav('#/chat')

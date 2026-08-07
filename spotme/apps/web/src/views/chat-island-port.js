@@ -16,6 +16,8 @@
  * No flag read here — the single one lives in chat-island.js.
  */
 
+import { buildLangComposer } from './chat-island-lang.js'
+
 /** Stub/preview labels — same grammar as the engine's preview (pinned by
  *  chat-characterization). Used for stubs AND reply/copy snippets. */
 export function stubLabel (m) {
@@ -73,6 +75,10 @@ function mediaOf (m, mine, conn, mapLink) {
   if (m.kind === 'voice' && m.data) {
     return { type: 'voice', url: m.data, durLabel: `${m.dur || 0}s` }
   }
+  if (m.kind === 'video' && m.data) {
+    // Session 3: real playback for fetched videos (the stub row retires).
+    return { type: 'video', url: m.data, caption: m.text || '' }
+  }
   if (m.kind === 'file') {
     const kb = Math.max(1, Math.round((m.fileSize || 0) / 1024))
     return { type: 'file', url: m.data || null, name: m.fileName || 'File', sizeLabel: `${kb} KB` }
@@ -90,17 +96,23 @@ function mediaOf (m, mine, conn, mapLink) {
 }
 
 /**
- * @param {{ db:object, rooms:object, fmtTime:(ts:number)=>string, fmtDay:(ts:number)=>string }} deps
+ * @param {{ db:object, rooms:object, fmtTime:(ts:number)=>string, fmtDay:(ts:number)=>string,
+ *   lang?:object }} deps - `lang` (session 3) carries the translation/translit
+ *   engines + actionSheet for chat-island-lang.js; absent (old tests) the
+ *   port degrades to plain sends with no composer surface.
  * @param {{ nav(p:string):void, toast(m:string):void }} ctx
  * @param {string} roomId
  * @param {object} ui - browser side effects (chat-island-media.js shape)
  */
-export function buildChatPort ({ db, rooms, fmtTime, fmtDay }, ctx, roomId, ui) {
+export function buildChatPort ({ db, rooms, fmtTime, fmtDay, lang }, ctx, roomId, ui) {
   const convo = db.convo(roomId)
   const conn = convo && rooms.ensure(roomId)
   if (!conn) return null
   const myId = db.profile().id
   const group = convo.kind === 'group'
+  /** Session 3 — assigned below, once `invalidate` exists; rowOf only runs
+   *  from buildSnapshot, after assignment. */
+  let composer = null
 
   const dayLabel = (ts) =>
     new Date(ts).toDateString() === new Date().toDateString() ? 'Today' : fmtDay(ts)
@@ -135,6 +147,11 @@ export function buildChatPort ({ db, rooms, fmtTime, fmtDay }, ctx, roomId, ui) 
       canEdit: mine && isText,
       copyText: isText ? (m.text || null)
         : (m.kind === 'location' && m.live !== false ? ui.mapLink(m.lat, m.lon) : null),
+      // Legacy canForward: never view-once/burst; text/location always, media
+      // only once the bytes are held.
+      canForward: m.kind !== 'system' && !m.viewOnce && !m.burst &&
+        (isText || m.kind === 'location' || Boolean(m.data)),
+      translation: composer ? composer.translationOf(m, mine) : null,
       ...(media ? { media } : {})
     }
   }
@@ -148,6 +165,10 @@ export function buildChatPort ({ db, rooms, fmtTime, fmtDay }, ctx, roomId, ui) 
   let recStartedAt = 0
   const listeners = new Set()
   const invalidate = () => { snap = null; for (const fn of listeners) fn() }
+
+  // Session 3 — translation/transliteration through the same engines the
+  // legacy composer drives (injected; absent in older tests → plain sends).
+  composer = lang ? buildLangComposer({ db, lang }, ctx, roomId, invalidate) : null
 
   function buildSnapshot () {
     const current = db.convo(roomId) || convo
@@ -163,7 +184,8 @@ export function buildChatPort ({ db, rooms, fmtTime, fmtDay }, ctx, roomId, ui) 
       },
       rows: conn.store.list().map(rowOf),
       typingLabel: typing ? `${typing.name || 'Someone'} is typing…` : '',
-      recordingLabel
+      recordingLabel,
+      ...(composer ? { composer: composer.composerView() } : {})
     }
   }
 
@@ -242,12 +264,18 @@ export function buildChatPort ({ db, rooms, fmtTime, fmtDay }, ctx, roomId, ui) 
     },
 
     sendText: (text, replyToId) => {
-      const partial = { text }
-      if (replyToId) partial.replyTo = replyToId
-      const msgTtl = db.convo(roomId)?.msgTtl || 0
-      if (msgTtl) partial.ttl = msgTtl
-      rooms.sendMessage(roomId, partial)
-      invalidate()
+      // The same dispatch for every mode: replyTo and the per-chat ttl ride
+      // whatever partial the composer produced (translated hero + tr envelope
+      // in translate mode; the raw draft otherwise — legacy dispatchSend).
+      const dispatch = (partial) => {
+        if (replyToId) partial.replyTo = replyToId
+        const msgTtl = db.convo(roomId)?.msgTtl || 0
+        if (msgTtl) partial.ttl = msgTtl
+        rooms.sendMessage(roomId, partial)
+        invalidate()
+      }
+      if (composer) composer.sendText(text, dispatch)
+      else dispatch({ text })
     },
     retry: (id) => { rooms.retryMessage(roomId, id); invalidate() },
     markRead: () => rooms.markRead(roomId),
@@ -287,6 +315,48 @@ export function buildChatPort ({ db, rooms, fmtTime, fmtDay }, ctx, roomId, ui) 
         .catch(() => ctx.toast('Location is not available'))
     },
     toggleVoiceRecord: () => { void toggleVoiceRecord() },
+
+    /* ---- session 3: composer language modes (no-ops without `lang`) ---- */
+    draftChanged: (text) => { composer?.draftChanged(text) },
+    toggleTranslate: () => { composer?.toggleTranslate() },
+    pickTranslateLang: () => { composer?.pickTranslateLang() },
+    toggleTranslit: () => { composer?.toggleTranslit() },
+    pickTranslitLang: () => { composer?.pickTranslitLang() },
+
+    /** Forward — the legacy forwardTo clone, stripped of reply/translation
+     *  context and reactions, into a conversation picked app-side. */
+    forward: (id) => {
+      const m = conn.store.list().find((x) => x.id === id)
+      const sheet = lang?.actionSheet
+      if (!m || !sheet) return
+      const targets = db.convos().filter((c) => !c.archived)
+      if (!targets.length) { ctx.toast('No conversations to forward to'); return }
+      sheet(targets.map((c) => ({
+        label: c.title || c.peer?.name || 'Chat',
+        fn () {
+          let sent = null
+          if (!m.kind || m.kind === 'text') {
+            sent = rooms.sendMessage(c.roomId, m.lang ? { text: m.text, lang: m.lang } : { text: m.text })
+          } else if (m.kind === 'location') {
+            sent = rooms.sendMessage(c.roomId, { kind: 'location', lat: m.lat, lon: m.lon })
+          } else if (m.data) {
+            const partial = { kind: m.kind, data: m.data }
+            if (m.fileName) partial.fileName = m.fileName
+            if (m.fileSize) partial.fileSize = m.fileSize
+            if (m.dur) partial.dur = m.dur
+            sent = rooms.sendAttachment(c.roomId, partial)
+          }
+          if (!sent) { ctx.toast('Could not forward that message'); return }
+          invalidate()
+          ctx.toast(`Forwarded to ${c.title || c.peer?.name || 'chat'}`)
+        }
+      })), 'Forward to…')
+    },
+    /** Share — hands the message to the OS sheet (browser API, app-side). */
+    share: (id) => {
+      const m = conn.store.list().find((x) => x.id === id)
+      if (m && ui.shareMessage) ui.shareMessage(m, ctx)
+    },
 
     back: () => ctx.nav('#/chat'),
     toast: (m) => ctx.toast(m)

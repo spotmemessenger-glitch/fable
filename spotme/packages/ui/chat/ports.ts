@@ -36,12 +36,44 @@ export type MediaView =
   | { type: 'viewOnce'; maskUrl: string | null; label: string; chip: string }
   | { type: 'viewOnceMine'; label: string; chip: string; opened: boolean }
   | { type: 'voice'; url: string; durLabel: string }
+  | { type: 'video'; url: string; caption: string }
   | { type: 'file'; url: string | null; name: string; sizeLabel: string }
   | { type: 'location'; mapUrl: string | null; label: string; live: boolean };
 
 export interface ReactionChip {
   emoji: string;
   count: number;
+}
+
+/** SESSION 3 — composer language modes (translation / transliteration).
+ *  Everything is display-ready strings shaped app-side: the engines
+ *  (lib/translate.js, spotme-core/core/translit.js) NEVER enter this package.
+ *  The preview mirrors the legacy tlprev panel: tag line, hero line, sub. */
+export interface ComposerPreview {
+  tag: string;
+  main: string;
+  /** 'Detected Tamil (romanized)' — empty string hides the line. */
+  sub: string;
+}
+
+export interface ComposerView {
+  /** Which feature owns the composer (legacy composeMode). */
+  mode: 'translate' | 'translit' | null;
+  translateOn: boolean;
+  translitOn: boolean;
+  /** 'Tamil' — the 🌐 target chip label. */
+  translateLangLabel: string;
+  /** 'Auto' or a pinned language — the 文A ▾ chip label. */
+  translitLangLabel: string;
+  preview: ComposerPreview | null;
+}
+
+/** Incoming-message reading line (legacy .tr block): 'Tamil · Translated' +
+ *  the translated text, or 'Translating…' + '…' while pending. */
+export interface TranslationLine {
+  tag: string;
+  text: string;
+  pending: boolean;
 }
 
 export interface MessageRowView {
@@ -75,6 +107,11 @@ export interface MessageRowView {
   copyText: string | null;
   /** Present exactly when kind === 'media'. */
   media?: MediaView;
+  /** SESSION 3 — Forward/Share appear in the sheet only when true (legacy:
+   *  never view-once/burst, and only text/location/fetched media). */
+  canForward?: boolean;
+  /** SESSION 3 — incoming reading line; absent/null hides it. */
+  translation?: TranslationLine | null;
 }
 
 export interface ChatSnapshot {
@@ -84,6 +121,9 @@ export interface ChatSnapshot {
   typingLabel: string;
   /** "0:07" while a voice note records; empty string = not recording. */
   recordingLabel: string;
+  /** SESSION 3 — absent hides every language control (old adapters and
+   *  fixtures keep working untouched). */
+  composer?: ComposerView;
 }
 
 export interface ChatPort {
@@ -123,12 +163,34 @@ export interface ChatPort {
    *  snapshot tracks the session). */
   toggleVoiceRecord(): void;
 
+  /* SESSION 3 — all optional, so session-2 adapters/fixtures stay valid.
+   * The composer modes drive lib/translate.js + the translit engine APP-SIDE;
+   * this package only ever calls these and reads snapshot strings. */
+  /** Every keystroke's trimmed draft — the adapter debounces the engines and
+   *  pushes the resulting preview into snapshot().composer.preview. */
+  draftChanged?(text: string): void;
+  /** 🌐 switch — one tap on/off, never opens a list (legacy trBtn). */
+  toggleTranslate?(): void;
+  /** 🌐 chip — app-side language action sheet (legacy trChip). */
+  pickTranslateLang?(): void;
+  /** 文A switch — whole-chat transliteration on/off (legacy txBtn). */
+  toggleTranslit?(): void;
+  /** 文A ▾ chip — Auto-detect + pinned languages (legacy xlitChip). */
+  pickTranslitLang?(): void;
+  /** Forward stays inside Spot Me — app-side conversation picker + the same
+   *  clone-send the legacy forwardTo makes. */
+  forward?(id: string): void;
+  /** Share hands the message to the OS share sheet (app-side). */
+  share?(id: string): void;
+
   back(): void;
   toast(msg: string): void;
 }
 
 /** Fixture port for tests. */
-export function fixtureChatPort(rows?: MessageRowView[]): ChatPort & { calls: string[] } {
+export function fixtureChatPort(
+  rows?: MessageRowView[],
+): ChatPort & { calls: string[]; setSnapshot: (next: ChatSnapshot) => void } {
   const row = (over: Partial<MessageRowView>): MessageRowView => ({
     id: 'm1', mine: false, kind: 'text', text: 'hello', name: 'Asha', showName: false,
     timeLabel: '10:02', dayKey: 'today', dayLabel: 'Today', status: 'sent',
@@ -180,8 +242,18 @@ export function fixtureChatPort(rows?: MessageRowView[]): ChatPort & { calls: st
     attachFile: () => calls.push('attachFile'),
     attachLocation: () => calls.push('attachLocation'),
     toggleVoiceRecord: () => calls.push('voiceRecord'),
+    draftChanged: (t: string) => calls.push(`draft:${t}`),
+    toggleTranslate: () => calls.push('toggleTranslate'),
+    pickTranslateLang: () => calls.push('pickTranslateLang'),
+    toggleTranslit: () => calls.push('toggleTranslit'),
+    pickTranslitLang: () => calls.push('pickTranslitLang'),
+    forward: (id: string) => calls.push(`forward:${id}`),
+    share: (id: string) => calls.push(`share:${id}`),
     back: () => calls.push('back'),
     toast: (m: string) => calls.push(`toast:${m}`),
+    /** Test hook: replace the snapshot and notify (session-3 tests drive the
+     *  composer state through this). */
+    setSnapshot (next: ChatSnapshot) { snap = next; notify(); },
   };
   return port;
 }

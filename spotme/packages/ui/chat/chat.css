@@ -114,6 +114,38 @@
 
 .ch-voice { display: flex; align-items: center; gap: 8px; }
 .ch-voice audio { max-width: 210px; height: 40px; }
+
+/* ---------------- session 3: language modes, preview, video, polish ------ */
+.ch-langbar { display: flex; align-items: center; gap: 6px; margin-left: auto; }
+.ch-langsw {
+  min-width: 40px; min-height: 40px; background: var(--well); border: 0;
+  border-radius: 12px; font: inherit; font-size: 15px; color: var(--muted);
+  cursor: pointer;
+}
+.ch-langsw[data-on='true'] { color: var(--ink); box-shadow: inset 0 0 0 1px var(--blue); }
+.ch-langsw:focus-visible, .ch-langchip:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+.ch-langchip {
+  background: var(--well); border: 0; border-radius: 999px; padding: 6px 10px;
+  min-height: 32px; font: inherit; font-size: 12.5px; color: var(--ink2); cursor: pointer;
+}
+
+.ch-tlprev {
+  border-top: 1px solid var(--hair); background: var(--surface);
+  padding: 8px 14px 6px;
+}
+.ch-tltag { font-size: 11.5px; color: var(--muted); }
+.ch-tlmain { font-size: 15px; color: var(--ink); padding: 2px 0; overflow-wrap: anywhere; }
+.ch-tlsub { font-size: 11.5px; color: var(--muted); }
+
+.ch-trline { border-top: 1px solid var(--hair); margin-top: 4px; padding-top: 4px; }
+.ch-trline.ch-pend { opacity: 0.7; }
+.ch-trtag { display: block; font-style: normal; font-size: 11px; color: var(--muted); }
+.ch-trtxt { font-size: 14.5px; overflow-wrap: anywhere; }
+
+.ch-wave { display: inline-flex; align-items: center; gap: 2px; height: 22px; }
+.ch-wave i { width: 2.5px; border-radius: 2px; background: var(--blue); opacity: 0.75; }
+
+.ch-vidmsg video { max-width: 240px; max-height: 280px; border-radius: 12px; display: block; }
 .ch-vdur { font-size: 12px; color: var(--muted); }
 
 .ch-file { display: flex; flex-direction: column; gap: 2px; color: inherit; text-decoration: none; }

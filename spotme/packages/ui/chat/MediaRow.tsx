@@ -42,9 +42,26 @@ export function MediaBubble({ row, media, port }: {
     case 'voice':
       return (
         <div className="ch-voice">
+          {/* Decorative bars — a real amplitude waveform needs decoding the
+              audio, which is app-side; fixed pseudo-random heights read as a
+              voice note without it. */}
+          <span className="ch-wave" aria-hidden="true">
+            {Array.from({ length: 20 }, (_, i) => (
+              <i key={i} style={{ height: `${30 + ((i * 37) % 53)}%` }} />
+            ))}
+          </span>
           {/* Playback of a display-ready URL; recording/encoding is app-side. */}
           <audio controls preload="metadata" src={media.url} aria-label="Voice note" />
           <span className="ch-vdur">{media.durLabel}</span>
+        </div>
+      );
+    case 'video':
+      return (
+        <div className="ch-vidmsg">
+          {/* Real playback of a display-ready URL (session 3 — the stub row
+              retires for fetched videos). */}
+          <video controls playsInline preload="metadata" src={media.url} aria-label="Video message" />
+          {media.caption && <span className="ch-imgcap">{media.caption}</span>}
         </div>
       );
     case 'file':
