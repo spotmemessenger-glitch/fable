@@ -4,7 +4,7 @@ import { CurrentUser, AuthenticatedPrincipal } from '../common/decorators/curren
 import { PushService } from './push.service';
 
 /**
- * Same wire contract the web client already speaks (spotme/web/src/lib/push.js),
+ * Same wire contract the web client already speaks (spotme/apps/web/src/lib/push.js),
  * so nothing on the client changes:
  *
  *   GET  /api/push                                    -> { enabled, publicKey }

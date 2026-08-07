@@ -7,7 +7,7 @@
 import { join } from 'node:path';
 import { existsSync } from 'node:fs';
 import {
-  liveEntryDarkPackageImports, posix, BACKEND, REPO, read, walk, inDir, requireNonEmpty, clientDomainRoots, appEntries, clientTestExists, clientManifests,
+  liveWebRoot, liveEntryDarkPackageImports, posix, BACKEND, REPO, read, walk, inDir, requireNonEmpty, clientDomainRoots, appEntries, clientTestExists, clientManifests,
 } from './helpers/fence-paths';
 import { stripImageMetadata, containsMetadataMarkers } from '../src/moment-media/exif-strip';
 import { createMomentQueues } from '../src/moment-media/media.queues';
@@ -195,7 +195,7 @@ describe('Moments — dark integration fences', () => {
       expect(read(f)).not.toMatch(/MOMENTS[_A-Z]*ENABLED\s*=\s*true/);
       expect(SECRET.test(read(f))).toBe(false);
     }
-    const signing = read(join(REPO, 'spotme/web/src/lib/crypto/signing-key-publication.js'));
+    const signing = read(join(liveWebRoot(), 'src/lib/crypto/signing-key-publication.js'));
     expect(signing).toContain('SIGNING_PUBLICATION_ENABLED = false');
   });
 
