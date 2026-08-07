@@ -9,6 +9,7 @@
 
 import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
+import { DomainGate } from '../flags/domain-gate.guard';
 import { CurrentUser, AuthenticatedPrincipal } from '../common/decorators/current-user.decorator';
 import { ExchangeService } from './exchange.service';
 import { ExchangeError } from './exchange.errors';
@@ -18,7 +19,15 @@ const toInt = (v: unknown, d: number) => {
   return Number.isInteger(n) ? n : d;
 };
 
-@UseGuards(JwtAuthGuard)
+/* E1: mounted but DARK. The gate answers 404 unless the `exchange` RuntimeFlag
+ * row says enabled OR this exact account is on the Stage-A allowlist — so a
+ * gated-off domain is indistinguishable from one that was never mounted.
+ *
+ * requireAdult is load-bearing rather than decorative: D5 permits listings for
+ * legal age-restricted goods (beer, cigarettes, condoms), and the ONLY thing
+ * that makes that defensible is that no unverified account can reach the
+ * surface at all. Removing it would silently widen the policy. */
+@UseGuards(JwtAuthGuard, DomainGate('exchange', { requireAdult: true }))
 @Controller('v1/exchange')
 export class ExchangeController {
   constructor(private readonly exchange: ExchangeService) {}

@@ -31,13 +31,23 @@ owner-controlled execution order — do not reorder or skip:
 | # | Step | State |
 |---|---|---|
 | 1 | Smart Nearby Discovery Map | Implemented (Draft PRs), dark — Platform Phase 2 stacked PRs #80–#85; PR #60 remains the byte-identical earlier draft, reusable concepts re-cut per the Phase 0 classification |
-| 2 | **SpotMe Exchange** (AI-matched Needs & Offers) | Planned — flagship |
+| 2 | **SpotMe Exchange** (AI-matched Needs & Offers) | **Implemented (Merged — DARK), being wired** — Phase 3A–3E merged (#86–#90); **E1 mounted it** behind `DomainGate('exchange', {requireAdult:true})`, so production 404s until an allowlist row or flag flip. The user-facing surface in `spotme/web` is **in progress** (v1 is text-only; listing photos deferred to v1.1) |
 | 3 | Live Nearby Events | Implemented (Draft PR), dark — PR #61 |
 | 4 | **Nearby Moments** | **Next approved mission** (after handbook merge) |
 | 5 | AI Assistant & Personalization | Planned, consent-based, interface-first |
 
 > SpotMe Exchange was inserted as step 2 by owner decision (2026-08-03),
 > superseding ADR-021's four-step sequence (immutable; ratify via ADR-022).
+
+> **Drift corrected 2026-08-07 (G9).** This table said Exchange was *"Planned —
+> flagship"* with no code, while [03-IMPLEMENTATION-STATUS](03-IMPLEMENTATION-STATUS.md)
+> already recorded Phase 3A–3E as **Merged — DARK** (#86–#90). Two pages of the
+> same handbook disagreed for three days because the merges updated §03 and
+> never came back here. The repository was the truth, as G1 says. The general
+> fix is the one G9 already prescribes — update the roadmap page **in the same
+> change** that alters reality, not afterwards; the specific lesson is that a
+> phase landing must touch §03 *and* §04, since a status row alone leaves the
+> planning page lying.
 
 ## Current milestone
 

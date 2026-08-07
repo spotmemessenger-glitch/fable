@@ -1,15 +1,23 @@
 /**
- * The Exchange module (Phase 3B), PREPARED BUT NOT WIRED.
+ * The Exchange module (Phase 3B), MOUNTED AND DARK as of E1.
  *
- * NOT imported by AppModule — importing it is the single line that would give
- * the running application a /v1/exchange route, and that line is an owner-gated
- * activation change. Until then no route exists, no repository binds, nothing
- * runs. The 3E dark fence asserts this. Business participation is a dark seam
- * (D4): no business flow is reachable; v1 posture is individuals-only.
+ * AppModule now imports this, so `/v1/exchange` routes exist in the graph —
+ * but every one of them sits behind `DomainGate('exchange', { requireAdult:
+ * true })`, which answers 404 while the RuntimeFlag row is absent and no
+ * allowlist entry names the caller. Production keeps zero rows, so mounting
+ * changed nothing an unallowlisted caller can observe. That claim is proven at
+ * runtime, not by inspection, in test/exchange-gate-runtime.spec.ts.
+ *
+ * FlagsModule is imported for exactly that gate: it exports RuntimeFlagService
+ * and DomainAllowlistService, which the guard injects.
+ *
+ * Business participation remains a dark seam (D4): no business flow is
+ * reachable; the v1 posture is individuals-only.
  */
 
 import { Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
+import { FlagsModule } from '../flags/flags.module';
 import { ExchangeController } from './exchange.controller';
 import { ExchangeService } from './exchange.service';
 import { EXCHANGE_INTENT_REPOSITORY } from './exchange.repository';
@@ -17,7 +25,7 @@ import { PrismaExchangeIntentRepository } from './exchange.prisma.repository';
 import { EXCHANGE_SEARCH_PORT, UnconfiguredExchangeSearchAdapter } from './exchange.search';
 
 @Module({
-  imports: [JwtModule.register({})],
+  imports: [JwtModule.register({}), FlagsModule],
   controllers: [ExchangeController],
   providers: [
     ExchangeService,

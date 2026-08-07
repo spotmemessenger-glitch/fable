@@ -61,8 +61,10 @@ describe('Moments — dark integration fences', () => {
   it('AppModule mounts MomentsModule (activation) — and nothing else changed', () => {
     const src = read(join(BACKEND, 'src/app.module.ts'));
     expect(src).toContain('MomentsModule');
-    // The dark domains stay OUT of the graph entirely.
-    for (const banned of ['ExchangeModule', 'EventsModule', 'AssistantModule']) {
+    // The still-dark domains stay OUT of the graph entirely. ExchangeModule
+    // left this list in E1: it is now mounted behind its own DomainGate, and
+    // its darkness is asserted by exchange-dark-fences + the runtime proof.
+    for (const banned of ['EventsModule', 'AssistantModule']) {
       expect(src).not.toContain(banned);
     }
   });
