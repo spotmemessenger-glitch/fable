@@ -16,6 +16,8 @@ import type { ContactsPort } from './contacts/ports';
 import type { NotificationsPort } from './notifications/ports';
 import type { StoriesPort } from './stories/ports';
 import { GroupsIsland, type GroupsIslandProps } from './groups/island';
+import { ProfileShell } from './profile/ProfileShell';
+import type { ProfilePort } from './profile/ports';
 
 export {
   BrowseScreen, DetailScreen, CreateScreen, MyIntentsScreen,
@@ -63,4 +65,11 @@ export type { GroupsDeps } from './groups/ports';
  */
 export function __mountGroups(props: GroupsIslandProps) {
   return createElement(GroupsIsland, props);
+}
+
+/** Slice 4 — Profile & Settings, behind spotme.ui.profile (default OFF). */
+export type { ProfilePort, ProfileSnapshot, ToggleKey, EditableFieldKey, UsernameCheck } from './profile/ports';
+
+export function __mountProfile(port: ProfilePort) {
+  return createElement(ProfileShell, { port });
 }

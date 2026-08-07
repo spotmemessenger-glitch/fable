@@ -16,6 +16,8 @@ import { el, clear, avatar, actionSheet } from '../lib/ui.js'
 import { notifyState, enableNotify, chime, notifyBlockedReason } from '../lib/notify.js'
 import { subscribePush } from '../lib/push.js'
 import { API_BASE as REGISTRY_API } from '../lib/api.js'
+import { uiFlag } from '../lib/island.js'
+import { profileIsland } from '../lib/island-adapters-profile.js'
 
 /* ------------------------------------------------------------- icons */
 
@@ -56,6 +58,8 @@ const langNative = (code) => LANGS.find((l) => l.code === code)?.native || code
 const langEnglish = (code) => LANGS.find((l) => l.code === code)?.name || code
 
 export function render (root, ctx) {
+  if (uiFlag('profile')) return profileIsland(root, ctx) // ADR-035 slice 4, default OFF
+
   const wrap = el('div', { class: 'v-profile' })
   let editingName = false
 
