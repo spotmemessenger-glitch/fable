@@ -12,7 +12,7 @@
  *
  * DELIBERATELY ABSENT ON THIS BRANCH — the #139 base (e304d27) predates
  * master's #144/#143, so this API client has NO reaction/comment count fields,
- * NO setVisibility (audience control), NO share/save surface. The UI omits
+ * NO audience-change call, NO share/save surface. The UI omits
  * them rather than promising what this branch's server contract lacks; they
  * arrive by REBASING #139, not by inventing fields here. Listed in the
  * report.
