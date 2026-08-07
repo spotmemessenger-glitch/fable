@@ -20,6 +20,7 @@ import { rooms } from '../lib/rooms.js'
 import { groupsApi } from '../lib/groups-api.js'
 import { openGroupWizard } from './group-new.js'
 import { el, clear, avatar, actionSheet, fmtDay } from '../lib/ui.js'
+import { reactGroups } from './groups-island.js'
 
 const STAGGER_MS = 32
 const STAGGER_CAP = 12
@@ -52,6 +53,7 @@ async function shareLink (url, toast) {
 }
 
 export function render (root, ctx) {
+  { const island = reactGroups(root, ctx, 'list'); if (island) return island } // ADR-035 slice 3 flag branch
   let closeWizard = null
   let serverGroups = []
   let loadError = null

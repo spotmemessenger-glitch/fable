@@ -20,6 +20,7 @@ import { rooms } from '../lib/rooms.js'
 import { groupsApi, may, outranks, ROLE_LABEL } from '../lib/groups-api.js'
 import { buildPicker } from './member-picker.js'
 import { el, clear, avatar, actionSheet } from '../lib/ui.js'
+import { reactGroups } from './groups-island.js'
 
 const MUTE_CHOICES = [
   { label: 'Mute for 1 hour', minutes: 60 },
@@ -32,6 +33,7 @@ const ICON_BACK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" st
 const isMuted = (m) => Boolean(m.mutedUntil) && new Date(m.mutedUntil).getTime() > Date.now()
 
 export function render (root, ctx, groupId) {
+  { const island = reactGroups(root, ctx, 'manage', groupId); if (island) return island } // ADR-035 slice 3 flag branch
   let group = null
   let dead = false
 
