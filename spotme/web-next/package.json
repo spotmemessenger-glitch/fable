@@ -9,17 +9,20 @@
     "build": "vite build",
     "typecheck": "tsc --noEmit",
     "check:boundaries": "node scripts/check-boundaries.mjs",
-    "test": "npm run check:boundaries && npm run typecheck && npm run test:unit && npm run build",
+    "check:analytics-artifact": "node scripts/check-analytics-artifact.mjs",
+    "test": "npm run check:boundaries && npm run typecheck && npm run test:unit && npm run build && npm run check:analytics-artifact",
     "preview": "vite preview",
     "test:unit": "vitest run"
   },
   "dependencies": {
+    "posthog-js": "^1.411.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },
   "devDependencies": {
     "@testing-library/react": "^16.3.2",
     "@testing-library/user-event": "^14.6.1",
+    "@types/node": "^26.1.2",
     "@types/react": "^18.3.11",
     "@types/react-dom": "^18.3.1",
     "@vitejs/plugin-react": "^4.3.2",

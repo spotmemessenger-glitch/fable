@@ -152,6 +152,20 @@ export type {
   RouteAdvice,
 } from './assistant.ts';
 
+// Launch integrations — closed-vocabulary analytics contracts (ADR-031, DARK).
+export { ANALYTICS_CONTRACTS_VERSION, ANALYTICS_EVENT_NAMES } from './analytics.ts';
+export type {
+  AnalyticsContractsVersion,
+  OpaqueAnalyticsUserId,
+  AnalyticsScreen,
+  AnalyticsSignupStep,
+  AnalyticsFeature,
+  AnalyticsErrorCode,
+  AnalyticsEvent,
+  AnalyticsEventName,
+  AnalyticsPort,
+} from './analytics.ts';
+
 export { DISCOVERY_CONTRACTS_VERSION } from './discovery.ts';
 export type {
   DiscoveryContractsVersion,

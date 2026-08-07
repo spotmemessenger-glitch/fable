@@ -67,12 +67,18 @@ check('no authentication or credential storage', authHits.length === 0,
 const IMPORT_STMT = /import\s+(type\s+)?[\s\S]*?from\s+(['"])([^'"]+)\2/g;
 const imports = files.flatMap((f) =>
   [...f.code.matchAll(IMPORT_STMT)].map((m) => ({ path: f.path, typeOnly: Boolean(m[1]), spec: m[3] })));
+// Deliberate, reviewed amendment (ADR-031): the analytics module — and ONLY
+// it — may import the PostHog SDK. The adapter file is further pinned down by
+// the analytics-not-shipped fence (posthog-js only in posthog.ts, imported
+// only by init.ts, called by nothing live).
+const ANALYTICS_ONLY = new Set(['posthog-js']);
 const allowed = (i) =>
   i.spec.startsWith('react') || i.spec.startsWith('./') ||
   // Intra-web-next sibling reuse (exchange ↔ discovery). Escapes toward
   // web/backend are still blocked by rule 1 (LEGACY).
   i.spec.startsWith('../') ||
-  (i.spec === '@spotme/contracts' && i.typeOnly);
+  (i.spec === '@spotme/contracts' && i.typeOnly) ||
+  (ANALYTICS_ONLY.has(i.spec) && i.path.replace(/\\/g, '/').startsWith('src/analytics/'));
 const badImports = imports.filter((i) => !allowed(i));
 check('imports limited to react/*, siblings, and type-only @spotme/contracts',
   badImports.length === 0, badImports.map((i) => `${i.path} → ${i.spec}`).join(' | '));

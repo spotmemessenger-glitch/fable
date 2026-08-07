@@ -1,10 +1,13 @@
-import { useCallback, useMemo, useState, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import type { DiscoveryFilters } from '@spotme/contracts';
 import { DiscoveryShell, markersFor, resultsOf } from './discovery/DiscoveryShell';
 import { DiscoveryController, MemoryCache } from './discovery/controller';
 import { FixtureDiscoveryApi } from './discovery/fixtures';
 import { DisabledRealtime } from './discovery/ports';
 import type { GeolocationPort } from './discovery/ports';
+// Baseline instrumentation (ADR-031) goes through the analytics seam only —
+// closed vocabulary, NOOP sink while dark (initAnalytics is never called here).
+import { track } from './analytics';
 
 /**
  * The inert Discovery beachhead (checkpoints 10/11). Everything is behind
@@ -38,6 +41,19 @@ export function App() {
   const [, bump] = useState(0);
   const rerender = useCallback(() => bump((n) => n + 1), []);
 
+  useEffect(() => {
+    track({ type: 'screen_view', screen: 'discovery' });
+  }, []);
+
+  // error_shown carries a machine category only — never coordinates, reasons,
+  // or message text (the closed vocabulary rejects anything else).
+  useEffect(() => {
+    if (state.kind === 'offline') track({ type: 'error_shown', surface: 'discovery', code: 'offline' });
+    else if (state.kind === 'provider-unavailable') track({ type: 'error_shown', surface: 'discovery', code: 'provider_unavailable' });
+    else if (state.kind === 'permission-required') track({ type: 'error_shown', surface: 'discovery', code: 'permission_required' });
+    else if (state.kind === 'location-unavailable') track({ type: 'error_shown', surface: 'discovery', code: 'location_unavailable' });
+  }, [state.kind]);
+
   // One derivation shared with the Shell — the map and list never disagree,
   // including in offline / provider-unavailable states (F7-3).
   const results = resultsOf(state);
@@ -55,11 +71,11 @@ export function App() {
       markers={markersFor(results, controller.selectedId)}
       center={null}
       onSearchText={(v) => { controller.searchText = v; rerender(); }}
-      onSubmit={() => void controller.search()}
-      onMode={(m) => { controller.mode = m; rerender(); }}
+      onSubmit={() => { track({ type: 'feature_used', name: 'discovery_search' }); void controller.search(); }}
+      onMode={(m) => { track({ type: 'feature_used', name: 'view_mode_toggle' }); controller.mode = m; rerender(); }}
       onFilters={(f: DiscoveryFilters) => { controller.filters = f; rerender(); }}
-      onVisibility={(next) => void controller.setVisibility(next).then(rerender)}
-      onSelect={(id) => { controller.select(id); rerender(); }}
+      onVisibility={(next) => { track({ type: 'feature_used', name: 'discovery_visibility_toggle' }); void controller.setVisibility(next).then(rerender); }}
+      onSelect={(id) => { track({ type: 'feature_used', name: 'map_marker_select' }); controller.select(id); rerender(); }}
       onFriendRequest={() => { /* D9 dark: no transport exists this phase */ }}
       onBlock={() => { /* dark: block projection wiring is activation work */ }}
       onReport={() => { /* dark */ }}
