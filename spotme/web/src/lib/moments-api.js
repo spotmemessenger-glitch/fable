@@ -188,14 +188,81 @@ export const editMedia = (mediaId, { trimStartMs, trimEndMs, coverAtMs } = {}) =
  * strips EXIF/GPS before anything is stored, which a presigned direct upload
  * to the bucket could not do (the original would already be in the bucket).
  */
-export async function uploadMedia (file, { onProgress } = {}) {
-  const buf = await file.arrayBuffer()
-  if (typeof onProgress === 'function') onProgress(0)
-  const out = await call('/media', {
-    method: 'POST', raw: buf, contentType: file.type || 'application/octet-stream'
+export async function uploadMedia (file, { onProgress, signal } = {}) {
+  const report = typeof onProgress === 'function' ? onProgress : () => {}
+  const headers = await authHeaders({ 'Content-Type': file.type || 'application/octet-stream' })
+  report(0)
+  /* XHR, NOT fetch, and deliberately so.
+   *
+   * `fetch` cannot report UPLOAD progress — the promise settles when the
+   * response arrives and says nothing in between. For a 50 MB video on a phone
+   * that is a minute or more of a composer that reads as hung, with no way to
+   * tell a slow upload from a dead one and no way out of either. It also could
+   * not be aborted, so a stalled connection left "Uploading…" on screen for the
+   * life of the page.
+   *
+   * The body is the File itself rather than an ArrayBuffer: `file.arrayBuffer()`
+   * pulls the whole clip into JS memory, on the same phone that is decoding the
+   * same file for the trim filmstrip. XHR streams the File from disk. */
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest()
+    xhr.open('POST', `${base()}/media`)
+    for (const [k, v] of Object.entries(headers)) xhr.setRequestHeader(k, v)
+    xhr.responseType = 'text'
+
+    /* A STALL TIMEOUT, NOT A TOTAL ONE. A big video on a slow connection is
+     * legitimately slow, so a wall-clock deadline would kill uploads that were
+     * working. What is never legitimate is no bytes moving at all: this fires
+     * only after 30 s of silence, and every progress event pushes it back. */
+    let stall = null
+    const alive = () => {
+      clearTimeout(stall)
+      stall = setTimeout(() => { done = true; xhr.abort(); reject(new Error('The upload stalled. Check your connection and try again.')) }, 30000)
+    }
+    let done = false
+    const finish = (fn) => (...a) => { if (done) return; done = true; clearTimeout(stall); off(); fn(...a) }
+
+    const onAbort = () => { done = true; clearTimeout(stall); off(); xhr.abort(); reject(new Error('canceled')) }
+    const off = () => signal?.removeEventListener?.('abort', onAbort)
+    if (signal) {
+      if (signal.aborted) return onAbort()
+      signal.addEventListener('abort', onAbort, { once: true })
+    }
+
+    xhr.upload.addEventListener('progress', (e) => {
+      alive()
+      // `lengthComputable` is false for a chunked body; report nothing rather
+      // than a fabricated number, and let the caller show an indeterminate bar.
+      if (e.lengthComputable && e.total > 0) report(Math.min(0.99, e.loaded / e.total))
+    })
+    xhr.upload.addEventListener('loadend', alive)      // bytes are up; the server is now working
+
+    xhr.addEventListener('error', finish(() => reject(new Error('Upload failed — the network dropped.'))))
+    xhr.addEventListener('abort', finish(() => reject(new Error('canceled'))))
+    xhr.addEventListener('load', finish(() => {
+      const s = xhr.status
+      // Same status semantics as call(): a 404 means the domain is dark, a 403
+      // means this account may not post. Divergence here is how an upload
+      // reported "failed" for a surface that was merely switched off.
+      if (s === 404) return reject(new MomentsDisabledError())
+      let detail = null
+      try { detail = xhr.responseText ? JSON.parse(xhr.responseText) : null } catch { /* non-JSON */ }
+      if (s === 403) {
+        const m = detail?.message
+        return reject(new MomentsForbiddenError(Array.isArray(m) ? m.join(' ') : m))
+      }
+      if (s < 200 || s >= 300) {
+        const err = new Error(detail?.reason || detail?.error || `moments ${s}`)
+        err.status = s
+        return reject(err)
+      }
+      report(1)
+      resolve(detail)   // { mediaId, deduplicated, exifStripped }
+    }))
+
+    alive()
+    xhr.send(file)
   })
-  if (typeof onProgress === 'function') onProgress(1)
-  return out    // { mediaId, deduplicated, exifStripped }
 }
 
 /**
