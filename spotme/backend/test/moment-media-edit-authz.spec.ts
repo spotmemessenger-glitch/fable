@@ -94,6 +94,27 @@ beforeAll(async () => {
   app.setGlobalPrefix('api', {
     exclude: [{ path: 'health', method: RequestMethod.GET }, { path: 'ready', method: RequestMethod.GET }],
   });
+  /* MIRROR bootstrap()'s BODY PARSERS, or this suite tests a server that does
+   * not exist. A Nest testing app installs none of them, which is how the
+   * prefix-matching bug shipped: `app.use('/api/v1/moments/media', raw(...))`
+   * matches every path UNDER the mount point too, so in production the edit
+   * route received a Buffer where it expected JSON and silently discarded
+   * every trim and cover it was sent. The suite was green throughout.
+   *
+   * Kept byte-identical in shape to main.ts. If that file's parsers change,
+   * this must change with them. */
+  {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { raw } = require('express') as { raw: (o?: unknown) => unknown };
+    type Mw = (req: { path: string }, res: unknown, next: () => void) => void;
+    const onlyAtMountPoint = (mw: unknown): Mw => (req, res, next) =>
+      (req.path === '/' ? (mw as Mw)(req, res, next) : next());
+    app.getHttpAdapter().getInstance().use(
+      '/api/v1/moments/media',
+      onlyAtMountPoint(raw({ type: '*/*', limit: '50mb' })),
+    );
+  }
+
   await app.listen(0);
   url = await app.getUrl();
   // The domain must be ON, or every assertion here would pass for the wrong
@@ -167,6 +188,42 @@ describe('moment media edit — authorised by uploader, not by refCount', () => 
     const mediaId = await unreferencedVideo(owner.id);
     expect((await edit(owner.token, mediaId, { coverAtMs: -1 })).status).toBe(400);
     expect((await edit(owner.token, mediaId, { trimStartMs: 5000, trimEndMs: 1000 })).status).toBe(400);
+  });
+
+  /* THE RAW-PARSER PREFIX BUG.
+   *
+   * `app.use('/api/v1/moments/media', raw(...))` matches every path under the
+   * mount point, so this route was handed a Buffer where it expected JSON.
+   * Every field read undefined, the handler wrote nulls, requeued a transcode
+   * with no trim, and answered 201 — an edit that looked like it worked and
+   * discarded everything it was sent. In production, trimming a clip has never
+   * once taken effect.
+   *
+   * The two assertions are deliberately different in kind. A 400 proves the
+   * VALIDATION saw the body; a persisted value proves the HANDLER did. A body
+   * swallowed by the raw parser fails both, and fails them as a 201 — which is
+   * why "the request succeeded" was never evidence of anything here. */
+  it('THE BODY ACTUALLY ARRIVES: the raw upload parser must not swallow this route', async () => {
+    const mediaId = await unreferencedVideo(owner.id);
+    expect((await edit(owner.token, mediaId, { coverAtMs: -1 })).status).toBe(400);
+
+    const res = await edit(owner.token, mediaId, { trimStartMs: 250, trimEndMs: 7750, coverAtMs: 3100 });
+    expect(res.status).toBeLessThan(300);
+    const row = await prisma.momentMediaAsset.findUniqueOrThrow({ where: { id: mediaId } });
+    expect([row.trimStartMs, row.trimEndMs, row.coverAtMs]).toEqual([250, 7750, 3100]);
+  });
+
+  it('…while the upload route still gets its RAW bytes, which is what the parser is for', async () => {
+    // One byte-exact JPEG header: proof the mount point itself still parses raw.
+    const res = await fetch(`${url}/api/v1/moments/media`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${owner.token}`, 'Content-Type': 'image/jpeg' },
+      body: Buffer.from([0xff, 0xd8, 0xff]),
+    });
+    // Refused for being an unusable image (400), NOT for arriving empty — an
+    // "expected raw media bytes" 400 would mean the parser stopped running.
+    expect(res.status).toBe(400);
+    expect(JSON.stringify(await res.json())).not.toMatch(/expected raw media bytes/);
   });
 
   it('unauthenticated is 401, before any of this', async () => {
