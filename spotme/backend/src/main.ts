@@ -179,9 +179,33 @@ async function bootstrap() {
   {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const { raw } = require('express') as { raw: (o?: unknown) => unknown };
+
+    /* EXACTLY THIS PATH — NOT EVERYTHING UNDER IT.
+     *
+     * `app.use('/p', mw)` matches by PREFIX in Express, so mounting the raw
+     * byte parser at `/api/v1/moments/media` also swallowed
+     * `/api/v1/moments/media/:id/edit`. That route takes JSON. It received a
+     * Buffer instead, every field read `undefined`, and the handler dutifully
+     * wrote nulls and requeued a transcode with no trim — 201, a body that
+     * looked like a successful edit, and the composer's trim and cover
+     * silently discarded. Values that MUST be refused (a negative coverAtMs,
+     * trimEnd before trimStart) came back 201 as well, because the validation
+     * never saw them either.
+     *
+     * Inside a mounted middleware Express rewrites `req.path` to the remainder,
+     * so `'/'` means "the mount point itself" and anything else is a child
+     * route that wants the normal JSON parser.
+     *
+     * The bug was invisible to tests because a Nest testing app does not
+     * install this middleware at all — the spec has to mirror bootstrap, which
+     * `test/moment-media-edit-authz.spec.ts` now does. */
+    type Mw = (req: { path: string }, res: unknown, next: () => void) => void;
+    const onlyAtMountPoint = (mw: unknown): Mw => (req, res, next) =>
+      (req.path === '/' ? (mw as Mw)(req, res, next) : next());
+
     app.getHttpAdapter().getInstance().use(
       '/api/v2/media/local',
-      raw({ type: '*/*', limit: '16mb' }),
+      onlyAtMountPoint(raw({ type: '*/*', limit: '16mb' })),
     );
     /* Moments upload (M1). Same reasoning, different ceiling: these are photos
      * and short videos the SERVER must read in order to strip EXIF/GPS before
@@ -191,7 +215,7 @@ async function bootstrap() {
      * with a typed reason rather than letting the parser truncate. */
     app.getHttpAdapter().getInstance().use(
       '/api/v1/moments/media',
-      raw({ type: '*/*', limit: '50mb' }),
+      onlyAtMountPoint(raw({ type: '*/*', limit: '50mb' })),
     );
   }
 
