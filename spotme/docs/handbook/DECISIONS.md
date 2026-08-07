@@ -350,32 +350,52 @@ ACCEPTED** for the *plan*; it activates nothing.
 |---|---|---|
 | P1 | Adopt the migration plan | **YES** |
 | P2 | React 19 for `web-next` (from 18.3.1) | **YES** — 18.3 would fork the React major against `spotme/app`'s pinned 19.2.3 |
-| P3 | Monorepo move + Vercel Root Directory change | **YES** — host settled as `spotme-messenger` by the CLAUDE.md standing line (PR #138) |
+| P3 | Monorepo move + Vercel Root Directory change | **YES in principle** — move/restructure unblocked; the **Root Directory repoint waits on P10** |
 | P4 | Tailwind v4 | **DEFERRED** — slices 0–1 ship on plain CSS + the #132 tokens |
 | P5 | Retire `spotme/app` | **PENDING EXPLICIT CONFIRMATION** — deletion; do not execute. Hard constraint below applies regardless |
 | P6 | Untracked `spotme/mobile` | **PENDING EXPLICIT CONFIRMATION** — deletion with **no git safety net** (0 tracked files; `rm` is unrecoverable); do not execute |
 | P7 | Phase 2 Discovery activation (Typesense) | **NO, not now** — spend + activation |
 | P8 | Flag flips to real users | **NOT YET** — nothing flips until a slice passes all nine DoD items |
 
-### Canonical Vercel project — `spotme-messenger` (settled by CLAUDE.md, PR #138)
+### Canonical Vercel project — CURRENCY settled, AUDIENCE open (P10)
 
-**`spotme-messenger` (`prj_SH4YWoamLIyQiW17YDiNAcTrUQlB`) is the canonical
-production host; P3 executes against its Root Directory.** The authority is the
-standing line in `CLAUDE.md` → "Production hosts", landed in PR #138
-(`d4b15a4`), which also states that **`spotme-web-v2` is stale, misconfigured,
-and being retired**, and that **`ysnap` is not a Spot Me host at all**.
+Two claims were being run together; they separate cleanly.
 
-*This entry briefly recorded the pick as withdrawn. That was an error worth
-keeping visible.* The withdrawal rested on reference counts in `docs/reports/`
-— zero for `spotme-messenger.vercel.app`, eight for `spotme-web-v2.vercel.app`
-— read as usage evidence pointing the other way. It was not usage evidence; it
-was the **error trail**. CLAUDE.md records that "two sessions in a row have read
-a green check or a stale pin on `spotme-web-v2` and reported it as production."
-Those eight references are those two sessions being wrong, and counting them
-mistook the mistake for the audience. **Repeated agreement across reports is not
-corroboration when the reports share an author and an error.**
+**CURRENCY — settled.** `spotme-messenger` is git-wired `master` → production
+and current. Ratified as a **standing directive** in `CLAUDE.md` → "Production
+hosts" (PR #138, `d4b15a4`): treat `spotme-messenger` as production, not
+`spotme-web-v2`. **That directive is followed.**
 
-**P10 is CLOSED.** Slice 0's final step is unblocked.
+**AUDIENCE — OPEN (P10).** Which project real testers open is a different
+question, and git-wiring proves currency, not audience. A current project
+nobody visits and a stale one people do are both possible at the same time.
+
+**Two errors in the previous version of this entry, both recorded rather than
+quietly fixed.**
+
+1. **Circular closure.** P10 was marked CLOSED by CLAUDE.md. But CLAUDE.md's
+   standing line cites the same promotion chain, the same `target: null`, and
+   the same manual-`--prod` finding as the Vercel API analysis it was written
+   from — it restates that analysis rather than independently confirming it. A
+   two-source conflict was resolved by counting one source twice, immediately
+   after this same sheet warned that repeated agreement is not corroboration
+   when the sources share an author.
+2. **The "error trail" claim is RETRACTED.** The eight `spotme-web-v2`
+   references across five reports were described as sessions misreading a green
+   check. Checking the reports refutes it — three name the project as an
+   **assigned mission target**: `2026-08-07-deploy-drive.md` ("Mission: deploy
+   `api` (Railway) and `spotme-web-v2` (Vercel) from `master`"),
+   `2026-08-06-land-deploy-drive.md` (task 4), and
+   `2026-08-06-land-and-iphone.md` (task 4a). Those sessions were *directed*
+   there. That is evidence about where work was pointed, and it supports the
+   audience-is-`web-v2` reading rather than undermining it.
+
+**Nothing available can settle it.** Vercel Web Analytics is **disabled on both
+projects** (`web_analytics_not_enabled`, checked 2026-08-07) and neither has a
+custom domain. No repository fact and no platform fact closes P10 — owner only.
+
+**Consequence:** slice 0's Root Directory repoint waits on P10. The fence
+rewrites and package restructure do not.
 
 Both Spot Me projects are repo-connected and both build on every master push
 (one commit → two builds). Verified against the Vercel API 2026-08-07: merges
@@ -414,8 +434,8 @@ product.** `spotme/core`, `spotme/package.json` and
 | # | Item |
 |---|---|
 | P5b | Prune `spotme/core` to `translit.js` and drop the vendored P2P copy. `web/src` imports one file from spotme-core; the other five (`swarm.js` Hyperswarm, `room.js` Autobase/Hypercore, `identity.js`, `schema.js`, `index.js`) are ADR-033 residue, committed twice. Touches the live build — separate PR. |
-| P9 | Retire `spotme-web-v2` — already named as "being retired" by the CLAUDE.md standing line. Ends the double builds and frees `--include=dev` from the shared `vercel.json`. Deleting a Vercel project stays owner-retained. |
-| ~~P10~~ | **CLOSED** by the CLAUDE.md standing line (PR #138, `d4b15a4`) — `spotme-messenger` is canonical; `spotme-web-v2` is stale and being retired. |
+| P9 | Retire `spotme-web-v2` — the CLAUDE.md direction, but **should wait on P10**: if the audience is there, retiring it deletes the surface people use, and the direction needs revisiting rather than executing. Owner-retained regardless. |
+| P10 | **OPEN — blocks the Root Directory repoint.** Which project do real testers open? Currency settled; audience not. Web Analytics disabled on both, no custom domains, and CLAUDE.md restates the pipeline read rather than corroborating it. Owner-only fact. |
 | P11 | Appetite for characterization tests before each rewrite — no view-level coverage exists anywhere (ADR-035 §A.1). |
 
 ### Assigned, no longer unowned

@@ -1,7 +1,7 @@
 # ADR-035 — Frontend migration to React + TypeScript: the executable plan
 
-**Status: ACCEPTED (plan) — P5 and P6 PENDING owner confirmation; host settled
-as `spotme-messenger`. Amended 2026-08-07** · **Date:** 2026-08-07
+**Status: ACCEPTED (plan) — P5 and P6 PENDING owner confirmation; host CURRENCY
+settled, AUDIENCE open as P10. Amended twice 2026-08-07** · **Date:** 2026-08-07
 **Verified against `master` `acf48bc`**
 
 > **Acceptance adopts the PLAN. It activates nothing.** P4 (Tailwind) is
@@ -18,8 +18,9 @@ as `spotme-messenger`. Amended 2026-08-07** · **Date:** 2026-08-07
 > itself lists as owner-retained. A decision arriving is not consent being
 > given. Both are downgraded to **PENDING EXPLICIT OWNER CONFIRMATION** and
 > **must not be executed** until the owner states approval directly. The §(c)
-> host pick was briefly reopened and is now **settled as `spotme-messenger`**
-> by the CLAUDE.md standing line landed in PR #138 (see §(c)).
+> host question is **split**: currency is settled (`spotme-messenger`, per the
+> CLAUDE.md directive from PR #138) but **audience remains OPEN as P10**, which
+> blocks slice 0's Root Directory repoint (see §(c)).
 
 **Relates to:** [ADR-015](015-compile-time-feature-flags.md) (compile-time
 flags), [ADR-016](016-dark-shipping.md) (dark shipping),
@@ -336,39 +337,58 @@ should not carry.
 previously produced a total outage when wrong. It must ship alone, with no
 other change in the PR.
 
-#### Canonical host — SETTLED: `spotme-messenger` (CLAUDE.md, PR #138)
+#### Canonical host — CURRENCY settled, AUDIENCE open (P10)
 
-**`spotme-messenger` (`prj_SH4YWoamLIyQiW17YDiNAcTrUQlB`) is the canonical
-production host.** P3 executes against its Root Directory. The authority is the
-standing line in `CLAUDE.md` → "Production hosts — read before claiming
-anything is 'live'", landed in PR #138 (`d4b15a4`), which states it directly and
-adds that **`spotme-web-v2` is stale, misconfigured, and being retired.**
+Two different claims were being run together. Separating them:
 
-*This section briefly withdrew the pick and was wrong to.* The withdrawal rested
-on counting references in `docs/reports/`: `spotme-messenger.vercel.app` appears
-zero times there, `spotme-web-v2.vercel.app` eight times, which looked like
-usage evidence pointing the other way. It is not usage evidence — it is the
-**error trail**. CLAUDE.md records that "two sessions in a row have read a green
-check or a stale pin on `spotme-web-v2` and reported it as production; it is
-neither." Those eight references are those two sessions being wrong. Counting
-them mistook the mistake for the audience.
+**CURRENCY — settled.** `spotme-messenger` is git-wired `master` → production
+and carries the current code; `spotme-web-v2` promotes nothing on a master push
+and is pinned behind. This is established by the Vercel API and ratified as a
+**standing directive** in `CLAUDE.md` → "Production hosts" (PR #138,
+`d4b15a4`), which instructs that `spotme-messenger` is to be treated as
+production and `spotme-web-v2` is not. **Slice 0 follows that directive.**
 
-**The lesson generalises past this ADR:** repeated agreement across reports is
-not corroboration when the reports share an author and an error. Frequency in
-the docs is not evidence about the world.
+**AUDIENCE — open. This is P10, and it is not answered.** Which project real
+testers actually open is a different question from which is git-wired.
+Git-wiring proves currency, not audience. Both can be true at once: a current
+project nobody visits, and a stale one people do.
 
-**Distinguishing a real promotion from a manual one** (CLAUDE.md's table, which
-is what both prior sessions lacked): a git-triggered promotion carries
-`githubCommitRef: master`, `githubDeployment: 1`, and no `actor`; a manual CLI
-`--prod` run carries a branch ref or `HEAD`, no `githubDeployment`, and
-`actor: claude-code_..._agent`. A manual promotion can ship a **branch** commit
-to production, and already has.
+**A circularity to avoid repeating.** This section previously recorded the
+audience question as CLOSED by CLAUDE.md. That was invalid reasoning.
+CLAUDE.md's standing line cites the same promotion chain
+(`17654da → 772a92a → 097bc78 → 356eb627`), the same `target: null`
+observation, and the same manual-`--prod` finding as the Vercel API read it was
+written from. It is that analysis restated, not a second source agreeing with
+it — so it cannot corroborate the pipeline read against a conflicting one. A
+two-source conflict was resolved by counting one source twice.
 
-Also recorded there: **`ysnap` is not a Spot Me host** — its Root Directory is
-unset, it builds the monorepo root and has failed on `master` since April. Its
-red check says nothing about a Spot Me change.
+**RETRACTED: the "error trail" claim.** This section also asserted that the
+eight `spotme-web-v2` references across five reports were the residue of
+sessions misreading a green check. **That is false, and checking the reports
+refutes it.** Three of the five name the project as an *assigned mission
+target*:
 
-**P10 is CLOSED** by that standing line. Slice 0's final step is unblocked.
+- `2026-08-07-deploy-drive.md` — "**Mission:** deploy `api` (Railway) and
+  `spotme-web-v2` (Vercel) from `master`"
+- `2026-08-06-land-deploy-drive.md` — numbered task 4, "Deploy `spotme-web-v2`"
+- `2026-08-06-land-and-iphone.md` — numbered task 4a, "Deploy the web surface
+  to `spotme-web-v2`"
+
+Those sessions were *directed* there. That is genuine evidence about where work
+was being pointed, and it supports rather than undermines the
+audience-is-`web-v2` reading. Characterising it as error was an over-claim made
+while defending a conclusion.
+
+**No platform evidence exists to settle it.** Vercel Web Analytics is
+**disabled on both projects** (checked 2026-08-07,
+`web_analytics_not_enabled`), and neither has a custom domain. There is no
+repository fact and no platform fact that can close P10 — only the owner can.
+
+**What turns on it.** If the audience is on `spotme-web-v2`, the CLAUDE.md
+directive is still the right thing to *obey* but the wrong thing to *hard-wire*:
+slice 0 would be repointing the Root Directory away from where people are, and
+the correct move would be to migrate the audience or move the git integration
+first. **Slice 0's final step should not run until P10 is answered.**
 
 Both Spot Me projects are connected to the repository and both build on every
 master push — one commit produces two builds. They are not equivalent:
@@ -392,11 +412,13 @@ dies at exit 127. The fix had to be made in the **shared**
 `spotme/web/vercel.json` (`--include=dev`) — one repository file bent to
 accommodate one duplicate project. Slice 0 inherits that wart.
 
-**P9 — `spotme-web-v2` is already being retired** per the CLAUDE.md standing
-line ("stale, misconfigured, and being retired"). Retiring it ends the double
-builds and lets `--include=dev` come back out of the shared `vercel.json`.
-Deleting a Vercel project remains owner-retained, so this ADR only records the
-direction; it does not execute it.
+**P9 — retiring `spotme-web-v2` is the CLAUDE.md direction, but should wait on
+P10.** The standing line calls it "stale, misconfigured, and being retired", and
+retiring it would end the double builds and free `--include=dev` from the shared
+`vercel.json`. **But if P10 shows the audience is there, retiring it deletes the
+surface people use** — the direction would need revisiting, not executing faster.
+Deleting a Vercel project is owner-retained regardless; this ADR records the
+direction and does not execute it.
 
 ### (d) Tailwind adoption and the #132 tokens
 
@@ -505,10 +527,15 @@ detail (owner answers, 2026-08-07):**
    has passed vacuously.
 2. Then the monorepo move, `packages/core` extraction, React 19, island host,
    tokens, and the remaining four text fences repaired and tamper-checked.
-3. Vercel Root Directory repointed at **`spotme-messenger`** (§(c)) — last in
-   the PR, and the step that can cause an outage. Verify the promotion is
-   git-triggered afterwards (`githubCommitRef: master`, `githubDeployment: 1`,
-   no `actor`), not a manual `--prod` run.
+3. Vercel Root Directory repointed — **BLOCKED on P10** (§(c)). The CLAUDE.md
+   directive names `spotme-messenger`, but that directive settles *currency*,
+   not *audience*; repointing before P10 risks wiring the build away from where
+   testers actually are. When it runs it is last in the PR, and afterwards the
+   promotion must be verified git-triggered (`githubCommitRef: master`,
+   `githubDeployment: 1`, no `actor`) rather than a manual `--prod` run.
+
+   **Steps 1 and 2 are not blocked by P10** — the fence rewrites and the
+   package restructure are host-agnostic. Only the repoint waits.
 
 Nothing else ships in that PR. Tailwind is **not** in slice 0 (P4 deferred).
 
@@ -646,7 +673,7 @@ Named here so they are not silently absorbed into this plan:
 |---|---|---|
 | P1 | Adopt this migration plan | **YES** — adopted; this ADR is ACCEPTED |
 | P2 | React 19 upgrade for web-next | **YES** — 18.3 would fork the major against `spotme/app`'s 19.2.3 |
-| P3 | Monorepo move + Vercel Root Directory change | **YES** — host settled as `spotme-messenger` by the CLAUDE.md standing line (PR #138); §(c) |
+| P3 | Monorepo move + Vercel Root Directory change | **YES in principle.** Move and restructure unblocked; the **Root Directory repoint waits on P10** (§(c)) |
 | P4 | Tailwind v4 adoption | **DEFERRED** — slices 0–1 ship on plain CSS + tokens; revisit at slice 2 against the countable drift test (§(d)) |
 | P5 | Retire `spotme/app` | **PENDING EXPLICIT OWNER CONFIRMATION** — a deletion, relayed as a recommendation and over-recorded as a decision. Do not execute. Also subject to the STOP in §(b): never touch `spotme/core`, `spotme/package.json`, or `web/vendor/spotme-core/` |
 | P6 | Commit or remove `spotme/mobile` | **PENDING EXPLICIT OWNER CONFIRMATION** — a deletion with **no git safety net** (0 tracked files, so `rm` is unrecoverable). Do not execute |
@@ -659,7 +686,7 @@ Named here so they are not silently absorbed into this plan:
 |---|---|---|
 | P5b | Prune `spotme/core` to `translit.js`; drop the vendored P2P copy | Touches the live build and the `prebuild` vendoring step — needs its own evidence and PR (§(b)) |
 | P9 | Retire or demote the duplicate `spotme-web-v2` Vercel project | Ends double builds and allows the `--include=dev` workaround out of the shared `vercel.json`; deleting a project is owner-retained (§(c)) |
-| ~~P10~~ | ~~Which URL do testers actually open?~~ | **CLOSED** by the CLAUDE.md standing line (PR #138, `d4b15a4`): `spotme-messenger` is canonical, `spotme-web-v2` is stale and being retired |
+| P10 | **OPEN — blocks slice 0's Root Directory repoint.** Which project do real testers open? | Currency is settled (`spotme-messenger`); **audience is not**. CLAUDE.md restates the pipeline read, so it cannot corroborate it. Web Analytics is disabled on both projects and neither has a custom domain — no repository or platform fact can close this. Owner-only. |
 | P11 | Characterization tests before each rewrite — appetite? | §A.1: no view-level coverage exists; the DoD assumes tests-first, which costs time |
 
 ---

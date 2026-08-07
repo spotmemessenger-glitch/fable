@@ -252,7 +252,7 @@ PROPOSED → ACCEPTED; the full record is in
 |---|---|---|
 | P1 | Adopt ADR-035's plan | **YES** |
 | P2 | React 19 for web-next | **YES** |
-| P3 | Monorepo move + Vercel Root Directory change | **YES** — host settled as `spotme-messenger` (CLAUDE.md, PR #138) |
+| P3 | Monorepo move + Vercel Root Directory change | **YES in principle** — repoint waits on P10 |
 | P4 | Tailwind v4 | **DEFERRED** to a slice-2 evidence test |
 | P5 | Retire `spotme/app` | **PENDING CONFIRMATION** — deletion, over-recorded from a recommendation; do not execute |
 | P6 | Untracked `spotme/mobile` | **PENDING CONFIRMATION** — deletion, no git safety net |
@@ -261,28 +261,33 @@ PROPOSED → ACCEPTED; the full record is in
 
 ### The two blockers this report flagged are both closed
 
-**Canonical Vercel host — `spotme-messenger`, settled by CLAUDE.md (PR #138).**
-Both projects are repo-connected and both build every master push (one commit,
-two builds), but only `spotme-messenger` receives `target: "production"` from
-git — #134, #135, #136 and this report's own `356eb62` each promoted there,
-while `spotme-web-v2` got previews and reached production only through manual
-CLI `--prod` runs. PR #138 (`d4b15a4`) landed that as a standing line in
-`CLAUDE.md`, adding that `spotme-web-v2` is **stale, misconfigured and being
-retired**, and that `ysnap` is not a Spot Me host at all.
+**Canonical Vercel host — currency settled, audience OPEN (P10).** These are
+two claims and I ran them together. *Currency:* `spotme-messenger` is git-wired
+`master` → production and current; `spotme-web-v2` promotes nothing on a master
+push. `CLAUDE.md` (PR #138, `d4b15a4`) ratifies that as a standing directive,
+and slice 0 follows it. *Audience:* which project testers actually open is
+**not** settled — git-wiring proves currency, not audience.
 
-*One wrong turn worth recording.* Between the pick and the standing line, I
-briefly **withdrew** this decision. The reason: `spotme-messenger.vercel.app`
-appears zero times in `docs/reports/` while `spotme-web-v2.vercel.app` appears
-eight times across five reports — which read as usage evidence pointing the
-other way. It was not usage evidence. It was the **error trail**: CLAUDE.md
-records that "two sessions in a row have read a green check or a stale pin on
-`spotme-web-v2` and reported it as production." Those eight references are
-those two sessions being wrong, and I counted them as corroboration.
+*Two errors of mine, recorded rather than smoothed over.* First, I marked P10
+CLOSED by citing CLAUDE.md — but CLAUDE.md's line cites the same promotion
+chain and the same `target: null` finding as the Vercel API read it was written
+from. It restates that analysis; it does not independently confirm it. I
+resolved a two-source conflict by counting one source twice, one paragraph
+after warning against exactly that.
 
-**Repeated agreement across reports is not corroboration when the reports share
-an author and an error.** Frequency in the docs is not evidence about the world
-— a point that applies well beyond this decision, since this migration will
-lean on the handbook repeatedly.
+Second, I called the eight `spotme-web-v2` references an "error trail." **That
+is retracted.** Three of the five reports name it as an *assigned mission
+target* — `2026-08-07-deploy-drive.md` ("Mission: deploy `api` (Railway) and
+`spotme-web-v2` (Vercel) from `master`"), `2026-08-06-land-deploy-drive.md`
+(task 4), `2026-08-06-land-and-iphone.md` (task 4a). Those sessions were
+directed there. That is evidence about where work was being pointed, and it
+supports the audience-is-`web-v2` reading. I mischaracterised it while
+defending a conclusion I had already reached.
+
+*No available evidence can close it.* Vercel Web Analytics is **disabled on both
+projects** (`web_analytics_not_enabled`, checked 2026-08-07) and neither has a
+custom domain. P10 is irreducibly an owner fact, and it blocks slice 0's Root
+Directory repoint — though not the fence rewrites or the package restructure.
 
 **The five dark-fence rewrites are now slice 0's first task**, gated before the
 monorepo move and tamper-checked — no longer unowned.
@@ -309,8 +314,8 @@ shipping.
 | # | Item |
 |---|---|
 | P5b | Prune `spotme/core` to `translit.js`; drop the vendored P2P copy (touches the live build) |
-| P9 | Retire `spotme-web-v2` — already named "being retired" by CLAUDE.md; owner-retained to execute |
-| ~~P10~~ | **CLOSED** by the CLAUDE.md standing line (PR #138) — `spotme-messenger` canonical; `spotme-web-v2` stale and being retired |
+| P9 | Retire `spotme-web-v2` — CLAUDE.md's direction, but should wait on P10; retiring it early could delete the surface people use |
+| P10 | **OPEN — blocks the Root Directory repoint.** Currency settled, audience not; no repo or platform fact can close it |
 | P11 | Appetite for characterization tests before each rewrite (§2.2: no view-level coverage exists) |
 | P12 | Does `spotme/web/api/*` (8 serverless functions) move under `apps/web`? Implied by the Root Directory change, and the part of slice 0 most likely to cause the outage it is designed to avoid. |
 
