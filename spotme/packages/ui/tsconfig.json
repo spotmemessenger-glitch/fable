@@ -29,6 +29,9 @@
     "events",
     "moments",
     "assistant",
+    "contacts",
+    "notifications",
+    "stories",
     "test"
   ]
 }

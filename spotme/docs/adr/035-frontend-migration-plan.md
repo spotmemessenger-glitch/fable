@@ -488,7 +488,7 @@ the original "Discovery first (beachhead exists)" call recorded below.
 |---|---|---|
 | 0 | **Dark-fence rewrite FIRST**, then monorepo move + React 19 + tokens | Infrastructure. No user-visible change. Ships alone. **Task order inside the PR is load-bearing** — see below. |
 | 1 | **Exchange** (`packages/ui/exchange`) + the **island host** | **Greenfield — see below.** |
-| 2 | Contacts · Notifications · Stories | Small, low-coupling, no realtime. Widens the component library cheaply. |
+| 2 | Contacts · Notifications · Stories | Small, low-coupling, no realtime. Widens the component library cheaply. **Built (dark)** on `feat/slice-2-small-surfaces`: `packages/ui/{contacts,notifications,stories}` behind `spotme.ui.contacts` / `.notifications` / `.stories`, all default OFF; legacy views keep the route, one-line flag branch each. |
 | 3 | Groups (list · new · manage) | Self-contained; `group-perms` already framework-free and tested. |
 | 4 | Profile · Settings | Large but shallow; forces the media/crop/photoedit port boundaries. |
 | 5 | **Discovery** (`views/discovery.js`, `lib/discovery.js`) | Moved here from slice 1. A working screen with **no view-level tests**, carrying the ADR-024 P0 privacy fence. |
