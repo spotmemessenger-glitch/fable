@@ -40,8 +40,6 @@ const DOCUMENTED_NOT_READ: Record<string, string> = {
   R2_ACCESS_KEY_ID: 'consumed by .github/workflows/r2-smoke.yml, not by the server',
   R2_SECRET_ACCESS_KEY: 'consumed by .github/workflows/r2-smoke.yml, not by the server',
   R2_BUCKET: 'consumed by .github/workflows/r2-smoke.yml, not by the server',
-  APNS_KEY_ID: 'RESERVED — APNs is not implemented; no consumer exists yet',
-  APNS_TEAM_ID: 'RESERVED — APNs is not implemented; no consumer exists yet',
   AGE_VERIFY_PROVIDER: 'RESERVED — the age-verification vendor seam is unbuilt',
   AGE_VERIFY_API_KEY: 'RESERVED — the age-verification vendor seam is unbuilt',
   OTP_FROM_EMAIL:
