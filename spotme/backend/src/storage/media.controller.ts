@@ -28,6 +28,7 @@ import {
   STORAGE_ADAPTER,
   buildObjectKey,
   parseObjectKey,
+  safeServeType,
 } from './storage.interface';
 
 /**
@@ -230,18 +231,31 @@ export class LocalMediaController {
     @Query('key') key: string,
     @Query('expires') expires: string,
     @Query('sig') sig: string,
+    @Query('ct') ct: string,
     @Res() res: Response,
   ) {
     this.assertLocalActive();
-    if (!this.local.verify(String(key), Number(expires), 'GET', String(sig))) {
+    // `ct` is part of the signed material, so a tampered type fails here
+    // rather than reaching the allow-list at all.
+    const asked = ct ? String(ct) : '';
+    if (!this.local.verify(String(key), Number(expires), 'GET', String(sig), asked)) {
       throw new ForbiddenException('invalid or expired download url');
     }
     const bytes = await this.local.read(String(key));
     if (!bytes) throw new NotFoundException();
-    // Always octet-stream: the bytes are ciphertext, and letting a stored
-    // content type drive this header is how a store of "opaque blobs" starts
-    // serving text/html back to a browser.
-    res.setHeader('Content-Type', 'application/octet-stream');
+    /* Chat attachments are ciphertext and stay opaque — no `ct`, so this
+     * resolves to octet-stream exactly as before.
+     *
+     * Moments objects are plaintext media that a browser has to DECODE, and
+     * `octet-stream` + `nosniff` is the one combination that guarantees it
+     * cannot: every moment video failed MEDIA_ERR_SRC_NOT_SUPPORTED and every
+     * photo came out blank. They carry a signed `ct`, clamped again here to
+     * the renderable allow-list, so real media renders while `text/html` and
+     * `image/svg+xml` remain unservable however the value got here.
+     *
+     * `nosniff` STAYS in both cases: the header is now accurate, so there is
+     * never a reason for a browser to guess past it. */
+    res.setHeader('Content-Type', safeServeType(asked));
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.send(bytes);
   }
