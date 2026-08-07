@@ -28,6 +28,7 @@ import { db } from '../lib/db.js'
 import { el, clear, avatar, actionSheet } from '../lib/ui.js'
 import * as M from '../lib/moments-api.js'
 import { videoEl, watchInView, playExclusive, pause, pauseAll, isSoundOn, setSoundOn, onSoundChange } from '../lib/video.js'
+import { likeBurst, tick, onDoubleTap } from '../lib/burst.js'
 import { openPhotoEditor } from '../lib/photoedit.js'
 import { fileToDataURL, fileFromDataURL } from '../lib/media.js'
 
@@ -204,6 +205,51 @@ export function render (root, ctx, params) {
    */
   const handleOf = (author) =>
     (author?.username ? `@${author.username}` : null) || author?.displayName || 'Someone'
+
+  /* A4 — ONE VOCABULARY FOR AUDIENCE, USED BY THE PICKER AND THE BADGE.
+   *
+   * `private` used to be offered in the picker and then rendered nowhere,
+   * because the feed query excluded it for every viewer INCLUDING THE AUTHOR —
+   * so choosing it silently threw the post away. It is now "Only you", which is
+   * what it does, and A1 makes that true in the query.
+   *
+   * `public` IS NO LONGER OFFERED — owner decision, 2026-08-07.
+   *
+   * It and `nearby` were indistinguishable in practice: both surface in the
+   * nearby feed, both bounded by the same radius. Two options, one behaviour,
+   * is worse than one option, because it asks the reader to choose between
+   * things that are not different. The alternative — a City tab — would have
+   * been a third tab showing nothing, since the only accounts in the city are
+   * the two test phones.
+   *
+   * So the picker offers exactly three, and each does something the reader can
+   * observe: nearby, friends, only you.
+   *
+   * `public` REMAINS in the database enum, in the backend policy and in this
+   * map, so posts already stored as public keep working and keep rendering
+   * their badge. Only the picker entry is gone. Reintroduce it the day a city
+   * or global surface exists that makes selecting it meaningful — not before.
+   */
+  const AUDIENCE = {
+    nearby: { label: 'Nearby', hint: 'People near you' },
+    friends: { label: 'Friends', hint: 'People who follow you' },
+    public: { label: 'Public', hint: 'Anyone, beyond your area' },
+    private: { label: 'Only you', hint: 'Nobody else can see this' }
+  }
+
+  /* What the composer offers. Deliberately a SUBSET of AUDIENCE: the badge must
+   * still render `public` for posts that already carry it. */
+  const PICKABLE = ['nearby', 'friends', 'private']
+
+  const audienceBadge = (v) => {
+    const a = AUDIENCE[v] || AUDIENCE.nearby
+    return el('span', {
+      class: `mo-aud is-${v || 'nearby'}`,
+      text: a.label,
+      title: a.hint,
+      'aria-label': `Audience: ${a.label}. ${a.hint}`
+    })
+  }
 
   /** Resolve one asset to its short-lived URL bundle, once. */
   function assetFor (mediaId) {
@@ -544,7 +590,19 @@ export function render (root, ctx, params) {
     const head = el('header', { class: 'mo-cardhead' }, [
       avatar({ name: who, avatar: m.author?.avatar }, 36),
       el('div', { class: 'mo-whowrap' }, [
-        el('b', { class: 'mo-who', text: who }),
+        el('div', { class: 'mo-wholine' }, [
+          el('b', { class: 'mo-who', text: who }),
+          /* A2 — WHO CAN SEE THIS, ON THE CARD.
+           *
+           * The audience was chosen in the composer and then never shown
+           * again, so there was no way to tell a post you had sent to
+           * everyone from one you had sent to nobody — and the difference
+           * between 'public' and 'only you' is the whole reason the control
+           * exists. Shown on every card, including other people's: knowing a
+           * post is public is what tells you whether resharing it is
+           * reasonable. */
+          audienceBadge(m.visibility)
+        ]),
         el('span', { class: 'mo-meta', text: [place(m), when(m.createdAtUTC)].filter(Boolean).join(' · ') })
       ]),
       el('button', {
@@ -652,7 +710,13 @@ export function render (root, ctx, params) {
       class: 'mo-icon mo-act' + (m.myReaction ? ' on' : ''), type: 'button',
       html: reactFace(m.myReaction),
       'aria-label': 'React', 'aria-pressed': m.myReaction ? 'true' : 'false',
-      onclick: () => openReactions(m, reactBtn)
+      /* B1 — A TAP LIKES. Holding opens the full reaction picker.
+       *
+       * The picker used to be the ONLY way to react, so the commonest action
+       * in the product cost a tap, a sheet, a read and a second tap. A like is
+       * now the tap itself and the sheet is the deliberate path. */
+      onclick: () => toggleLike(m, reactBtn),
+      oncontextmenu: (e) => { e.preventDefault(); openReactions(m, reactBtn) }
     })
     acts.appendChild(reactBtn)
     acts.appendChild(el('button', {
@@ -664,6 +728,11 @@ export function render (root, ctx, params) {
       'aria-label': 'Share', onclick: () => shareMoment(m)
     }))
 
+    /* B1 — DOUBLE-TAP THE MEDIA LIKES IT, with the burst centred on the tap.
+     * Registered after the slot exists and left to the same optimistic path as
+     * the button, so there is exactly one like implementation. */
+    if (mediaSlot) onDoubleTap(mediaSlot, (origin) => toggleLike(m, reactBtn, origin))
+
     return el('article', { class: 'mo-card' }, [
       head,
       mediaSlot,
@@ -674,15 +743,48 @@ export function render (root, ctx, params) {
 
   /* ----------------------------------------------------------- reactions */
 
+  /** Paint the button from `m.myReaction`. One place, so optimistic and
+   *  reverted states cannot drift from each other. */
+  function paintReact (m, btn) {
+    btn.innerHTML = reactFace(m.myReaction)
+    btn.className = 'mo-icon mo-act' + (m.myReaction ? ' on' : '')
+    btn.setAttribute('aria-pressed', m.myReaction ? 'true' : 'false')
+  }
+
+  /**
+   * B1 — LIKE, OPTIMISTICALLY.
+   *
+   * The fill and the burst happen on the tap, BEFORE the request is made. A
+   * like that waits for a round-trip feels broken on a slow connection even
+   * when it works, and it is the one interaction people do without looking.
+   *
+   * On failure the fill is REVERTED and said once. Reverting matters more than
+   * the toast: a like that silently did not persist is worse than one that
+   * visibly failed, because the reader believes a thing about the world that
+   * is not true.
+   */
+  async function toggleLike (m, btn, origin = null) {
+    const was = m.myReaction
+    const liking = !was
+    m.myReaction = liking ? 'like' : null
+    paintReact(m, btn)
+    if (liking) { likeBurst(btn, origin); tick() }
+    try {
+      if (liking) await M.react(m.id, 'like'); else await M.unreact(m.id)
+    } catch (e) {
+      m.myReaction = was
+      paintReact(m, btn)
+      ctx.toast(e.message || 'That like did not save')
+    }
+  }
+
   function openReactions (m, btn) {
     actionSheet(REACTIONS.map((r) => ({
       label: `${r.glyph}  ${r.key}`,
       fn: async () => {
         try {
           if (m.myReaction === r.key) { await M.unreact(m.id); m.myReaction = null } else { await M.react(m.id, r.key); m.myReaction = r.key }
-          btn.innerHTML = reactFace(m.myReaction)
-          btn.className = 'mo-icon mo-act' + (m.myReaction ? ' on' : '')
-          btn.setAttribute('aria-pressed', m.myReaction ? 'true' : 'false')
+          paintReact(m, btn)
         } catch (e) { ctx.toast(e.message || 'Could not react') }
       }
     })), 'React')
@@ -886,10 +988,14 @@ export function render (root, ctx, params) {
     caption.addEventListener('input', grow)
 
     const visBtn = el('button', {
-      class: 'pill', type: 'button', text: `Visible to: ${visibility}`,
+      class: 'pill', type: 'button', text: `Visible to: ${AUDIENCE[visibility].label}`,
       onclick: () => actionSheet(
-        ['nearby', 'friends', 'public', 'private'].map((v) => ({
-          label: v, fn: () => { visibility = v; visBtn.textContent = `Visible to: ${visibility}` }
+        /* Three, not four — see AUDIENCE. `public` is still a valid stored
+         * value; it is simply not offered until it means something different
+         * from `nearby` to the person choosing. */
+        PICKABLE.map((v) => ({
+          label: `${AUDIENCE[v].label} — ${AUDIENCE[v].hint}`,
+          fn: () => { visibility = v; visBtn.textContent = `Visible to: ${AUDIENCE[visibility].label}` }
         })), 'Who can see this?')
     })
 

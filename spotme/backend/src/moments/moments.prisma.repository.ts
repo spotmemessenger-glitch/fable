@@ -94,38 +94,66 @@ export class PrismaMomentsRepository implements MomentRepositoryPort {
       WHERE (b."blockerId" = ${q.viewerId} AND b."blockedId" = m."authorId")
          OR (b."blockerId" = m."authorId" AND b."blockedId" = ${q.viewerId})
     )`;
-    const notSelfExcluded = Prisma.sql`AND m."deletedAt" IS NULL`;
+    /* THE NAME IS A LIE, AND IT HID THE BUG. `notSelfExcluded` asserts that the
+     * author is not excluded; the SQL is only a soft-delete filter and has
+     * never had anything to do with self. Whoever read the name reasonably
+     * concluded self-visibility was handled, and stopped looking. Renamed to
+     * what it does. */
+    const notDeleted = Prisma.sql`AND m."deletedAt" IS NULL`;
+
+    /* A1 — THE AUTHOR ALWAYS SEES THEIR OWN POSTS, IN EVERY MODE.
+     *
+     * Three independent clauses excluded them, and each looked reasonable on
+     * its own:
+     *   1. `visibility <> 'private'` at the top level — so a 'private' post was
+     *      invisible to EVERYONE INCLUDING ITS AUTHOR. Not "only you": nobody.
+     *      There was no surface anywhere that could show it back.
+     *   2. friends mode requires a MomentFollow row, and nobody follows
+     *      themselves — so posting to Friends and then opening Friends showed
+     *      you an empty feed containing the post you had just made.
+     *   3. nearby/city filter on visibility and geography, so your own
+     *      'friends' post, or one with no fix, vanished from the tab you were
+     *      looking at.
+     *
+     * The author is a viewer of their own post by definition. `isAuthor` is
+     * OR'd with the AUDIENCE predicate only — moderation is kept OUTSIDE it, so
+     * this widens who can see a post and never what may be shown. */
+    const isAuthor = Prisma.sql`m."authorId" = ${q.viewerId}`;
 
     let tierAndScope: Prisma.Sql;
+    let moderation: Prisma.Sql;
     if (q.mode === 'nearby') {
       if (!q.origin) return [];
       const radiusM = Math.min(100, Math.max(1, q.radiusKm)) * 1000;
+      moderation = Prisma.sql`AND m."moderationState" IN ('visible', 'reported')`;
       tierAndScope = Prisma.sql`
-        AND m."visibility" IN ('nearby', 'public')
-        AND m."moderationState" IN ('visible', 'reported')
-        AND m."geog" IS NOT NULL
-        AND ST_DWithin(m."geog", ST_SetSRID(ST_MakePoint(${q.origin.lon}, ${q.origin.lat}), 4326)::geography, ${radiusM})`;
+        AND (${isAuthor} OR (
+          m."visibility" IN ('nearby', 'public')
+          AND m."geog" IS NOT NULL
+          AND ST_DWithin(m."geog", ST_SetSRID(ST_MakePoint(${q.origin.lon}, ${q.origin.lat}), 4326)::geography, ${radiusM})
+        ))`;
     } else if (q.mode === 'city') {
       if (!q.origin) return [];
       const cityCell = `c${round1(q.origin.lat).toFixed(1)}:${round1(q.origin.lon).toFixed(1)}`;
+      moderation = Prisma.sql`AND m."moderationState" IN ('visible', 'reported')`;
       tierAndScope = Prisma.sql`
-        AND m."visibility" = 'public'
-        AND m."moderationState" IN ('visible', 'reported')
-        AND m."cityCell" = ${cityCell}`;
+        AND (${isAuthor} OR (m."visibility" = 'public' AND m."cityCell" = ${cityCell}))`;
     } else {
       // friends: posts by people the viewer explicitly follows; limited stays
       // visible here ([PROPOSED]: 'limited' = reach-limited, not friend-hidden).
+      moderation = Prisma.sql`AND m."moderationState" IN ('visible', 'reported', 'limited')`;
       tierAndScope = Prisma.sql`
-        AND m."visibility" IN ('friends', 'nearby', 'public')
-        AND m."moderationState" IN ('visible', 'reported', 'limited')
-        AND EXISTS (SELECT 1 FROM "MomentFollow" f WHERE f."followerId" = ${q.viewerId} AND f."targetId" = m."authorId")`;
+        AND (${isAuthor} OR (
+          m."visibility" IN ('friends', 'nearby', 'public')
+          AND EXISTS (SELECT 1 FROM "MomentFollow" f WHERE f."followerId" = ${q.viewerId} AND f."targetId" = m."authorId")
+        ))`;
     }
 
     const rows = await this.prisma.$queryRaw<Array<Record<string, unknown>>>(Prisma.sql`
       SELECT ${Prisma.raw(MOMENT_SELECT)}
       FROM "Moment" m
-      WHERE m."visibility" <> 'private'
-        ${tierAndScope} ${notBlocked} ${notSelfExcluded} ${keyset}
+      WHERE (m."visibility" <> 'private' OR ${isAuthor})
+        ${tierAndScope} ${moderation} ${notBlocked} ${notDeleted} ${keyset}
       ORDER BY "createdAt" DESC, "id" DESC
       LIMIT ${q.limit}
     `);

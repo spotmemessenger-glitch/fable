@@ -17,6 +17,7 @@ import { API_BASE } from '../api.js'
 import { generateIdentity, exportPublicKeyB64, deriveRoomKey, E2E_V2 } from './e2e-v2.js'
 import { applyToRecord } from './identity-pin-store.js'
 import { OBSERVE, VERIFY } from './identity-pin.js'
+import { recordOpenFailure, recordOpenSuccess, lastFailure, explainFailure } from '../storage-health.js'
 
 /**
  * Record that a human compared this exact key out of band.
@@ -92,10 +93,27 @@ const SELF = 'self'
 
 function openDb () {
   return new Promise((resolve, reject) => {
-    const req = indexedDB.open(DB_NAME, 1)
+    let req
+    // `indexedDB.open` can throw SYNCHRONOUSLY in locked-down Safari, where a
+    // promise executor turns it into an unhandled rejection with no name.
+    try { req = indexedDB.open(DB_NAME, 1) } catch (err) { return reject(err) }
     req.onupgradeneeded = () => { req.result.createObjectStore(STORE) }
-    req.onsuccess = () => resolve(req.result)
-    req.onerror = () => reject(req.error)
+    /* NEITHER onsuccess NOR onerror IS GUARANTEED TO FIRE.
+     *
+     * `onblocked` fires instead when another tab holds an older version, and on
+     * iOS a tab suspended mid-open fires nothing at all. This promise then
+     * never settles — and `loadIdentity()` awaits it, so every caller waiting
+     * on an identity waits forever. From the outside that is not "storage
+     * failed", it is "the app hung", which is exactly what was reported and
+     * could not be explained. Settle, always, with a reason. */
+    const settle = (err) => { clearTimeout(timer); if (err) reject(err); else resolve(req.result) }
+    const timer = setTimeout(
+      () => settle(Object.assign(new Error('indexedDB.open did not settle within 3000ms'), { name: 'TimeoutError' })),
+      3000
+    )
+    req.onsuccess = () => settle(null)
+    req.onerror = () => settle(req.error || Object.assign(new Error('open failed with no error object'), { name: 'UnknownError' }))
+    req.onblocked = () => settle(Object.assign(new Error('open blocked by another tab holding an older version'), { name: 'BlockedError' }))
   })
 }
 
@@ -160,8 +178,21 @@ export async function loadIdentity () {
 async function loadIdentityOnce () {
   if (cached) return cached
   let db
-  try { db = await openDb() } catch { openFailed = true; return null }   // private mode, quota, etc.
+  /* THE EXCEPTION IS THE DIAGNOSIS. It used to be discarded here, and the
+   * banner guessed "private browsing is the usual cause" for every failure mode
+   * at once — so someone whose store had been evicted was told to change a
+   * setting they were not using, and nobody could tell the two apart because
+   * nothing anywhere recorded which had happened. Record it, then behave
+   * exactly as before. */
+  try {
+    db = await openDb()
+  } catch (err) {
+    openFailed = true
+    recordOpenFailure(DB_NAME, err)
+    return null
+  }
   openFailed = false
+  recordOpenSuccess()
 
   /* AN ABORTED READ IS NOT AN EMPTY STORE.
    *
@@ -185,8 +216,9 @@ async function loadIdentityOnce () {
   let found
   try {
     found = await tx(db, 'readonly', (s) => s.get(SELF))
-  } catch {
+  } catch (err) {
     openFailed = true
+    recordOpenFailure(DB_NAME, err, 'read')
     return null
   }
   if (found?.privateKey) {
@@ -279,6 +311,12 @@ export function forgetIdentity () {
   cached = null
   loading = null
   openFailed = false
+}
+
+/** WHY the store is unavailable — the recorded exception, never a guess.
+ *  Null when nothing has failed. */
+export function identityFailure () {
+  return openFailed ? { ...(lastFailure() || {}), advice: explainFailure() } : null
 }
 
 export function identityStatus () {

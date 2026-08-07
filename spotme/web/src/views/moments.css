@@ -377,3 +377,79 @@
   display: flex; align-items: center; gap: 9px; color: #fff;
   filter: drop-shadow(0 1px 6px rgba(0, 0, 0, .6));
 }
+
+/* ---------------------------------------------------------------- audience */
+/* A2 — who can see this post, on the card.
+ *
+ * Deliberately quiet: it sits beside the name as a fact, not a call to action.
+ * RED IS NOT AVAILABLE HERE (ADR-034 reserves it for destructive and SOS), so
+ * "Only you" — the most restrictive audience and the one most worth noticing —
+ * is distinguished by WEIGHT and a filled ground rather than by alarm colour. */
+.mo-wholine { display: flex; align-items: center; gap: 6px; min-width: 0 }
+.mo-wholine .mo-who { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+
+.mo-aud {
+  flex: none;
+  font-size: 11px;
+  line-height: 1;
+  font-weight: 600;
+  letter-spacing: .01em;
+  padding: 3px 7px;
+  border-radius: 999px;
+  color: var(--ink2);
+  background: var(--well);
+  border: 1px solid var(--hair);
+}
+/* Nearby is the default and needs no emphasis at all. */
+.mo-aud.is-nearby { color: var(--ink2) }
+.mo-aud.is-friends { color: var(--ink) }
+/* Public reaches furthest — the accent, which is teal, never red. */
+.mo-aud.is-public { color: var(--arch); border-color: color-mix(in srgb, var(--arch) 40%, transparent) }
+/* Only you: filled, so it reads at a glance without shouting. */
+.mo-aud.is-private { color: var(--onfill); background: var(--ink); border-color: transparent }
+
+/* ------------------------------------------------------------------ B1 like */
+/* Composited properties ONLY — transform and opacity. This fires while the feed
+ * is being scrolled, and anything that forces layout per frame turns a like
+ * into a stutter on exactly the mid-range hardware that can least afford it. */
+@keyframes mo-pop {
+  0%   { transform: scale(1) }
+  38%  { transform: scale(1.32) }   /* past the final size, then settle */
+  68%  { transform: scale(.94) }
+  100% { transform: scale(1) }
+}
+.mo-pop { animation: mo-pop 260ms cubic-bezier(.2, .9, .3, 1.2) }
+
+/* The particle anchor is zero-size and absolutely positioned, so adding it
+ * cannot move a single pixel of the card — "no layout shift" by construction
+ * rather than by being careful. */
+.mo-burst {
+  position: absolute;
+  width: 0; height: 0;
+  left: 50%; top: 50%;
+  pointer-events: none;
+  z-index: 3;
+}
+.mo-acts { position: relative }
+.mo-media { position: relative }
+
+.mo-burst i {
+  position: absolute;
+  width: 6px; height: 6px;
+  margin: -3px 0 0 -3px;
+  border-radius: 50%;
+  /* Teal, per ADR-034: red is reserved for destructive and SOS, and a like is
+   * neither. */
+  background: var(--arch);
+  opacity: 0;
+  animation: mo-throw 380ms ease-out forwards;
+}
+@keyframes mo-throw {
+  0%   { opacity: 1; transform: rotate(var(--a)) translateY(0) scale(1) }
+  100% { opacity: 0; transform: rotate(var(--a)) translateY(calc(var(--d) * -1)) scale(.3) }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mo-pop { animation: none }
+  .mo-burst { display: none }
+}
