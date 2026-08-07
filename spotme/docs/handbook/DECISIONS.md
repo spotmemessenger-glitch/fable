@@ -350,35 +350,32 @@ ACCEPTED** for the *plan*; it activates nothing.
 |---|---|---|
 | P1 | Adopt the migration plan | **YES** |
 | P2 | React 19 for `web-next` (from 18.3.1) | **YES** — 18.3 would fork the React major against `spotme/app`'s pinned 19.2.3 |
-| P3 | Monorepo move + Vercel Root Directory change | **YES in principle, BLOCKED** — the host pick below was withdrawn on new evidence; waits on P10 |
+| P3 | Monorepo move + Vercel Root Directory change | **YES** — host settled as `spotme-messenger` by the CLAUDE.md standing line (PR #138) |
 | P4 | Tailwind v4 | **DEFERRED** — slices 0–1 ship on plain CSS + the #132 tokens |
 | P5 | Retire `spotme/app` | **PENDING EXPLICIT CONFIRMATION** — deletion; do not execute. Hard constraint below applies regardless |
 | P6 | Untracked `spotme/mobile` | **PENDING EXPLICIT CONFIRMATION** — deletion with **no git safety net** (0 tracked files; `rm` is unrecoverable); do not execute |
 | P7 | Phase 2 Discovery activation (Typesense) | **NO, not now** — spend + activation |
 | P8 | Flag flips to real users | **NOT YET** — nothing flips until a slice passes all nine DoD items |
 
-### Canonical Vercel project — WITHDRAWN, pending P10
+### Canonical Vercel project — `spotme-messenger` (settled by CLAUDE.md, PR #138)
 
-**Recorded as `spotme-messenger`; that decision is withdrawn the same day.** A
-second evidence source points the opposite way and the two cannot both be
-right. **No Root Directory is repointed until P10 is answered.**
+**`spotme-messenger` (`prj_SH4YWoamLIyQiW17YDiNAcTrUQlB`) is the canonical
+production host; P3 executes against its Root Directory.** The authority is the
+standing line in `CLAUDE.md` → "Production hosts", landed in PR #138
+(`d4b15a4`), which also states that **`spotme-web-v2` is stale, misconfigured,
+and being retired**, and that **`ysnap` is not a Spot Me host at all**.
 
-*Usage evidence, missed on the first pass:* across every report in
-`docs/reports/`, `spotme-messenger.vercel.app` appears **zero** times, while
-`spotme-web-v2.vercel.app` appears **8 times in 5 reports** — every recorded
-deploy-and-drive, including the iPhone session, which lists "Deploy the web
-surface to `spotme-web-v2`" as a task of its own.
+*This entry briefly recorded the pick as withdrawn. That was an error worth
+keeping visible.* The withdrawal rested on reference counts in `docs/reports/`
+— zero for `spotme-messenger.vercel.app`, eight for `spotme-web-v2.vercel.app`
+— read as usage evidence pointing the other way. It was not usage evidence; it
+was the **error trail**. CLAUDE.md records that "two sessions in a row have read
+a green check or a stale pin on `spotme-web-v2` and reported it as production."
+Those eight references are those two sessions being wrong, and counting them
+mistook the mistake for the audience. **Repeated agreement across reports is not
+corroboration when the reports share an author and an error.**
 
-*A reading that fits everything and inverts the pick:* `spotme-messenger` is
-the **older** project with `framework: null`; `spotme-web-v2` is newer,
-correctly configured (`framework: "vite"`), and is what humans and agents
-actually open. That is an orphaned project still carrying git integration —
-auto-building a production target nobody looks at — while real work moved to a
-newer project deployed by hand. If so, `spotme-web-v2` is canonical in practice
-and `spotme-messenger` is the one to retire.
-
-The pipeline evidence that produced the withdrawn pick is retained below,
-because it is real and P10 must be answered against both.
+**P10 is CLOSED.** Slice 0's final step is unblocked.
 
 Both Spot Me projects are repo-connected and both build on every master push
 (one commit → two builds). Verified against the Vercel API 2026-08-07: merges
@@ -393,9 +390,11 @@ the build at exit 127 — fixed only by putting `--include=dev` into the
 **shared** `spotme/web/vercel.json`. One repository file is bent to serve one
 duplicate project.
 
-**Neither project has a custom domain**, so no repository fact can settle
-which surface real people use. That is precisely why P10 is now BLOCKING rather
-than a caveat.
+Neither project has a custom domain, which is why deployment metadata — not a
+URL someone remembers — is the thing to read. CLAUDE.md's table separates a
+git-triggered promotion (`githubCommitRef: master`, `githubDeployment: 1`, no
+`actor`) from a manual CLI `--prod` run (branch ref or `HEAD`, no
+`githubDeployment`, `actor: claude-code_..._agent`).
 
 ### P5 constraint — retiring `spotme/app` must not touch `spotme/core`
 
@@ -415,8 +414,8 @@ product.** `spotme/core`, `spotme/package.json` and
 | # | Item |
 |---|---|
 | P5b | Prune `spotme/core` to `translit.js` and drop the vendored P2P copy. `web/src` imports one file from spotme-core; the other five (`swarm.js` Hyperswarm, `room.js` Autobase/Hypercore, `identity.js`, `schema.js`, `index.js`) are ADR-033 residue, committed twice. Touches the live build — separate PR. |
-| P9 | Retire or demote whichever project P10 shows to be the orphan; ends double builds and frees the shared `vercel.json`. **Which one is unknown until P10** — naming it early risks deleting the surface people actually use. |
-| P10 | **BLOCKING P3.** Which URL do testers actually open? Pipeline evidence says `spotme-messenger`; all 8 usage references in `docs/reports/` say `spotme-web-v2`. Owner-only fact. |
+| P9 | Retire `spotme-web-v2` — already named as "being retired" by the CLAUDE.md standing line. Ends the double builds and frees `--include=dev` from the shared `vercel.json`. Deleting a Vercel project stays owner-retained. |
+| ~~P10~~ | **CLOSED** by the CLAUDE.md standing line (PR #138, `d4b15a4`) — `spotme-messenger` is canonical; `spotme-web-v2` is stale and being retired. |
 | P11 | Appetite for characterization tests before each rewrite — no view-level coverage exists anywhere (ADR-035 §A.1). |
 
 ### Assigned, no longer unowned
