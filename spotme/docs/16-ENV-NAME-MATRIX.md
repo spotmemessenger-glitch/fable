@@ -21,7 +21,9 @@ committing one is a governance violation (CLAUDE.md, roadmap V2 rule 7).
 | `OTP_FROM_EMAIL`, `RESEND_API_KEY` | OTP email delivery | OTP delivery unwired (dev echoes code) |
 | `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET` | R2 media | R2 media leg off |
 | `STORAGE_PROVIDER`, `S3_ENDPOINT`, `S3_REGION`, `S3_BUCKET`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_FORCE_PATH_STYLE` | storage adapter | `local` adapter |
-| `FCM_SERVICE_ACCOUNT_JSON`, `APNS_KEY_ID`, `APNS_TEAM_ID` | push | vendor push legs off |
+| `FIREBASE_SERVICE_ACCOUNT` | FCM push (`push.service.ts:46` — JSON blob, base64, or path) | FCM leg off silently (`initFirebase()` returns before its try/catch, so there is no warning) |
+| `APNS_KEY_ID`, `APNS_TEAM_ID` | APNs push | APNs leg off |
+| `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` | web-push | web push reports `enabled:false` (`VAPID_SUBJECT` defaults) |
 | `AGE_VERIFY_PROVIDER`, `AGE_VERIFY_API_KEY` | age-verify seam | seam off |
 | `LOG_FORMAT`, `METRICS_ENABLED`, `SENTRY_DSN`, `OTEL_EXPORTER_OTLP_ENDPOINT`, `OTEL_SERVICE_NAME` | observability | every leg no-op |
 | `REDIS_URL` | BullMQ `{maintenance}` queue (dark) | queue module disabled |
@@ -46,6 +48,22 @@ committing one is a governance violation (CLAUDE.md, roadmap V2 rule 7).
 | Name | Consumer |
 |---|---|
 | `TEST_REDIS_URL` | backend queue smoke tests |
+
+## Known drift — `backend/.env.example` (verified 2026-08-07)
+
+`.env.example` documents **`FCM_SERVICE_ACCOUNT_JSON`**, which **no code
+reads** — the only consumer is `push.service.ts:46`, and it reads
+**`FIREBASE_SERVICE_ACCOUNT`**. The two names appear in exactly one file
+each and never meet. `.env.example` also omits the three `VAPID_*` names
+entirely. Anyone provisioning push from `.env.example` alone would set a
+variable nothing consumes and get a silently dead FCM leg (the absent-key
+path returns before the try/catch, so nothing is logged).
+
+**Production is unaffected** — live probe of `GET /api/push` returns
+`native: true`, which is only reachable after `initializeApp()` succeeds,
+so the real deployment does carry a valid `FIREBASE_SERVICE_ACCOUNT`.
+This is a documentation defect, not an outage. Correcting `.env.example`
+is a one-line change left for a PR based on current `master`.
 
 ## Rules
 
