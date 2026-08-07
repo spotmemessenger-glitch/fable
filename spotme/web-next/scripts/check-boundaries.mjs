@@ -67,12 +67,18 @@ check('no authentication or credential storage', authHits.length === 0,
 const IMPORT_STMT = /import\s+(type\s+)?[\s\S]*?from\s+(['"])([^'"]+)\2/g;
 const imports = files.flatMap((f) =>
   [...f.code.matchAll(IMPORT_STMT)].map((m) => ({ path: f.path, typeOnly: Boolean(m[1]), spec: m[3] })));
+// Deliberate, reviewed amendment (ADR-030): the self-hosted map module — and
+// ONLY it — may import the maplibre renderer and the pmtiles source reader.
+// Both talk exclusively to the owner-configured TILES_URL origin; the
+// map-tiles fence separately proves no third-party tile host exists anywhere.
+const MAP_ONLY = new Set(['maplibre-gl', 'pmtiles']);
 const allowed = (i) =>
   i.spec.startsWith('react') || i.spec.startsWith('./') ||
   // Intra-web-next sibling reuse (exchange ↔ discovery). Escapes toward
   // web/backend are still blocked by rule 1 (LEGACY).
   i.spec.startsWith('../') ||
-  (i.spec === '@spotme/contracts' && i.typeOnly);
+  (i.spec === '@spotme/contracts' && i.typeOnly) ||
+  (MAP_ONLY.has(i.spec) && i.path.replace(/\\/g, '/').startsWith('src/map/'));
 const badImports = imports.filter((i) => !allowed(i));
 check('imports limited to react/*, siblings, and type-only @spotme/contracts',
   badImports.length === 0, badImports.map((i) => `${i.path} → ${i.spec}`).join(' | '));

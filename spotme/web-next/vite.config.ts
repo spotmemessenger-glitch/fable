@@ -8,6 +8,11 @@ import { fileURLToPath } from 'node:url';
 // contains none of the contracts source.
 export default defineConfig({
   plugins: [react()],
+  // TILES_URL (env name, owner-set at build time) is the ONLY tile source for
+  // the self-hosted map (ADR-030). Empty default = map structurally inert.
+  define: {
+    __TILES_URL__: JSON.stringify(process.env.TILES_URL ?? ''),
+  },
   resolve: {
     alias: {
       '@spotme/contracts': fileURLToPath(new URL('../packages/contracts/src/index.ts', import.meta.url)),

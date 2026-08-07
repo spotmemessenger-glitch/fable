@@ -9,17 +9,21 @@
     "build": "vite build",
     "typecheck": "tsc --noEmit",
     "check:boundaries": "node scripts/check-boundaries.mjs",
-    "test": "npm run check:boundaries && npm run typecheck && npm run test:unit && npm run build",
+    "check:map-artifact": "node scripts/check-map-artifact.mjs",
+    "test": "npm run check:boundaries && npm run typecheck && npm run test:unit && npm run build && npm run check:map-artifact",
     "preview": "vite preview",
     "test:unit": "vitest run"
   },
   "dependencies": {
+    "maplibre-gl": "^6.1.0",
+    "pmtiles": "^4.4.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },
   "devDependencies": {
     "@testing-library/react": "^16.3.2",
     "@testing-library/user-event": "^14.6.1",
+    "@types/node": "^26.1.2",
     "@types/react": "^18.3.11",
     "@types/react-dom": "^18.3.1",
     "@vitejs/plugin-react": "^4.3.2",
