@@ -9,8 +9,11 @@
  *
  * SESSION 1: message list + composer core. SESSION 2: media rows (photo,
  * view-once locked tile, voice, file, location), the attach + message
- * sheets, reactions, reply composition. Calls, translation composer modes,
- * live location sharing, group management and every crypto-facing surface
+ * sheets, reactions, reply composition. SESSION 3: translation +
+ * transliteration composer modes. SESSION 4: the crypto-facing lines
+ * (encryption claim + Verify entry, undecryptable / key warnings) as
+ * finished sentences via chat-island-crypto.js. Calls, live location
+ * sharing, whole-thread transliteration reading lines and group management
  * still render ONLY in the legacy view — the flag stays owner-off.
  *
  * PERSISTED SHAPES stay app-side and UNCHANGED: the port built in
@@ -37,7 +40,7 @@ export function reactChat (root, ctx, roomId) {
 async function mount (root, ctx, roomId) {
   try {
     // Loaded only on the opted-in path: flag-off cost of this module is zero.
-    const [{ db }, { rooms }, uiLib, { buildChatPort }, { browserMediaUI }, translateLib, translitLib, { isPlainEnglish }] =
+    const [{ db }, { rooms }, uiLib, { buildChatPort }, { browserMediaUI }, translateLib, translitLib, { isPlainEnglish }, { buildSecurityView }] =
       await Promise.all([
         import('../lib/db.js'),
         import('../lib/rooms.js'),
@@ -48,7 +51,10 @@ async function mount (root, ctx, roomId) {
         // app-side; the package never sees them (strings-only port).
         import('../lib/translate.js'),
         import('spotme-core/core/translit.js'),
-        import('../lib/english.js')
+        import('../lib/english.js'),
+        // Session 4 — crypto-facing lines as finished sentences (the only
+        // adapter file allowed near lib/crypto, and read-only status at that).
+        import('./chat-island-crypto.js')
       ])
 
     const { fmtTime, fmtDay, actionSheet } = uiLib
@@ -62,7 +68,7 @@ async function mount (root, ctx, roomId) {
       isPlainEnglish,
       actionSheet
     }
-    const port = buildChatPort({ db, rooms, fmtTime, fmtDay, lang }, ctx, roomId, browserMediaUI(root))
+    const port = buildChatPort({ db, rooms, fmtTime, fmtDay, lang, security: buildSecurityView }, ctx, roomId, browserMediaUI(root))
     if (!port) {
       ctx.toast('Conversation not found')
       ctx.nav('#/chat')

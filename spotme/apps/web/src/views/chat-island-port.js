@@ -104,7 +104,7 @@ function mediaOf (m, mine, conn, mapLink) {
  * @param {string} roomId
  * @param {object} ui - browser side effects (chat-island-media.js shape)
  */
-export function buildChatPort ({ db, rooms, fmtTime, fmtDay, lang }, ctx, roomId, ui) {
+export function buildChatPort ({ db, rooms, fmtTime, fmtDay, lang, security }, ctx, roomId, ui) {
   const convo = db.convo(roomId)
   const conn = convo && rooms.ensure(roomId)
   if (!conn) return null
@@ -166,6 +166,23 @@ export function buildChatPort ({ db, rooms, fmtTime, fmtDay, lang }, ctx, roomId
   const listeners = new Set()
   const invalidate = () => { snap = null; for (const fn of listeners) fn() }
 
+  /* Session 4 — the undecryptable-room state machine, exactly the legacy
+   * rules: 'wrong-key' (the stronger claim) may upgrade an existing 'no-key',
+   * never the other way round; the FIRST frame that opens clears it (incoming
+   * path only, so the user's own sends cannot clear it by accident). */
+  let undecryptableReason = null
+  const onConnEvent = (event) => {
+    if (event?.type === 'message' && undecryptableReason) {
+      undecryptableReason = null
+    } else if (event?.type === 'undecryptable') {
+      const worse = event.reason === 'wrong-key' && undecryptableReason !== 'wrong-key'
+      if (!undecryptableReason || worse) {
+        undecryptableReason = event.reason || undecryptableReason || 'wrong-key'
+      }
+    }
+    invalidate()
+  }
+
   // Session 3 — translation/transliteration through the same engines the
   // legacy composer drives (injected; absent in older tests → plain sends).
   composer = lang ? buildLangComposer({ db, lang }, ctx, roomId, invalidate) : null
@@ -185,7 +202,18 @@ export function buildChatPort ({ db, rooms, fmtTime, fmtDay, lang }, ctx, roomId
       rows: conn.store.list().map(rowOf),
       typingLabel: typing ? `${typing.name || 'Someone'} is typing…` : '',
       recordingLabel,
-      ...(composer ? { composer: composer.composerView() } : {})
+      ...(composer ? { composer: composer.composerView() } : {}),
+      // Session 4 — finished sentences only (chat-island-crypto.js); the
+      // package never sees a key or an identity object.
+      ...(security
+        ? {
+            security: security({
+              e2eVersion: current.e2eVersion,
+              undecryptableReason,
+              peerName: current.peer?.name
+            })
+          }
+        : {})
     }
   }
 
@@ -254,7 +282,7 @@ export function buildChatPort ({ db, rooms, fmtTime, fmtDay, lang }, ctx, roomId
   return {
     subscribe (fn) {
       listeners.add(fn)
-      const offConn = conn.on(invalidate)
+      const offConn = conn.on(onConnEvent)
       const offDb = db.subscribe(invalidate)
       return () => { listeners.delete(fn); offConn(); offDb() }
     },
@@ -357,6 +385,10 @@ export function buildChatPort ({ db, rooms, fmtTime, fmtDay, lang }, ctx, roomId
       const m = conn.store.list().find((x) => x.id === id)
       if (m && ui.shareMessage) ui.shareMessage(m, ctx)
     },
+
+    /** Session 4 — the safety-number entry point: same route the legacy
+     *  sysLine link takes. */
+    openVerify: () => ctx.nav(`#/verify/${roomId}`),
 
     back: () => ctx.nav('#/chat'),
     toast: (m) => ctx.toast(m)

@@ -202,6 +202,21 @@ export function ChatShell({ port }: { port: ChatPort }) {
       </header>
 
       <div className="ch-log" ref={logRef} role="log" aria-label="Messages">
+        {snap.security && (
+          <>
+            <div className="ch-sys ch-sec" role="note">
+              {snap.security.sysText}
+              {snap.security.canVerify && (
+                <button type="button" className="ch-verify" onClick={() => port.openVerify?.()}>
+                  Verify
+                </button>
+              )}
+            </div>
+            {snap.security.warnText && (
+              <div className="ch-sys ch-warn" role="alert">{snap.security.warnText}</div>
+            )}
+          </>
+        )}
         {hidden > 0 && (
           <button type="button" className="ch-earlier" onClick={() => setShown((n) => n + WINDOW_STEP)}>
             Show earlier messages ({hidden})

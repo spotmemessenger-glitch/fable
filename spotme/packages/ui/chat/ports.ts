@@ -114,6 +114,19 @@ export interface MessageRowView {
   translation?: TranslationLine | null;
 }
 
+/** SESSION 4 — crypto-facing system lines, as finished sentences shaped
+ *  app-side (views/chat-island-crypto.js): the encryption claim, the Verify
+ *  entry point (v2 rooms only), and the undecryptable / device-key warning.
+ *  No key material, no identity objects — display strings only. */
+export interface SecurityView {
+  /** The first-run encryption claim line (legacy sysLine). */
+  sysText: string;
+  /** v2 rooms only — shows the Verify link on the claim line. */
+  canVerify: boolean;
+  /** Undecryptable-room or device-key warning banner; null hides it. */
+  warnText: string | null;
+}
+
 export interface ChatSnapshot {
   header: { name: string; presenceLabel: string; avatarUrl: string | null };
   rows: MessageRowView[];
@@ -124,6 +137,9 @@ export interface ChatSnapshot {
   /** SESSION 3 — absent hides every language control (old adapters and
    *  fixtures keep working untouched). */
   composer?: ComposerView;
+  /** SESSION 4 — absent hides the crypto lines (old adapters/fixtures keep
+   *  working untouched). */
+  security?: SecurityView;
 }
 
 export interface ChatPort {
@@ -182,6 +198,11 @@ export interface ChatPort {
   forward?(id: string): void;
   /** Share hands the message to the OS share sheet (app-side). */
   share?(id: string): void;
+
+  /** SESSION 4 — the safety-number entry point: routes to the verify screen
+   *  (legacy: ctx.nav('#/verify/<roomId>')). Optional so session-2/3
+   *  adapters and fixtures stay valid. */
+  openVerify?(): void;
 
   back(): void;
   toast(msg: string): void;
@@ -249,6 +270,7 @@ export function fixtureChatPort(
     pickTranslitLang: () => calls.push('pickTranslitLang'),
     forward: (id: string) => calls.push(`forward:${id}`),
     share: (id: string) => calls.push(`share:${id}`),
+    openVerify: () => calls.push('openVerify'),
     back: () => calls.push('back'),
     toast: (m: string) => calls.push(`toast:${m}`),
     /** Test hook: replace the snapshot and notify (session-3 tests drive the
