@@ -1,5 +1,4 @@
 {
-  "//installCommand": "--include=dev is REQUIRED, not belt-and-braces. Vite is a devDependency, and a Vercel project that carries NODE_ENV=production in its environment makes plain `npm install` omit devDependencies entirely — so the install succeeds with ~28 packages, `vite` is never on PATH, and `npm run build` dies with `vite: command not found` (exit 127). This stayed hidden for a long time because the build cache kept restoring a node_modules from before that variable existed; the first cache-pruned install is where it surfaced, which makes it look like whatever commit happened to trigger that build. Asking for dev dependencies explicitly makes the build independent of NODE_ENV.",
   "installCommand": "npm install --include=dev",
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
