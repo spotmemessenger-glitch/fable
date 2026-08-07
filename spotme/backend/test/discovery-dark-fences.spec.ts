@@ -105,8 +105,22 @@ describe('C12 — dark integration fences', () => {
     }
     // .env.example must not pre-fill a Typesense endpoint — quoted OR unquoted
     // (the old quoted-only regex let `TYPESENSE_URL=http://…` through, F11.4).
+    //
+    // The character classes are [ \t], not \s: `\s` matches newlines, so
+    // `\s*\S` after the `=` reached across the line break and matched the
+    // FIRST NON-BLANK CHARACTER ANYWHERE LATER IN THE FILE. That made a bare,
+    // genuinely-empty `TYPESENSE_URL=` fail — while the name was documented
+    // for operators and the value left unset, which is exactly the state this
+    // fence wants. The tightening it was written for (F11.4) is unchanged and
+    // re-proved below: a value on the line still trips it.
     const envx = read(join(BACKEND, '.env.example'));
-    expect(envx).not.toMatch(/^\s*TYPESENSE_URL\s*=\s*\S/m);
+    expect(envx).not.toMatch(/^[ \t]*TYPESENSE_URL[ \t]*=[ \t]*\S/m);
+
+    // The fence still bites — an endpoint on that line is caught, quoted or not.
+    const TRIP = /^[ \t]*TYPESENSE_URL[ \t]*=[ \t]*\S/m;
+    expect('TYPESENSE_URL=http://typesense:8108').toMatch(TRIP);
+    expect('TYPESENSE_URL="http://typesense:8108"').toMatch(TRIP);
+    expect('TYPESENSE_URL=\nTYPESENSE_API_KEY=""').not.toMatch(TRIP);
   });
 
   it('place providers make NO network call (no fetch/http in the places layer)', () => {

@@ -37,9 +37,13 @@ SEED_ADMIN_EMAIL=you@example.com SEED_ADMIN_NAME="You" SEED_ADMIN_PASSWORD='chan
 ## Deploying
 
 Railway or Fly.io both build straight from the included `Dockerfile`. Point
-`DATABASE_URL` at Neon, keep `JWT_ACCESS_SECRET`/`JWT_REFRESH_SECRET` in the
-host's secret manager (never in the repo), same pattern `spotme/web`'s
-`PUSH.md` already documents for its own secrets.
+`DATABASE_URL` at Neon, keep `JWT_ACCESS_SECRET` in the host's secret manager
+(never in the repo), same pattern `spotme/web`'s `PUSH.md` already documents
+for its own secrets.
+
+There is deliberately no `JWT_REFRESH_SECRET` to provision: refresh tokens are
+opaque random strings matched by hash, not JWT-signed, so nothing reads it and
+rotating it has no effect (finding R5 in `docs/10-PRIORITY-0-AUDIT.md`).
 
 ## What still needs wiring before this is production-ready
 
