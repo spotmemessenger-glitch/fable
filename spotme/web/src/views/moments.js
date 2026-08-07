@@ -9,11 +9,21 @@
  * what people already know.
  *
  * WHAT THIS SCREEN WILL NOT SHOW, and it is not an oversight:
- *  - NO like/reaction COUNTERS. Reactions exist and are recorded; tallies are
- *    deliberately absent from the contract (the server refuses `likeCount`
- *    and friends as unsupported fields). A number next to a post is the thing
+ *  - COUNTERS: REVERSED BY OWNER DECISION, 2026-08-07. The rule here used to
+ *    read "NO like/reaction COUNTERS … a number next to a post is the thing
  *    that turns posting into scorekeeping, and the product decision is to not
- *    have one. If this ever needs a count, it is an owner decision first.
+ *    have one. If this ever needs a count, it is an owner decision first."
+ *
+ *    That decision was taken: like and comment totals now show on the card.
+ *    The original reasoning is kept verbatim above rather than deleted, because
+ *    it was right about what counts DO — they turn posting into scorekeeping —
+ *    and whoever reads this next should see the trade that was made, not just
+ *    the outcome.
+ *
+ *    The bounds that survive it: counts are SERVER-AGGREGATED totals, computed
+ *    per feed page and stored nowhere new; nothing records who reacted or what
+ *    a viewer looked at; and a ZERO IS NEVER SHOWN, so a new account's post
+ *    does not announce that nobody engaged with it.
  *  - NO private posts from anyone else. `private` is excluded server-side and
  *    never reaches a feed; nothing here filters for it, because nothing here
  *    should ever receive one.
@@ -781,34 +791,75 @@ export function render (root, ctx, params) {
       }
     }
 
-    /* The action row. Reactions, NO counters — see the header note. */
+    /* THE ACTION ROW. Counted actions on the left, save pinned right.
+     *
+     * The counts are SERVER-AGGREGATED totals, not per-viewer state — the
+     * schema's privacy rule ("no engagement counters stored per-viewer") is
+     * untouched, because nothing new is written and nothing says WHO reacted.
+     *
+     * A ZERO IS NOT SHOWN. "Like 0" is an announcement that nobody did, on the
+     * post of someone who has just started; the number appears when there is
+     * something to report. Same rule the reference uses.
+     */
     const acts = el('div', { class: 'mo-acts' })
+    const counts = el('div', { class: 'mo-actgroup' })
+
+    const countEl = (n) => el('span', { class: 'mo-count', text: n > 0 ? String(n) : '' })
+
+    const reactCount = countEl(m.reactionCount || 0)
     const reactBtn = el('button', {
       class: 'mo-icon mo-act' + (m.myReaction ? ' on' : ''), type: 'button',
       html: reactFace(m.myReaction),
-      'aria-label': 'React', 'aria-pressed': m.myReaction ? 'true' : 'false',
-      /* B1 — A TAP LIKES. Holding opens the full reaction picker.
-       *
-       * The picker used to be the ONLY way to react, so the commonest action
-       * in the product cost a tap, a sheet, a read and a second tap. A like is
-       * now the tap itself and the sheet is the deliberate path. */
-      onclick: () => toggleLike(m, reactBtn),
+      'aria-label': `React. ${m.reactionCount || 0} so far`,
+      'aria-pressed': m.myReaction ? 'true' : 'false',
+      onclick: () => toggleLike(m, reactBtn, null, reactCount),
       oncontextmenu: (e) => { e.preventDefault(); openReactions(m, reactBtn) }
     })
-    acts.appendChild(reactBtn)
-    acts.appendChild(el('button', {
+    counts.append(el('span', { class: 'mo-actpair' }, [reactBtn, reactCount]))
+
+    const commentBtn = el('button', {
       class: 'mo-icon mo-act', type: 'button', html: ICONS.comment,
-      'aria-label': 'Comments', onclick: () => openComments(m)
-    }))
-    acts.appendChild(el('button', {
-      class: 'mo-icon mo-act', type: 'button', html: ICONS.share,
-      'aria-label': 'Share', onclick: () => shareMoment(m)
-    }))
+      'aria-label': `Comments. ${m.commentCount || 0} so far`, onclick: () => openComments(m)
+    })
+    counts.append(el('span', { class: 'mo-actpair' }, [commentBtn, countEl(m.commentCount || 0)]))
+
+    counts.append(el('span', { class: 'mo-actpair' }, [
+      el('button', {
+        class: 'mo-icon mo-act', type: 'button', html: ICONS.share,
+        'aria-label': 'Share', onclick: () => shareMoment(m)
+      })
+    ]))
+    acts.appendChild(counts)
+
+    /* SAVE, pinned right — a personal bookmark, not a social signal, which is
+     * why it carries no count and sits apart from the three that do.
+     *
+     * DEVICE-LOCAL. There is no save table, so this does not follow you to
+     * another phone. Said plainly rather than implied: a bookmark that silently
+     * fails to sync is worse than one you know is local. */
+    const saved = readSaved()
+    const saveBtn = el('button', {
+      class: 'mo-icon mo-act mo-save' + (saved.has(m.id) ? ' on' : ''), type: 'button',
+      html: saved.has(m.id) ? ICONS.saveOn : ICONS.save,
+      'aria-label': saved.has(m.id) ? 'Saved. Tap to remove' : 'Save',
+      'aria-pressed': saved.has(m.id) ? 'true' : 'false',
+      onclick: () => {
+        const set = readSaved()
+        const on = !set.has(m.id)
+        if (on) set.add(m.id); else set.delete(m.id)
+        writeSaved(set)
+        saveBtn.innerHTML = on ? ICONS.saveOn : ICONS.save
+        saveBtn.classList.toggle('on', on)
+        saveBtn.setAttribute('aria-pressed', on ? 'true' : 'false')
+        saveBtn.setAttribute('aria-label', on ? 'Saved. Tap to remove' : 'Save')
+        tick()
+      }
+    })
+    acts.appendChild(saveBtn)
 
     /* B1 — DOUBLE-TAP THE MEDIA LIKES IT, with the burst centred on the tap.
-     * Registered after the slot exists and left to the same optimistic path as
-     * the button, so there is exactly one like implementation. */
-    if (mediaSlot) onDoubleTap(mediaSlot, (origin) => toggleLike(m, reactBtn, origin))
+     * Same optimistic path as the button, and it moves the same count. */
+    if (mediaSlot) onDoubleTap(mediaSlot, (origin) => toggleLike(m, reactBtn, origin, reactCount))
 
     return el('article', { class: 'mo-card' }, [
       head,
@@ -840,16 +891,23 @@ export function render (root, ctx, params) {
    * visibly failed, because the reader believes a thing about the world that
    * is not true.
    */
-  async function toggleLike (m, btn, origin = null) {
+  async function toggleLike (m, btn, origin = null, countEl = null) {
     const was = m.myReaction
     const liking = !was
     m.myReaction = liking ? 'like' : null
+    /* THE COUNT MOVES WITH THE FILL, optimistically and by exactly one. A heart
+     * that fills while the number beside it stays put reads as a failed like. */
+    const wasCount = Number(m.reactionCount) || 0
+    m.reactionCount = Math.max(0, wasCount + (liking ? 1 : -1))
+    if (countEl) countEl.textContent = m.reactionCount > 0 ? String(m.reactionCount) : ''
     paintReact(m, btn)
     if (liking) { likeBurst(btn, origin); tick() }
     try {
       if (liking) await M.react(m.id, 'like'); else await M.unreact(m.id)
     } catch (e) {
       m.myReaction = was
+      m.reactionCount = wasCount
+      if (countEl) countEl.textContent = wasCount > 0 ? String(wasCount) : ''
       paintReact(m, btn)
       ctx.toast(e.message || 'That like did not save')
     }

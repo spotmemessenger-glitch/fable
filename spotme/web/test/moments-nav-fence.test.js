@@ -79,8 +79,23 @@ console.log('\n========================================')
 console.log('  Moments surface — the built rules (M4)')
 console.log('========================================')
 
-check('NO engagement counters are read or rendered',
-  !/likeCount|viewCount|shareCount|reactionCount/.test(view))
+/* COUNTERS WERE FORBIDDEN HERE UNTIL 2026-08-07, when the owner decided
+ * otherwise. The fence is not deleted, because the thing it protected is still
+ * worth protecting — it is narrowed to the part of the rule that survives.
+ *
+ * WHAT IS NOW ALLOWED: like and comment totals, server-aggregated per feed page.
+ * WHAT IS STILL FORBIDDEN: anything that counts a VIEWER rather than an action —
+ * views, watch time, per-viewer engagement. Those are what the schema's "no
+ * engagement counters are stored per-viewer" rule exists to prevent, and no
+ * owner decision has touched that one. */
+check('reaction and comment counts come from the SERVER, never invented locally',
+  /reactionCount/.test(view) && /commentCount/.test(view))
+
+check('NO VIEWER-COUNTING metrics are read or rendered',
+  !/viewCount|watchTime|impressions|seenBy/.test(view))
+
+check('a zero count is never rendered — a new post does not announce that nobody engaged',
+  /n > 0 \? String\(n\) : ''/.test(view))
 
 check('the view never asks for a `private` feed tier',
   !/'private'/.test(view.slice(view.indexOf('const FEED_MODES'), view.indexOf('export function render'))))

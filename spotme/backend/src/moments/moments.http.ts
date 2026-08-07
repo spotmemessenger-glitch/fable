@@ -75,6 +75,14 @@ export interface MomentView {
   createdAtUTC: number;
   version: number;
   myReaction: string | null;
+  /* COUNTS ARE SERVER-AGGREGATED, NEVER PER-VIEWER STATE.
+   *
+   * These are totals over the rows, computed per feed page with one groupBy
+   * each — not an engagement record about the reader. The schema's privacy note
+   * ("No engagement counters are stored per-viewer") is unaffected: nothing new
+   * is written, and nothing here says who reacted. */
+  reactionCount: number;
+  commentCount: number;
   ranking: unknown;
   mine: boolean;
 }
@@ -95,14 +103,26 @@ export class MomentSerializer {
   ): Promise<MomentView[]> {
     const authorIds = [...new Set(rows.map((r) => r.moment.authorId))];
     const mediaIds = [...new Set(rows.flatMap((r) => r.moment.mediaIds))];
-    const [authors, assets] = await Promise.all([
+    const momentIds = rows.map((r) => r.moment.id);
+    /* ONE GROUPBY EACH FOR THE WHOLE PAGE, never per row. A count fetched
+     * inside the map would be 2N queries on a 20-item feed, which is how a
+     * feed that renders fine at ten posts falls over at a hundred. */
+    const [authors, assets, reactions, comments] = await Promise.all([
       this.prisma.user.findMany({ where: { id: { in: authorIds } }, select: { id: true, name: true, username: true } }),
       this.prisma.momentMediaAsset.findMany({ where: { id: { in: mediaIds } }, select: { id: true, kind: true } }),
+      this.prisma.momentReactionRow.groupBy({ by: ['momentId'], where: { momentId: { in: momentIds } }, _count: { momentId: true } }),
+      this.prisma.momentComment.groupBy({
+        by: ['momentId'],
+        where: { momentId: { in: momentIds }, moderationState: { in: ['visible', 'reported', 'limited'] } },
+        _count: { momentId: true },
+      }),
     ]);
+    const reactionOf = new Map(reactions.map((r) => [r.momentId, r._count.momentId]));
+    const commentOf = new Map(comments.map((c) => [c.momentId, c._count.momentId]));
     const nameOf = new Map(authors.map((a) => [a.id, a.name || (a.username ? `@${a.username}` : 'Someone')]));
     const handleOf = new Map(authors.map((a) => [a.id, a.username ?? null]));
     const kindOf = new Map(assets.map((a) => [a.id, a.kind === 'video' ? 'video' : 'image'] as const));
-    return rows.map((r) => this.one(viewerId, r.moment, r.myReaction, r.ranking, nameOf, handleOf, kindOf));
+    return rows.map((r) => this.one(viewerId, r.moment, r.myReaction, r.ranking, nameOf, handleOf, kindOf, reactionOf, commentOf));
   }
 
   /** One row (used by create, which has no batch to amortise). */
@@ -114,7 +134,12 @@ export class MomentSerializer {
     const nameOf = new Map([[moment.authorId, author?.name || (author?.username ? `@${author.username}` : 'Someone')]]);
     const handleOf = new Map([[moment.authorId, author?.username ?? null]]);
     const kindOf = new Map(assets.map((a) => [a.id, a.kind === 'video' ? 'video' : 'image'] as const));
-    return this.one(viewerId, moment, myReaction, null, nameOf, handleOf, kindOf);
+    const [rc, cc] = await Promise.all([
+      this.prisma.momentReactionRow.count({ where: { momentId: moment.id } }),
+      this.prisma.momentComment.count({ where: { momentId: moment.id, moderationState: { in: ['visible', 'reported', 'limited'] } } }),
+    ]);
+    return this.one(viewerId, moment, myReaction, null, nameOf, handleOf, kindOf,
+      new Map([[moment.id, rc]]), new Map([[moment.id, cc]]));
   }
 
   private one(
@@ -125,6 +150,8 @@ export class MomentSerializer {
     nameOf: Map<string, string>,
     handleOf: Map<string, string | null>,
     kindOf: Map<string, 'image' | 'video'>,
+    reactionOf: Map<string, number>,
+    commentOf: Map<string, number>,
   ): MomentView {
     return {
       id: m.id,
@@ -141,6 +168,8 @@ export class MomentSerializer {
       createdAtUTC: m.createdAtUTC,
       version: m.versionSeq,
       myReaction,
+      reactionCount: reactionOf.get(m.id) ?? 0,
+      commentCount: commentOf.get(m.id) ?? 0,
       ranking,
       mine: m.authorId === viewerId,
     };
