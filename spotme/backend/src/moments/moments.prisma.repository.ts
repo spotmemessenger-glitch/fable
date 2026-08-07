@@ -83,6 +83,59 @@ export class PrismaMomentsRepository implements MomentRepositoryPort {
     return res.count > 0;
   }
 
+  /**
+   * Change an existing post's audience. Author-scoped and version-checked, the
+   * same shape as deleteOwn.
+   *
+   * THE LOCATION MUST FOLLOW THE AUDIENCE, NOT LINGER BEHIND IT.
+   *
+   * A coarse cell may only ride on nearby/public posts — the create policy
+   * refuses one on friends/private outright. If moving a post to friends or
+   * private left its stored cell in place, a location collected under one
+   * audience would survive on a post the author had just narrowed, which is
+   * precisely the thing the create-side refusal exists to prevent. Narrowing
+   * clears it, in the same statement, so there is no window where the row is
+   * private and still carries where it was made.
+   *
+   * WIDENING DOES NOT INVENT ONE. A friends post moved to nearby has no cell
+   * and gets none — we do not have the fix, and asking for one on somebody's
+   * behalf during an edit is not a thing this should do. The honest consequence
+   * is that such a post will not appear in other people's radius query (which
+   * requires `geog IS NOT NULL`), though it reaches the global feed if public.
+   */
+  async setVisibility(
+    authorId: string,
+    id: string,
+    visibility: MomentVisibility,
+    expectedVersion: number,
+  ): Promise<boolean> {
+    const keepsLocation = visibility === 'nearby' || visibility === 'public';
+    /* RAW SQL, NOT prisma.updateMany, FOR ONE REASON: `geog` is
+     * Unsupported("geography(Point, 4326)") and the typed client refuses to
+     * write it — "Unknown argument `geog`". The first version of this used
+     * updateMany and threw a PrismaClientValidationError at runtime, 500ing
+     * every narrow. `tsc` did NOT catch it: the fields are behind a conditional
+     * spread, which widens the inferred type and switches off excess-property
+     * checking, so the compiler had nothing to object to.
+     *
+     * Raw also makes "in the same statement" literally true rather than
+     * approximately: the visibility change and the location clear commit
+     * together, so there is no instant where the row is private and still
+     * carries where it was made. Two statements would have had one. */
+    const clearLocation = keepsLocation
+      ? Prisma.empty
+      : Prisma.sql`, "coarseLat" = NULL, "coarseLon" = NULL, "coarseCell" = NULL, "cityCell" = NULL, "geog" = NULL`;
+    const affected = await this.prisma.$executeRaw(Prisma.sql`
+      UPDATE "Moment"
+      SET "visibility" = ${visibility}, "versionSeq" = "versionSeq" + 1 ${clearLocation}
+      WHERE "id" = ${id}
+        AND "authorId" = ${authorId}
+        AND "versionSeq" = ${expectedVersion}
+        AND "deletedAt" IS NULL
+    `);
+    return affected > 0;
+  }
+
   /** The three feeds. Exclusions ALL in SQL (M5 + block + moderation). */
   async feed(q: FeedQuery): Promise<MomentRow[]> {
     const keyset = q.cursor
@@ -132,6 +185,21 @@ export class PrismaMomentsRepository implements MomentRepositoryPort {
           AND m."geog" IS NOT NULL
           AND ST_DWithin(m."geog", ST_SetSRID(ST_MakePoint(${q.origin.lon}, ${q.origin.lat}), 4326)::geography, ${radiusM})
         ))`;
+    } else if (q.mode === 'global') {
+      /* NO ORIGIN REQUIRED, and no geographic predicate.
+       *
+       * Every other mode returns [] without an origin, because every other mode
+       * is a question about a place. This one is not: it asks for public posts
+       * from anywhere, so demanding a location fix in order to answer it would
+       * be both wrong and a reason to collect a fix we do not need.
+       *
+       * Only 'public' qualifies. `nearby` posts are deliberately excluded — the
+       * author chose an audience bounded by proximity, and honouring that is the
+       * whole point of having audiences at all. A nearby post must never reach
+       * the world because someone opened a different tab. */
+      moderation = Prisma.sql`AND m."moderationState" IN ('visible', 'reported')`;
+      tierAndScope = Prisma.sql`
+        AND (${isAuthor} OR m."visibility" = 'public')`;
     } else if (q.mode === 'city') {
       if (!q.origin) return [];
       const cityCell = `c${round1(q.origin.lat).toFixed(1)}:${round1(q.origin.lon).toFixed(1)}`;

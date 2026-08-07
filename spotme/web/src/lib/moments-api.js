@@ -312,6 +312,14 @@ export const createMoment = ({ kind, text, mediaIds, visibility, location }) =>
 /** 3 decimals ≈ 110 m — the coarse grid the server will accept. */
 const round3 = (n) => Math.round(Number(n) * 1000) / 1000
 
+/** Change an existing post's audience. `version` is the optimistic-concurrency
+ *  check the server enforces — a stale one is refused, not silently applied. */
+export const setVisibility = (id, visibility, version) =>
+  call(`/${encodeURIComponent(id)}/visibility`, {
+    method: 'POST',
+    body: { visibility, expectedVersion: Number(version) || 0 }
+  })
+
 export const deleteMoment = (id, version) =>
   call(`/${encodeURIComponent(id)}?version=${Number(version) || 0}`, { method: 'DELETE' })
 

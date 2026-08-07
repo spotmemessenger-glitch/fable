@@ -453,3 +453,34 @@
   .mo-pop { animation: none }
   .mo-burst { display: none }
 }
+
+/* The audience badge as a CONTROL — only ever on your own post. It reads as the
+ * same object as the label so the feed does not gain a second visual language;
+ * the affordance is the press state and the caret, not a different shape. */
+.mo-audbtn { cursor: pointer; -webkit-tap-highlight-color: transparent }
+.mo-audbtn::after { content: ' ⌄'; opacity: .6; font-size: 10px }
+.mo-audbtn:active { transform: scale(.96) }
+
+/* ------------------------------------------------- action row (reference) */
+/* Counted actions left, save pinned right — `justify-content: space-between`
+ * rather than a spacer element, so the save stays on the edge at every width. */
+.mo-acts { display: flex; align-items: center; justify-content: space-between; gap: 8px }
+.mo-actgroup { display: flex; align-items: center; gap: 4px }
+
+/* The icon and its number are ONE target. Tapping the number should like the
+ * post — a number that looks attached to a button and does nothing when pressed
+ * is a dead zone the thumb finds immediately. */
+.mo-actpair { display: inline-flex; align-items: center; gap: 2px }
+.mo-count {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+  min-width: 0;
+  padding-right: 6px;
+  font-variant-numeric: tabular-nums;   /* the row must not jog as counts change */
+}
+.mo-count:empty { padding-right: 0 }
+
+/* Save carries no count and sits apart: a personal bookmark, not a signal. */
+.mo-save { margin-left: auto }
+.mo-save.on { color: var(--ink) }

@@ -9,11 +9,21 @@
  * what people already know.
  *
  * WHAT THIS SCREEN WILL NOT SHOW, and it is not an oversight:
- *  - NO like/reaction COUNTERS. Reactions exist and are recorded; tallies are
- *    deliberately absent from the contract (the server refuses `likeCount`
- *    and friends as unsupported fields). A number next to a post is the thing
+ *  - COUNTERS: REVERSED BY OWNER DECISION, 2026-08-07. The rule here used to
+ *    read "NO like/reaction COUNTERS … a number next to a post is the thing
  *    that turns posting into scorekeeping, and the product decision is to not
- *    have one. If this ever needs a count, it is an owner decision first.
+ *    have one. If this ever needs a count, it is an owner decision first."
+ *
+ *    That decision was taken: like and comment totals now show on the card.
+ *    The original reasoning is kept verbatim above rather than deleted, because
+ *    it was right about what counts DO — they turn posting into scorekeeping —
+ *    and whoever reads this next should see the trade that was made, not just
+ *    the outcome.
+ *
+ *    The bounds that survive it: counts are SERVER-AGGREGATED totals, computed
+ *    per feed page and stored nowhere new; nothing records who reacted or what
+ *    a viewer looked at; and a ZERO IS NEVER SHOWN, so a new account's post
+ *    does not announce that nobody engaged with it.
  *  - NO private posts from anyone else. `private` is excluded server-side and
  *    never reaches a feed; nothing here filters for it, because nothing here
  *    should ever receive one.
@@ -84,7 +94,13 @@ const writeSaved = (set) => {
 
 const FEED_MODES = [
   { key: 'nearby', label: 'Nearby' },
-  { key: 'friends', label: 'Friends' }
+  { key: 'friends', label: 'Friends' },
+  /* `global` is what makes `public` a real choice. Without it a post marked
+   * public reached the same people a nearby post did, so the option meant
+   * nothing and was removed from the composer. The tab and the audience go in
+   * together, deliberately — shipping the option without the surface is how it
+   * became dead the first time. */
+  { key: 'global', label: 'Everyone' }
 ]
 /** The closed reaction registry — same list the server accepts. */
 const REACTIONS = [
@@ -213,33 +229,90 @@ export function render (root, ctx, params) {
    * so choosing it silently threw the post away. It is now "Only you", which is
    * what it does, and A1 makes that true in the query.
    *
-   * `public` IS NO LONGER OFFERED — owner decision, 2026-08-07.
+   * `public` IS OFFERED AGAIN — owner decision, 2026-08-07, now that the
+   * Everyone tab exists to reach it. The history is kept because the reason it
+   * left is the reason it may not leave the tab behind again.
    *
-   * It and `nearby` were indistinguishable in practice: both surface in the
-   * nearby feed, both bounded by the same radius. Two options, one behaviour,
-   * is worse than one option, because it asks the reader to choose between
-   * things that are not different. The alternative — a City tab — would have
-   * been a third tab showing nothing, since the only accounts in the city are
-   * the two test phones.
+   * IT WAS REMOVED because it and `nearby` were indistinguishable in practice:
+   * both surfaced in the nearby feed, both bounded by the same radius. Two
+   * options with one behaviour is worse than one option, because it asks the
+   * reader to choose between things that are not different.
    *
-   * So the picker offers exactly three, and each does something the reader can
-   * observe: nearby, friends, only you.
+   * IT IS BACK because the `global` feed mode now exists — a query with no
+   * geographic predicate at all — and the Everyone tab reaches it. `public` now
+   * means something `nearby` cannot: anywhere in the world.
    *
-   * `public` REMAINS in the database enum, in the backend policy and in this
-   * map, so posts already stored as public keep working and keep rendering
-   * their badge. Only the picker entry is gone. Reintroduce it the day a city
-   * or global surface exists that makes selecting it meaningful — not before.
+   * THE RULE THAT FOLLOWS FROM BOTH: the option and the surface ship together.
+   * If the Everyone tab is ever removed, `public` leaves the picker in the same
+   * commit, or it becomes dead again exactly as before.
+   *
+   * `public` never left the database enum, the backend policy or this map, so
+   * posts stored while it was unpickable kept working and kept their badge —
+   * which is why restoring it needed no migration and no backfill.
    */
   const AUDIENCE = {
     nearby: { label: 'Nearby', hint: 'People near you' },
     friends: { label: 'Friends', hint: 'People who follow you' },
-    public: { label: 'Public', hint: 'Anyone, beyond your area' },
+    public: { label: 'Public', hint: 'Anyone, anywhere in the world' },
     private: { label: 'Only you', hint: 'Nobody else can see this' }
   }
 
-  /* What the composer offers. Deliberately a SUBSET of AUDIENCE: the badge must
-   * still render `public` for posts that already carry it. */
-  const PICKABLE = ['nearby', 'friends', 'private']
+  /* What the composer offers. Kept as its own list rather than derived from
+   * AUDIENCE: the two coincide today, and the reason they were allowed to
+   * diverge — a value that must still RENDER after it stops being SELECTABLE —
+   * is a distinction worth keeping expressible. */
+  const PICKABLE = ['nearby', 'friends', 'public', 'private']
+
+  /**
+   * The audience badge, as a control, on your own post.
+   *
+   * Optimistic like the heart: the badge repaints on choice and reverts if the
+   * server refuses. `version` matters — the server rejects a stale one rather
+   * than applying it, which is what stops two devices editing the same post
+   * from silently overwriting each other.
+   */
+  function audiencePicker (m) {
+    const btn = el('button', {
+      class: `mo-aud mo-audbtn is-${m.visibility || 'nearby'}`,
+      type: 'button',
+      text: (AUDIENCE[m.visibility] || AUDIENCE.nearby).label,
+      'aria-label': `Audience: ${(AUDIENCE[m.visibility] || AUDIENCE.nearby).label}. Tap to change who can see this.`,
+      onclick: () => actionSheet(PICKABLE.map((v) => ({
+        label: `${AUDIENCE[v].label} — ${AUDIENCE[v].hint}`,
+        fn: async () => {
+          if (v === m.visibility) return
+          const was = m.visibility
+          const wasVersion = m.version
+          m.visibility = v
+          paintAudience(btn, v)
+          try {
+            const updated = await M.setVisibility(m.id, v, wasVersion)
+            // Take the server's version back, or the NEXT change sends a stale
+            // one and is refused for a reason the reader cannot see.
+            if (updated && typeof updated.version === 'number') m.version = updated.version
+            /* NARROWING DROPS THE LOCATION, server-side and in the same
+             * statement. Said out loud because it is not reversible by widening
+             * again — we never had a second fix to put back. */
+            if ((was === 'nearby' || was === 'public') && v !== 'nearby' && v !== 'public') {
+              ctx.toast(`Now ${AUDIENCE[v].label.toLowerCase()} — the location was removed`)
+            }
+          } catch (e) {
+            m.visibility = was
+            paintAudience(btn, was)
+            ctx.toast(e.message || 'Could not change who can see this')
+          }
+        }
+      })), 'Who can see this?')
+    })
+    return btn
+  }
+
+  const paintAudience = (btn, v) => {
+    const a = AUDIENCE[v] || AUDIENCE.nearby
+    btn.className = `mo-aud mo-audbtn is-${v || 'nearby'}`
+    btn.textContent = a.label
+    btn.setAttribute('aria-label', `Audience: ${a.label}. Tap to change who can see this.`)
+  }
 
   const audienceBadge = (v) => {
     const a = AUDIENCE[v] || AUDIENCE.nearby
@@ -490,7 +563,13 @@ export function render (root, ctx, params) {
     if (state === 'empty') {
       list.appendChild(el('div', { class: 'mo-note' }, [
         el('b', { text: 'Nothing here yet' }),
-        el('p', { text: mode === 'nearby' ? 'No posts nearby. Be the first.' : 'Posts from people you follow show up here.' }),
+        el('p', {
+          text: mode === 'nearby'
+            ? 'No posts nearby. Be the first.'
+            : mode === 'global'
+              ? 'No public posts yet. Post to Everyone and it shows up here.'
+              : 'Posts from people you follow show up here.'
+        }),
         el('button', { class: 'pill ok', type: 'button', text: 'Create a post', onclick: () => openComposer() })
       ]))
       return
@@ -601,7 +680,15 @@ export function render (root, ctx, params) {
            * exists. Shown on every card, including other people's: knowing a
            * post is public is what tells you whether resharing it is
            * reasonable. */
-          audienceBadge(m.visibility)
+          /* MINE IS A CONTROL, THEIRS IS A LABEL.
+           *
+           * The badge renders on every card, including other people's — knowing
+           * a post is public is what tells you whether resharing it is
+           * reasonable. But only the AUTHOR may change it, so only the author's
+           * own card gets a button. Rendering an interactive control on someone
+           * else's post would invite a tap the server is right to refuse, and
+           * the refusal would read as a bug rather than as a boundary. */
+          mine ? audiencePicker(m) : audienceBadge(m.visibility)
         ]),
         el('span', { class: 'mo-meta', text: [place(m), when(m.createdAtUTC)].filter(Boolean).join(' · ') })
       ]),
@@ -704,34 +791,75 @@ export function render (root, ctx, params) {
       }
     }
 
-    /* The action row. Reactions, NO counters — see the header note. */
+    /* THE ACTION ROW. Counted actions on the left, save pinned right.
+     *
+     * The counts are SERVER-AGGREGATED totals, not per-viewer state — the
+     * schema's privacy rule ("no engagement counters stored per-viewer") is
+     * untouched, because nothing new is written and nothing says WHO reacted.
+     *
+     * A ZERO IS NOT SHOWN. "Like 0" is an announcement that nobody did, on the
+     * post of someone who has just started; the number appears when there is
+     * something to report. Same rule the reference uses.
+     */
     const acts = el('div', { class: 'mo-acts' })
+    const counts = el('div', { class: 'mo-actgroup' })
+
+    const countEl = (n) => el('span', { class: 'mo-count', text: n > 0 ? String(n) : '' })
+
+    const reactCount = countEl(m.reactionCount || 0)
     const reactBtn = el('button', {
       class: 'mo-icon mo-act' + (m.myReaction ? ' on' : ''), type: 'button',
       html: reactFace(m.myReaction),
-      'aria-label': 'React', 'aria-pressed': m.myReaction ? 'true' : 'false',
-      /* B1 — A TAP LIKES. Holding opens the full reaction picker.
-       *
-       * The picker used to be the ONLY way to react, so the commonest action
-       * in the product cost a tap, a sheet, a read and a second tap. A like is
-       * now the tap itself and the sheet is the deliberate path. */
-      onclick: () => toggleLike(m, reactBtn),
+      'aria-label': `React. ${m.reactionCount || 0} so far`,
+      'aria-pressed': m.myReaction ? 'true' : 'false',
+      onclick: () => toggleLike(m, reactBtn, null, reactCount),
       oncontextmenu: (e) => { e.preventDefault(); openReactions(m, reactBtn) }
     })
-    acts.appendChild(reactBtn)
-    acts.appendChild(el('button', {
+    counts.append(el('span', { class: 'mo-actpair' }, [reactBtn, reactCount]))
+
+    const commentBtn = el('button', {
       class: 'mo-icon mo-act', type: 'button', html: ICONS.comment,
-      'aria-label': 'Comments', onclick: () => openComments(m)
-    }))
-    acts.appendChild(el('button', {
-      class: 'mo-icon mo-act', type: 'button', html: ICONS.share,
-      'aria-label': 'Share', onclick: () => shareMoment(m)
-    }))
+      'aria-label': `Comments. ${m.commentCount || 0} so far`, onclick: () => openComments(m)
+    })
+    counts.append(el('span', { class: 'mo-actpair' }, [commentBtn, countEl(m.commentCount || 0)]))
+
+    counts.append(el('span', { class: 'mo-actpair' }, [
+      el('button', {
+        class: 'mo-icon mo-act', type: 'button', html: ICONS.share,
+        'aria-label': 'Share', onclick: () => shareMoment(m)
+      })
+    ]))
+    acts.appendChild(counts)
+
+    /* SAVE, pinned right — a personal bookmark, not a social signal, which is
+     * why it carries no count and sits apart from the three that do.
+     *
+     * DEVICE-LOCAL. There is no save table, so this does not follow you to
+     * another phone. Said plainly rather than implied: a bookmark that silently
+     * fails to sync is worse than one you know is local. */
+    const saved = readSaved()
+    const saveBtn = el('button', {
+      class: 'mo-icon mo-act mo-save' + (saved.has(m.id) ? ' on' : ''), type: 'button',
+      html: saved.has(m.id) ? ICONS.saveOn : ICONS.save,
+      'aria-label': saved.has(m.id) ? 'Saved. Tap to remove' : 'Save',
+      'aria-pressed': saved.has(m.id) ? 'true' : 'false',
+      onclick: () => {
+        const set = readSaved()
+        const on = !set.has(m.id)
+        if (on) set.add(m.id); else set.delete(m.id)
+        writeSaved(set)
+        saveBtn.innerHTML = on ? ICONS.saveOn : ICONS.save
+        saveBtn.classList.toggle('on', on)
+        saveBtn.setAttribute('aria-pressed', on ? 'true' : 'false')
+        saveBtn.setAttribute('aria-label', on ? 'Saved. Tap to remove' : 'Save')
+        tick()
+      }
+    })
+    acts.appendChild(saveBtn)
 
     /* B1 — DOUBLE-TAP THE MEDIA LIKES IT, with the burst centred on the tap.
-     * Registered after the slot exists and left to the same optimistic path as
-     * the button, so there is exactly one like implementation. */
-    if (mediaSlot) onDoubleTap(mediaSlot, (origin) => toggleLike(m, reactBtn, origin))
+     * Same optimistic path as the button, and it moves the same count. */
+    if (mediaSlot) onDoubleTap(mediaSlot, (origin) => toggleLike(m, reactBtn, origin, reactCount))
 
     return el('article', { class: 'mo-card' }, [
       head,
@@ -763,16 +891,23 @@ export function render (root, ctx, params) {
    * visibly failed, because the reader believes a thing about the world that
    * is not true.
    */
-  async function toggleLike (m, btn, origin = null) {
+  async function toggleLike (m, btn, origin = null, countEl = null) {
     const was = m.myReaction
     const liking = !was
     m.myReaction = liking ? 'like' : null
+    /* THE COUNT MOVES WITH THE FILL, optimistically and by exactly one. A heart
+     * that fills while the number beside it stays put reads as a failed like. */
+    const wasCount = Number(m.reactionCount) || 0
+    m.reactionCount = Math.max(0, wasCount + (liking ? 1 : -1))
+    if (countEl) countEl.textContent = m.reactionCount > 0 ? String(m.reactionCount) : ''
     paintReact(m, btn)
     if (liking) { likeBurst(btn, origin); tick() }
     try {
       if (liking) await M.react(m.id, 'like'); else await M.unreact(m.id)
     } catch (e) {
       m.myReaction = was
+      m.reactionCount = wasCount
+      if (countEl) countEl.textContent = wasCount > 0 ? String(wasCount) : ''
       paintReact(m, btn)
       ctx.toast(e.message || 'That like did not save')
     }

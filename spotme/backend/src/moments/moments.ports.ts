@@ -46,7 +46,15 @@ export interface MomentCommentRow {
   createdAtUTC: number;
 }
 
-export type MomentFeedMode = 'nearby' | 'friends' | 'city';
+/* `global` reaches every 'public' post regardless of where it was made — the
+ * only mode with no geographic predicate at all.
+ *
+ * It exists because `public` had no surface: `city` filters on cityCell (~11 km),
+ * which is a city, not the world, so a post marked public appeared in `nearby`
+ * within radius and nowhere else. The audience and the reach did not match, and
+ * the option was removed from the composer for exactly that reason. This is what
+ * makes putting it back honest. */
+export type MomentFeedMode = 'nearby' | 'friends' | 'city' | 'global';
 
 export interface FeedQuery {
   viewerId: string;
@@ -70,6 +78,9 @@ export interface MomentRepositoryPort {
    *  directions) and removed content returns null. ALL in SQL. */
   findViewable(viewerId: string, id: string): Promise<MomentRow | null>;
   deleteOwn(authorId: string, id: string, expectedVersion: number): Promise<boolean>;
+  /** Change an existing post's audience. Author-scoped, version-checked, and it
+   *  CLEARS the coarse location when the new tier may not carry one. */
+  setVisibility(authorId: string, id: string, visibility: MomentVisibility, expectedVersion: number): Promise<boolean>;
   /** Every exclusion IN SQL: private, blocked (both directions), removed,
    *  deleted, tier-inapplicable rows are never fetched. */
   feed(q: FeedQuery): Promise<MomentRow[]>;

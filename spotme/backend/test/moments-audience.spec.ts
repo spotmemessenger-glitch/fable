@@ -164,6 +164,115 @@ describe('A1 — the author always sees their own posts, in every mode', () => {
   });
 });
 
+describe("the `global` feed — what makes `public` an honest option", () => {
+  /* `public` was removed from the composer because it reached exactly the same
+   * people `nearby` did. `global` is the surface that makes the two different,
+   * so these assert the difference is REAL and not just labelled. */
+  const globalFeed = (token: string) => feed(token, 'global');
+
+  it('a stranger anywhere sees the public post — no follow, no proximity', async () => {
+    const ids = (await globalFeed(stranger.token)).map((m) => m.id);
+    expect(ids).toContain(made.public);
+  });
+
+  it('NO LOCATION IS REQUIRED to read it — global is not a question about a place', async () => {
+    // Deliberately no lat/lon: every other mode returns [] without an origin.
+    const r = await fetch(`${url}/api/v1/moments/feed?mode=global`, {
+      headers: { Authorization: `Bearer ${stranger.token}` },
+    });
+    const b = (await r.json()) as { results?: Array<{ id: string }> };
+    expect((b.results ?? []).map((m) => m.id)).toContain(made.public);
+  });
+
+  it("THE LEAK THAT MUST NOT HAPPEN: a NEARBY post never reaches the global feed", async () => {
+    // The author chose an audience bounded by proximity. Honouring that is the
+    // whole point of having audiences — opening a different tab must not widen
+    // somebody else's post.
+    const ids = (await globalFeed(stranger.token)).map((m) => m.id);
+    expect(ids).not.toContain(made.nearby);
+  });
+
+  it('…and neither does a friends post or a private one', async () => {
+    const ids = (await globalFeed(stranger.token)).map((m) => m.id);
+    expect(ids).not.toContain(made.friends);
+    expect(ids).not.toContain(made.private);
+  });
+
+  it('the author still sees their own posts in global, as in every mode', async () => {
+    const ids = (await globalFeed(author.token)).map((m) => m.id);
+    expect(ids).toContain(made.public);
+    expect(ids).toContain(made.private);
+  });
+});
+
+describe('changing a post\'s audience after the fact', () => {
+  const setVis = (token: string, id: string, visibility: string, expectedVersion: number) =>
+    fetch(`${url}/api/v1/moments/${id}/visibility`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ visibility, expectedVersion }),
+    });
+
+  it('the author can narrow a nearby post to private', async () => {
+    const res = await post(author.token, 'nearby', `${RUN} movable`);
+    const { id, version } = (await res.json()) as { id: string; version: number };
+    const r = await setVis(author.token, id, 'private', version);
+    expect(r.status).toBeLessThan(300);
+    const row = await prisma.moment.findUniqueOrThrow({ where: { id } });
+    expect(row.visibility).toBe('private');
+  });
+
+  it('THE PRIVACY POINT: narrowing CLEARS the stored location, in the same statement', async () => {
+    const res = await post(author.token, 'nearby', `${RUN} loc-drop`);
+    const { id, version } = (await res.json()) as { id: string; version: number };
+    const before = await prisma.moment.findUniqueOrThrow({ where: { id } });
+    expect(before.coarseCell).toBeTruthy();          // it had one to lose
+
+    await setVis(author.token, id, 'friends', version);
+    const after = await prisma.moment.findUniqueOrThrow({ where: { id } });
+    // A location collected under one audience must not survive on a post the
+    // author has just narrowed — that is what the create-side refusal exists
+    // to prevent, and an edit must not be the way around it.
+    expect(after.coarseCell).toBeNull();
+    expect(after.coarseLat).toBeNull();
+    expect(after.coarseLon).toBeNull();
+    expect(after.cityCell).toBeNull();
+  });
+
+  it('A STRANGER MAY NOT CHANGE SOMEBODY ELSE\'S AUDIENCE', async () => {
+    const res = await post(author.token, 'nearby', `${RUN} notyours`);
+    const { id, version } = (await res.json()) as { id: string; version: number };
+    const r = await setVis(stranger.token, id, 'public', version);
+    expect(r.status).toBe(404);                      // 404, not 403: no existence leak
+    const row = await prisma.moment.findUniqueOrThrow({ where: { id } });
+    expect(row.visibility).toBe('nearby');           // and nothing was written
+  });
+
+  it('a STALE version is refused rather than applied', async () => {
+    const res = await post(author.token, 'nearby', `${RUN} stale`);
+    const { id, version } = (await res.json()) as { id: string; version: number };
+    await setVis(author.token, id, 'friends', version);          // bumps the version
+    const second = await setVis(author.token, id, 'public', version);  // same one again
+    expect(second.status).toBeGreaterThanOrEqual(400);
+    const row = await prisma.moment.findUniqueOrThrow({ where: { id } });
+    expect(row.visibility).toBe('friends');          // the stale write did not land
+  });
+
+  it('an unknown audience value is refused', async () => {
+    const res = await post(author.token, 'nearby', `${RUN} badvis`);
+    const { id, version } = (await res.json()) as { id: string; version: number };
+    expect((await setVis(author.token, id, 'everyone', version)).status).toBeGreaterThanOrEqual(400);
+  });
+
+  it('the change is REAL: a narrowed post leaves the stranger\'s feed', async () => {
+    const res = await post(author.token, 'nearby', `${RUN} vanish`);
+    const { id, version } = (await res.json()) as { id: string; version: number };
+    expect((await feed(stranger.token, 'nearby')).map((m) => m.id)).toContain(id);
+    await setVis(author.token, id, 'private', version);
+    expect((await feed(stranger.token, 'nearby')).map((m) => m.id)).not.toContain(id);
+  });
+});
+
 describe('the widening is exactly one person wide', () => {
   it("a stranger NEVER sees the author's private post", async () => {
     for (const mode of ['nearby', 'friends', 'city']) {
