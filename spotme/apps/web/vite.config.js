@@ -1,4 +1,5 @@
 import { defineConfig } from 'vite'
+import { fileURLToPath } from 'node:url'
 
 export default defineConfig(({ command }) => {
   /* A PRODUCTION BUILD WITHOUT A BACKEND ADDRESS IS A BROKEN APP, SILENTLY.
@@ -29,6 +30,14 @@ export default defineConfig(({ command }) => {
     build: {
       outDir: 'dist',
       target: 'es2020'
+    },
+    resolve: {
+      alias: {
+        // The React domain shells live in packages/ui (a library, not an
+        // app); the chat island imports them through this alias so the flag
+        // gate's dynamic import stays the only entry point.
+        '@spotme/ui': fileURLToPath(new URL('../../packages/ui', import.meta.url))
+      }
     },
     server: {
       // Bind all interfaces so a phone on the same network (or over Tailscale)

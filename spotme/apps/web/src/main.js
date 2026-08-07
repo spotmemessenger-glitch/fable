@@ -157,6 +157,12 @@ const BAR_TABS = new Set(NAV_ITEMS.map((item) => item.path))
 // A resetting device is mid-wipe: its hint is the very data being erased, so
 // the landing falls back to the line that has always been here.
 const homeTab = () => (!RESETTING && db.ready() && db.settings().momentsHome ? '#/posts' : '#/chat')
+
+/** React chat opt-in. DEFAULT OFF: unset, wrong casing, and a throwing
+ *  storage (private mode) all read as off — only the literal 'on' opts in. */
+const reactChatOn = () => {
+  try { return localStorage.getItem('spotme.ui.chat') === 'on' } catch { return false }
+}
 let coldOpenTab = null   // the bar tab this load landed on by default, until the person navigates
 let hintLed = false      // that landing was chosen by the stored hint, not by the URL
 
@@ -315,7 +321,18 @@ function render () {
   const threadMatch = hash.match(/^#\/thread\/(.+)$/)
   if (threadMatch) {
     navEl.style.display = 'none'
-    currentCleanup = chat.render(viewContainer, ctx, decodeURIComponent(threadMatch[1]))
+    const threadRoomId = decodeURIComponent(threadMatch[1])
+    if (reactChatOn()) {
+      // Gate BEFORE the dynamic import: flag-off users never download React.
+      let cleanup = null
+      let dead = false
+      import('./react/chat/index.jsx')
+        .then((m) => { if (!dead) cleanup = m.mount(viewContainer, ctx, threadRoomId) })
+        .catch(() => { if (!dead) cleanup = chat.render(viewContainer, ctx, threadRoomId) })
+      currentCleanup = () => { dead = true; if (cleanup) cleanup() }
+      return
+    }
+    currentCleanup = chat.render(viewContainer, ctx, threadRoomId)
     return
   }
 
