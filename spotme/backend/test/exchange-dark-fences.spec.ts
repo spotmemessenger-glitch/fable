@@ -41,14 +41,58 @@ describe('Exchange — dark integration fences', () => {
     expect(read(join(BACKEND, 'src/main.ts'))).not.toMatch(/exchange/i);
   });
 
-  it('the web-next entry (App/main) mounts NEITHER ExchangeShell NOR the exchange subtree', () => {
-    // WEBNEXT-UNFENCED: the client shell is dark too — the app entry renders
-    // only Discovery; nothing imports or mounts the exchange UI.
-    expect(liveEntryDarkPackageImports()).toEqual([]);
-    for (const entry of appEntries()) {
+  it('Exchange is reachable ONLY behind spotme.ui.exchange, which defaults OFF', () => {
+    /* SLICE 1 CHANGED THE MECHANISM, IT DID NOT DROP THE FENCE.
+     *
+     * Exchange used to be dark by non-reference: nothing imported it. It is
+     * now deliberately reachable behind a flag, so asserting non-reference
+     * would just be asserting that slice 1 did not ship. This asserts the
+     * NEW, STRONGER invariant instead -- the same move the Discovery fence
+     * made when DiscoveryModule went behind DomainGate:
+     *
+     *   the live entry reaches exchange through EXACTLY ONE route view;
+     *   that view renders nothing unless the flag is explicitly 'on';
+     *   the flag is never defaulted on anywhere;
+     *   the island host never STATICALLY imports the ui package.
+     */
+    const entryFiles = appEntries();
+    for (const entry of entryFiles) {
       const s = read(entry);
+      // The React shell itself is still never mounted from an entry.
       expect(s).not.toMatch(/ExchangeShell/);
-      expect(EXCHANGE_REACH.test(s)).toBe(false);
+    }
+
+    const web = liveWebRoot();
+    const main = read(join(web, 'src/main.js'));
+    // ONE reach, and it is the route view -- never the package or internals.
+    const reaches = [...main.matchAll(/from\s+['"]([^'"]*exchange[^'"]*)['"]/g)].map((m) => m[1]);
+    expect(reaches).toEqual(['./views/exchange.js']);
+
+    // That view is gated, and the gate is the flag.
+    const view = read(join(web, 'src/views/exchange.js'));
+    expect(view).toMatch(/uiFlag\(\s*['"]exchange['"]\s*\)/);
+    expect(view).toMatch(/if \(!uiFlag/);
+
+    // The host resolves the package dynamically; a static import would make
+    // every dark surface reachable from the shipped entry.
+    const host = read(join(web, 'src/lib/island.js'));
+    expect(/^\s*import[^;]*['"]@spotme\/ui['"]/m.test(host)).toBe(false);
+
+    // Nothing anywhere turns the flag on by default.
+    const webFiles = walk(join(web, 'src'), ['.js']);
+    for (const f of webFiles) {
+      expect(read(f)).not.toMatch(/setItem\(\s*['"`]spotme\.ui\./);
+    }
+  });
+
+  it('the OTHER client surfaces stay dark: the ui entry exports Exchange only', () => {
+    // Slice 1 activates one domain. discovery/events/moments/assistant must
+    // remain unreachable through the package entry the host imports.
+    const idx = join(REPO, 'spotme/packages/ui/index.ts');
+    if (!existsSync(idx)) return;
+    const s = stripComments(read(idx));
+    for (const dark of ['discovery', 'events', 'moments', 'assistant']) {
+      expect(s).not.toMatch(new RegExp(`from\s+['"]\./${dark}/`));
     }
   });
 

@@ -36,7 +36,30 @@ export interface ExchangeIntentView {
   budgetBand?: 'low' | 'medium' | 'high';
   informationalPrice?: { label: string; disclaimer: 'informational-only-no-payment' };
   approxLocation: { lat: number; lon: number; cell: string };
+  /** Reach, as the owner set it. `maxKm` bounds the slider. */
+  radius: { km: number; maxKm: number };
+  availability:
+    | { state: 'window'; fromIso: string; toIso: string }
+    | { state: 'recurring'; scheduleLabel: string }
+    | { state: 'unknown' };
+  visibility: 'hidden' | 'discoverable';
+  createdAtIso: string;
+  /**
+   * Real server field, nullable. Rendered as an actual date -- NEVER as a
+   * hardcoded duration. `defaultExpiryHours` is 24, not the 30 days the mock
+   * toast claimed; 30 days is the opt-in ceiling. See the slice-1
+   * reconciliation report.
+   */
+  expiresAtIso: string | null;
+  /** Owner display name for the detail header. */
+  ownerName?: string;
   version: { seq: number };
+
+  /* DELIBERATELY ABSENT, and each omission is load-bearing:
+   *   audienceEstimate  -- no server field; ADR-028 bans the category
+   *   contactCount      -- no server field
+   *   media/thumbnail   -- Exchange has no media pipeline at all
+   * Adding any of them means inventing data. */
 }
 
 export interface ExchangeMatchView {

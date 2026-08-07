@@ -1,0 +1,180 @@
+/* ====================================================================== *
+ * Exchange screens (slice 1).
+ *
+ * Every colour is a token. No hex literal appears in this file -- the orange
+ * ramp lives in apps/web/src/tokens.css as --x-accent-*, governed by ADR-034:
+ *   - near-black on the 500 fill (6.67:1); white would be 2.87:1 and fails AA
+ *   - orange TEXT only at 700 (5.19:1); 600 is 3.68:1 and is fill-only
+ *   - danger stays --red and is deliberately NOT in the accent ramp, so a
+ *     destructive action keeps reading as destructive under CVD
+ * ====================================================================== */
+
+.x-screen { padding: 12px 16px 96px; font: inherit; }
+.x-vh {
+  position: absolute; width: 1px; height: 1px; overflow: hidden;
+  clip-path: inset(50%); white-space: nowrap;
+}
+
+.x-head h1 { font-size: 26px; font-weight: 650; margin: 8px 0 12px; }
+.x-head-row { display: flex; align-items: center; gap: 8px; }
+.x-head-row h1 { flex: 1; font-size: 18px; margin: 0; }
+.x-step { color: var(--muted); font-size: 13px; }
+
+/* 44px minimum on every interactive target. */
+.x-iconbtn, .x-chip, .x-filter, .x-tabs button, .x-segment button,
+.x-card-actions button, .x-overflow-menu button, .x-primary {
+  min-height: 44px; min-width: 44px;
+}
+.x-iconbtn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  background: none; border: 0; padding: 0 10px; border-radius: 12px;
+  color: var(--ink); font: inherit; cursor: pointer;
+}
+.x-iconbtn:focus-visible, .x-chip:focus-visible, .x-primary:focus-visible,
+.x-tabs button:focus-visible, .x-segment button:focus-visible {
+  outline: 2px solid var(--x-accent-700); outline-offset: 2px;
+}
+.x-iconbtn-text { font-size: 13px; }
+
+.x-tabs { display: flex; border-bottom: 1px solid var(--line); }
+.x-tabs button {
+  flex: 1; background: none; border: 0; padding: 10px; font: inherit;
+  color: var(--muted); border-bottom: 2px solid transparent; cursor: pointer;
+}
+.x-tabs button.on {
+  color: var(--x-accent-700); border-bottom-color: var(--x-accent-500); font-weight: 640;
+}
+
+.x-filters { display: flex; gap: 8px; padding: 12px 0; flex-wrap: wrap; }
+.x-filter, .x-chip {
+  border: 1px solid var(--line); background: var(--surface); border-radius: 999px;
+  padding: 0 14px; font: inherit; color: var(--ink); cursor: pointer;
+}
+.x-filter select { border: 0; background: none; font: inherit; color: inherit; }
+.x-chip.on {
+  background: var(--x-accent-well); border-color: var(--x-accent-line);
+  color: var(--x-accent-700); font-weight: 640;
+}
+
+.x-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.x-note { color: var(--muted); padding: 24px 4px; }
+
+.x-card {
+  display: grid; gap: 4px; width: 100%; text-align: left;
+  background: var(--surface); border: 1px solid var(--hair); border-radius: 16px;
+  padding: 12px 14px; font: inherit; color: var(--ink); cursor: pointer;
+}
+.x-card-static { cursor: default; }
+.x-card-row { display: flex; align-items: center; justify-content: space-between; }
+.x-card-title { font-weight: 640; font-size: 16px; }
+.x-card-text { color: var(--ink2); font-size: 14px; }
+.x-card-meta { color: var(--muted); font-size: 13px; }
+.x-card-actions { display: flex; gap: 8px; margin-top: 8px; }
+.x-card-actions button {
+  flex: 1; border: 1px solid var(--line); background: var(--surface);
+  border-radius: 12px; font: inherit; cursor: pointer;
+}
+
+.x-kind {
+  display: inline-block; font-size: 11px; letter-spacing: .08em; font-weight: 700;
+  padding: 4px 8px; border-radius: 6px; background: var(--well); color: var(--ink2);
+}
+.x-kind-service { background: var(--x-accent-well); color: var(--x-accent-700); }
+
+.x-title { font-size: 24px; font-weight: 650; margin: 8px 0 4px; }
+.x-owner { color: var(--muted); margin: 0 0 10px; }
+.x-body { color: var(--ink); line-height: 1.5; }
+
+.x-tags {
+  display: flex; flex-wrap: wrap; gap: 8px; list-style: none; padding: 0; margin: 12px 0;
+}
+.x-tags li { border: 1px solid var(--line); border-radius: 999px; padding: 6px 12px; font-size: 13px; }
+
+.x-facts { display: flex; gap: 28px; margin: 16px 0; }
+.x-facts dt { font-weight: 640; font-size: 13px; }
+.x-facts dd { margin: 4px 0 0; color: var(--ink2); }
+
+.x-band { display: inline-flex; align-items: center; gap: 8px; }
+.x-band-none { color: var(--muted); }
+.x-band-bars { display: inline-flex; gap: 3px; }
+.x-band-bars i { width: 14px; height: 5px; border-radius: 3px; background: var(--line); }
+.x-band-bars i.on { background: var(--x-accent-500); }
+
+.x-price { margin: 12px 0; }
+.x-price-note { display: block; color: var(--muted); font-size: 12px; }
+
+.x-sub { font-size: 14px; font-weight: 640; margin: 20px 0 8px; }
+.x-area { margin: 0; }
+.x-area-map { width: 100%; height: auto; border-radius: 14px; display: block; }
+.x-area-ground { fill: var(--block); }
+.x-area-road { fill: var(--road); }
+/* A COARSE CIRCLE, never a pin: no marker element exists anywhere here. */
+.x-area-circle { fill: var(--water); fill-opacity: .55; stroke: var(--blue); stroke-opacity: .5; }
+.x-area-cap { color: var(--muted); font-size: 13px; padding-top: 6px; }
+
+.x-cta { margin: 20px 0 8px; }
+.x-primary {
+  width: 100%; border: 0; border-radius: 14px; padding: 14px;
+  background: var(--x-accent-500);
+  color: var(--x-onaccent);          /* ADR-034 Decision 1: near-black, 6.67:1 */
+  font: inherit; font-weight: 650; cursor: pointer;
+}
+.x-primary:disabled { background: var(--well); color: var(--muted); cursor: default; }
+.x-consent { color: var(--muted); font-size: 13px; margin: 8px 2px 0; }
+
+.x-actions { display: flex; gap: 8px; margin-top: 16px; }
+.x-actions .x-iconbtn { flex: 1; border: 1px solid var(--line); border-radius: 12px; }
+
+.x-overflow { position: relative; }
+.x-overflow-menu {
+  position: absolute; right: 0; top: 46px; z-index: 5; list-style: none;
+  margin: 0; padding: 6px; min-width: 190px;
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: 14px; box-shadow: var(--shadow);
+}
+.x-overflow-menu button {
+  display: block; width: 100%; text-align: left; background: none; border: 0;
+  padding: 10px 12px; border-radius: 10px; font: inherit; color: var(--ink); cursor: pointer;
+}
+/* Destructive stays --red, NOT the accent -- ADR-034 Decision 2. */
+.x-overflow-menu button.x-danger { color: var(--red); }
+
+.x-progress { display: flex; gap: 6px; list-style: none; padding: 0; margin: 4px 0 20px; }
+.x-progress li { flex: 1; height: 4px; border-radius: 2px; background: var(--line); }
+.x-progress li.on { background: var(--x-accent-500); }
+
+.x-field { display: block; margin: 0 0 18px; border: 0; padding: 0; }
+.x-field > span, .x-field legend {
+  display: block; font-weight: 640; font-size: 14px; margin-bottom: 8px;
+}
+.x-field input[type="text"], .x-field input:not([type]),
+.x-field textarea, .x-field select {
+  width: 100%; min-height: 44px; padding: 10px 12px; font: inherit;
+  border: 1px solid var(--line); border-radius: 12px;
+  background: var(--surface); color: var(--ink);
+}
+.x-field input[type="range"] { width: 100%; accent-color: var(--x-accent-500); min-height: 44px; }
+.x-radio { display: inline-flex; align-items: center; gap: 8px; margin-right: 16px; min-height: 44px; }
+.x-bands { display: flex; gap: 8px; flex-wrap: wrap; }
+.x-hint { color: var(--muted); font-size: 13px; margin: 8px 0 0; }
+
+.x-toggle {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 16px; min-height: 44px;
+}
+.x-toggle small { display: block; color: var(--muted); }
+.x-toggle input { width: 52px; height: 32px; accent-color: var(--green); }
+
+.x-segment {
+  display: flex; gap: 4px; background: var(--well);
+  border-radius: 12px; padding: 4px; margin-bottom: 12px;
+}
+.x-segment button {
+  flex: 1; border: 0; background: none; border-radius: 9px; font: inherit;
+  color: var(--muted); cursor: pointer;
+}
+.x-segment button.on { background: var(--surface); color: var(--ink); font-weight: 640; }
+
+@media (prefers-reduced-motion: reduce) {
+  .x-screen * { transition: none !important; animation: none !important; }
+}

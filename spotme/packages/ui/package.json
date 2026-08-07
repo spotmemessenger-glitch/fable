@@ -3,6 +3,8 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  "main": "./index.ts",
+  "exports": { ".": "./index.ts" },
   "description": "React 19 + TypeScript client surfaces. Domain shells (discovery, exchange, events, moments, assistant) as a LIBRARY, not an app: no router, no auth, no backend, no deployable entry. Consumed by apps/web through the island host. Phase 2-6 surfaces remain dark and unmounted.",
   "scripts": {
     "typecheck": "tsc --noEmit",
