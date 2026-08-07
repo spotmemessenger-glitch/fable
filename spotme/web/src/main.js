@@ -26,6 +26,7 @@ import { openCrop } from './lib/crop.js'
 import { readLink } from './net.js'
 import { primeAudio, startNotifier, notifyState, enableNotify, notifyBlockedReason, alertMessage } from './lib/notify.js'
 import { subscribePush, attachPushHandlers, isNative as isNativeShell } from './lib/push.js'
+import { mountTurnstile, turnstileToken, withTurnstileHeader } from './lib/turnstile.js'
 
 import * as inbox from './views/inbox.js'
 import * as discovery from './views/discovery.js'
@@ -537,6 +538,7 @@ function renderOnboarding () {
   }
 
   const goBtn = el('button', { class: 'pill ok ob-go', type: 'button', text: 'Start', onclick: start })
+  const turnstileHost = el('div', { class: 'ob-turnstile' })
 
   /* A pre-gate device arriving back here (age_declaration_required) keeps its
    * identity: prefill so "confirm your birth month" is one field, not a redo. */
@@ -574,6 +576,9 @@ function renderOnboarding () {
       birthYM,
       el('p', { class: 'ob-uhint', text: 'Spot Me is 18+. Only the year and month — never your full birthday.' }),
       goBtn,
+      // Bot check (ADR-032): invisible unless Cloudflare needs interaction, and
+      // an empty inert div until the owner sets TURNSTILE_SITE_KEY at build.
+      turnstileHost,
       el('p', { class: 'ob-fine', text: 'No password, no phone number. Your profile lives on this device.' }),
       looksInApp()
         ? el('p', { class: 'ob-fine', style: 'color:#b45309', text: 'You seem to be inside another app’s browser — it may forget you when it closes. Open spotme-web-v2.vercel.app in Chrome or Safari and use “Add to Home Screen”.' })
@@ -584,6 +589,7 @@ function renderOnboarding () {
       })
     ])
   ]))
+  void mountTurnstile(turnstileHost)
   name.focus()
 }
 
@@ -612,9 +618,12 @@ function renderRecovery () {
     if (secret.length < 8) { toast('Enter your recovery code'); code.focus(); return }
     busy = true; goBtn.disabled = true
     try {
+      // Bot check (ADR-032). Recovery is the grinding surface — @username is
+      // public and only the code is secret — so it carries a token like the
+      // create paths do. No-op until the owner sets TURNSTILE_SITE_KEY.
       const res = await fetch(`${REGISTRY_API}/api/auth/guest/recover`, {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
+        headers: withTurnstileHeader({ 'content-type': 'application/json' }, await turnstileToken()),
         body: JSON.stringify({ username: uname, secret })
       })
       if (!res.ok) { toast('That username and code don’t match.'); busy = false; goBtn.disabled = false; return }

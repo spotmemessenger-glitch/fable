@@ -35,6 +35,7 @@ import { io } from 'socket.io-client'
 import { db } from './db.js'
 
 import { API_BASE as SERVER } from './api.js'
+import { turnstileToken, withTurnstileHeader } from './turnstile.js'
 const TOKEN_KEY = 'spotme.server.tokens'
 
 /* Reported at auth so the install table can answer "which build is out there".
@@ -387,9 +388,11 @@ async function guestAuth () {
     // (their account already exists, so re-auth needs no declaration).
     birthYearMonth: me.birthYearMonth || undefined
   }
+  // Bot check (ADR-032): header only exists when the owner has set the site
+  // key; tokens are single-use, so the 409 retry mints its own.
   let res = await fetch(`${SERVER}/api/auth/guest`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: withTurnstileHeader({ 'Content-Type': 'application/json' }, await turnstileToken()),
     body: JSON.stringify(body)
   })
   if (res.status === 409) {
@@ -397,7 +400,7 @@ async function guestAuth () {
     // the visible display name is unaffected.
     res = await fetch(`${SERVER}/api/auth/guest`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: withTurnstileHeader({ 'Content-Type': 'application/json' }, await turnstileToken()),
       body: JSON.stringify({ ...body, username: `${username.slice(0, 11)}_${String(me.id).slice(0, 4)}` })
     })
   }
