@@ -331,3 +331,77 @@ time. Until all three exist, Moments stays invite-only behind the domain gate.
 **Enforcement today:** `DomainGate('moments')` — production keeps the
 RuntimeFlag row absent and the allowlist empty, so every route 404s
 (`test/moments-gate-runtime.spec.ts` proves the posture against real HTTP).
+
+## Frontend migration — ADR-035 decisions P1–P8 — DECIDED 2026-08-07
+
+The owner answered all eight decisions ADR-035 raised. **ADR-035 flips
+PROPOSED → ACCEPTED.** Acceptance adopts the *plan*; it activates nothing.
+
+| # | Item | Decision |
+|---|---|---|
+| P1 | Adopt the migration plan | **YES** |
+| P2 | React 19 for `web-next` (from 18.3.1) | **YES** — 18.3 would fork the React major against `spotme/app`'s pinned 19.2.3 |
+| P3 | Monorepo move + Vercel Root Directory change | **YES, sequenced** behind the canonical-host pick (made below) |
+| P4 | Tailwind v4 | **DEFERRED** — slices 0–1 ship on plain CSS + the #132 tokens |
+| P5 | Retire `spotme/app` | **YES**, with a hard constraint (below) |
+| P6 | Untracked `spotme/mobile` | **REMOVE** |
+| P7 | Phase 2 Discovery activation (Typesense) | **NO, not now** — spend + activation |
+| P8 | Flag flips to real users | **NOT YET** — nothing flips until a slice passes all nine DoD items |
+
+### Canonical Vercel project — `spotme-messenger`
+
+**`spotme-messenger` (`prj_SH4YWoamLIyQiW17YDiNAcTrUQlB`) is canonical; P3
+executes against its Root Directory.**
+
+Both Spot Me projects are repo-connected and both build on every master push
+(one commit → two builds). Verified against the Vercel API 2026-08-07: merges
+of #134 (`17654da`), #135 (`772a92a`), #136 (`097bc78`) and `356eb62` each
+produced a **production** deployment on `spotme-messenger` and only a
+**preview** (`target: null`) on `spotme-web-v2`. The latter reached production
+solely through manual agent CLI pushes (`actor: claude-code_2-1-224_agent`).
+
+The duplicate is not merely redundant: `spotme-web-v2` carries `NODE_ENV` in
+its Vercel environment, which omits devDependencies, loses `vite`, and fails
+the build at exit 127 — fixed only by putting `--include=dev` into the
+**shared** `spotme/web/vercel.json`. One repository file is bent to serve one
+duplicate project.
+
+**Caveat, unresolved:** neither project has a custom domain. The pick rests on
+the deployment pipeline, not observed traffic. **If testers are being sent to
+`spotme-web-v2.vercel.app`, this decision inverts** — the git integration
+moves rather than the audience (tracked as P10).
+
+### P5 constraint — retiring `spotme/app` must not touch `spotme/core`
+
+`spotme/app/package.json` declares `"spotme-core": "file:.."`, resolving to
+`spotme/` itself (`spotme/package.json` is *named* `spotme-core`). Separately
+`spotme/web` declares `"spotme-core": "file:vendor/spotme-core"` and its
+`prebuild` copies `../core` into `vendor/spotme-core/core`. **`web/src/app.js:10`
+and `web/src/views/chat.js:20` import `spotme-core/core/translit.js`** — the
+Indic transliteration engine on the composer's critical path.
+
+**Deleting the parent alongside the app removes transliteration from the live
+product.** `spotme/core`, `spotme/package.json` and
+`spotme/web/vendor/spotme-core/` are out of scope for P5.
+
+### Open after P1–P8
+
+| # | Item |
+|---|---|
+| P5b | Prune `spotme/core` to `translit.js` and drop the vendored P2P copy. `web/src` imports one file from spotme-core; the other five (`swarm.js` Hyperswarm, `room.js` Autobase/Hypercore, `identity.js`, `schema.js`, `index.js`) are ADR-033 residue, committed twice. Touches the live build — separate PR. |
+| P9 | Retire or demote the duplicate `spotme-web-v2` project; ends double builds and frees the shared `vercel.json`. |
+| P10 | Confirm which URL testers actually open (inverts P3's host pick if it is `spotme-web-v2`). |
+| P11 | Appetite for characterization tests before each rewrite — no view-level coverage exists anywhere (ADR-035 §A.1). |
+
+### Assigned, no longer unowned
+
+The **five backend `*-dark-fences.spec.ts` rewrites are slice 0's first task**,
+gated before the monorepo move and tamper-checked. They assert web-next's
+isolation; dissolving it removes the only thing keeping Phase 2–6 dark.
+
+### P4 revisit trigger
+
+After slice 1 ships, count the spacing, colour and type values in its React CSS
+**not** drawn from a `tokens.css` custom property. Small ⇒ plain CSS held and
+Tailwind stays unadopted. Large ⇒ measured drift, and Tailwind gets its own PR
+on that evidence.

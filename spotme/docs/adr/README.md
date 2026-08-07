@@ -66,6 +66,18 @@ recorded in `handbook/DECISIONS.md`). Acceptance wires nothing in.
 |---|---|---|
 | [028](028-nearby-moments-data-privacy-model.md) | Nearby Moments — data & privacy model (four-tier visibility, coarse-only opt-in location, EXIF-strip-before-persistence, no engagement telemetry, retention/cascade) | Accepted (2026-08-04, delegated Phase 5 review authority) |
 
+### Age gate, transport, design, and the frontend migration (029, 033-035)
+
+Recorded here to close a gap: this index previously ended at 028 while 029,
+033 and 034 existed on disk. Numbers 030-032 were never used.
+
+| ADR | Title | Status |
+|---|---|---|
+| [029](029-eighteen-plus-age-gate.md) | 18+ at launch, enforced at the ACCOUNT level (D6) | Accepted |
+| [033](033-server-only-transport-migration.md) | Server-side-only transport; the P2P (Trystero) path is removed, not frozen | Accepted |
+| [034](034-orange-accent-contrast-and-danger-separation.md) | Orange accent text-on-fill; danger separated by lightness | Accepted |
+| [035](035-frontend-migration-plan.md) | Frontend migration to React + TypeScript - inventory, slice order, per-slice DoD, rollback (owner decisions P1-P8 recorded 2026-08-07; P4 Tailwind deferred, P7/P8 refused for now) | Accepted |
+
 ## Format
 
 Each ADR: **Status**, **Context**, **Decision**, **Consequences**, **Evidence**.

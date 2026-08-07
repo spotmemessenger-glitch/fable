@@ -1,6 +1,13 @@
 # ADR-035 — Frontend migration to React + TypeScript: the executable plan
 
-**Status: PROPOSED** · **Date:** 2026-08-07 · **Verified against `master` `acf48bc`**
+**Status: ACCEPTED — owner decisions P1–P8 recorded 2026-08-07** · **Date:** 2026-08-07
+**Verified against `master` `acf48bc`**
+
+> **Acceptance adopts the PLAN. It activates nothing.** P4 (Tailwind) is
+> **deferred**, P7 (Phase 2 activation) and P8 (flag flips) are **refused for
+> now**, and P3 is **sequenced** behind the canonical-host pick (now made — see
+> §(c)). The owner's answers are recorded verbatim in
+> `handbook/DECISIONS.md` → "Frontend migration — ADR-035 decisions P1–P8".
 
 **Relates to:** [ADR-015](015-compile-time-feature-flags.md) (compile-time
 flags), [ADR-016](016-dark-shipping.md) (dark shipping),
@@ -9,10 +16,11 @@ fence), [ADR-027](027-mobile-native-boundary.md) (mobile-native boundary),
 [ADR-033](033-server-only-transport-migration.md) (server-only transport),
 PR #132 (design tokens, self-hosted fonts), the Platform Phase 1–6 programmes.
 
-> **Nothing in this ADR is authorized by writing it.** Every item that touches
-> spend, activation, or product scope is marked **[PROPOSED]** and remains
-> owner-retained. No code, dependency, or configuration changed in the mission
-> that produced this document.
+> **Nothing was authorized by writing this ADR**; the owner's P1–P8 answers of
+> 2026-08-07 are what adopted it. Spend, activation and product scope remain
+> owner-retained: P7 and P8 are refused for now and nothing flips without a
+> further, explicit decision. No code, dependency, or configuration changed in
+> the mission that produced this document.
 
 ---
 
@@ -223,9 +231,33 @@ mobile directories, two of them misleading:**
    family entirely and declared its reintroduction "a regression against this
    ADR, not a legitimate feature". Left in the tree it will be mistaken for
    the ADR-027 React Native target it is not.
-   **[PROPOSED] — retire `spotme/app`.** Deletion is owner-retained; this ADR
-   only recommends it. Until the owner decides, it is quarantined by §(g)'s
-   rule that no slice may import from it.
+   **APPROVED for retirement (owner, 2026-08-07).** Execution is a deletion and
+   still needs its own PR. Until it lands it is quarantined by §(g)'s rule that
+   no slice may import from it.
+
+   > **STOP — `spotme/app` is not self-contained. Retiring it must not touch
+   > `spotme/core`, `spotme/package.json`, or `spotme/web/vendor/spotme-core/`.**
+   >
+   > `spotme/app/package.json` declares `"spotme-core": "file:.."`, which
+   > resolves to `spotme/` itself — `spotme/package.json` is *named*
+   > `spotme-core`. Separately, `spotme/web` declares
+   > `"spotme-core": "file:vendor/spotme-core"` and its `prebuild` copies
+   > `../core` into `vendor/spotme-core/core`. **`web/src/app.js:10` and
+   > `web/src/views/chat.js:20` import `spotme-core/core/translit.js`** — the
+   > Indic transliteration engine, which `test/translit.test.js` describes as
+   > sitting "on the composer's critical path". Deleting the parent along with
+   > the app takes out transliteration in the live product.
+
+   **P5b — the P2P residue survives P5 and is NOT resolved here.** `web/src`
+   imports exactly one file from spotme-core: `core/translit.js`. The other
+   five tracked files — `swarm.js` (Hyperswarm DHT), `room.js`
+   (Autobase/Hypercore), `identity.js`, `schema.js`, `index.js` — are the same
+   dead P2P stack ADR-033 removed, and they are **committed twice**: once at
+   `spotme/core/` and again, vendored, at `spotme/web/vendor/spotme-core/`.
+   Retiring `spotme/app` leaves all of it shipping. Pruning core to
+   `translit.js` alone touches the live build and the vendoring `prebuild`
+   step, so it is a separate change on its own evidence — **open, not folded
+   into P5.**
 2. **`spotme/mobile` is untracked.** It has no bearing on any decision and
    must not be built on. Whoever needs it should commit it behind a PR or
    remove it.
@@ -287,14 +319,72 @@ already covers what four packages need. Adopting a build orchestrator before a
 measured build-time problem is exactly the speculative complexity the migration
 should not carry.
 
-**[PROPOSED] — the move itself is slice 0 and touches deployment.** Relocating
+**The move itself is slice 0 and touches deployment.** Relocating
 `spotme/web` → `apps/web` changes the Vercel Root Directory, which has
 previously produced a total outage when wrong. It must ship alone, with no
 other change in the PR.
 
+#### Canonical host — DECIDED 2026-08-07 (unblocks P3)
+
+**`spotme-messenger` (`prj_SH4YWoamLIyQiW17YDiNAcTrUQlB`) is the canonical
+Vercel project.** P3 executes against its Root Directory and no other.
+
+Both Spot Me projects are connected to the repository and both build on every
+master push — one commit produces two builds. They are not equivalent:
+
+| | `spotme-messenger` | `spotme-web-v2` |
+|---|---|---|
+| master merge | **`target: "production"`**, automatically | `target: null` (preview only) |
+| Production deploys | via git integration | **only manual CLI pushes** (`actor: claude-code_2-1-224_agent`, `gitRootDirectory: spotme/web`) |
+| Domains | `spotme-messenger.vercel.app` (+ team/branch aliases) | `spotme-web-v2.vercel.app` (+ aliases) |
+| `framework` | `null` | `vite` |
+
+Verified 2026-08-07 against the Vercel API: merges of #134 (`17654da`), #135
+(`772a92a`), #136 (`097bc78`) and this ADR's own `356eb62` each produced a
+**production** deployment on `spotme-messenger` and a **preview** on
+`spotme-web-v2`.
+
+**The duplicate has a repository cost, which is why it is not merely
+redundant.** `spotme-web-v2` carries `NODE_ENV` in its Vercel environment; with
+it set, `npm install` omits devDependencies, `vite` is absent and the build
+dies at exit 127. The fix had to be made in the **shared**
+`spotme/web/vercel.json` (`--include=dev`) — one repository file bent to
+accommodate one duplicate project. Slice 0 inherits that wart.
+
+**Recorded caveat.** Neither project has a custom domain; both are
+`*.vercel.app`. The pick rests on the deployment pipeline, not on observed
+user traffic. **If testers are being sent to `spotme-web-v2.vercel.app`, this
+decision inverts** — the git integration moves rather than the audience. That
+is an owner fact, not a repository fact, and it is not settled here.
+
+**[PROPOSED] — retire or demote `spotme-web-v2`** to end the double builds and
+allow the `vercel.json` workaround to be removed. Deleting a Vercel project is
+owner-retained; this ADR only recommends it.
+
 ### (d) Tailwind adoption and the #132 tokens
 
-**Decision: [PROPOSED] adopt Tailwind CSS v4, tokens-first, scoped to
+**Decision: DEFERRED (owner, 2026-08-07). Slices 0 and 1 ship WITHOUT
+Tailwind**, on plain CSS against the #132 tokens — the pattern web-next's five
+domain CSS files already use. Revisited at slice 2 against the evidence test
+below.
+
+*Why the deferral is right, and why this ADR's original position was weaker.*
+The draft proposed Tailwind v4 up front. That was adopting a utility layer with
+**zero measured evidence that plain CSS + tokens fails**, while #132's tokens
+had just landed — churning the design system twice in consecutive slices. A
+working pattern already exists in the tree; the ladder says use it.
+
+**Revisit trigger, so "later" does not become "never."** After slice 1 ships,
+count the spacing, colour and type values in its React CSS that are **not**
+drawn from a `tokens.css` custom property. A small count means plain CSS held
+and Tailwind stays unadopted. A large count is measured drift, and Tailwind
+gets its own PR on that evidence. The test is countable, not a matter of taste.
+
+*The plan below is what adoption WOULD look like if the trigger fires; it is
+not in force.* Retained because the token carry-over is the hard part and the
+analysis should not be redone.
+
+**If adopted: Tailwind CSS v4, tokens-first, scoped to
 `packages/ui` only.** `apps/web`'s legacy CSS is never converted.
 
 The carry-over is mechanical because v4 reads CSS custom properties natively:
@@ -337,7 +427,7 @@ LEGACY live Discovery surface, explicitly excluding any Phase 2 activation.**
 
 | # | Slice | Why here |
 |---|---|---|
-| 0 | Monorepo move + `packages/core` extraction + React 19 + island host + tokens | Infrastructure. No user-visible change. Ships alone. |
+| 0 | **Dark-fence rewrite FIRST**, then monorepo move + `packages/core` extraction + React 19 + island host + tokens | Infrastructure. No user-visible change. Ships alone. **Task order inside the PR is load-bearing** — see below. |
 | 1 | **Discovery** (`views/discovery.js`, `lib/discovery.js`) | The beachhead's architecture exists, and this is the first step of the fixed Discovery execution order (ADR-022) — migration effort lands where product effort already points. |
 | 2 | Contacts · Notifications · Stories | Small, low-coupling, no realtime. Widens the component library cheaply. |
 | 3 | Groups (list · new · manage) | Self-contained; `group-perms` already framework-free and tested. |
@@ -365,6 +455,23 @@ the React implementation**, not merely continue passing against the legacy one.
 This is the one slice that carries a P0 privacy fence, and it is deliberately
 first so the fence-parity mechanism is proven while the blast radius is one
 screen.
+
+**Slice 0's internal order is part of the decision, not an implementation
+detail (owner answers, 2026-08-07):**
+
+1. **Rewrite the five backend `*-dark-fences.spec.ts` suites FIRST** — owned by
+   slice 0, no longer unassigned. They assert web-next's isolation and
+   non-deployment; dissolving web-next into `packages/` removes their premise,
+   and with it the only thing keeping Phase 2–6 dark. Rewritten to fence the
+   new layout (the four dark domains stay unmounted), and **tamper-checked** —
+   each shown to fail when the property it guards is deliberately broken, or it
+   has passed vacuously.
+2. Then the monorepo move, `packages/core` extraction, React 19, island host,
+   tokens, and the remaining four text fences repaired and tamper-checked.
+3. Vercel Root Directory repointed at **`spotme-messenger`** (§(c)) — last, and
+   the step that can cause an outage.
+
+Nothing else ships in that PR. Tailwind is **not** in slice 0 (P4 deferred).
 
 *Deviation considered and rejected: a smaller pathfinder slice first.*
 `views/notifications.js` (175 lines) or `views/stories.js` (107) would be
@@ -494,18 +601,27 @@ Named here so they are not silently absorbed into this plan:
 
 ---
 
-## Owner decisions required — all [PROPOSED]
+## Owner decisions — ANSWERED 2026-08-07
 
-| # | Item | Why owner-retained |
+| # | Item | Decision |
 |---|---|---|
-| P1 | Adopt this migration plan at all | Sets programme direction |
-| P2 | React 19 upgrade for web-next | Low risk, but a stack decision |
-| P3 | Monorepo move + Vercel Root Directory change (slice 0) | Deployment change; known outage mode |
-| P4 | Tailwind v4 adoption | **New dependency** |
-| P5 | Retire `spotme/app` (dead P2P prototype, ADR-033) | **Deletion** — explicitly owner-retained |
-| P6 | Commit or remove the untracked `spotme/mobile` | Repository hygiene |
-| P7 | Any Phase 2 Discovery activation (Typesense provisioning, provider credentials) | **Spend + activation + product scope** |
-| P8 | Any flag flip to real users | Activation |
+| P1 | Adopt this migration plan | **YES** — adopted; this ADR is ACCEPTED |
+| P2 | React 19 upgrade for web-next | **YES** — 18.3 would fork the major against `spotme/app`'s 19.2.3 |
+| P3 | Monorepo move + Vercel Root Directory change | **YES, sequenced** behind the canonical-host pick — now made: **`spotme-messenger`** (§(c)) |
+| P4 | Tailwind v4 adoption | **DEFERRED** — slices 0–1 ship on plain CSS + tokens; revisit at slice 2 against the countable drift test (§(d)) |
+| P5 | Retire `spotme/app` | **YES** — subject to the STOP in §(b): do not touch `spotme/core`, `spotme/package.json`, or `web/vendor/spotme-core/` |
+| P6 | Commit or remove `spotme/mobile` | **REMOVE** — 0 tracked files; recreate deliberately if ever needed |
+| P7 | Phase 2 Discovery activation (Typesense) | **NO, not now** — spend + activation; slice 1 is pinned to live endpoints to avoid it |
+| P8 | Flag flips to real users | **NOT YET** — nothing flips until a slice passes all nine DoD items |
+
+### Still open after P1–P8
+
+| # | Item | Why still open |
+|---|---|---|
+| P5b | Prune `spotme/core` to `translit.js`; drop the vendored P2P copy | Touches the live build and the `prebuild` vendoring step — needs its own evidence and PR (§(b)) |
+| P9 | Retire or demote the duplicate `spotme-web-v2` Vercel project | Ends double builds and allows the `--include=dev` workaround out of the shared `vercel.json`; deleting a project is owner-retained (§(c)) |
+| P10 | Confirm which URL testers actually open | If it is `spotme-web-v2.vercel.app`, the P3 host decision inverts (§(c)) |
+| P11 | Characterization tests before each rewrite — appetite? | §A.1: no view-level coverage exists; the DoD assumes tests-first, which costs time |
 
 ---
 

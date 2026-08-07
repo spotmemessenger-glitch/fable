@@ -1,7 +1,7 @@
 # Migration Phase 0 — what I read, what I found, what I recommend
 
 **Date:** 2026-08-07 · **Branch:** `master` · **Verified at:** `acf48bc`
-**Deliverable:** [ADR-035 — Frontend migration to React + TypeScript](../adr/035-frontend-migration-plan.md) (Status: **PROPOSED**)
+**Deliverable:** [ADR-035 — Frontend migration to React + TypeScript](../adr/035-frontend-migration-plan.md) (Status: **ACCEPTED** — owner decisions P1-P8 recorded 2026-08-07)
 **Mission constraints honoured:** no application code, no `package.json`
 changes, no new dependencies, no merges, `claude/vercel-token-connection-bj4d21`
 untouched, environment variables referenced by **name only**.
@@ -43,8 +43,9 @@ verified against.
 Second, smaller mismatch: `docs/adr/README.md` is **stale**. Its index table
 ends at ADR-028 and does not list ADR-029 (18+ age gate), ADR-033 (server-only
 transport) or ADR-034 (orange accent contrast), all of which exist on disk.
-Numbers 030–032 were never used. The new ADR therefore takes **035**, and the
-index needs a separate repair PR.
+Numbers 030–032 were never used. The new ADR therefore takes **035**. The
+index has since been repaired in place (029, 033, 034 and 035 added) rather
+than deferred to a separate PR.
 
 ---
 
@@ -58,7 +59,7 @@ index needs a separate repair PR.
 | `docs/handbook/DECISIONS.md` | Owner-retained vs delegated authority; D6/D7/A3/A5 constraints |
 | `docs/adr/033-server-only-transport-migration.md` | Made `spotme/app` legible as dead code |
 | `spotme/web-next/` — README, `package.json`, `App.tsx`, `src/discovery/*`, `scripts/check-boundaries.mjs` | What the beachhead actually is (and is not) |
-| `spotme/web/src/` — all 80 non-empty files | The inventory |
+| `spotme/web/src/` — all 82 non-empty files | The inventory |
 | `spotme/web/test/` — all 57 suites | Coverage mapping, test-kind classification |
 | `spotme/packages/contracts/`, `spotme/web/vercel.json`, `spotme/app/`, `spotme/mobile/` | Layout, deployment, the mobile question |
 | PR #132 (via `gh pr view`) | The design-token contract the migration must carry |
@@ -180,9 +181,9 @@ Full rationale and rejected alternatives are in ADR-035; the short form:
 | Question | Answer |
 |---|---|
 | **(a) React 18.3 or 19** | **19.** Nothing shipped depends on React 18 — web-next is inert, so the upgrade cost is at its permanent minimum. `spotme/app` already pins 19.2.3, and RN 0.86 requires 19; choosing 18.3 forks the React major across surfaces, defeating ADR-027's own reason for choosing React. |
-| **(b) Mobile boundary** | **ADR-027 stands, unchanged.** Capacitor is the shipping shell for the whole migration; no React Native app is created. Separately: **[PROPOSED]** retire `spotme/app` (dead under ADR-033), and commit-or-remove the untracked `spotme/mobile`. |
+| **(b) Mobile boundary** | **ADR-027 stands, unchanged.** Capacitor is the shipping shell for the whole migration; no React Native app is created. Separately: retire `spotme/app` (**approved P5**, subject to the `spotme/core` constraint) and remove the untracked `spotme/mobile` (**P6**). |
 | **(c) Monorepo layout** | `apps/web` + `packages/{contracts,core,ui,search-bench}`. **web-next is dissolved, not promoted** — components → `packages/ui`, controllers/ports → `packages/core`, its harness deleted. No `apps/mobile` placeholder. |
-| **(d) Tailwind + #132 tokens** | **[PROPOSED]** Tailwind v4, tokens-first, `packages/ui` only. v4's `@theme` reads CSS custom properties natively, so `tokens.css` stays the single source; `--onfill`/`--surface`, `--ink-press`, the 15 vendored fonts and the discrete-weight decision all move verbatim, and the 29-assertion `design-tokens-fence` moves with them and keeps running. |
+| **(d) Tailwind + #132 tokens** | **DEFERRED (P4).** Slices 0–1 ship on plain CSS + the #132 tokens; revisit at slice 2 against a countable drift test. The adoption plan is retained but not in force: Tailwind v4, tokens-first, `packages/ui` only. v4's `@theme` reads CSS custom properties natively, so `tokens.css` stays the single source; `--onfill`/`--surface`, `--ink-press`, the 15 vendored fonts and the discrete-weight decision all move verbatim, and the 29-assertion `design-tokens-fence` moves with them and keeps running. |
 | **(e) Slice order** | **Default kept: slice 1 = Discovery** — but scope-pinned to the *legacy live* surface. Chat and crypto last. A smaller pathfinder slice was considered and rejected (§4). |
 | **(f) Per-slice DoD** | Nine items: dark flag `spotme.ui.<slice>` (default off) · legacy view stays live and unmodified · 1,085-assertion floor holds · new package tests · **fence parity against the React build** · a flag-off/flag-on parity test · a11y parity · bundle budget recorded · docs updated in place (G9). |
 | **(g) Rollback** | Tier 1 flag-off (seconds, no deploy) · tier 2 revert the merge (slices are additive by construction) · tier 3 **prevented, not recovered**: a slice may not change any persisted shape — new data goes under a new key legacy ignores. Legacy deletion is a separate PR one release after 100% rollout. |
@@ -223,43 +224,85 @@ risks would be deferred to slice 2 at the cost of an extra release. Discovery
 is the right first slice. Pinning its scope, not picking a different screen, is
 what makes it safe.
 
-**Prerequisite: slice 0 must land first and alone.** Monorepo move + React 19 +
-`packages/core` extraction + island host + tokens + **all nine fences repaired
-and tamper-checked**. It changes the Vercel Root Directory, which has produced
-a total outage before, so it ships in its own PR with nothing else in it.
+**Prerequisite: slice 0 must land first and alone**, and its internal order is
+part of the decision (owner answers, 2026-08-07):
+
+1. **Rewrite the five backend `*-dark-fences.spec.ts` suites FIRST** — now
+   owned by slice 0 rather than unassigned. They assert web-next's isolation
+   and non-deployment; dissolving web-next removes their premise and with it
+   the only thing keeping Phase 2–6 dark. Each must be **tamper-checked**:
+   shown to fail when the property it guards is deliberately broken, or it has
+   passed vacuously.
+2. Then the monorepo move, `packages/core` extraction, React 19, island host,
+   tokens, and the remaining four text fences repaired and tamper-checked.
+3. Vercel Root Directory repointed at **`spotme-messenger`** — last, and the
+   step that can cause an outage.
+
+Nothing else ships in that PR. Tailwind is **not** in slice 0 (P4 deferred).
 
 ---
 
-## 5. Open questions for the owner
+## 5. Owner decisions — ANSWERED 2026-08-07
 
-Everything touching spend, activation or product scope is **PROPOSED**:
+All eight were answered the same day this report landed. ADR-035 flipped
+PROPOSED → ACCEPTED; the full record is in
+`handbook/DECISIONS.md` → "Frontend migration — ADR-035 decisions P1–P8".
 
-| # | Question |
+| # | Question | Answer |
+|---|---|---|
+| P1 | Adopt ADR-035's plan | **YES** |
+| P2 | React 19 for web-next | **YES** |
+| P3 | Monorepo move + Vercel Root Directory change | **YES, sequenced** behind the host pick — now made |
+| P4 | Tailwind v4 | **DEFERRED** to a slice-2 evidence test |
+| P5 | Retire `spotme/app` | **YES**, but must not touch `spotme/core` |
+| P6 | Untracked `spotme/mobile` | **REMOVE** |
+| P7 | Phase 2 Discovery activation | **NO, not now** |
+| P8 | Flag flips to real users | **NOT YET** |
+
+### The two blockers this report flagged are both closed
+
+**Canonical Vercel host — `spotme-messenger`.** Checked against the Vercel API
+rather than assumed, and the answer contradicted the working assumption
+(including a note in my own memory that named `spotme-web-v2`). Both projects
+are repo-connected and both build every master push — one commit, two builds.
+But only `spotme-messenger` receives `target: "production"` from git: merges of
+#134, #135, #136 and this report's own `356eb62` each produced a production
+deployment there and a mere preview on `spotme-web-v2`, which reached
+production solely via manual agent CLI pushes. The duplicate also costs
+something concrete — it carries `NODE_ENV`, which strips devDependencies and
+kills its build, and the fix had to go into the **shared**
+`spotme/web/vercel.json`. *Unresolved:* neither has a custom domain, so if
+testers are being sent to `spotme-web-v2.vercel.app` the pick inverts (P10).
+
+**The five dark-fence rewrites are now slice 0's first task**, gated before the
+monorepo move and tamper-checked — no longer unowned.
+
+### A trap found while answering P5
+
+`spotme/app` is not self-contained. It declares `"spotme-core": "file:.."`,
+which resolves to `spotme/` itself, and **`web/src/app.js:10` and
+`web/src/views/chat.js:20` import `spotme-core/core/translit.js`** — the Indic
+transliteration engine on the composer's critical path. Deleting the parent
+along with the app would remove transliteration from the live product.
+`spotme/core`, `spotme/package.json` and `spotme/web/vendor/spotme-core/` are
+therefore out of scope for P5.
+
+That leaves a second half, logged as **P5b**: `web/src` imports exactly one
+file from spotme-core. The other five — `swarm.js` (Hyperswarm DHT), `room.js`
+(Autobase/Hypercore), `identity.js`, `schema.js`, `index.js` — are the same
+ADR-033 residue, committed twice (once at `spotme/core/`, once vendored into
+`spotme/web/vendor/spotme-core/`). Retiring `spotme/app` leaves all of it
+shipping.
+
+### Still open
+
+| # | Item |
 |---|---|
-| P1 | Adopt ADR-035's migration plan at all? |
-| P2 | React 19 for web-next? |
-| P3 | Monorepo move + Vercel Root Directory change (slice 0)? |
-| P4 | Tailwind v4 — a **new dependency**? |
-| P5 | Retire `spotme/app`? It is dead under ADR-033, but **deletion is owner-retained**. |
-| P6 | Commit or remove the untracked `spotme/mobile`? |
-| P7 | Any Phase 2 Discovery activation — Typesense provisioning, provider credentials, the mandatory production-hardware re-benchmark? **Spend + activation.** |
-| P8 | Any flag flip to real users? |
-
-Engineering questions I could not settle from the repository:
-
-1. **Is there an appetite for characterization tests before the rewrite?**
-   §2.2 means each slice either writes tests against legacy behaviour first
-   (slower, safer) or rewrites from the source and accepts the risk. ADR-035
-   assumes the former; that assumption costs time and should be confirmed.
-2. **Who owns the five backend dark-fence rewrites?** They are backend files
-   enforcing a frontend property. If they are not rewritten before slice 1,
-   Phase 2–6 darkness stops being enforced.
-3. **Does `spotme/web/api/*` (8 serverless functions) move under `apps/web`?**
-   The Vercel Root Directory change implies yes, but it is a deployment
-   question, not a frontend one, and it is the part of slice 0 most likely to
-   cause the outage it is designed to avoid.
-
----
+| P5b | Prune `spotme/core` to `translit.js`; drop the vendored P2P copy (touches the live build) |
+| P9 | Retire or demote the duplicate `spotme-web-v2` project |
+| P10 | Confirm which URL testers actually open — inverts P3's host pick if it is `spotme-web-v2` |
+| P11 | Appetite for characterization tests before each rewrite (§2.2: no view-level coverage exists) |
+| P12 | Does `spotme/web/api/*` (8 serverless functions) move under `apps/web`? Implied by the Root Directory change, and the part of slice 0 most likely to cause the outage it is designed to avoid. |
 
 ## 6. Out of scope — LATER phases
 
@@ -279,7 +322,7 @@ Recorded so they are not silently absorbed:
 ## 7. Artifacts and verification
 
 **Produced (docs only, both new files):**
-- `spotme/docs/adr/035-frontend-migration-plan.md` — Status **PROPOSED**
+- `spotme/docs/adr/035-frontend-migration-plan.md` — Status **ACCEPTED** (P1-P8 answered 2026-08-07)
 - `spotme/docs/reports/2026-08-07-migration-phase-0.md` — this report
 
 **Verified during the mission:**
