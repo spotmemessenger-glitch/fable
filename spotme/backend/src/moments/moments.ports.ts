@@ -78,6 +78,9 @@ export interface MomentRepositoryPort {
    *  directions) and removed content returns null. ALL in SQL. */
   findViewable(viewerId: string, id: string): Promise<MomentRow | null>;
   deleteOwn(authorId: string, id: string, expectedVersion: number): Promise<boolean>;
+  /** Change an existing post's audience. Author-scoped, version-checked, and it
+   *  CLEARS the coarse location when the new tier may not carry one. */
+  setVisibility(authorId: string, id: string, visibility: MomentVisibility, expectedVersion: number): Promise<boolean>;
   /** Every exclusion IN SQL: private, blocked (both directions), removed,
    *  deleted, tier-inapplicable rows are never fetched. */
   feed(q: FeedQuery): Promise<MomentRow[]>;

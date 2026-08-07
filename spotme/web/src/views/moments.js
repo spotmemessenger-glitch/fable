@@ -253,6 +253,57 @@ export function render (root, ctx, params) {
    * is a distinction worth keeping expressible. */
   const PICKABLE = ['nearby', 'friends', 'public', 'private']
 
+  /**
+   * The audience badge, as a control, on your own post.
+   *
+   * Optimistic like the heart: the badge repaints on choice and reverts if the
+   * server refuses. `version` matters — the server rejects a stale one rather
+   * than applying it, which is what stops two devices editing the same post
+   * from silently overwriting each other.
+   */
+  function audiencePicker (m) {
+    const btn = el('button', {
+      class: `mo-aud mo-audbtn is-${m.visibility || 'nearby'}`,
+      type: 'button',
+      text: (AUDIENCE[m.visibility] || AUDIENCE.nearby).label,
+      'aria-label': `Audience: ${(AUDIENCE[m.visibility] || AUDIENCE.nearby).label}. Tap to change who can see this.`,
+      onclick: () => actionSheet(PICKABLE.map((v) => ({
+        label: `${AUDIENCE[v].label} — ${AUDIENCE[v].hint}`,
+        fn: async () => {
+          if (v === m.visibility) return
+          const was = m.visibility
+          const wasVersion = m.version
+          m.visibility = v
+          paintAudience(btn, v)
+          try {
+            const updated = await M.setVisibility(m.id, v, wasVersion)
+            // Take the server's version back, or the NEXT change sends a stale
+            // one and is refused for a reason the reader cannot see.
+            if (updated && typeof updated.version === 'number') m.version = updated.version
+            /* NARROWING DROPS THE LOCATION, server-side and in the same
+             * statement. Said out loud because it is not reversible by widening
+             * again — we never had a second fix to put back. */
+            if ((was === 'nearby' || was === 'public') && v !== 'nearby' && v !== 'public') {
+              ctx.toast(`Now ${AUDIENCE[v].label.toLowerCase()} — the location was removed`)
+            }
+          } catch (e) {
+            m.visibility = was
+            paintAudience(btn, was)
+            ctx.toast(e.message || 'Could not change who can see this')
+          }
+        }
+      })), 'Who can see this?')
+    })
+    return btn
+  }
+
+  const paintAudience = (btn, v) => {
+    const a = AUDIENCE[v] || AUDIENCE.nearby
+    btn.className = `mo-aud mo-audbtn is-${v || 'nearby'}`
+    btn.textContent = a.label
+    btn.setAttribute('aria-label', `Audience: ${a.label}. Tap to change who can see this.`)
+  }
+
   const audienceBadge = (v) => {
     const a = AUDIENCE[v] || AUDIENCE.nearby
     return el('span', {
@@ -619,7 +670,15 @@ export function render (root, ctx, params) {
            * exists. Shown on every card, including other people's: knowing a
            * post is public is what tells you whether resharing it is
            * reasonable. */
-          audienceBadge(m.visibility)
+          /* MINE IS A CONTROL, THEIRS IS A LABEL.
+           *
+           * The badge renders on every card, including other people's — knowing
+           * a post is public is what tells you whether resharing it is
+           * reasonable. But only the AUTHOR may change it, so only the author's
+           * own card gets a button. Rendering an interactive control on someone
+           * else's post would invite a tap the server is right to refuse, and
+           * the refusal would read as a bug rather than as a boundary. */
+          mine ? audiencePicker(m) : audienceBadge(m.visibility)
         ]),
         el('span', { class: 'mo-meta', text: [place(m), when(m.createdAtUTC)].filter(Boolean).join(' · ') })
       ]),

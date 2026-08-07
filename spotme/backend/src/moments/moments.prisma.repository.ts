@@ -83,6 +83,44 @@ export class PrismaMomentsRepository implements MomentRepositoryPort {
     return res.count > 0;
   }
 
+  /**
+   * Change an existing post's audience. Author-scoped and version-checked, the
+   * same shape as deleteOwn.
+   *
+   * THE LOCATION MUST FOLLOW THE AUDIENCE, NOT LINGER BEHIND IT.
+   *
+   * A coarse cell may only ride on nearby/public posts — the create policy
+   * refuses one on friends/private outright. If moving a post to friends or
+   * private left its stored cell in place, a location collected under one
+   * audience would survive on a post the author had just narrowed, which is
+   * precisely the thing the create-side refusal exists to prevent. Narrowing
+   * clears it, in the same statement, so there is no window where the row is
+   * private and still carries where it was made.
+   *
+   * WIDENING DOES NOT INVENT ONE. A friends post moved to nearby has no cell
+   * and gets none — we do not have the fix, and asking for one on somebody's
+   * behalf during an edit is not a thing this should do. The honest consequence
+   * is that such a post will not appear in other people's radius query (which
+   * requires `geog IS NOT NULL`), though it reaches the global feed if public.
+   */
+  async setVisibility(
+    authorId: string,
+    id: string,
+    visibility: MomentVisibility,
+    expectedVersion: number,
+  ): Promise<boolean> {
+    const keepsLocation = visibility === 'nearby' || visibility === 'public';
+    const res = await this.prisma.moment.updateMany({
+      where: { id, authorId, versionSeq: expectedVersion, deletedAt: null },
+      data: {
+        visibility,
+        versionSeq: { increment: 1 },
+        ...(keepsLocation ? {} : { coarseLat: null, coarseLon: null, coarseCell: null, cityCell: null, geog: null }),
+      },
+    });
+    return res.count > 0;
+  }
+
   /** The three feeds. Exclusions ALL in SQL (M5 + block + moderation). */
   async feed(q: FeedQuery): Promise<MomentRow[]> {
     const keyset = q.cursor

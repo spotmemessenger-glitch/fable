@@ -12,6 +12,7 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { MomentsService } from './moments.service';
 import { MomentSerializer, MomentsExceptionFilter } from './moments.http';
 import type { MomentFeedMode } from './moments.ports';
+import type { MomentVisibility } from './moments.policy';
 
 /* The principal the app's JWT strategy actually provides ({ id, role, kind } —
  * see jwt.strategies.ts). The dark phase wrote these controllers against a
@@ -55,6 +56,20 @@ export class MomentsController {
   async remove(@CurrentUser() u: Principal, @Param('id') id: string, @Query('version') version: string) {
     await this.moments.deleteMoment(this.uid(u), id, Number(version));
     return { deleted: true };
+  }
+
+  /* Change an existing post's audience. POST rather than PATCH to match every
+   * other mutating route on this controller; `expectedVersion` carries the
+   * optimistic-concurrency check, same as delete. */
+  @Post(':id/visibility')
+  async setVisibility(
+    @CurrentUser() u: Principal,
+    @Param('id') id: string,
+    @Body() body: { visibility: MomentVisibility; expectedVersion?: unknown },
+  ) {
+    const uid = this.uid(u);
+    const row = await this.moments.setVisibility(uid, id, body?.visibility, Number(body?.expectedVersion));
+    return this.serialize.single(uid, row);
   }
 
   @Get('feed')

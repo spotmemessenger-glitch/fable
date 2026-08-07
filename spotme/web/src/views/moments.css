@@ -453,3 +453,10 @@
   .mo-pop { animation: none }
   .mo-burst { display: none }
 }
+
+/* The audience badge as a CONTROL — only ever on your own post. It reads as the
+ * same object as the label so the feed does not gain a second visual language;
+ * the affordance is the press state and the caret, not a different shape. */
+.mo-audbtn { cursor: pointer; -webkit-tap-highlight-color: transparent }
+.mo-audbtn::after { content: ' ⌄'; opacity: .6; font-size: 10px }
+.mo-audbtn:active { transform: scale(.96) }

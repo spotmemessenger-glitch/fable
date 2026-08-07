@@ -21,7 +21,9 @@ export type MomentModerationState = 'visible' | 'reported' | 'limited' | 'remove
 export const MOMENT_REACTIONS = ['like', 'love', 'laugh', 'wow', 'support'] as const;
 export type MomentReaction = (typeof MOMENT_REACTIONS)[number];
 
-const VISIBILITIES: readonly MomentVisibility[] = ['private', 'friends', 'nearby', 'public'];
+/** The closed audience set. Exported so the create path and the change-audience
+ *  path cannot drift into accepting different values. */
+export const VISIBILITIES: readonly MomentVisibility[] = ['private', 'friends', 'nearby', 'public'];
 const KINDS = ['photo', 'video', 'text'] as const;
 const MAX_TEXT = 4000;
 const MAX_COMMENT = 1000;

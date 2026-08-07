@@ -13,7 +13,7 @@ import {
 } from './moments.ports';
 import {
   validateMomentInput, validateCommentText, assertReaction, assertModerationTransition,
-  MomentModerationState, MomentReaction, MomentVisibility,
+  MomentModerationState, MomentReaction, MomentVisibility, VISIBILITIES,
 } from './moments.policy';
 import { chronological, rankMoments, RankableMoment, MomentRankingBreakdown } from './moments.ranking';
 import { encodeCursor, decodeCursor, MomentDecodedCursor } from './moments.cursor';
@@ -64,6 +64,25 @@ export class MomentsService {
     const ok = await this.repo.deleteOwn(authorId, id, expectedVersion);
     if (!ok) throw versionConflict();
     if (this.media) for (const m of row.mediaIds) await this.media.releaseReference(m);
+  }
+
+  /**
+   * Change an existing post's audience.
+   *
+   * Uniform notFound for "does not exist" and "not yours" — the same posture as
+   * deleteMoment, so this cannot be used to discover whether an id is real.
+   */
+  async setVisibility(authorId: string, id: string, visibility: MomentVisibility, expectedVersion: number): Promise<MomentRow> {
+    if (!VISIBILITIES.includes(visibility)) {
+      throw new MomentsError('MALFORMED_MOMENT', 'visibility must be private|friends|nearby|public', false, 'fix visibility');
+    }
+    const row = await this.repo.findById(id);
+    if (!row || row.authorId !== authorId) throw notFound();
+    const ok = await this.repo.setVisibility(authorId, id, visibility, expectedVersion);
+    if (!ok) throw versionConflict();
+    const after = await this.repo.findById(id);
+    if (!after) throw notFound();
+    return after;
   }
 
   /**
