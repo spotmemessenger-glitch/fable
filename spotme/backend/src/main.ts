@@ -200,21 +200,6 @@ async function bootstrap() {
   await app.listen(port);
   // eslint-disable-next-line no-console
   console.log(`Spot Me backend listening on :${port}`);
-
-  /* TRANSIENT — Wave 1C, open `moments` to every verified adult. Wired for ONE
-   * deploy and reverted by the commit that immediately follows this one. Needs
-   * the private database and a loopback call, so it can only run in the image.
-   * Writes exactly one RuntimeFlag row and never touches the DomainAllowlist.
-   * Wrapped so a failure here can never stop the server serving. */
-  try {
-    const { runEnableMomentsFlag } = await import('./scripts/wave1c/enable-moments-flag');
-    const result = await runEnableMomentsFlag(port);
-    // eslint-disable-next-line no-console
-    console.log('FLAG_ON_BEGIN ' + JSON.stringify(result) + ' FLAG_ON_END');
-  } catch (e) {
-    // eslint-disable-next-line no-console
-    console.error('FLAG_ON_BEGIN ' + JSON.stringify({ error: (e as Error).message }) + ' FLAG_ON_END');
-  }
 }
 // A bare `bootstrap()` meant any failure to start — Postgres unreachable, port
 // taken, the assertion above — died as an unhandled rejection with no usable
