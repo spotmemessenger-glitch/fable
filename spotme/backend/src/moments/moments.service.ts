@@ -204,7 +204,12 @@ export class MomentsService {
     const moment = await this.repo.findViewable(userId, momentId); // PRIVATE-INTERACT gate
     if (!moment) throw notFound();
     await this.repo.setReaction(momentId, userId, reaction);
-    await this.realtime.publish({ kind: 'reaction', targetUserId: moment.authorId, refId: momentId, actorId: userId });
+    /* NO SELF-ALERTS (A3): reacting to your own post notifies nobody -- the
+     * author already knows. Suppressed here rather than in an adapter so it
+     * holds for every transport, present and future. */
+    if (moment.authorId !== userId) {
+      await this.realtime.publish({ kind: 'reaction', targetUserId: moment.authorId, refId: momentId, actorId: userId });
+    }
   }
 
   async unreact(userId: string, momentId: string): Promise<void> {
