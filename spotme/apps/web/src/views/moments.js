@@ -177,7 +177,25 @@ function perfHarness (root) {
   }
 }
 
+/* spotme.ui.moments — the React migration flag, DEFAULT OFF. Anything but the
+ * exact string 'on' (including a throwing private-mode localStorage) renders
+ * the legacy view below, unmodified. The React bundle is a dynamic import, so
+ * flag-off users never download it. */
+function reactMomentsOn () {
+  try { return localStorage.getItem('spotme.ui.moments') === 'on' } catch { return false }
+}
+
 export function render (root, ctx, params) {
+  if (reactMomentsOn()) {
+    import('../react/moments/index.jsx')
+      .then((mod) => mod.mountMoments(root, ctx))
+      .catch(() => { renderLegacy(root, ctx, params) })
+    return
+  }
+  return renderLegacy(root, ctx, params)
+}
+
+function renderLegacy (root, ctx, params) {
   /* `#/posts?m=<id>` — the link the Share button on a post produces. With an
    * id present this screen shows THAT post rather than a feed, because the
    * whole reason to send someone a link is that the post is not necessarily
