@@ -100,6 +100,13 @@ let B: { id: string; token: string };
 
 beforeAll(async () => {
   process.env.JWT_ACCESS_SECRET ||= 'moments-reactions-0123456789abcd01';
+  // The moments domain gate 404s every route without this row; CI databases
+  // start empty, so the suite seeds what it needs rather than assuming it.
+  await prisma.runtimeFlag.upsert({
+    where: { key: 'moments' },
+    create: { key: 'moments', enabled: true },
+    update: { enabled: true },
+  });
   const m = await Test.createTestingModule({ imports: [AppModule] })
     .overrideProvider(MOMENT_REALTIME_PORT)
     .useValue(realtime)
