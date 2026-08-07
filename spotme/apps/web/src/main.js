@@ -33,6 +33,7 @@ import * as inbox from './views/inbox.js'
 import * as discovery from './views/discovery.js'
 import * as chat from './views/chat.js'
 import * as bluetooth from './views/bluetooth.js'
+import * as exchange from './views/exchange.js'
 import * as profile from './views/profile.js'
 import * as contacts from './views/contacts.js'
 import * as groups from './views/groups.js'
@@ -269,7 +270,11 @@ const ROUTES = {
   '#/notifications': notifications,
   '#/stories': stories,
   '#/posts': moments,
-  '#/bluetooth': bluetooth
+  '#/bluetooth': bluetooth,
+  /* Slice 1. Renders the React island when spotme.ui.exchange is 'on';
+   * with the flag off (the default) it renders nothing and the route is
+   * effectively absent -- Exchange has no legacy screen to fall back to. */
+  '#/exchange': exchange
 }
 
 let currentCleanup = null
