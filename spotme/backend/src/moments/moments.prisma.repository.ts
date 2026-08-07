@@ -132,6 +132,21 @@ export class PrismaMomentsRepository implements MomentRepositoryPort {
           AND m."geog" IS NOT NULL
           AND ST_DWithin(m."geog", ST_SetSRID(ST_MakePoint(${q.origin.lon}, ${q.origin.lat}), 4326)::geography, ${radiusM})
         ))`;
+    } else if (q.mode === 'global') {
+      /* NO ORIGIN REQUIRED, and no geographic predicate.
+       *
+       * Every other mode returns [] without an origin, because every other mode
+       * is a question about a place. This one is not: it asks for public posts
+       * from anywhere, so demanding a location fix in order to answer it would
+       * be both wrong and a reason to collect a fix we do not need.
+       *
+       * Only 'public' qualifies. `nearby` posts are deliberately excluded — the
+       * author chose an audience bounded by proximity, and honouring that is the
+       * whole point of having audiences at all. A nearby post must never reach
+       * the world because someone opened a different tab. */
+      moderation = Prisma.sql`AND m."moderationState" IN ('visible', 'reported')`;
+      tierAndScope = Prisma.sql`
+        AND (${isAuthor} OR m."visibility" = 'public')`;
     } else if (q.mode === 'city') {
       if (!q.origin) return [];
       const cityCell = `c${round1(q.origin.lat).toFixed(1)}:${round1(q.origin.lon).toFixed(1)}`;

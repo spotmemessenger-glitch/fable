@@ -84,7 +84,13 @@ const writeSaved = (set) => {
 
 const FEED_MODES = [
   { key: 'nearby', label: 'Nearby' },
-  { key: 'friends', label: 'Friends' }
+  { key: 'friends', label: 'Friends' },
+  /* `global` is what makes `public` a real choice. Without it a post marked
+   * public reached the same people a nearby post did, so the option meant
+   * nothing and was removed from the composer. The tab and the audience go in
+   * together, deliberately — shipping the option without the surface is how it
+   * became dead the first time. */
+  { key: 'global', label: 'Everyone' }
 ]
 /** The closed reaction registry — same list the server accepts. */
 const REACTIONS = [
@@ -213,33 +219,39 @@ export function render (root, ctx, params) {
    * so choosing it silently threw the post away. It is now "Only you", which is
    * what it does, and A1 makes that true in the query.
    *
-   * `public` IS NO LONGER OFFERED — owner decision, 2026-08-07.
+   * `public` IS OFFERED AGAIN — owner decision, 2026-08-07, now that the
+   * Everyone tab exists to reach it. The history is kept because the reason it
+   * left is the reason it may not leave the tab behind again.
    *
-   * It and `nearby` were indistinguishable in practice: both surface in the
-   * nearby feed, both bounded by the same radius. Two options, one behaviour,
-   * is worse than one option, because it asks the reader to choose between
-   * things that are not different. The alternative — a City tab — would have
-   * been a third tab showing nothing, since the only accounts in the city are
-   * the two test phones.
+   * IT WAS REMOVED because it and `nearby` were indistinguishable in practice:
+   * both surfaced in the nearby feed, both bounded by the same radius. Two
+   * options with one behaviour is worse than one option, because it asks the
+   * reader to choose between things that are not different.
    *
-   * So the picker offers exactly three, and each does something the reader can
-   * observe: nearby, friends, only you.
+   * IT IS BACK because the `global` feed mode now exists — a query with no
+   * geographic predicate at all — and the Everyone tab reaches it. `public` now
+   * means something `nearby` cannot: anywhere in the world.
    *
-   * `public` REMAINS in the database enum, in the backend policy and in this
-   * map, so posts already stored as public keep working and keep rendering
-   * their badge. Only the picker entry is gone. Reintroduce it the day a city
-   * or global surface exists that makes selecting it meaningful — not before.
+   * THE RULE THAT FOLLOWS FROM BOTH: the option and the surface ship together.
+   * If the Everyone tab is ever removed, `public` leaves the picker in the same
+   * commit, or it becomes dead again exactly as before.
+   *
+   * `public` never left the database enum, the backend policy or this map, so
+   * posts stored while it was unpickable kept working and kept their badge —
+   * which is why restoring it needed no migration and no backfill.
    */
   const AUDIENCE = {
     nearby: { label: 'Nearby', hint: 'People near you' },
     friends: { label: 'Friends', hint: 'People who follow you' },
-    public: { label: 'Public', hint: 'Anyone, beyond your area' },
+    public: { label: 'Public', hint: 'Anyone, anywhere in the world' },
     private: { label: 'Only you', hint: 'Nobody else can see this' }
   }
 
-  /* What the composer offers. Deliberately a SUBSET of AUDIENCE: the badge must
-   * still render `public` for posts that already carry it. */
-  const PICKABLE = ['nearby', 'friends', 'private']
+  /* What the composer offers. Kept as its own list rather than derived from
+   * AUDIENCE: the two coincide today, and the reason they were allowed to
+   * diverge — a value that must still RENDER after it stops being SELECTABLE —
+   * is a distinction worth keeping expressible. */
+  const PICKABLE = ['nearby', 'friends', 'public', 'private']
 
   const audienceBadge = (v) => {
     const a = AUDIENCE[v] || AUDIENCE.nearby
@@ -490,7 +502,13 @@ export function render (root, ctx, params) {
     if (state === 'empty') {
       list.appendChild(el('div', { class: 'mo-note' }, [
         el('b', { text: 'Nothing here yet' }),
-        el('p', { text: mode === 'nearby' ? 'No posts nearby. Be the first.' : 'Posts from people you follow show up here.' }),
+        el('p', {
+          text: mode === 'nearby'
+            ? 'No posts nearby. Be the first.'
+            : mode === 'global'
+              ? 'No public posts yet. Post to Everyone and it shows up here.'
+              : 'Posts from people you follow show up here.'
+        }),
         el('button', { class: 'pill ok', type: 'button', text: 'Create a post', onclick: () => openComposer() })
       ]))
       return

@@ -164,6 +164,47 @@ describe('A1 — the author always sees their own posts, in every mode', () => {
   });
 });
 
+describe("the `global` feed — what makes `public` an honest option", () => {
+  /* `public` was removed from the composer because it reached exactly the same
+   * people `nearby` did. `global` is the surface that makes the two different,
+   * so these assert the difference is REAL and not just labelled. */
+  const globalFeed = (token: string) => feed(token, 'global');
+
+  it('a stranger anywhere sees the public post — no follow, no proximity', async () => {
+    const ids = (await globalFeed(stranger.token)).map((m) => m.id);
+    expect(ids).toContain(made.public);
+  });
+
+  it('NO LOCATION IS REQUIRED to read it — global is not a question about a place', async () => {
+    // Deliberately no lat/lon: every other mode returns [] without an origin.
+    const r = await fetch(`${url}/api/v1/moments/feed?mode=global`, {
+      headers: { Authorization: `Bearer ${stranger.token}` },
+    });
+    const b = (await r.json()) as { results?: Array<{ id: string }> };
+    expect((b.results ?? []).map((m) => m.id)).toContain(made.public);
+  });
+
+  it("THE LEAK THAT MUST NOT HAPPEN: a NEARBY post never reaches the global feed", async () => {
+    // The author chose an audience bounded by proximity. Honouring that is the
+    // whole point of having audiences — opening a different tab must not widen
+    // somebody else's post.
+    const ids = (await globalFeed(stranger.token)).map((m) => m.id);
+    expect(ids).not.toContain(made.nearby);
+  });
+
+  it('…and neither does a friends post or a private one', async () => {
+    const ids = (await globalFeed(stranger.token)).map((m) => m.id);
+    expect(ids).not.toContain(made.friends);
+    expect(ids).not.toContain(made.private);
+  });
+
+  it('the author still sees their own posts in global, as in every mode', async () => {
+    const ids = (await globalFeed(author.token)).map((m) => m.id);
+    expect(ids).toContain(made.public);
+    expect(ids).toContain(made.private);
+  });
+});
+
 describe('the widening is exactly one person wide', () => {
   it("a stranger NEVER sees the author's private post", async () => {
     for (const mode of ['nearby', 'friends', 'city']) {
