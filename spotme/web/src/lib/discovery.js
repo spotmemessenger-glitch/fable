@@ -18,6 +18,7 @@
 // Presence stays ephemeral server-side (see the gateway's EPHEMERAL set), and
 // one global lobby room is a Phase-1 shape — geo-sharded presence is Phase 2.
 import { joinRoom } from './transport/room.js'
+import { discoveryApi } from './discovery-api.js'
 import { RTC_CONFIG, readyRTC } from '../net.js'
 import { db } from './db.js'
 import { pushNote } from './notify.js'
@@ -110,6 +111,49 @@ function createLobby () {
 
   function announce () {
     if (hello) safe(hello.send(myAnnouncement()))
+    syncServerPresence()
+  }
+
+  /* --------------------------------------------------------------- A2 ----
+   * THE SERVER-SIDE PRESENCE WRITE, WIRED FOR THE FIRST TIME.
+   *
+   * `discoveryApi.setVisibility` existed and NOTHING called it: the entire
+   * client was orphaned, so the DiscoveryVisibility table stayed empty for
+   * every account and any server-backed nearby surface found nobody -- there
+   * was no row to find. The socket lobby (above) is connection-scoped and
+   * carried on regardless, which is why the gap was invisible from the code
+   * that "worked".
+   *
+   * Rules, matched to the server policy rather than invented here:
+   *   - coordinates are rounded to 3 decimals BEFORE they leave the device --
+   *     the policy REFUSES 4+ decimals as a precise fix (the refusal is the
+   *     privacy feature); the server then re-coarsens onto its own grid.
+   *   - the row expires: default TTL is 30 minutes, so a live client
+   *     re-writes at 10-minute intervals -- comfortably inside the window,
+   *     nowhere near heartbeat-chatty.
+   *   - ghost (settings.showOnMap === false) writes enabled:false, which is
+   *     the REMOVAL: one switch governs the socket payload and the row.
+   *   - every call is fire-and-forget behind safe(): presence must never be
+   *     able to break the lobby.
+   */
+  const PRESENCE_REWRITE_MS = 10 * 60 * 1000
+  let presenceWrittenAt = 0
+  let presenceWasEnabled = null
+
+  function syncServerPresence () {
+    const show = db.settings().showOnMap
+    const now = Date.now()
+    const due = now - presenceWrittenAt >= PRESENCE_REWRITE_MS
+    const flipped = presenceWasEnabled !== null && presenceWasEnabled !== !!show
+    if (!due && !flipped) return
+    if (show && !position) return // nothing honest to write yet
+
+    presenceWrittenAt = now
+    presenceWasEnabled = !!show
+    const round3 = (n) => Math.round(n * 1000) / 1000
+    safe(discoveryApi.setVisibility(show
+      ? { enabled: true, origin: { lat: round3(position.lat), lon: round3(position.lon) } }
+      : { enabled: false }))
   }
 
   function start () {
