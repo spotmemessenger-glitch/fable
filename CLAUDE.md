@@ -95,6 +95,39 @@ against it.** The owner's instruction: refer to it each time you code.
   the failure — if a trigger should not deploy, **delete it** rather than
   reword it.
 
+## Production hosts — read before claiming anything is "live"
+
+**Canonical production web host is `spotme-messenger`.** It is git-wired:
+a push to `master` promotes to production automatically
+(`target: production`, `githubCommitRef: master`, `githubDeployment: 1`).
+Verified chain: `17654da` → `772a92a` → `097bc78` → `356eb627`.
+
+**`spotme-web-v2` is stale, misconfigured, and being retired. Do not treat it
+as production.** Nothing promotes there on a master push — every git build is
+`target: null` (preview), and its one production deployment was set by an
+explicit CLI `--prod` run. Two sessions in a row have read a green check or a
+stale pin on `spotme-web-v2` and reported it as production; it is neither.
+
+**`ysnap` is not a Spot Me host at all.** Its Root Directory is unset, so it
+builds the monorepo root, finds no Next.js, and fails on `master` itself — it
+has since April. Its red check is not a signal about your change.
+
+Distinguishing a real promotion from a manual one, in deployment metadata:
+
+| | git-triggered promotion | manual CLI `--prod` |
+|---|---|---|
+| `githubCommitRef` | `master` | a branch, or `HEAD` |
+| `githubDeployment` | `1` | absent |
+| `actor` | absent | `claude-code_..._agent` |
+| `githubPrId` | present on PR builds | absent |
+
+A manual promotion can ship a **branch** commit to production — this has
+already happened (`be48ef3`, a PR #136 branch commit, promoted twice). Prefer
+merging to `master` and letting the wiring promote.
+
+**CI green ≠ shipped.** A green Vercel check on a PR is a *preview* build.
+Before saying something is live, name the host, the `target`, and the SHA.
+
 ## Build & Test
 
 - ALWAYS run tests after code changes
