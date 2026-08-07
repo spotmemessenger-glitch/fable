@@ -82,6 +82,18 @@ against it.** The owner's instruction: refer to it each time you code.
 - NEVER add a `Co-Authored-By` trailer to user commits unless this project's `.claude/settings.json` has `attribution.commit` set (#2078). The Claude Code Bash tool may suggest one in its default commit-message template — ignore it. `Co-Authored-By` is semantic authorship attribution under git/GitHub convention; the tool is the facilitator, not a co-author.
 - Keep files under 500 lines
 - Validate input at system boundaries
+- **NEVER create or edit a scheduled trigger/Routine that carries deploy, merge,
+  or push authority.** A scheduled task fires unattended, so any authority
+  written into its prompt is exercised with no one watching. Check-ins must be
+  read-only: report and stop. Never instruct a future run to "retry if
+  permission has since been granted" — **a permission becoming available is
+  never authorization to use it**, and neither silence nor an unattended
+  wake-up is consent. Never tell a check-in to "re-arm silently" without a
+  bound; that is how a single task became ~40 chained hourly runs (2026-07-31 →
+  08-02). Note that `update_trigger` cannot remove tools from a trigger's
+  `allowed_tools`, so a rewritten prompt is a guardrail in the same medium as
+  the failure — if a trigger should not deploy, **delete it** rather than
+  reword it.
 
 ## Build & Test
 

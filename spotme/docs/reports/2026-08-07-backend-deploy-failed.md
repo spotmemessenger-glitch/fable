@@ -246,12 +246,24 @@ remains PR #136's, untouched.
    `spotme/backend`, or change `package.json`'s `deploy` script to upload from
    the repository root. As it stands, the documented `npm run deploy` path is
    broken.
-3. Establish which Claude Code session issued the `claude_code` redeploys
-   (`4edb4d60`, `650bbd4d`, `22072780`). Lower urgency than it first appeared —
-   all three share one image digest, so none of them changed the running code —
-   but a production service being restarted by an unidentified caller is still
-   a loose thread. Railway's own attribution stops at the token owner, so this
-   has to be answered from the session side.
+3. Redeploy attribution — **closed as low-stakes; lead logged, not pursued.**
+   All three `claude_code` redeploys (`4edb4d60`, `650bbd4d`, `22072780`) share
+   one image digest, so none changed the running code, and Railway's
+   attribution stops at the token-owning account.
+
+   A scheduled-automation explanation was proposed and **checked and ruled
+   out**: a sweep of every Routine on the account returned 52 triggers, all
+   `send_later` one-shots, **none with a `cron_expression`**. No recurring
+   automation existed that could have fired the 06:45 or 06:50 restarts, so
+   they came from an interactive session.
+
+   Best remaining candidate, recorded but **not established**:
+   `session_01Uykc51nMVCdXsLiGxX2DfC`, which opened PR #136 at 06:35:21 —
+   bracketing both restarts — and holds the only two 2026-08-07 triggers
+   (07:38, 08:42, both *after* the restarts, so neither caused them). That
+   session's own report claims no `RAILWAY_TOKEN`, but also says the Railway
+   tooling "disconnected mid-session", which is consistent with earlier access
+   since lost. Testable if it ever matters; not worth further time now.
 4. Resolve the `ysnap` Vercel project, which fails on `master` itself and has
    since April. A permanently red check trains everyone to ignore CI. Either
    set its Root Directory to a real app or disconnect it from this repository.
