@@ -200,22 +200,6 @@ async function bootstrap() {
   await app.listen(port);
   // eslint-disable-next-line no-console
   console.log(`Spot Me backend listening on :${port}`);
-
-  /* TRANSIENT — Wave 1C C7 Stage-A grant, wired for ONE deploy and reverted by
-   * the commit that immediately follows this one. The script needs the private
-   * database and a loopback HTTP call, so it can only run inside the deployed
-   * image; there is no admin route that writes DomainAllowlist. It creates no
-   * RuntimeFlag row and flips no flag — one allowlist row is the whole change.
-   * Wrapped so a failure here can never stop the server from serving. */
-  try {
-    const { runOwnerGrant } = await import('./scripts/wave1c/owner-grant');
-    const result = await runOwnerGrant(port);
-    // eslint-disable-next-line no-console
-    console.log('OWNER_GRANT_BEGIN ' + JSON.stringify(result) + ' OWNER_GRANT_END');
-  } catch (e) {
-    // eslint-disable-next-line no-console
-    console.error('OWNER_GRANT_BEGIN ' + JSON.stringify({ error: (e as Error).message }) + ' OWNER_GRANT_END');
-  }
 }
 // A bare `bootstrap()` meant any failure to start — Postgres unreachable, port
 // taken, the assertion above — died as an unhandled rejection with no usable
