@@ -1,13 +1,24 @@
 # ADR-035 — Frontend migration to React + TypeScript: the executable plan
 
-**Status: ACCEPTED — owner decisions P1–P8 recorded 2026-08-07** · **Date:** 2026-08-07
+**Status: ACCEPTED (plan) — P5, P6 and the canonical-host pick PENDING owner
+confirmation, amended 2026-08-07** · **Date:** 2026-08-07
 **Verified against `master` `acf48bc`**
 
 > **Acceptance adopts the PLAN. It activates nothing.** P4 (Tailwind) is
 > **deferred**, P7 (Phase 2 activation) and P8 (flag flips) are **refused for
-> now**, and P3 is **sequenced** behind the canonical-host pick (now made — see
-> §(c)). The owner's answers are recorded verbatim in
-> `handbook/DECISIONS.md` → "Frontend migration — ADR-035 decisions P1–P8".
+> now**. Recorded in `handbook/DECISIONS.md` → "Frontend migration — ADR-035
+> decisions P1–P8".
+>
+> **CORRECTION 2026-08-07 — P5, P6 and the §(c) host pick are PENDING, not
+> decided.** The eight answers reached this ADR as a *recommendation table*
+> ("my recommendation", "My read", "If you agree") and were recorded as an
+> owner decision. That is a stronger claim than was given. For P1–P4, P7 and
+> P8 the over-reading is harmless — they set direction or **restrict** action.
+> For **P5 and P6 it is not**: both authorize a **deletion**, which this ADR
+> itself lists as owner-retained. A decision arriving is not consent being
+> given. Both are downgraded to **PENDING EXPLICIT OWNER CONFIRMATION** and
+> **must not be executed** until the owner states approval directly. The §(c)
+> host pick is separately reopened on new evidence (see §(c)).
 
 **Relates to:** [ADR-015](015-compile-time-feature-flags.md) (compile-time
 flags), [ADR-016](016-dark-shipping.md) (dark shipping),
@@ -324,10 +335,34 @@ should not carry.
 previously produced a total outage when wrong. It must ship alone, with no
 other change in the PR.
 
-#### Canonical host — DECIDED 2026-08-07 (unblocks P3)
+#### Canonical host — REOPENED 2026-08-07, PENDING P10
 
-**`spotme-messenger` (`prj_SH4YWoamLIyQiW17YDiNAcTrUQlB`) is the canonical
-Vercel project.** P3 executes against its Root Directory and no other.
+**This was recorded as DECIDED (`spotme-messenger`) and is withdrawn.** The
+evidence is split, the two sources point opposite ways, and P3 stays blocked
+until the owner answers P10. Do not repoint any Root Directory on this section
+as it stands.
+
+**Pipeline evidence — favours `spotme-messenger`.** It is the only project git
+deploys to production (below).
+
+**Usage evidence — favours `spotme-web-v2`, and was missed the first time.**
+Across every report in `docs/reports/`, `spotme-messenger.vercel.app` appears
+**zero** times; `spotme-web-v2.vercel.app` appears **8 times in 5 reports** —
+every recorded deploy-and-drive, including `2026-08-06-land-and-iphone.md`,
+which lists "Deploy the web surface to `spotme-web-v2`" as a task in its own
+right.
+
+**A reading that reconciles both, and which would invert the pick.**
+`spotme-messenger` was created *earlier* and carries `framework: null`;
+`spotme-web-v2` is newer, correctly configured (`framework: "vite"`), and is
+what every human and agent actually opens. That is the shape of an **orphaned
+project that still has git integration attached** — auto-building a production
+target nobody looks at — while real work moved to a newer project deployed by
+hand. If so, `spotme-web-v2` is canonical *in practice* and `spotme-messenger`
+is the one to retire, exactly reversing the withdrawn decision.
+
+**P10 settles it and only the owner holds it:** which URL do real testers open?
+Neither project has a custom domain, so no repository fact can close this.
 
 Both Spot Me projects are connected to the repository and both build on every
 master push — one commit produces two builds. They are not equivalent:
@@ -357,9 +392,11 @@ user traffic. **If testers are being sent to `spotme-web-v2.vercel.app`, this
 decision inverts** — the git integration moves rather than the audience. That
 is an owner fact, not a repository fact, and it is not settled here.
 
-**[PROPOSED] — retire or demote `spotme-web-v2`** to end the double builds and
-allow the `vercel.json` workaround to be removed. Deleting a Vercel project is
-owner-retained; this ADR only recommends it.
+**[PROPOSED, blocked on P10] — retire or demote WHICHEVER project P10 shows to
+be the orphan**, ending the double builds and freeing the shared `vercel.json`
+of the `--include=dev` workaround. Which one that is depends entirely on P10;
+naming it before then would risk deleting the surface people actually use.
+Deleting a Vercel project is owner-retained in any case.
 
 ### (d) Tailwind adoption and the #132 tokens
 
@@ -468,8 +505,8 @@ detail (owner answers, 2026-08-07):**
    has passed vacuously.
 2. Then the monorepo move, `packages/core` extraction, React 19, island host,
    tokens, and the remaining four text fences repaired and tamper-checked.
-3. Vercel Root Directory repointed at **`spotme-messenger`** (§(c)) — last, and
-   the step that can cause an outage.
+3. Vercel Root Directory repointed at the canonical project — **blocked on
+   P10** (§(c)), last in the PR, and the step that can cause an outage.
 
 Nothing else ships in that PR. Tailwind is **not** in slice 0 (P4 deferred).
 
@@ -607,10 +644,10 @@ Named here so they are not silently absorbed into this plan:
 |---|---|---|
 | P1 | Adopt this migration plan | **YES** — adopted; this ADR is ACCEPTED |
 | P2 | React 19 upgrade for web-next | **YES** — 18.3 would fork the major against `spotme/app`'s 19.2.3 |
-| P3 | Monorepo move + Vercel Root Directory change | **YES, sequenced** behind the canonical-host pick — now made: **`spotme-messenger`** (§(c)) |
+| P3 | Monorepo move + Vercel Root Directory change | **YES in principle, BLOCKED** — the host pick was withdrawn on new evidence and now waits on P10 (§(c)) |
 | P4 | Tailwind v4 adoption | **DEFERRED** — slices 0–1 ship on plain CSS + tokens; revisit at slice 2 against the countable drift test (§(d)) |
-| P5 | Retire `spotme/app` | **YES** — subject to the STOP in §(b): do not touch `spotme/core`, `spotme/package.json`, or `web/vendor/spotme-core/` |
-| P6 | Commit or remove `spotme/mobile` | **REMOVE** — 0 tracked files; recreate deliberately if ever needed |
+| P5 | Retire `spotme/app` | **PENDING EXPLICIT OWNER CONFIRMATION** — a deletion, relayed as a recommendation and over-recorded as a decision. Do not execute. Also subject to the STOP in §(b): never touch `spotme/core`, `spotme/package.json`, or `web/vendor/spotme-core/` |
+| P6 | Commit or remove `spotme/mobile` | **PENDING EXPLICIT OWNER CONFIRMATION** — a deletion with **no git safety net** (0 tracked files, so `rm` is unrecoverable). Do not execute |
 | P7 | Phase 2 Discovery activation (Typesense) | **NO, not now** — spend + activation; slice 1 is pinned to live endpoints to avoid it |
 | P8 | Flag flips to real users | **NOT YET** — nothing flips until a slice passes all nine DoD items |
 
@@ -620,7 +657,7 @@ Named here so they are not silently absorbed into this plan:
 |---|---|---|
 | P5b | Prune `spotme/core` to `translit.js`; drop the vendored P2P copy | Touches the live build and the `prebuild` vendoring step — needs its own evidence and PR (§(b)) |
 | P9 | Retire or demote the duplicate `spotme-web-v2` Vercel project | Ends double builds and allows the `--include=dev` workaround out of the shared `vercel.json`; deleting a project is owner-retained (§(c)) |
-| P10 | Confirm which URL testers actually open | If it is `spotme-web-v2.vercel.app`, the P3 host decision inverts (§(c)) |
+| P10 | **BLOCKING P3.** Which URL do testers actually open? | Pipeline evidence says `spotme-messenger`; all 8 usage references in `docs/reports/` say `spotme-web-v2`. The host pick is withdrawn until this is answered (§(c)) |
 | P11 | Characterization tests before each rewrite — appetite? | §A.1: no view-level coverage exists; the DoD assumes tests-first, which costs time |
 
 ---

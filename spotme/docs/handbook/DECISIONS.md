@@ -334,24 +334,51 @@ RuntimeFlag row absent and the allowlist empty, so every route 404s
 
 ## Frontend migration — ADR-035 decisions P1–P8 — DECIDED 2026-08-07
 
-The owner answered all eight decisions ADR-035 raised. **ADR-035 flips
-PROPOSED → ACCEPTED.** Acceptance adopts the *plan*; it activates nothing.
+Eight decisions ADR-035 raised were answered. **ADR-035 flips PROPOSED →
+ACCEPTED** for the *plan*; it activates nothing.
+
+> **CORRECTION, same day — P5, P6 and the canonical-host pick are PENDING, not
+> decided.** The answers arrived as a *recommendation table* ("my
+> recommendation", "My read", "If you agree") and were written up here as an
+> owner decision. That over-states what was given. For P1–P4, P7 and P8 it does
+> no harm — they set direction or **restrict** action. For **P5 and P6 it does**:
+> both authorize a **deletion**, which is owner-retained under this very sheet.
+> A decision arriving is not consent being given. Neither may be executed until
+> the owner states approval directly.
 
 | # | Item | Decision |
 |---|---|---|
 | P1 | Adopt the migration plan | **YES** |
 | P2 | React 19 for `web-next` (from 18.3.1) | **YES** — 18.3 would fork the React major against `spotme/app`'s pinned 19.2.3 |
-| P3 | Monorepo move + Vercel Root Directory change | **YES, sequenced** behind the canonical-host pick (made below) |
+| P3 | Monorepo move + Vercel Root Directory change | **YES in principle, BLOCKED** — the host pick below was withdrawn on new evidence; waits on P10 |
 | P4 | Tailwind v4 | **DEFERRED** — slices 0–1 ship on plain CSS + the #132 tokens |
-| P5 | Retire `spotme/app` | **YES**, with a hard constraint (below) |
-| P6 | Untracked `spotme/mobile` | **REMOVE** |
+| P5 | Retire `spotme/app` | **PENDING EXPLICIT CONFIRMATION** — deletion; do not execute. Hard constraint below applies regardless |
+| P6 | Untracked `spotme/mobile` | **PENDING EXPLICIT CONFIRMATION** — deletion with **no git safety net** (0 tracked files; `rm` is unrecoverable); do not execute |
 | P7 | Phase 2 Discovery activation (Typesense) | **NO, not now** — spend + activation |
 | P8 | Flag flips to real users | **NOT YET** — nothing flips until a slice passes all nine DoD items |
 
-### Canonical Vercel project — `spotme-messenger`
+### Canonical Vercel project — WITHDRAWN, pending P10
 
-**`spotme-messenger` (`prj_SH4YWoamLIyQiW17YDiNAcTrUQlB`) is canonical; P3
-executes against its Root Directory.**
+**Recorded as `spotme-messenger`; that decision is withdrawn the same day.** A
+second evidence source points the opposite way and the two cannot both be
+right. **No Root Directory is repointed until P10 is answered.**
+
+*Usage evidence, missed on the first pass:* across every report in
+`docs/reports/`, `spotme-messenger.vercel.app` appears **zero** times, while
+`spotme-web-v2.vercel.app` appears **8 times in 5 reports** — every recorded
+deploy-and-drive, including the iPhone session, which lists "Deploy the web
+surface to `spotme-web-v2`" as a task of its own.
+
+*A reading that fits everything and inverts the pick:* `spotme-messenger` is
+the **older** project with `framework: null`; `spotme-web-v2` is newer,
+correctly configured (`framework: "vite"`), and is what humans and agents
+actually open. That is an orphaned project still carrying git integration —
+auto-building a production target nobody looks at — while real work moved to a
+newer project deployed by hand. If so, `spotme-web-v2` is canonical in practice
+and `spotme-messenger` is the one to retire.
+
+The pipeline evidence that produced the withdrawn pick is retained below,
+because it is real and P10 must be answered against both.
 
 Both Spot Me projects are repo-connected and both build on every master push
 (one commit → two builds). Verified against the Vercel API 2026-08-07: merges
@@ -366,10 +393,9 @@ the build at exit 127 — fixed only by putting `--include=dev` into the
 **shared** `spotme/web/vercel.json`. One repository file is bent to serve one
 duplicate project.
 
-**Caveat, unresolved:** neither project has a custom domain. The pick rests on
-the deployment pipeline, not observed traffic. **If testers are being sent to
-`spotme-web-v2.vercel.app`, this decision inverts** — the git integration
-moves rather than the audience (tracked as P10).
+**Neither project has a custom domain**, so no repository fact can settle
+which surface real people use. That is precisely why P10 is now BLOCKING rather
+than a caveat.
 
 ### P5 constraint — retiring `spotme/app` must not touch `spotme/core`
 
@@ -389,8 +415,8 @@ product.** `spotme/core`, `spotme/package.json` and
 | # | Item |
 |---|---|
 | P5b | Prune `spotme/core` to `translit.js` and drop the vendored P2P copy. `web/src` imports one file from spotme-core; the other five (`swarm.js` Hyperswarm, `room.js` Autobase/Hypercore, `identity.js`, `schema.js`, `index.js`) are ADR-033 residue, committed twice. Touches the live build — separate PR. |
-| P9 | Retire or demote the duplicate `spotme-web-v2` project; ends double builds and frees the shared `vercel.json`. |
-| P10 | Confirm which URL testers actually open (inverts P3's host pick if it is `spotme-web-v2`). |
+| P9 | Retire or demote whichever project P10 shows to be the orphan; ends double builds and frees the shared `vercel.json`. **Which one is unknown until P10** — naming it early risks deleting the surface people actually use. |
+| P10 | **BLOCKING P3.** Which URL do testers actually open? Pipeline evidence says `spotme-messenger`; all 8 usage references in `docs/reports/` say `spotme-web-v2`. Owner-only fact. |
 | P11 | Appetite for characterization tests before each rewrite — no view-level coverage exists anywhere (ADR-035 §A.1). |
 
 ### Assigned, no longer unowned

@@ -252,27 +252,37 @@ PROPOSED → ACCEPTED; the full record is in
 |---|---|---|
 | P1 | Adopt ADR-035's plan | **YES** |
 | P2 | React 19 for web-next | **YES** |
-| P3 | Monorepo move + Vercel Root Directory change | **YES, sequenced** behind the host pick — now made |
+| P3 | Monorepo move + Vercel Root Directory change | **YES in principle, BLOCKED** on P10 — the host pick was withdrawn |
 | P4 | Tailwind v4 | **DEFERRED** to a slice-2 evidence test |
-| P5 | Retire `spotme/app` | **YES**, but must not touch `spotme/core` |
-| P6 | Untracked `spotme/mobile` | **REMOVE** |
+| P5 | Retire `spotme/app` | **PENDING CONFIRMATION** — deletion, over-recorded from a recommendation; do not execute |
+| P6 | Untracked `spotme/mobile` | **PENDING CONFIRMATION** — deletion, no git safety net |
 | P7 | Phase 2 Discovery activation | **NO, not now** |
 | P8 | Flag flips to real users | **NOT YET** |
 
 ### The two blockers this report flagged are both closed
 
-**Canonical Vercel host — `spotme-messenger`.** Checked against the Vercel API
-rather than assumed, and the answer contradicted the working assumption
-(including a note in my own memory that named `spotme-web-v2`). Both projects
-are repo-connected and both build every master push — one commit, two builds.
-But only `spotme-messenger` receives `target: "production"` from git: merges of
-#134, #135, #136 and this report's own `356eb62` each produced a production
-deployment there and a mere preview on `spotme-web-v2`, which reached
-production solely via manual agent CLI pushes. The duplicate also costs
-something concrete — it carries `NODE_ENV`, which strips devDependencies and
-kills its build, and the fix had to go into the **shared**
-`spotme/web/vercel.json`. *Unresolved:* neither has a custom domain, so if
-testers are being sent to `spotme-web-v2.vercel.app` the pick inverts (P10).
+**Canonical Vercel host — WITHDRAWN, blocked on P10.** First recorded as
+`spotme-messenger` on pipeline evidence: both projects are repo-connected and
+both build every master push (one commit, two builds), but only
+`spotme-messenger` receives `target: "production"` from git — #134, #135, #136
+and this report's own `356eb62` each produced a production deployment there and
+a mere preview on `spotme-web-v2`, which reached production solely via manual
+agent CLI pushes.
+
+**Then the usage evidence turned up and points the other way.** Across every
+report in `docs/reports/`, `spotme-messenger.vercel.app` appears **zero** times;
+`spotme-web-v2.vercel.app` appears **8 times in 5 reports** — every recorded
+deploy-and-drive, including the iPhone session, which lists "Deploy the web
+surface to `spotme-web-v2`" as a task of its own. `spotme-messenger` is also
+the *older* project with `framework: null`, against `spotme-web-v2`'s correctly
+configured `vite`. That is the shape of an orphan still carrying git
+integration while the real work moved elsewhere — in which case the pick
+inverts.
+
+Neither project has a custom domain, so **no repository fact can close this.**
+P10 is now blocking, not a caveat. The duplicate's concrete cost stands either
+way: one of them carries `NODE_ENV`, which strips devDependencies and killed
+its build, forcing `--include=dev` into the **shared** `spotme/web/vercel.json`.
 
 **The five dark-fence rewrites are now slice 0's first task**, gated before the
 monorepo move and tamper-checked — no longer unowned.
