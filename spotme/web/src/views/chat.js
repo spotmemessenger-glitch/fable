@@ -7,6 +7,7 @@
  */
 import './chat.css'
 import { precheckAttachment } from '../lib/media-precheck.js'
+import { playExclusive } from '../lib/video.js'
 import { db } from '../lib/db.js'
 import { rooms } from '../lib/rooms.js'
 import { lobby, distanceM, fmtDistance } from '../lib/discovery.js'
@@ -1380,7 +1381,19 @@ export function render (root, ctx, roomId) {
         return
       }
       wantPlay = false
-      audio.play().catch(() => {
+      /* B6 — ONE AUDIBLE MEDIA AT A TIME, AND THE ORDER MATTERS.
+       *
+       * This called `audio.play()` directly, so a voice note and a Moments
+       * video could be audible together: the video surface routes every
+       * element through the shared owner and chat did not, which means there
+       * were two independent notions of "what is playing" and neither could
+       * see the other.
+       *
+       * `playExclusive` pauses the current owner FIRST, then takes ownership,
+       * then plays. Play-new-then-pause-old is the ordering that produces the
+       * audible overlap, however brief, and on a slow decode it is not brief. */
+      playExclusive(audio).then((ok) => {
+        if (ok) return
         wantPlay = false
         showDuration()
         ctx.toast('Could not play this voice note')
@@ -1407,7 +1420,9 @@ export function render (root, ctx, roomId) {
        *
        * No gesture is left to lose here (this is an async event either way),
        * so the resume is free: if the browser refuses it, play anyway. */
-      const go = () => audio.play().catch(() => ctx.toast('Could not play this voice note'))
+      // Through the shared owner here too — a resume is still a start, and it
+      // must silence whatever else holds the speaker.
+      const go = () => playExclusive(audio).then((ok) => { if (!ok) ctx.toast('Could not play this voice note') })
       const ac = getAudioCtx()
       if (ac && ac.state === 'suspended') ac.resume().then(go, go)
       else go()
@@ -4044,7 +4059,7 @@ export function render (root, ctx, roomId) {
     }
     playBtn.addEventListener('click', () => {
       if (!confAudio) return
-      if (confAudio.paused) confAudio.play().catch(() => ctx.toast('Could not play the recording'))
+      if (confAudio.paused) playExclusive(confAudio).then((ok) => { if (!ok) ctx.toast('Could not play the recording') })
       else confAudio.pause()
     })
     confAudio.addEventListener('play', () => { playBtn.innerHTML = IC.pause; raf = requestAnimationFrame(paint) })

@@ -28,6 +28,7 @@ import { db } from '../lib/db.js'
 import { el, clear, avatar, actionSheet } from '../lib/ui.js'
 import * as M from '../lib/moments-api.js'
 import { videoEl, watchInView, playExclusive, pause, pauseAll, isSoundOn, setSoundOn, onSoundChange } from '../lib/video.js'
+import { likeBurst, tick, onDoubleTap } from '../lib/burst.js'
 import { openPhotoEditor } from '../lib/photoedit.js'
 import { fileToDataURL, fileFromDataURL } from '../lib/media.js'
 
@@ -695,7 +696,13 @@ export function render (root, ctx, params) {
       class: 'mo-icon mo-act' + (m.myReaction ? ' on' : ''), type: 'button',
       html: reactFace(m.myReaction),
       'aria-label': 'React', 'aria-pressed': m.myReaction ? 'true' : 'false',
-      onclick: () => openReactions(m, reactBtn)
+      /* B1 — A TAP LIKES. Holding opens the full reaction picker.
+       *
+       * The picker used to be the ONLY way to react, so the commonest action
+       * in the product cost a tap, a sheet, a read and a second tap. A like is
+       * now the tap itself and the sheet is the deliberate path. */
+      onclick: () => toggleLike(m, reactBtn),
+      oncontextmenu: (e) => { e.preventDefault(); openReactions(m, reactBtn) }
     })
     acts.appendChild(reactBtn)
     acts.appendChild(el('button', {
@@ -707,6 +714,11 @@ export function render (root, ctx, params) {
       'aria-label': 'Share', onclick: () => shareMoment(m)
     }))
 
+    /* B1 — DOUBLE-TAP THE MEDIA LIKES IT, with the burst centred on the tap.
+     * Registered after the slot exists and left to the same optimistic path as
+     * the button, so there is exactly one like implementation. */
+    if (mediaSlot) onDoubleTap(mediaSlot, (origin) => toggleLike(m, reactBtn, origin))
+
     return el('article', { class: 'mo-card' }, [
       head,
       mediaSlot,
@@ -717,15 +729,48 @@ export function render (root, ctx, params) {
 
   /* ----------------------------------------------------------- reactions */
 
+  /** Paint the button from `m.myReaction`. One place, so optimistic and
+   *  reverted states cannot drift from each other. */
+  function paintReact (m, btn) {
+    btn.innerHTML = reactFace(m.myReaction)
+    btn.className = 'mo-icon mo-act' + (m.myReaction ? ' on' : '')
+    btn.setAttribute('aria-pressed', m.myReaction ? 'true' : 'false')
+  }
+
+  /**
+   * B1 — LIKE, OPTIMISTICALLY.
+   *
+   * The fill and the burst happen on the tap, BEFORE the request is made. A
+   * like that waits for a round-trip feels broken on a slow connection even
+   * when it works, and it is the one interaction people do without looking.
+   *
+   * On failure the fill is REVERTED and said once. Reverting matters more than
+   * the toast: a like that silently did not persist is worse than one that
+   * visibly failed, because the reader believes a thing about the world that
+   * is not true.
+   */
+  async function toggleLike (m, btn, origin = null) {
+    const was = m.myReaction
+    const liking = !was
+    m.myReaction = liking ? 'like' : null
+    paintReact(m, btn)
+    if (liking) { likeBurst(btn, origin); tick() }
+    try {
+      if (liking) await M.react(m.id, 'like'); else await M.unreact(m.id)
+    } catch (e) {
+      m.myReaction = was
+      paintReact(m, btn)
+      ctx.toast(e.message || 'That like did not save')
+    }
+  }
+
   function openReactions (m, btn) {
     actionSheet(REACTIONS.map((r) => ({
       label: `${r.glyph}  ${r.key}`,
       fn: async () => {
         try {
           if (m.myReaction === r.key) { await M.unreact(m.id); m.myReaction = null } else { await M.react(m.id, r.key); m.myReaction = r.key }
-          btn.innerHTML = reactFace(m.myReaction)
-          btn.className = 'mo-icon mo-act' + (m.myReaction ? ' on' : '')
-          btn.setAttribute('aria-pressed', m.myReaction ? 'true' : 'false')
+          paintReact(m, btn)
         } catch (e) { ctx.toast(e.message || 'Could not react') }
       }
     })), 'React')
