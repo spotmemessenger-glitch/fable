@@ -213,12 +213,22 @@ export function render (root, ctx, params) {
    * so choosing it silently threw the post away. It is now "Only you", which is
    * what it does, and A1 makes that true in the query.
    *
-   * `public` had no surface either: the city feed is the only thing that reads
-   * it and no tab reaches the city feed. Rather than remove a stored value the
-   * backend already supports — a deletion that would have to be undone the day
-   * the tab lands — it is labelled honestly as reaching beyond the local area,
-   * and the badge says `Public` so the choice is at least visible and
-   * reversible. Recorded in the report as the open half of A4.
+   * `public` IS NO LONGER OFFERED — owner decision, 2026-08-07.
+   *
+   * It and `nearby` were indistinguishable in practice: both surface in the
+   * nearby feed, both bounded by the same radius. Two options, one behaviour,
+   * is worse than one option, because it asks the reader to choose between
+   * things that are not different. The alternative — a City tab — would have
+   * been a third tab showing nothing, since the only accounts in the city are
+   * the two test phones.
+   *
+   * So the picker offers exactly three, and each does something the reader can
+   * observe: nearby, friends, only you.
+   *
+   * `public` REMAINS in the database enum, in the backend policy and in this
+   * map, so posts already stored as public keep working and keep rendering
+   * their badge. Only the picker entry is gone. Reintroduce it the day a city
+   * or global surface exists that makes selecting it meaningful — not before.
    */
   const AUDIENCE = {
     nearby: { label: 'Nearby', hint: 'People near you' },
@@ -226,6 +236,10 @@ export function render (root, ctx, params) {
     public: { label: 'Public', hint: 'Anyone, beyond your area' },
     private: { label: 'Only you', hint: 'Nobody else can see this' }
   }
+
+  /* What the composer offers. Deliberately a SUBSET of AUDIENCE: the badge must
+   * still render `public` for posts that already carry it. */
+  const PICKABLE = ['nearby', 'friends', 'private']
 
   const audienceBadge = (v) => {
     const a = AUDIENCE[v] || AUDIENCE.nearby
@@ -976,7 +990,10 @@ export function render (root, ctx, params) {
     const visBtn = el('button', {
       class: 'pill', type: 'button', text: `Visible to: ${AUDIENCE[visibility].label}`,
       onclick: () => actionSheet(
-        ['nearby', 'friends', 'public', 'private'].map((v) => ({
+        /* Three, not four — see AUDIENCE. `public` is still a valid stored
+         * value; it is simply not offered until it means something different
+         * from `nearby` to the person choosing. */
+        PICKABLE.map((v) => ({
           label: `${AUDIENCE[v].label} — ${AUDIENCE[v].hint}`,
           fn: () => { visibility = v; visBtn.textContent = `Visible to: ${AUDIENCE[visibility].label}` }
         })), 'Who can see this?')

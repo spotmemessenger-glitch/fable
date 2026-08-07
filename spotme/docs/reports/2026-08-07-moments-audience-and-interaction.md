@@ -57,19 +57,35 @@ create route and reading the stored value back **out of the database** — an ec
 of the create response would pass even if the column were written with a
 default.
 
-## A4 — no dead options ⚠️ half
+## A4 — no dead options ✅ CLOSED (owner decision, 2026-08-07)
 
 - **`private` → "Only you"**, which is what it does, and A1 makes that true in
   the query. Was genuinely dead before: chosen, stored, and then visible to
   nobody.
-- **`public` is kept and labelled honestly**, not removed. The city feed already
-  reads it; no tab reaches the city feed. Deleting a value the backend supports
-  would only have to be undone when that tab lands, and the badge at least makes
-  the choice visible and reversible.
+- **`public` is REMOVED from the picker.** It and `nearby` were
+  indistinguishable in practice — both surface in the nearby feed, both bounded
+  by the same radius. Two options with one behaviour is worse than one option,
+  because it asks the reader to choose between things that are not different.
+  The alternative considered and rejected was a City tab, which would have been
+  a third tab showing nothing: the only accounts in the city are the two test
+  phones.
 
-**The open half: `public` still has no surface of its own.** A city tab, or
-folding public into nearby without a distance limit, is a product decision I
-should not make silently. Recorded rather than quietly resolved.
+The picker now offers **exactly three, each observably different**:
+
+| option | who sees it |
+|---|---|
+| **Nearby** | people around you |
+| **Friends** | people who follow you |
+| **Only you** | nobody else |
+
+**`public` is not deleted.** It remains in the database enum, in the backend
+policy, and in the client's AUDIENCE map — so posts already stored as public
+keep working and keep rendering their badge. Only the picker entry is gone.
+`PICKABLE` is deliberately a subset of `AUDIENCE` rather than the same list, so
+the badge cannot silently lose a value the composer no longer offers.
+
+Reintroduce it the day a city or global surface exists that makes selecting it
+mean something different from `nearby` — not before.
 
 ## A5 — does Friends work now? ✅ YES — verified, not reasoned
 
