@@ -14,9 +14,9 @@
  *                 records NO email; the claimed @username is the identifier.
  * The tool never asks for, prints, or logs a userId; selectors are masked in
  * output. Per run it:
- *   1. reports the pre-op Discovery allowlist COUNT; any row that does not
- *      belong to the current invited set STOPS the run (notes listed, nothing
- *      deleted) for the owner's decision;
+ *   1. reports the pre-op allowlist COUNT **for DOMAIN only**; any row that
+ *      does not belong to the current invited set STOPS the run (notes listed,
+ *      nothing deleted) for the owner's decision;
  *   2. upserts one row per LOCATED invitee (idempotent — re-runs never
  *      duplicate), note carrying who/why; refuses to exceed MAX_ROWS;
  *   3. verifies: every located invitee → 200; a non-allowlisted adult → 404;
@@ -26,9 +26,21 @@
  *      on a later run, after they sign up;
  *   5. cleans up every probe row it created.
  *
- * REVOCATION: delete that user's row (DomainAllowlist, domain='discovery') —
- * dark again for them within one 5s cache window. Auditable: every row has
- * note + addedAt; list with the DomainAllowlistService or plain SQL.
+ * REVOCATION: delete that user's row (DomainAllowlist, domain=DOMAIN) — dark
+ * again for them within one 5s cache window. Auditable: every row has note +
+ * addedAt; list with the DomainAllowlistService or plain SQL.
+ *
+ * ---------------------------------------------------------------------------
+ * CURRENT TARGET (2026-08-07): DOMAIN='moments', invited set = @yuv2 alone.
+ *
+ * `DOMAIN` scopes every read and write in this file, so a run in this
+ * configuration cannot see or modify the `discovery` rows — they live under a
+ * different (domain, userId) key and are never queried.
+ *
+ * What this run does NOT do, and must not: it creates no RuntimeFlag row and
+ * flips no flag. A flag row would open Moments for every verified adult; one
+ * allowlist row opens it for one account. That difference is the entire point
+ * of the change.
  */
 
 import { PrismaClient } from '@prisma/client';
@@ -39,11 +51,14 @@ import { createHash } from 'node:crypto';
  *  join, then re-run. Growing this list is a code change — deliberate, so
  *  every widening is diffable and attributable. HARD CAP below. */
 const INVITED: Array<{ email?: string; username?: string; note: string }> = [
-  { email: 'movietrends47@gmail.com', note: 'stage-a owner' },
-  // { username: 'friendname', note: 'stage-a invitee: <who>' },
+  { username: 'yuv2', note: 'stage-a invitee: @yuv2 (moments)' },
 ];
 const MAX_ROWS = 11; // owner + ~10 — Stage-A scale guard
-const DOMAIN = 'discovery';
+/* The domain this run grants. Every query below is scoped by it, so pointing
+ * this at 'moments' leaves the 'discovery' allowlist rows completely
+ * untouched — they are a different (domain, userId) key space and this script
+ * never reads or writes outside DOMAIN. */
+const DOMAIN = 'moments';
 
 function mask(s: string | null | undefined): string {
   if (!s) return '(none)';
@@ -59,8 +74,11 @@ export async function runOwnerGrant(port: number): Promise<Record<string, unknow
   const out: Record<string, unknown> = {};
   const probeIds: string[] = [];
   const mint = (sub: string) => sign({ sub, role: 'USER' }, secret, { expiresIn: '10m' });
-  const disc = (token: string, path = '/visibility', init: RequestInit = {}) =>
-    fetch(`${base}/v2/discovery${path}`, {
+  /* The gated surface this run probes. Moments mounts at /v1/moments behind
+   * DomainGate('moments', { requireAdult: true }) — the same guard shape
+   * Discovery uses, so the 200 / 404 / 403 expectations below are unchanged. */
+  const disc = (token: string, path = '/feed?mode=friends', init: RequestInit = {}) =>
+    fetch(`${base}/v1/moments${path}`, {
       ...init,
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, ...(init.headers || {}) },
     });
@@ -148,13 +166,10 @@ export async function runOwnerGrant(port: number): Promise<Record<string, unknow
     // (a) every located invitee → 200 on Discovery (ephemeral internal token).
     const inviteeStatuses: Record<string, number> = {};
     for (const l of located) inviteeStatuses[l.masked] = (await disc(mint(l.id))).status;
-    out.invitee_visibility_GET = inviteeStatuses; // expect all 200
-    out.first_invitee_query_POST = (
-      await disc(mint(located[0].id), '/query', {
-        method: 'POST',
-        body: JSON.stringify({ contractsVersion: 1, intent: { kind: 'people' }, scope: 'people', origin: { lat: 12.9766, lon: 77.5913 }, radius: { km: 2 } }),
-      })
-    ).status; // expect 2xx
+    out.invitee_feed_GET = inviteeStatuses; // expect all 200
+    // A second gated route, read-only: proves the whole domain opened, not one
+    // handler. GET only — this run must create no Moments content.
+    out.first_invitee_stories_rail_GET = (await disc(mint(located[0].id), '/stories/rail')).status; // expect 200
 
     // (b) a NON-allowlisted adult → 404.
     const otherId = 'zzgrantoth0000000'.slice(0, 16);
@@ -175,8 +190,10 @@ export async function runOwnerGrant(port: number): Promise<Record<string, unknow
     out.allowlisted_unverified_403 = (await disc(mint(unvId))).status; // expect 403
     await prisma.domainAllowlist.deleteMany({ where: { domain: DOMAIN, userId: unvId } });
 
-    // (d) RuntimeFlag remains zero rows for discovery.
-    out.runtimeflag_discovery_rows = await prisma.runtimeFlag.count({ where: { key: DOMAIN } }); // expect 0
+    // (d) RuntimeFlag remains zero rows for this domain. This run must NOT
+    //     create one: a flag row opens the domain for EVERY verified adult,
+    //     which is the opposite of a one-account grant.
+    out.runtimeflag_rows_for_domain = await prisma.runtimeFlag.count({ where: { key: DOMAIN } }); // expect 0
 
     // (e) final rows == located invitees, every note accounted for.
     const finalRows = await prisma.domainAllowlist.findMany({ where: { domain: DOMAIN }, select: { userId: true, note: true, addedAt: true } });
