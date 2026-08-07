@@ -90,6 +90,119 @@
 }
 .ch-send:disabled { opacity: 0.45; cursor: default; }
 
+/* ------------------------------------------------ session 2: media rows */
+.ch-imgmsg { border: 0; background: none; padding: 0; cursor: pointer; display: block; }
+.ch-imgmsg img { max-width: 100%; border-radius: 12px; display: block; }
+.ch-imgcap { display: block; font-size: 13px; color: var(--ink2); padding: 4px 2px 0; text-align: left; }
+
+.ch-vonce {
+  display: flex; flex-direction: column; gap: 6px; border: 0; background: none;
+  padding: 0; cursor: pointer; font: inherit; color: inherit; align-items: flex-start;
+}
+.ch-vmask {
+  position: relative; width: 180px; height: 180px; border-radius: 12px;
+  overflow: hidden; background: var(--well); display: block;
+}
+.ch-vblur { width: 100%; height: 100%; object-fit: cover; filter: blur(2px); image-rendering: pixelated; }
+.ch-bchip, .ch-bchip2 {
+  font-size: 12px; background: var(--well); border-radius: 999px; padding: 2px 10px;
+}
+.ch-vmask .ch-bchip { position: absolute; left: 8px; bottom: 8px; }
+.ch-vfire { position: absolute; right: 8px; top: 8px; }
+.ch-vomine { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.ch-vocap { font-size: 12px; color: var(--muted); }
+
+.ch-voice { display: flex; align-items: center; gap: 8px; }
+.ch-voice audio { max-width: 210px; height: 40px; }
+.ch-vdur { font-size: 12px; color: var(--muted); }
+
+.ch-file { display: flex; flex-direction: column; gap: 2px; color: inherit; text-decoration: none; }
+.ch-file b { font-weight: 650; }
+.ch-file span { font-size: 12px; color: var(--muted); }
+.ch-file-gone { opacity: 0.7; }
+
+.ch-loc { display: flex; flex-direction: column; gap: 2px; }
+.ch-loc a { color: var(--blue); font-size: 13px; }
+.ch-loc-live b::before {
+  content: ''; display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+  background: var(--red); margin-right: 6px;
+}
+
+.ch-reacts { display: flex; gap: 4px; margin-top: 2px; }
+.ch-reacts span {
+  background: var(--surface); border: 1px solid var(--line); border-radius: 999px;
+  padding: 1px 8px; font-size: 12.5px;
+}
+
+/* ------------------------------------------------ session 2: sheets */
+.ch-sheet-back {
+  position: fixed; inset: 0; background: color-mix(in srgb, var(--ink) 40%, transparent);
+  display: flex; align-items: flex-end; justify-content: center; z-index: 40;
+}
+.ch-sheet {
+  width: min(480px, 100%); background: var(--surface); border-radius: 18px 18px 0 0;
+  padding: 12px; display: flex; flex-direction: column; gap: 4px;
+  max-height: 80vh; overflow-y: auto;
+}
+.ch-ms-title { font-weight: 650; text-align: center; padding: 6px 0; }
+.ch-ms-item {
+  min-height: 44px; border: 0; background: none; font: inherit; color: var(--ink);
+  border-radius: 10px; cursor: pointer; text-align: left; padding: 0 12px;
+}
+.ch-ms-item:hover { background: var(--well); }
+.ch-ms-item.danger { color: var(--red); }
+.ch-ms-item.cancel { text-align: center; color: var(--ink2); border-top: 1px solid var(--hair); }
+.ch-ms-emojis { display: flex; gap: 4px; justify-content: center; padding: 4px 0; }
+.ch-ms-emojis button, .ch-ms-grid button {
+  min-width: 42px; min-height: 42px; border: 0; background: none; font-size: 22px;
+  cursor: pointer; border-radius: 50%;
+}
+.ch-ms-emojis button:hover, .ch-ms-grid button:hover { background: var(--well); }
+.ch-plus { color: var(--ink2); }
+.ch-ms-grid { display: grid; grid-template-columns: repeat(6, 1fr); }
+.ch-edit-in {
+  border: 1px solid var(--line); border-radius: 12px; background: var(--well);
+  color: var(--ink); font: inherit; padding: 8px 12px; resize: none;
+}
+
+.ch-at-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; padding: 6px 0; }
+.ch-at-tile {
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  border: 0; background: none; font: inherit; cursor: pointer; color: var(--ink);
+}
+.ch-at-circ {
+  width: 52px; height: 52px; border-radius: 50%; background: var(--well);
+  display: inline-flex; align-items: center; justify-content: center; font-size: 22px;
+}
+.ch-at-label { font-size: 11px; color: var(--ink2); }
+
+/* ------------------------------------------------ session 2: composer */
+.ch-attach {
+  min-width: 44px; min-height: 44px; border: 0; border-radius: 50%;
+  background: var(--well); color: var(--ink); font-size: 20px; cursor: pointer;
+}
+.ch-replybar {
+  display: flex; align-items: center; gap: 8px; padding: 6px 12px;
+  border-top: 1px solid var(--hair); background: var(--surface);
+}
+.ch-replybar-body {
+  flex: 1; display: flex; flex-direction: column; border-left: 3px solid var(--blue);
+  padding-left: 8px; min-width: 0;
+}
+.ch-replybar-body b { font-size: 12px; color: var(--blue); }
+.ch-replybar-body span {
+  font-size: 13px; color: var(--ink2); white-space: nowrap; overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ch-replybar-x {
+  min-width: 36px; min-height: 36px; border: 0; background: none; font-size: 18px;
+  color: var(--muted); cursor: pointer;
+}
+.ch-rec {
+  flex: 1; min-height: 44px; border: 1px solid var(--red); border-radius: 22px;
+  background: none; color: var(--red); font: inherit; cursor: pointer;
+}
+
 @media (prefers-reduced-motion: no-preference) {
   .ch-bubble { transition: background 120ms ease; }
 }
