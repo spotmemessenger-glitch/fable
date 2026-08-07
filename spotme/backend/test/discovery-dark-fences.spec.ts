@@ -7,25 +7,11 @@
  * fenced: every new discovery module must be exercised by at least one test.
  */
 
-import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
-
-const BACKEND = join(__dirname, '..');
-const REPO = join(BACKEND, '../..');
-const WEB_SRC = join(REPO, 'spotme/web/src');
-const WEBNEXT = join(REPO, 'spotme/web-next');
-
-function walk(dir: string, exts: string[], out: string[] = []): string[] {
-  for (const e of readdirSync(dir)) {
-    if (e === 'node_modules' || e === 'dist' || e === '.git') continue;
-    const full = join(dir, e);
-    if (statSync(full).isDirectory()) walk(full, exts, out);
-    else if (exts.some((x) => e.endsWith(x))) out.push(full);
-  }
-  return out;
-}
-
-const read = (p: string) => readFileSync(p, 'utf8');
+import { existsSync, readdirSync, statSync } from 'node:fs';
+import {
+  BACKEND, read, walk, inDir, requireNonEmpty, liveWebRoot, liveWebScanRoots, clientAllRoots, trackedDeployConfigs, liveVercelConfig, clientTestExists,
+} from './helpers/fence-paths';
 
 describe('C12 — dark integration fences', () => {
   // WAVE 1C, C3: the darkness MECHANISM changed. Discovery is now MOUNTED —
@@ -49,7 +35,7 @@ describe('C12 — dark integration fences', () => {
 
   it('the ONLY route into the discovery subtree is DiscoveryModule → DomainGate; no other module reaches in (8.1)', () => {
     const files = walk(join(BACKEND, 'src'), ['.ts'])
-      .filter((f) => !f.includes('/discovery/'))
+      .filter((f) => !inDir(f, 'discovery'))
       .filter((f) => !f.endsWith('app.module.ts')); // the one authorized mount
     // No OTHER file may reach into the discovery subtree (static or dynamic).
     const REACH = /(from|import|require)\s*\(?['"][^'"]*\/discovery(\/|['"])|['"][^'"]*\/discovery\/[^'"]*['"]/;
@@ -65,24 +51,29 @@ describe('C12 — dark integration fences', () => {
   it('NO LIVE spotme/web MODULE (src OR api) imports Phase 2 code (8.2)', () => {
     // spotme/web/api holds the Vercel serverless functions bridged into the
     // running backend — the most deploy-reachable web-tier code. Fence it too.
-    const roots = [WEB_SRC, join(REPO, 'spotme/web/api')].filter((d) => existsSync(d));
+    const roots = liveWebScanRoots();
     const files = roots.flatMap((d) => walk(d, ['.js', '.mjs']));
     const offenders = files.filter((f) => /web-next|@spotme\/contracts|backend\/src\/discovery/.test(read(f)));
     expect(offenders).toEqual([]);
   });
 
-  it('web-next is NOT deployed: no vercel/now config anywhere links or builds it (8.3)', () => {
-    // No stray deploy config that could bring web-next / Phase 2 online.
-    const deployConfigs = ['vercel.json', 'spotme/vercel.json', 'now.json', 'spotme/now.json', '.vercel/project.json', 'spotme/.vercel/project.json', 'spotme/web-next/vercel.json'];
-    expect(deployConfigs.filter((p) => existsSync(join(REPO, p)))).toEqual([]);
-    // The one real config is rooted at spotme/web and never targets web-next in
-    // any of the fields Vercel actually deploys from.
-    const v = read(join(REPO, 'spotme/web/vercel.json'));
-    expect(v).not.toContain('web-next');
-    for (const field of ['functions', 'builds', 'outputDirectory']) {
-      if (v.includes(field)) {
-        const idx = v.indexOf(field);
-        expect(v.slice(idx, idx + 200)).not.toContain('web-next');
+  it('no dark client surface is deployable: no COMMITTED vercel/now config reaches one (8.3)', () => {
+    // TRACKED files only. This previously used existsSync, which fired on a
+    // gitignored .vercel/project.json left by any local `vercel build` -- a
+    // false red on a developer machine and absent in CI. Only a committed
+    // config can reach a deployment, so only a committed config is a breach.
+    expect(trackedDeployConfigs()).toEqual([]);
+    // The one real config lives with the live app -- spotme/web today,
+    // apps/web after ADR-035 -- and never targets a dark client surface in any
+    // field Vercel actually deploys from.
+    const v = read(liveVercelConfig());
+    for (const dark of ['web-next', 'packages/ui', 'packages/core']) {
+      expect(v).not.toContain(dark);
+      for (const field of ['functions', 'builds', 'outputDirectory', 'rootDirectory']) {
+        if (v.includes(field)) {
+          const idx = v.indexOf(field);
+          expect(v.slice(idx, idx + 200)).not.toContain(dark);
+        }
       }
     }
   });
@@ -133,15 +124,15 @@ describe('C12 — dark integration fences', () => {
   });
 
   it('no discovery feature flag is true anywhere; crypto flags remain dark in source', () => {
-    const all = [...walk(join(BACKEND, 'src'), ['.ts']), ...walk(join(WEBNEXT, 'src'), ['.ts', '.tsx'])];
+    const all = [...walk(join(BACKEND, 'src'), ['.ts']), ...requireNonEmpty(clientAllRoots().flatMap((d) => walk(d, ['.ts', '.tsx'])), 'client surface')];
     for (const f of all) {
       const s = read(f);
       expect(s).not.toMatch(/DISCOVERY[_A-Z]*ENABLED\s*=\s*true/);
       expect(s).not.toMatch(/discoveryEnabled\s*[:=]\s*true/);
     }
-    const signing = read(join(WEB_SRC, 'lib/crypto/signing-key-publication.js'));
+    const signing = read(join(liveWebRoot(), 'src/lib/crypto/signing-key-publication.js'));
     expect(signing).toContain('SIGNING_PUBLICATION_ENABLED = false');
-    const webApp = walk(WEB_SRC, ['.js']).filter((f) => !f.includes('/crypto/'));
+    const webApp = walk(join(liveWebRoot(), 'src'), ['.js']).filter((f) => !inDir(f, 'crypto'));
     expect(webApp.filter((f) => /spotme\.e2e3/.test(read(f)))).toEqual([]);
   });
 
@@ -155,7 +146,7 @@ describe('C12 — dark integration fences', () => {
     expect(project).toContain('distanceBand');
     expect(project).not.toContain('coarseDistanceM:'); // never assigned into the public shape
     // The client's ONLY brand-cast lives in coarsen.ts.
-    const clientFiles = walk(join(WEBNEXT, 'src'), ['.ts', '.tsx']).filter((f) => !f.endsWith('coarsen.ts'));
+    const clientFiles = requireNonEmpty(clientAllRoots().flatMap((d) => walk(d, ['.ts', '.tsx'])), 'client surface').filter((f) => !f.endsWith('coarsen.ts'));
     const casters = clientFiles.filter((f) => /as CoarsePublicLocation/.test(read(f)));
     expect(casters).toEqual([]);
   });
@@ -163,7 +154,7 @@ describe('C12 — dark integration fences', () => {
   it('no secret-shaped literal exists in any Phase 2 source file', () => {
     const files = [
       ...walk(join(BACKEND, 'src/discovery'), ['.ts']),
-      ...walk(join(WEBNEXT, 'src'), ['.ts', '.tsx']),
+      ...requireNonEmpty(clientAllRoots().flatMap((d) => walk(d, ['.ts', '.tsx'])), 'client surface'),
     ];
     const SECRET = /\b(sk|pk|key|token|bearer)[-_][A-Za-z0-9]{20,}|eyJ[A-Za-z0-9_-]{28,}|[a-z][a-z0-9+.-]*:\/\/[^\s'"]*:[^\s'"]*@/;
     const offenders = files.filter((f) => SECRET.test(read(f)));
@@ -186,7 +177,7 @@ describe('C12 — dark integration fences', () => {
     }
     // web-next: controller + UI + mutation suites exist.
     for (const t of ['discovery-ui.test.tsx', 'discovery-controller.test.ts', 'discovery-privacy-mutation.test.ts']) {
-      expect(existsSync(join(WEBNEXT, 'test', t))).toBe(true);
+      expect(clientTestExists(t)).toBe(true);
     }
   });
 
@@ -211,7 +202,7 @@ describe('C12 — dark integration fences', () => {
       expect(s).not.toMatch(/https?:\/\/[^'"\s]*typesense/i);
       // The LEGACY realtime plane (ADR-002, env-gated) legitimately mentions
       // Centrifugo; the Phase 2 discovery subtree must not.
-      if (f.includes('/discovery/')) expect(s).not.toMatch(/centrifug/i);
+      if (inDir(f, 'discovery')) expect(s).not.toMatch(/centrifug/i);
       expect(SECRET.test(s)).toBe(false);
     }
   });
