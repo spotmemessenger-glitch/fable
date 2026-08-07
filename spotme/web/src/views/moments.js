@@ -193,6 +193,18 @@ export function render (root, ctx, params) {
 
   /* ------------------------------------------------------------- helpers */
 
+  /**
+   * How a person is NAMED on a story.
+   *
+   * The handle, not the profile name. A story is a claim about who posted it,
+   * and `@username` is the identifier that is unique, stable and searchable in
+   * this app — a display name is neither, and two people may share one. Falls
+   * back to the display name when an account has claimed no username, and never
+   * to `userId`, which is an internal id nobody should be shown.
+   */
+  const handleOf = (author) =>
+    (author?.username ? `@${author.username}` : null) || author?.displayName || 'Someone'
+
   /** Resolve one asset to its short-lived URL bundle, once. */
   function assetFor (mediaId) {
     if (assetCache.has(mediaId)) return assetCache.get(mediaId)
@@ -360,7 +372,7 @@ export function render (root, ctx, params) {
     ])
     railWrap.appendChild(mine)
     for (const s of stories) {
-      const who = s.author?.displayName || s.author?.userId || 'Someone'
+      const who = handleOf(s.author)
       /* THE RING SHOWS THE STORY, not a letter.
        *
        * It rendered a name-derived avatar and nothing else, so a story you had
@@ -369,7 +381,7 @@ export function render (root, ctx, params) {
        * author avatar stays underneath as the placeholder, and the story's own
        * frame replaces it as soon as the asset lookup lands (the poster for a
        * video, the picture itself for a photo). */
-      const ringImg = el('span', { class: 'mo-ringimg live' }, [avatar({ name: who, avatar: s.author?.avatar }, 56)])
+      const ringImg = el('span', { class: 'mo-ringimg live' }, [avatar({ name: s.author?.displayName || who, avatar: s.author?.avatar }, 56)])
       railWrap.appendChild(el('button', { class: 'mo-ring', type: 'button', onclick: () => openStory(s) }, [
         ringImg,
         el('span', { class: 'mo-ringname', text: who })
@@ -1457,7 +1469,7 @@ export function render (root, ctx, params) {
    * returned that field, so it was dead weight hiding the real path.)
    */
   function openStory (s) {
-    const who = s.author?.displayName || 'Story'
+    const who = handleOf(s.author)
     const stage = el('div', { class: 'mo-stostage' })
     const layer = el('div', { class: 'mo-stolayer' }, [
       stage,
@@ -1466,7 +1478,7 @@ export function render (root, ctx, params) {
         'aria-label': 'Back', onclick: () => close()
       }),
       el('div', { class: 'mo-stowho' }, [
-        avatar({ name: who, avatar: s.author?.avatar }, 32),
+        avatar({ name: s.author?.displayName || who, avatar: s.author?.avatar }, 32),
         el('b', { text: who })
       ])
     ])

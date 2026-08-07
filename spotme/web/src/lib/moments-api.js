@@ -41,7 +41,26 @@ async function call (path, { method = 'GET', body, raw, contentType } = {}) {
     headers,
     body: raw || (body ? JSON.stringify(body) : undefined)
   })
-  if (res.status === 404) throw new MomentsDisabledError()
+  /* A 404 IS ONLY "THE DOMAIN IS DARK" UNTIL THE DOMAIN HAS ANSWERED.
+   *
+   * The gate 404s every route while Moments is off, so a 404 was read as
+   * "moments is not available" everywhere. But an ordinary NotFoundException —
+   * a missing asset, an id that is not yours — is also a 404, and once the
+   * session has had a 200 from this domain the first reading is provably
+   * wrong. It made a single broken route report the entire feature as switched
+   * off, which is how a 404 on `/media/:id/edit` was reported as the product
+   * being unavailable rather than as one call failing.
+   *
+   * So: before the domain has proved itself, a 404 still means dark. After it
+   * has, a 404 means what it says. */
+  if (res.status === 404) {
+    if (availability === true) {
+      const err = new Error('That is no longer there.')
+      err.status = 404
+      throw err
+    }
+    throw new MomentsDisabledError()
+  }
   if (res.status === 403) {
     let msg = null
     try { msg = (await res.clone().json())?.message } catch { /* non-JSON */ }
@@ -244,7 +263,13 @@ export async function uploadMedia (file, { onProgress, signal } = {}) {
       // Same status semantics as call(): a 404 means the domain is dark, a 403
       // means this account may not post. Divergence here is how an upload
       // reported "failed" for a surface that was merely switched off.
-      if (s === 404) return reject(new MomentsDisabledError())
+      // Same reading as call(): dark domain only until the domain has answered.
+      if (s === 404) {
+        if (availability !== true) return reject(new MomentsDisabledError())
+        const e404 = new Error('That is no longer there.')
+        e404.status = 404
+        return reject(e404)
+      }
       let detail = null
       try { detail = xhr.responseText ? JSON.parse(xhr.responseText) : null } catch { /* non-JSON */ }
       if (s === 403) {
