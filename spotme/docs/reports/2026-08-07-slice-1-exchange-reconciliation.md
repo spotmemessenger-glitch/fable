@@ -1,7 +1,7 @@
 # Slice 1 — Exchange: API reconciliation before any component
 
 **Date:** 2026-08-07 · **Branch:** `feat/slice-1-exchange-ui` (stacked on `feat/slice-0-frontend-migration` `5c24511`)
-**Status: RECONCILE done. BUILD not started.** Four screens not written.
+**Status: RECONCILE done. BUILD done.** Four screens, island host, flag, tests.
 
 Mission order was "RECONCILE FIRST, BUILD SECOND … report the gaps BEFORE
 writing components." The gaps are large enough that building first would have
@@ -159,35 +159,83 @@ ADR-028 exception, and both are owner-retained. Flagged, not assumed.
 
 ---
 
-## 5. What landed on this branch
+## 5. What landed
 
-**Exchange accent tokens only** (`apps/web/src/tokens.css`), ADR-034-governed
-and scoped: `--x-accent-{400,500,600,700}`, `--x-onaccent`, `--x-accent-well`,
-`--x-accent-line`. `--x-` prefixed so none can be mistaken for the app primary,
-which is untouched. Danger deliberately excluded from the ramp so an Exchange
-destructive action keeps reading as destructive — the CVD separation ADR-034
-measured.
+### Screens — `packages/ui/exchange/screens.tsx`
 
-`apps/web` still **1,125 assertions / 60 suites, exit 0** — the design-token
-fence passes with the new tokens.
+Browse (Needs/Offers, category + Services-only), Detail (tags, budget band,
+availability, approximate-area circle, Save/Share/Report), Create (3 steps,
+None/Low/Medium/High, reach slider, Discoverable), My intents
+(Active/Paused/Matched/Fulfilled). **Withdraw and Mark fulfilled sit in an
+overflow menu** on Detail and on every My-intents row.
 
-**Not built:** the four screens, the island host, flag `spotme.ui.exchange`.
-Nothing partial is on the branch.
+Built to §4 above: three fields omitted, expiry from the real value, primary
+action **Request contact**, no distance filter.
 
----
+### Island host — `apps/web/src/lib/island.js`
+
+Deferred from slice 0 because a mount point with nothing to mount tripped the
+fence it shared a PR with. Slice 1 is its first consumer.
+
+The `@spotme/ui` specifier is **assembled at call time, not static**. A static
+import would (a) make every dark surface reachable from the shipped entry,
+which the dark fence rightly forbids, and (b) bundle React for the 100% of
+users who have the flag off. Hostile storage reads as OFF, so the failure mode
+is "legacy renders", never "React renders unexpectedly". The host **writes
+nothing**, so ADR-035 §(g) tier-1 rollback has no persisted shape to diverge.
+
+Route: `#/exchange` → `views/exchange.js`, which renders "Exchange is not
+enabled on this device" with the flag off. Exchange is greenfield, so there is
+no legacy screen to fall back to — absence *is* today's behaviour.
+
+### The dark fence changed mechanism rather than being dropped
+
+Exchange is now deliberately reachable, so asserting non-reference would only
+assert that slice 1 did not ship — the same situation the Discovery fence hit
+when `DiscoveryModule` went behind `DomainGate`. It now asserts the stronger
+invariant: exactly one reach from the live entry and it is the route view;
+that view gates on `uiFlag`; nothing defaults the flag on; the host has no
+static package import; and the ui entry exports **Exchange only**, so
+discovery/events/moments/assistant stay unreachable through it.
+
+**Tamper-checked:** removing the flag gate turns it red; restoring turns it
+green.
+
+### Verification
+
+| Surface | Before | After |
+|---|---|---|
+| `packages/ui` | 105 passed / 4 skipped | **125 / 4**, boundary 6/6, tsc clean |
+| `apps/web` | 1,125 assertions / 60 suites | **1,125 unchanged + 7 new**, **61 suites**, exit 0 |
+| `apps/web` lint · build | 0 · 0 | **0** · **0** |
+| backend dark fences | 65/65 | **66/66** |
+
+The apps/web baseline **held exactly** — no existing assertion changed. The
+7 additions are the island-flag suite; the 20 new `packages/ui` tests are the
+screens.
+
+### How to see it
+
+```
+localStorage.setItem('spotme.ui.exchange', 'on')   // then open #/exchange
+localStorage.removeItem('spotme.ui.exchange')      // tier-1 rollback
+```
+
+Fixture-backed: no endpoint is wired, because `browse` takes no radius
+parameter and contact is consent-gated server-side.
 
 ## 6. Hard rules — status
 
 | Rule | Status |
 |---|---|
-| Coarse circles, never pins | Not yet exercised; `approxLocation` + `radius` support it |
+| Coarse circles, never pins | **Done** — one `<circle>`, no marker element; test-pinned |
 | Distances approximate | Supported per-card; the *filter* is not |
 | Budget band, never a number | `budgetBand` enum only — no currency field exists |
 | No cart, no checkout | Nothing added; `informationalPrice` carries `'informational-only-no-payment'` |
-| Report on every user-content surface | Not yet built |
-| 44 px targets, accessible names | Not yet built |
+| Report on every user-content surface | **Done** — Detail action row, test-pinned |
+| 44 px targets, accessible names | **Done** — CSS min-height/width 44px; a test asserts every button has a name |
 | Latin + Indic type | Carried by the #132 font stack already in `apps/web` |
-| No persisted-shape change | **Held** — this branch adds CSS tokens only |
+| No persisted-shape change | **Held** — the host writes nothing; a test asserts no `setItem`/`indexedDB` |
 
 **Hard stops honoured:** branched from #139, not master · no merge · no deploy ·
 no Vercel change · nothing deleted · no Tailwind · env **names** only.
