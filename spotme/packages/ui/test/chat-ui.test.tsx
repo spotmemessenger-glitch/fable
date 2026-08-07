@@ -15,7 +15,8 @@ afterEach(cleanup);
 const row = (over: Partial<MessageRowView>): MessageRowView => ({
   id: `r${Math.random()}`, mine: false, kind: 'text', text: 'x', name: 'Asha',
   showName: false, timeLabel: '10:00', dayKey: 'today', dayLabel: 'Today',
-  status: 'sent', edited: false, replyPreview: null, ...over,
+  status: 'sent', edited: false, replyPreview: null, reactions: [],
+  canEdit: false, copyText: 'x', ...over,
 });
 
 describe('chat shell — message list', () => {

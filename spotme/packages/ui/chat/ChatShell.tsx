@@ -1,24 +1,26 @@
 /**
- * Chat — React message list + composer core (final slice, session 1,
- * behind spotme.ui.chat, default OFF).
+ * Chat — React message list + composer (final slice, behind spotme.ui.chat,
+ * default OFF).
  *
- * Prop-driven off a ChatPort; nothing here fetches, stores, or routes. The
- * behaviours rendered here are the ones chat-characterization.test.js pins on
- * the legacy stack: day dividers ('Today' / fmtDay via row.dayLabel), the
- * tick line (Read / Sent / Not delivered + Retry), typing line, edited mark,
- * reply quotes. Sheets, media, voice, calls and crypto UI are later sessions.
+ * Session 1: list + composer core (day dividers, ticks, typing, retry).
+ * Session 2: media bubbles (photo / view-once / voice / file / location),
+ * attach sheet, long-press message sheet (reply / edit / delete / react /
+ * copy), reaction chips, reply composition. Prop-driven off a ChatPort;
+ * nothing here fetches, stores, or routes.
  *
  * "Virtualized-enough": long threads render only the newest WINDOW rows with
  * a "Show earlier messages" reveal — the legacy view renders everything, so
- * this is strictly cheaper, and a real virtualizer can replace it if a
- * profile ever demands one.
+ * this is strictly cheaper.
  */
 import './chat.css';
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import type { ChatPort, MessageRowView } from './ports';
+import { MediaBubble, ReactionChips } from './MediaRow';
+import { AttachSheet, MessageSheet, EditSheet } from './sheets';
 
 const WINDOW = 80;
 const WINDOW_STEP = 80;
+const LONG_PRESS_MS = 420;
 
 function Ticks({ status }: { status: MessageRowView['status'] }) {
   if (status === 'failed') return null;
@@ -30,13 +32,26 @@ function Ticks({ status }: { status: MessageRowView['status'] }) {
   );
 }
 
-function Row({ row, port }: { row: MessageRowView; port: ChatPort }) {
+function Row({ row, port, onSheet }: {
+  row: MessageRowView; port: ChatPort; onSheet: (row: MessageRowView) => void;
+}) {
+  const pressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   if (row.kind === 'system') {
     return <div className="ch-sys" role="note">{row.text}</div>;
   }
+  const cancelPress = () => {
+    if (pressTimer.current) { clearTimeout(pressTimer.current); pressTimer.current = null; }
+  };
   return (
     <div className={`ch-row${row.mine ? ' ch-mine' : ''}`}>
-      <div className="ch-bubble">
+      <div
+        className="ch-bubble"
+        onContextMenu={(e) => { e.preventDefault(); onSheet(row); }}
+        onTouchStart={() => { pressTimer.current = setTimeout(() => onSheet(row), LONG_PRESS_MS); }}
+        onTouchEnd={cancelPress}
+        onTouchMove={cancelPress}
+        onTouchCancel={cancelPress}
+      >
         {row.showName && !row.mine && <b className="ch-name">{row.name}</b>}
         {row.replyPreview && (
           <div className="ch-quote">
@@ -44,13 +59,16 @@ function Row({ row, port }: { row: MessageRowView; port: ChatPort }) {
             <span>{row.replyPreview.text}</span>
           </div>
         )}
-        <span className={row.kind === 'stub' ? 'ch-stub' : 'ch-text'}>{row.text}</span>
+        {row.kind === 'media' && row.media
+          ? <MediaBubble row={row} media={row.media} port={port} />
+          : <span className={row.kind === 'stub' ? 'ch-stub' : 'ch-text'}>{row.text}</span>}
         <span className="ch-meta">
           {row.edited && <i className="ch-edited">edited</i>}
           <time>{row.timeLabel}</time>
           {row.mine && <Ticks status={row.status} />}
         </span>
       </div>
+      <ReactionChips chips={row.reactions} />
       {row.mine && row.status === 'failed' && (
         <div className="ch-fail">
           Not delivered
@@ -67,6 +85,10 @@ export function ChatShell({ port }: { port: ChatPort }) {
   const snap = useSyncExternalStore(port.subscribe, port.snapshot, port.snapshot);
   const [draft, setDraft] = useState('');
   const [shown, setShown] = useState(WINDOW);
+  const [reply, setReply] = useState<MessageRowView | null>(null);
+  const [sheetRow, setSheetRow] = useState<MessageRowView | null>(null);
+  const [editRow, setEditRow] = useState<MessageRowView | null>(null);
+  const [attachOpen, setAttachOpen] = useState(false);
   const logRef = useRef<HTMLDivElement>(null);
   const typingRef = useRef(false);
 
@@ -92,10 +114,15 @@ export function ChatShell({ port }: { port: ChatPort }) {
   const send = () => {
     const text = draft.trim();
     if (!text) return;
-    port.sendText(text);
+    port.sendText(text, reply?.id);
     setDraft('');
+    setReply(null);
     setTyping(false);
   };
+
+  /** Quote-bar snippet — the media label for media rows, the text otherwise
+   *  (legacy kindLabel grammar arrives pre-rendered in row.text). */
+  const replySnippet = (r: MessageRowView) => r.text || (r.media ? 'Message' : '');
 
   const groups: { key: string; label: string; rows: MessageRowView[] }[] = [];
   for (const row of visible) {
@@ -126,27 +153,62 @@ export function ChatShell({ port }: { port: ChatPort }) {
         {groups.map((g) => (
           <section key={g.key}>
             <div className="ch-day"><span>{g.label}</span></div>
-            {g.rows.map((row) => <Row key={row.id} row={row} port={port} />)}
+            {g.rows.map((row) => (
+              <Row key={row.id} row={row} port={port} onSheet={setSheetRow} />
+            ))}
           </section>
         ))}
         {snap.typingLabel && <div className="ch-typing" aria-live="polite">{snap.typingLabel}</div>}
       </div>
 
+      {reply && (
+        <div className="ch-replybar">
+          <div className="ch-replybar-body">
+            <b>{reply.mine ? 'You' : reply.name}</b>
+            <span>{replySnippet(reply)}</span>
+          </div>
+          <button type="button" className="ch-replybar-x" aria-label="Cancel reply"
+            onClick={() => setReply(null)}>×</button>
+        </div>
+      )}
+
       <footer className="ch-compose">
-        <input
-          type="text"
-          className="ch-input"
-          placeholder="Message"
-          aria-label="Message"
-          value={draft}
-          onChange={(e) => { setDraft(e.target.value); setTyping(Boolean(e.target.value.trim())); }}
-          onBlur={() => setTyping(false)}
-          onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }}
-        />
-        <button type="button" className="ch-send" aria-label="Send" disabled={!draft.trim()} onClick={send}>
+        <button type="button" className="ch-attach" aria-label="Attach"
+          onClick={() => setAttachOpen(true)}>＋</button>
+        {snap.recordingLabel ? (
+          <button type="button" className="ch-rec" aria-label="Stop recording"
+            onClick={() => port.toggleVoiceRecord()}>
+            ● {snap.recordingLabel} — tap to send
+          </button>
+        ) : (
+          <input
+            type="text"
+            className="ch-input"
+            placeholder="Message"
+            aria-label="Message"
+            value={draft}
+            onChange={(e) => { setDraft(e.target.value); setTyping(Boolean(e.target.value.trim())); }}
+            onBlur={() => setTyping(false)}
+            onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }}
+          />
+        )}
+        <button type="button" className="ch-send" aria-label="Send"
+          disabled={!draft.trim() || Boolean(snap.recordingLabel)} onClick={send}>
           ➤
         </button>
       </footer>
+
+      {attachOpen && <AttachSheet port={port} onClose={() => setAttachOpen(false)} />}
+      {sheetRow && (
+        <MessageSheet
+          row={sheetRow}
+          port={port}
+          onReply={setReply}
+          onEdit={setEditRow}
+          onClose={() => setSheetRow(null)}
+        />
+      )}
+      {editRow && <EditSheet row={editRow} port={port} onClose={() => setEditRow(null)} />}
     </div>
   );
 }

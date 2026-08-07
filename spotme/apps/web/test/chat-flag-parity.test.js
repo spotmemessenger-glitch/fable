@@ -81,11 +81,34 @@ test('the island mounts through the shared host with the chat slice name', () =>
 })
 
 test('the adapter reuses the engine — rooms.* only, no store/transport/crypto imports', () => {
-  const src = read('views', 'chat-island.js')
-  assert.match(src, /rooms\.sendMessage/, 'send goes through the same engine call the legacy view uses')
-  assert.match(src, /rooms\.retryMessage/)
-  assert.match(src, /rooms\.markRead/)
-  for (const forbidden of ['socket-transport', 'store.js', 'crypto/', 'localStorage.setItem']) {
-    assert.equal(src.includes(forbidden), false, `chat-island.js must not touch ${forbidden}`)
+  // Session 2 split the adapter: chat-island.js (flag + mount),
+  // chat-island-port.js (the ChatPort over rooms/db), chat-island-media.js
+  // (raw browser APIs). The engine calls live in the port file; the fences
+  // hold across all three.
+  const ADAPTER_FILES = ['chat-island.js', 'chat-island-port.js', 'chat-island-media.js']
+  const port = read('views', 'chat-island-port.js')
+  assert.match(port, /rooms\.sendMessage/, 'send goes through the same engine call the legacy view uses')
+  assert.match(port, /rooms\.retryMessage/)
+  assert.match(port, /rooms\.markRead/)
+  // Session 2 mutations — same engine calls the legacy sheet makes.
+  assert.match(port, /rooms\.react/)
+  assert.match(port, /rooms\.editMessage/)
+  assert.match(port, /rooms\.deleteMessage/)
+  assert.match(port, /rooms\.sendAttachment/)
+  // View-once: burn committed before reveal, then the open is reported.
+  assert.ok(port.indexOf('rooms.viewOnceOpen(') < port.indexOf('ui.revealViewOnce('),
+    'the burn (viewOnceOpen) must commit before the reveal')
+  assert.match(port, /rooms\.viewOnceOpened/)
+  for (const f of ADAPTER_FILES) {
+    const src = read('views', f)
+    for (const forbidden of ['socket-transport', 'store.js', 'crypto/', 'localStorage.setItem']) {
+      assert.equal(src.includes(forbidden), false, `${f} must not touch ${forbidden}`)
+    }
+  }
+})
+
+test('session 2: the flag still has exactly one reader among the adapter files', () => {
+  for (const f of ['chat-island-port.js', 'chat-island-media.js']) {
+    assert.equal(/uiFlag/.test(read('views', f)), false, `${f} must not read any flag`)
   }
 })
