@@ -93,7 +93,7 @@ export interface MomentRepositoryPort {
   follow(followerId: string, targetId: string): Promise<void>;
   unfollow(followerId: string, targetId: string): Promise<void>;
   block(blockerId: string, blockedId: string): Promise<void>;
-  createStory(authorId: string, mediaId: string, visibility: Exclude<MomentVisibility, 'private'>, now: number): Promise<MomentStoryRow>;
+  createStory(authorId: string, mediaId: string, visibility: Exclude<MomentVisibility, 'private'>, now: number): Promise<MomentStoryRow | null>;
   storyRail(viewerId: string, now: number, limit: number): Promise<MomentStoryRow[]>;
   transitionStory(authorId: string | null, id: string, to: MomentStoryState, expectedVersion: number | null): Promise<MomentStoryRow | null>;
   /** The {story-expiry} sweep body: active + past-expiry → expired. */

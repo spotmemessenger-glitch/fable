@@ -299,11 +299,20 @@ export class PrismaMomentsRepository implements MomentRepositoryPort {
     });
   }
 
-  async createStory(authorId: string, mediaId: string, visibility: Exclude<MomentVisibility, 'private'>, now: number): Promise<MomentStoryRow> {
-    const s = await this.prisma.momentStory.create({
-      data: { authorId, mediaId, visibility, expiresAt: new Date(now + STORY_TTL_MS) },
-    });
-    return this.toStoryRow(s as never);
+  async createStory(authorId: string, mediaId: string, visibility: Exclude<MomentVisibility, 'private'>, now: number): Promise<MomentStoryRow | null> {
+    try {
+      const s = await this.prisma.momentStory.create({
+        data: { authorId, mediaId, visibility, expiresAt: new Date(now + STORY_TTL_MS) },
+      });
+      return this.toStoryRow(s as never);
+    } catch (e) {
+      /* A1: a mediaId that references no asset used to surface as an unhandled
+       * FK violation -- HTTP 500, "Internal server error" on the phone, and a
+       * stack trace as the only diagnostic. It is caller input; null lets the
+       * service answer with the same typed notFound every foreign id gets. */
+      if ((e as { code?: string })?.code === 'P2003') return null;
+      throw e;
+    }
   }
 
   /** Active, unexpired stories from followed authors + self; blocked excluded. */

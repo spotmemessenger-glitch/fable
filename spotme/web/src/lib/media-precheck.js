@@ -66,7 +66,7 @@ export function videoDuration (file, timeoutMs = 4000) {
  * `message` is written for the person holding the phone and always contains the
  * measured numbers.
  */
-export async function precheckAttachment (file, { maxBytes = MAX_ATTACHMENT_BYTES, maxSeconds = MAX_VIDEO_SECONDS } = {}) {
+export async function precheckAttachment (file, { maxBytes = MAX_ATTACHMENT_BYTES, maxSeconds = MAX_VIDEO_SECONDS, label = 'a chat attachment' } = {}) {
   if (!file) return { ok: false, reason: 'no-file', message: 'No file was chosen.' }
 
   const bytes = Number(file.size) || 0
@@ -81,7 +81,7 @@ export async function precheckAttachment (file, { maxBytes = MAX_ATTACHMENT_BYTE
       ok: false,
       reason: 'too-large',
       bytes,
-      message: `That file is ${MB(bytes)} MB. The limit for a chat attachment is ${MB(maxBytes)} MB — trim it, or send it at a lower quality.`
+      message: `That file is ${MB(bytes)} MB. The limit for ${label} is ${MB(maxBytes)} MB — trim it, or send it at a lower quality.`
     }
   }
 

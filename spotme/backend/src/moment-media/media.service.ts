@@ -20,7 +20,7 @@ import {
 } from './media.ports';
 import { stripImageMetadata, UnsupportedImageError } from './exif-strip';
 import {
-  ACCEPTED_INPUT_MIME, normalizeForStorage, NormalizeFailedError, TranscodeUnavailableError,
+  ACCEPTED_INPUT_MIME, sniffMime, normalizeForStorage, NormalizeFailedError, TranscodeUnavailableError,
 } from './normalize';
 import { FixtureMomentWorkers, TranscodeJob, ThumbnailJob } from './media.queues';
 import type { TranscodeQueue, TranscodeIO, TranscodeResult } from './transcode.worker';
@@ -61,6 +61,12 @@ export class MomentMediaService implements MomentMediaPort, MediaUploadPort, Med
   }
 
   async ingest(mediaId: string, bytes: Buffer, mimeType: string, ownerId = 'assets'): Promise<IngestResult> {
+    /* A1: an empty or octet-stream declaration is Android saying "I don't
+     * know", not the caller picking a forbidden format. Sniff magic bytes into
+     * the SAME accepted set; an unrecognisable payload still refuses below. */
+    if (!mimeType || mimeType === 'application/octet-stream') {
+      mimeType = sniffMime(bytes) ?? mimeType;
+    }
     if (!ALLOWED_MIME.has(mimeType)) return { state: 'refused', reason: 'bad-mime' };
     if (bytes.length > MAX_UPLOAD_BYTES) return { state: 'refused', reason: 'too-large' };
 
@@ -220,6 +226,11 @@ export class MomentMediaService implements MomentMediaPort, MediaUploadPort, Med
   /** 5C calls this when a moment/story acquires the asset. */
   async addReference(mediaId: string): Promise<void> {
     await this.prisma.momentMediaAsset.updateMany({ where: { id: mediaId }, data: { refCount: { increment: 1 } } });
+  }
+
+  /** A1: does this asset exist at all? Stories must not dangle. */
+  async assetExists(mediaId: string): Promise<boolean> {
+    return (await this.prisma.momentMediaAsset.count({ where: { id: mediaId } })) > 0;
   }
 
   /** Deletion cascade: last reference out deletes the row AND the object. */

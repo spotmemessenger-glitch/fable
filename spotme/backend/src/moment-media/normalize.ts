@@ -61,6 +61,33 @@ const TRANSCODE_TIMEOUT_MS = 120_000;
 /** MIME types accepted at the edge. The ones marked `via` are transcoded to a
  *  format the metadata stripper actually understands before anything is
  *  stored; the stored mime is `to`. */
+/**
+ * A1 (stories fail on Android): Android WebViews and camera intents routinely
+ * hand the client a File with an EMPTY `type`, which the uploader forwards as
+ * `application/octet-stream`. The old behaviour refused that outright -- and
+ * the failure was ASYMMETRIC in the UI: a post quietly degraded to text and
+ * "worked", while a story hard-requires media and died. Same file, same
+ * device, one path green and one red.
+ *
+ * The fix is to sniff MAGIC BYTES when the declared type says nothing, and
+ * ONLY into the formats already accepted above -- this widens recognition,
+ * never the format set. A declared, accepted type still wins; sniffing is the
+ * fallback, not an override.
+ */
+export function sniffMime(bytes: Buffer): string | null {
+  if (bytes.length < 12) return null;
+  if (bytes.readUInt16BE(0) === 0xffd8) return 'image/jpeg';
+  if (bytes.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) return 'image/png';
+  if (bytes.subarray(0, 4).equals(Buffer.from([0x1a, 0x45, 0xdf, 0xa3]))) return 'video/webm';
+  if (bytes.subarray(4, 8).toString('latin1') === 'ftyp') {
+    const brand = bytes.subarray(8, 12).toString('latin1');
+    if (brand.startsWith('hei') || brand.startsWith('mif')) return 'image/heic';
+    if (brand === 'qt  ') return 'video/quicktime';
+    return 'video/mp4'; // isom/mp42/3gp4/... -- every other ftyp brand the wild sends
+  }
+  return null;
+}
+
 export const ACCEPTED_INPUT_MIME: Record<string, { kind: 'image' | 'video'; to: string }> = {
   'image/jpeg': { kind: 'image', to: 'image/jpeg' },
   'image/png': { kind: 'image', to: 'image/png' },

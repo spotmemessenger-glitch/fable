@@ -41,6 +41,7 @@ import { videoEl, watchInView, playExclusive, pause, pauseAll, isSoundOn, setSou
 import { likeBurst, tick, onDoubleTap } from '../lib/burst.js'
 import { openPhotoEditor } from '../lib/photoedit.js'
 import { fileToDataURL, fileFromDataURL } from '../lib/media.js'
+import { precheckAttachment } from '../lib/media-precheck.js'
 
 /**
  * The card's icon set, in the SAME grammar as the bottom bar (see NAV_ITEMS in
@@ -1141,6 +1142,11 @@ export function render (root, ctx, params) {
        * two requests racing — whichever landed second won, so a cancelled pick
        * could overwrite the one on screen. */
       uploadAbort?.abort()
+      /* A4: EVERY path into upload() re-validates -- including a photo that
+       * just came back from the editor. Compression usually shrinks, but a
+       * drawn-on PNG re-encode can GROW, and the doomed upload it would start
+       * is exactly what the precheck exists to prevent. */
+      if (!(await precheckAndReport(picked))) return
       const ac = new AbortController()
       uploadAbort = ac
       status.textContent = 'Uploading…'
@@ -1303,12 +1309,32 @@ export function render (root, ctx, params) {
       }
     }
 
+    /* A4 — REFUSE BEFORE BYTES LEAVE THE DEVICE, VISIBLY, WITH THE NUMBERS.
+     *
+     * The old check refused correctly and told nobody: the message went to
+     * `.mo-substatus`, the LAST element in a scrolling sheet, below the Post
+     * button -- off-screen at 390x844 (the video-upload diagnosis, 2026-08-07).
+     * Picking a 200 MB clip looked identical to the picker doing nothing.
+     *
+     * Now the shared precheck runs first -- size AND duration, real numbers in
+     * the message ("That file is 209.2 MB. The limit for a post is 50 MB") --
+     * and the refusal lands in a TOAST as well as the status line, so it is
+     * seen where the reader is looking. Server-side validation is unchanged:
+     * this never replaces it, it just stops the doomed minutes-long upload. */
+    async function precheckAndReport (f) {
+      const check = await precheckAttachment(f, { maxBytes: MAX_VIDEO_BYTES, label: 'a post' })
+      if (!check.ok) {
+        status.textContent = check.message
+        ctx.toast(check.message)
+        return false
+      }
+      return true
+    }
+
     file.addEventListener('change', async () => {
       const f = file.files?.[0]
       if (!f) return
-      const isVideo = (f.type || '').startsWith('video/')
-      const cap = isVideo ? MAX_VIDEO_BYTES : MAX_IMAGE_BYTES
-      if (f.size > cap) { status.textContent = `That file is ${(f.size / 1048576).toFixed(1)} MB — the limit is ${cap / 1048576} MB.`; return }
+      if (!(await precheckAndReport(f))) return
       picked = f
       showPicked(true)
       await upload()

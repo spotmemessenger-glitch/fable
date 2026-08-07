@@ -204,7 +204,12 @@ export class MomentsService {
     const moment = await this.repo.findViewable(userId, momentId); // PRIVATE-INTERACT gate
     if (!moment) throw notFound();
     await this.repo.setReaction(momentId, userId, reaction);
-    await this.realtime.publish({ kind: 'reaction', targetUserId: moment.authorId, refId: momentId, actorId: userId });
+    /* NO SELF-ALERTS (A3): reacting to your own post notifies nobody -- the
+     * author already knows. Suppressed here rather than in an adapter so it
+     * holds for every transport, present and future. */
+    if (moment.authorId !== userId) {
+      await this.realtime.publish({ kind: 'reaction', targetUserId: moment.authorId, refId: momentId, actorId: userId });
+    }
   }
 
   async unreact(userId: string, momentId: string): Promise<void> {
@@ -227,7 +232,17 @@ export class MomentsService {
   /* ------------------------------------------------------------ stories (M3) */
 
   async createStory(authorId: string, mediaId: string, visibility: Exclude<MomentVisibility, 'private'>, now = Date.now()) {
+    /* A1: an absent or foreign mediaId used to reach Prisma raw and surface as
+     * a 500 -- an opaque "Internal server error" on the phone. It is caller
+     * input, so it gets a typed refusal like every other bad input here. */
+    if (typeof mediaId !== 'string' || mediaId.length === 0) throw notFound();
+    /* A1: there is NO foreign key from MomentStory.mediaId to the asset table,
+     * so an unknown id used to create a DANGLING story -- 201 on the phone,
+     * blank rectangle in the rail. "Posting a story produces an empty story"
+     * is this line missing. Uniform notFound: absent and foreign read alike. */
+    if (this.media && !(await this.media.assetExists(mediaId))) throw notFound();
     const story = await this.repo.createStory(authorId, mediaId, visibility, now);
+    if (!story) throw notFound(); // FK-guarded repos refuse the same way
     if (this.media) {
       await this.media.addReference(mediaId);
       await this.media.stampStoryRetention(mediaId, story.expiresAtUTC);
