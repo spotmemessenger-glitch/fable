@@ -91,6 +91,13 @@ export function MessageSheet({ row, port, onReply, onEdit, onClose }: {
         </div>
       )}
       {item('Reply', () => { onClose(); onReply(row); })}
+      {/* Session 3 — Forward stays inside Spot Me; Share hands it to the OS
+          sheet. Both are adapter callbacks, gated exactly as legacy: never
+          view-once/burst (canForward arrives pre-decided). */}
+      {row.canForward === true && port.forward &&
+        item('Forward', () => { onClose(); port.forward?.(row.id); })}
+      {row.canForward === true && port.share &&
+        item('Share…', () => { onClose(); port.share?.(row.id); })}
       {row.canEdit && item('Edit', () => { onClose(); onEdit(row); })}
       {row.copyText !== null &&
         item('Copy', () => { onClose(); port.copy(row.copyText as string); })}

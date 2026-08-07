@@ -85,7 +85,9 @@ test('the adapter reuses the engine — rooms.* only, no store/transport/crypto 
   // chat-island-port.js (the ChatPort over rooms/db), chat-island-media.js
   // (raw browser APIs). The engine calls live in the port file; the fences
   // hold across all three.
-  const ADAPTER_FILES = ['chat-island.js', 'chat-island-port.js', 'chat-island-media.js']
+  // Session 3 added chat-island-lang.js (translation/translit engines driven
+  // through injected deps) — the fences hold across all four.
+  const ADAPTER_FILES = ['chat-island.js', 'chat-island-port.js', 'chat-island-media.js', 'chat-island-lang.js']
   const port = read('views', 'chat-island-port.js')
   assert.match(port, /rooms\.sendMessage/, 'send goes through the same engine call the legacy view uses')
   assert.match(port, /rooms\.retryMessage/)
@@ -108,7 +110,7 @@ test('the adapter reuses the engine — rooms.* only, no store/transport/crypto 
 })
 
 test('session 2: the flag still has exactly one reader among the adapter files', () => {
-  for (const f of ['chat-island-port.js', 'chat-island-media.js']) {
+  for (const f of ['chat-island-port.js', 'chat-island-media.js', 'chat-island-lang.js']) {
     assert.equal(/uiFlag/.test(read('views', f)), false, `${f} must not read any flag`)
   }
 })
