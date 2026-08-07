@@ -63,7 +63,26 @@ function loadTurnstileScript () {
 }
 
 let widgetId = null
+let hostEl = null
 let pendingResolve = null
+
+/**
+ * Drop a widget whose container has left the DOM so the next mount re-renders.
+ *
+ * Onboarding and the recovery screen both `clear(app)`, which DETACHES the
+ * host div while `widgetId` still points at it. Executing against a detached
+ * widget yields no token and no error — the request would then go out bare and
+ * earn a 403 once the owner activates the keys, on the one screen a locked-out
+ * user is already trying to use. Re-rendering is the fix; the alternative is a
+ * bot check that works exactly once per page load.
+ */
+function dropIfDetached (ts) {
+  if (widgetId === null) return
+  if (hostEl && hostEl.isConnected) return
+  try { ts.remove(widgetId) } catch { /* already torn down */ }
+  widgetId = null
+  hostEl = null
+}
 
 /**
  * Mount the widget into the signup form. Invisible until Cloudflare needs
@@ -71,9 +90,12 @@ let pendingResolve = null
  * call more than once — the widget mounts once.
  */
 export async function mountTurnstile (container) {
-  if (!turnstileEnabled() || !container || widgetId !== null) return null
+  if (!turnstileEnabled() || !container) return null
   try {
     const ts = await loadTurnstileScript()
+    dropIfDetached(ts)
+    if (widgetId !== null) return widgetId
+    hostEl = container
     widgetId = ts.render(container, {
       sitekey: turnstileSiteKey(),
       appearance: 'interaction-only', // invisible unless a challenge is required
@@ -97,6 +119,7 @@ export async function turnstileToken () {
   if (!turnstileEnabled()) return null
   try {
     const ts = await loadTurnstileScript()
+    dropIfDetached(ts)
     if (widgetId === null) {
       // No form-mounted widget (e.g. token needed after onboarding was torn
       // down) — mount into an offscreen host so execute still works.

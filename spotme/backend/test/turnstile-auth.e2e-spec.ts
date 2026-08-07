@@ -60,6 +60,10 @@ describe('Turnstile on the auth surface (e2e)', () => {
     await app.close();
   });
 
+  /** An adult declaration: the 18+ gate (ADR-029) refuses account creation
+   *  without one, so every create fixture below carries it. */
+  const ADULT = '2000-01';
+
   /** OTP request needs an account behind the email — sign one up first
    *  (the signup POST itself passes through the gate under test). */
   const signupEmail = async (headers: Record<string, string> = {}) => {
@@ -67,7 +71,7 @@ describe('Turnstile on the auth surface (e2e)', () => {
     const res = await fetch(`${url}/api/auth/signup`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...headers },
-      body: JSON.stringify({ username: 'tu_' + hex(6), email, name: 'TS' }),
+      body: JSON.stringify({ username: 'tu_' + hex(6), email, name: 'TS', birthYearMonth: ADULT }),
     });
     return { email, status: res.status };
   };
@@ -83,7 +87,7 @@ describe('Turnstile on the auth surface (e2e)', () => {
     fetch(`${url}/api/auth/guest`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...headers },
-      body: JSON.stringify({ id: hex(16), username: 'ts_' + hex(6), name: 'TS', secret: 'tssecret123' }),
+      body: JSON.stringify({ id: hex(16), username: 'ts_' + hex(6), name: 'TS', secret: 'tssecret123', birthYearMonth: ADULT }),
     });
 
   it('ABSENT KEY (today): signup, OTP request and guest signup answer normally, siteverify never called', async () => {
@@ -134,6 +138,20 @@ describe('Turnstile on the auth surface (e2e)', () => {
     siteverify = { kind: 'outage' };
     const res = await otpRequest(email, { [TURNSTILE_HEADER]: 'any-token' });
     expect(res.status).toBe(201);
+    delete process.env.TURNSTILE_SECRET_KEY;
+  });
+
+  it('guest RECOVERY is gated: it grinds codes against a public @username', async () => {
+    process.env.TURNSTILE_SECRET_KEY = 'e2e-secret';
+    const res = await fetch(`${url}/api/auth/guest/recover`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: 'someone', secret: 'guess-attempt-1' }),
+    });
+    // 403 turnstile_required, NOT the 401/404 the recover handler would give —
+    // proof the gate runs BEFORE any code comparison happens.
+    expect(res.status).toBe(403);
+    expect(await res.json()).toEqual({ error: 'turnstile_required' });
     delete process.env.TURNSTILE_SECRET_KEY;
   });
 

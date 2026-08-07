@@ -60,10 +60,33 @@ check('no hardcoded turnstile key literal in web src',
 
 // The wiring exists (fence is not vacuous): onboarding mounts the widget and
 // guest auth attaches the header.
-check('onboarding mounts the widget host',
-  readFileSync(join(ROOT, 'src/main.js'), 'utf8').includes('mountTurnstile(turnstileHost)'))
-check('guest auth attaches the token header',
-  readFileSync(join(ROOT, 'src/lib/socket-transport.js'), 'utf8').includes('withTurnstileHeader'))
+const mainJs = readFileSync(join(ROOT, 'src/main.js'), 'utf8')
+const transportJs = readFileSync(join(ROOT, 'src/lib/socket-transport.js'), 'utf8')
+check('onboarding mounts the widget host', mainJs.includes('mountTurnstile(turnstileHost)'))
+check('guest auth attaches the token header', transportJs.includes('withTurnstileHeader'))
+check('guest RECOVERY attaches the token header too (the code-grinding surface)',
+  /guest\/recover[\s\S]{0,200}withTurnstileHeader/.test(mainJs))
+
+/* --- 4. ARCHITECTURE: HTTP auth requests only, never the socket handshake --
+ *
+ * ADR-033 made the transport server-only. The bot check belongs on the HTTP
+ * account requests the backend middleware already guards — which is also the
+ * path an abuser actually hits — and must never migrate onto the Socket.IO
+ * handshake, where it would gate every reconnect of an already-authenticated
+ * session instead of gating account creation. Encoded here so the next
+ * refactor of the transport cannot quietly move it.
+ */
+const handshake = transportJs.slice(transportJs.indexOf('io(`${SERVER}/rooms`'))
+check('the socket handshake carries NO turnstile token',
+  handshake.length > 0 && !/turnstile/i.test(handshake))
+
+// Every attach site must be a fetch of an /api/auth/* route, never anything else.
+const attachSites = [...mainJs.matchAll(/withTurnstileHeader/g)].length +
+  [...transportJs.matchAll(/withTurnstileHeader/g)].length
+check('token attach sites exist and are all on /api/auth/* HTTP calls',
+  attachSites >= 3 &&
+  [...mainJs.matchAll(/withTurnstileHeader/g), ...transportJs.matchAll(/withTurnstileHeader/g)].length === attachSites &&
+  /api\/auth\/guest[\s\S]{0,300}withTurnstileHeader|withTurnstileHeader[\s\S]{0,300}api\/auth\/guest/.test(transportJs))
 
 /* --- report -------------------------------------------------------------- */
 

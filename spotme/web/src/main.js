@@ -26,7 +26,7 @@ import { openCrop } from './lib/crop.js'
 import { readLink } from './net.js'
 import { primeAudio, startNotifier, notifyState, enableNotify, notifyBlockedReason, alertMessage } from './lib/notify.js'
 import { subscribePush, attachPushHandlers, isNative as isNativeShell } from './lib/push.js'
-import { mountTurnstile } from './lib/turnstile.js'
+import { mountTurnstile, turnstileToken, withTurnstileHeader } from './lib/turnstile.js'
 
 import * as inbox from './views/inbox.js'
 import * as discovery from './views/discovery.js'
@@ -618,9 +618,12 @@ function renderRecovery () {
     if (secret.length < 8) { toast('Enter your recovery code'); code.focus(); return }
     busy = true; goBtn.disabled = true
     try {
+      // Bot check (ADR-032). Recovery is the grinding surface — @username is
+      // public and only the code is secret — so it carries a token like the
+      // create paths do. No-op until the owner sets TURNSTILE_SITE_KEY.
       const res = await fetch(`${REGISTRY_API}/api/auth/guest/recover`, {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
+        headers: withTurnstileHeader({ 'content-type': 'application/json' }, await turnstileToken()),
         body: JSON.stringify({ username: uname, secret })
       })
       if (!res.ok) { toast('That username and code don’t match.'); busy = false; goBtn.disabled = false; return }

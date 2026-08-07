@@ -21,10 +21,21 @@ server-side with one HTTPS call — no vendor SDK on the server.
 
 ## Decision
 
-- **Cloudflare Turnstile on the account-creation surface**: `auth/signup`,
-  `auth/guest` (the live app's real signup), `auth/otp/request`,
-  `auth/otp/verify`. Refresh/employee-login are not challenged (they already
-  require a credential).
+- **Cloudflare Turnstile on the unauthenticated account surface**:
+  `auth/signup`, `auth/guest` (the live app's real signup),
+  `auth/guest/recover`, `auth/otp/request`, `auth/otp/verify`.
+  Refresh/employee-login are not challenged (they already require a
+  credential). `guest/recover` is included because it is a *guessing*
+  surface, not merely a creation one — public `@username` plus a secret
+  recovery code, 200 on match — and Nest treats it as a distinct route, so
+  `auth/guest` does not cover it.
+- **The token rides the HTTP account requests, never the realtime handshake.**
+  After ADR-033 made the transport server-only, putting it on the Socket.IO
+  handshake would gate every reconnect of an already-authenticated session
+  while leaving account creation — the path an abuser actually hits —
+  unguarded. Enforced by a fence, not convention (`turnstile-gate` asserts the
+  handshake region carries no turnstile reference and that every attach site
+  is an `/api/auth/*` fetch).
 - **Three-rule posture** (`backend/src/middleware/turnstile.ts`):
   1. **Structurally bypassed** when `TURNSTILE_SECRET_KEY` is absent — next()
      before touching the request; nothing changes until the owner adds keys.
