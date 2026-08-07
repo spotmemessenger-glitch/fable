@@ -2,7 +2,7 @@
 
 **Date:** 2026-08-07 · **Branch:** `claude/vercel-token-connection-bj4d21` · PR #143
 
-**Part A is complete. Part B is not.** B1 and B6 are done and verified; B2–B5
+**Part A is complete and now CI-verified.** Part B is not. B1 and B6 are done and verified; B2–B5
 and B7 are not started. Naming that up front because a partial delivery reported
 as a whole one is the more expensive failure.
 
@@ -71,17 +71,39 @@ default.
 folding public into nearby without a distance limit, is a product decision I
 should not make silently. Recorded rather than quietly resolved.
 
-## A5 — does Friends work now? ⏳ answered by CI, not by me
+## A5 — does Friends work now? ✅ YES — verified, not reasoned
 
-**This container has no Postgres, so `moments-audience.spec.ts` has not run
-locally.** It runs in CI's backend job.
+**CI ran `moments-audience.spec.ts` against real Postgres on `7bdc3fe` and it
+passed**, along with web, e2e and compose. This section previously said the
+answer was conditional; it no longer is.
 
-What I can say from the code: the friends feed's only bar to the author was the
-`MomentFollow` requirement, and `isAuthor` now short-circuits it without
-inventing a self-follow row (asserted explicitly). **My recommendation is to
-keep both tabs** — Friends is now the only mode showing follow-scoped posts, and
-Nearby cannot substitute because it is geography-bound. But treat that as
-conditional on the CI run, not as a verified claim.
+What is now proven rather than argued:
+
+| assertion | result |
+|---|---|
+| the author's own **friends** post appears in the friends feed | ✅ |
+| …with **no self-follow row** — fixed in the query, not by inventing data | ✅ |
+| a **`private`** post is visible to its author — "only you" means you | ✅ |
+| the author's own nearby post appears in nearby | ✅ |
+| the author's own **friends** post appears in **nearby** too | ✅ |
+| a stranger never sees the private post, in any mode | ✅ |
+| a stranger who follows nobody does not see the friends post | ✅ |
+| a stranger still sees the nearby post — nothing was narrowed | ✅ |
+| the author does **not** see their own **removed** post | ✅ |
+| a **deleted** post stays gone for its author too | ✅ |
+| all four audience values persist as chosen, read back from the DB | ✅ |
+
+**Keep both tabs.** Friends is now the only mode showing follow-scoped posts,
+and Nearby cannot substitute for it because Nearby is geography-bound. The
+friends feed's only bar to the author was the `MomentFollow` requirement, and
+`isAuthor` short-circuits it without a self-follow row.
+
+**One detail worth keeping**, because it makes the nearby assertion stronger
+than I originally designed it: the `friends` and `private` posts carry **no
+location at all** — the policy refuses a location on those tiers outright. So
+the author's own friends post appearing in the **nearby** feed cannot be
+explained by geography. It can only come from `isAuthor` short-circuiting the
+geo predicate, which is exactly what A1 claims.
 
 ---
 
@@ -159,7 +181,8 @@ targets audited) and I am not claiming them.
 | design-token fence | 29/29 |
 | backend `tsc --noEmit` | clean |
 | backend build | ✅ |
-| `moments-audience.spec.ts` | **not run locally — no Postgres.** Runs in CI |
+| `moments-audience.spec.ts` | **✅ PASSED in CI** against real Postgres (`7bdc3fe`) — not runnable locally, no Postgres |
+| CI overall on `7bdc3fe` | web ✅ · backend ✅ · e2e ✅ · compose ✅ |
 
 **"Verify on both phones" — I cannot.** I have no access to either device, and
 no headless run makes that claim true. Everything above is verified by the means
