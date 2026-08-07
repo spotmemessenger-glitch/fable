@@ -135,8 +135,16 @@ export interface IStorageAdapter {
   /** A short-lived URL the client may PUT ciphertext to. */
   getUploadUrl(objectKey: string, contentType: string): Promise<string>;
 
-  /** A short-lived URL the client may GET ciphertext from. */
-  getDownloadUrl(objectKey: string): Promise<string>;
+  /**
+   * A short-lived URL the client may GET ciphertext from.
+   *
+   * `contentType` is OPTIONAL and exists for Moments, whose objects are not
+   * ciphertext but plaintext photos and videos that a browser has to render in
+   * an `<img>`/`<video>`. Chat attachments pass nothing and keep being served
+   * as opaque bytes. An adapter that honours it must still refuse to serve any
+   * type outside the renderable media allow-list — see RENDERABLE_MEDIA_TYPES.
+   */
+  getDownloadUrl(objectKey: string, contentType?: string): Promise<string>;
 
   /**
    * Write bytes the SERVER already holds. Moments only (M1 activation).
@@ -166,6 +174,37 @@ export interface IStorageAdapter {
 
 /** DI token — the interface is erased at runtime, so injection needs a symbol. */
 export const STORAGE_ADAPTER = Symbol('STORAGE_ADAPTER');
+
+/**
+ * The ONLY content types a stored object may ever be served as.
+ *
+ * The local media route used to answer every download with
+ * `application/octet-stream` + `nosniff`, and the reasoning was sound for what
+ * it was written for: chat attachments are ciphertext, and letting a stored
+ * content type drive that header is how a blob store starts serving
+ * `text/html` back to a browser.
+ *
+ * Moments broke the assumption. Those objects are plaintext media that a
+ * browser must decode in an `<img>` or a `<video>`, and `octet-stream` +
+ * `nosniff` is precisely the combination that forbids it — every moment video
+ * failed with MEDIA_ERR_SRC_NOT_SUPPORTED and every photo rendered blank.
+ *
+ * An ALLOW-LIST keeps both properties at once: real media renders, and no
+ * amount of tampering with a stored or signed value can produce `text/html`,
+ * `image/svg+xml` (scriptable), or anything else with an execution story.
+ * Anything not on this list falls back to `octet-stream`.
+ */
+export const RENDERABLE_MEDIA_TYPES: readonly string[] = Object.freeze([
+  'image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/avif', 'image/heic',
+  'video/mp4', 'video/webm', 'video/quicktime',
+  'audio/mpeg', 'audio/mp4', 'audio/aac', 'audio/ogg', 'audio/webm',
+]);
+
+/** The type to actually serve: the requested one if renderable, else opaque. */
+export const safeServeType = (requested?: string | null): string => {
+  const t = String(requested || '').toLowerCase().split(';')[0].trim();
+  return RENDERABLE_MEDIA_TYPES.includes(t) ? t : 'application/octet-stream';
+};
 
 /**
  * Members a storage adapter must NOT have.

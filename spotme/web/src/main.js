@@ -20,6 +20,7 @@ import { freshTokens, setTerminalAuthHandler } from './lib/socket-transport.js'
 import { setBlockedSendHandler } from './lib/crypto/identity-enforcement.js'
 import { readyRTC } from './net.js'
 import { attachPullRefresh } from './lib/pullrefresh.js'
+import { installAudioUnlock } from './lib/video.js'
 import { el, clear, toast, avatar, actionSheet } from './lib/ui.js'
 import { compressImage, shrinkDataURL, AVATAR_EDGE, AVATAR_QUALITY } from './lib/media.js'
 import { openCrop } from './lib/crop.js'
@@ -42,6 +43,13 @@ import * as moments from './views/moments.js'
 import { momentsAvailable, resetMomentsAvailability } from './lib/moments-api.js'
 
 const app = document.getElementById('app')
+
+/* Video sound is meant to be ON, and browsers only permit that once the page
+ * has been touched. Arm the listener at the document, at boot, so the gesture
+ * that unlocks it is the reader's FIRST tap anywhere — onboarding, a chat, a
+ * tab — rather than a second tap they have to spend on a video control after
+ * already arriving at one. See lib/video.js for the full rule. */
+installAudioUnlock(document)
 
 /**
  * A reset was asked for via ?fresh — read once, before anything can navigate

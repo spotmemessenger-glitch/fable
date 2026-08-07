@@ -8,6 +8,7 @@ import {
   isSafeSegment,
   parseObjectKey,
   parseMomentObjectKey,
+  safeServeType,
 } from './storage.interface';
 
 /**
@@ -55,9 +56,15 @@ export class LocalStorageAdapter implements IStorageAdapter {
     return process.env.STORAGE_URL_SECRET || process.env.JWT_ACCESS_SECRET || 'dev-only-secret';
   }
 
-  private sign(objectKey: string, expires: number, method: 'PUT' | 'GET'): string {
+  /* The content type is INSIDE the signature, not just alongside it. A `ct`
+   * the route trusted without covering it here would be an open redirect of
+   * content types: anyone holding a valid download URL could re-serve the same
+   * bytes as any type they liked. Signed, it is exactly as forgeable as the
+   * key and the expiry, which is to say not at all. Absent, it signs as the
+   * empty string so existing (chat) URLs keep their meaning. */
+  private sign(objectKey: string, expires: number, method: 'PUT' | 'GET', contentType = ''): string {
     return createHmac('sha256', this.secret())
-      .update(`${method}\n${objectKey}\n${expires}`)
+      .update(`${method}\n${objectKey}\n${expires}\n${contentType}`)
       .digest('hex');
   }
 
@@ -66,19 +73,26 @@ export class LocalStorageAdapter implements IStorageAdapter {
    * METHOD too — otherwise a download URL would double as an upload URL, and
    * anyone who could read an attachment could overwrite it.
    */
-  verify(objectKey: string, expires: number, method: 'PUT' | 'GET', signature: string): boolean {
+  verify(
+    objectKey: string,
+    expires: number,
+    method: 'PUT' | 'GET',
+    signature: string,
+    contentType = '',
+  ): boolean {
     if (!Number.isFinite(expires) || expires * 1000 < Date.now()) return false;
     if (typeof signature !== 'string' || signature.length !== 64) return false;
-    const expected = Buffer.from(this.sign(objectKey, expires, method), 'utf8');
+    const expected = Buffer.from(this.sign(objectKey, expires, method, contentType), 'utf8');
     const given = Buffer.from(signature, 'utf8');
     if (expected.length !== given.length) return false;
     return timingSafeEqual(expected, given);
   }
 
-  private urlFor(objectKey: string, method: 'PUT' | 'GET'): string {
+  private urlFor(objectKey: string, method: 'PUT' | 'GET', contentType = ''): string {
     const expires = Math.floor(Date.now() / 1000) + PRESIGN_TTL_SECONDS;
-    const sig = this.sign(objectKey, expires, method);
+    const sig = this.sign(objectKey, expires, method, contentType);
     const q = new URLSearchParams({ key: objectKey, expires: String(expires), sig });
+    if (contentType) q.set('ct', contentType);
     return `${this.baseUrl}?${q.toString()}`;
   }
 
@@ -87,11 +101,17 @@ export class LocalStorageAdapter implements IStorageAdapter {
     return this.urlFor(objectKey, 'PUT');
   }
 
-  async getDownloadUrl(objectKey: string): Promise<string> {
+  /**
+   * `contentType` is clamped to the renderable allow-list BEFORE signing, so a
+   * type outside it can never be signed in the first place — the route's own
+   * clamp is then a second, independent check rather than the only one.
+   */
+  async getDownloadUrl(objectKey: string, contentType?: string): Promise<string> {
     if (!parseObjectKey(objectKey) && !parseMomentObjectKey(objectKey)) {
       throw new Error('invalid object key');
     }
-    return this.urlFor(objectKey, 'GET');
+    const ct = contentType ? safeServeType(contentType) : '';
+    return this.urlFor(objectKey, 'GET', ct === 'application/octet-stream' ? '' : ct);
   }
 
   /**
