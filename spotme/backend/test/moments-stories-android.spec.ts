@@ -46,11 +46,17 @@ let app: INestApplication;
 let url: string;
 let token = '';
 
-async function ensureMomentsFlag() {
-  await prisma.runtimeFlag.upsert({
-    where: { key: 'moments' },
-    create: { key: 'moments', enabled: true },
-    update: { enabled: true },
+/* The gate passes on RuntimeFlag OR allowlist. These suites use the ALLOWLIST,
+ * scoped to their own throwaway accounts, because the R7 kill-switch fence
+ * (flags-kill-switch.spec.ts) asserts NO domain RuntimeFlag row exists on a
+ * migrated database -- and jest runs suites in parallel against one database,
+ * so a suite that seeds the flag races that fence. Per-account rows race
+ * nothing and clean up with the accounts. */
+async function allowMoments(userId: string) {
+  await prisma.domainAllowlist.upsert({
+    where: { domain_userId: { domain: 'moments', userId } },
+    create: { domain: 'moments', userId, note: 'stories-android spec' },
+    update: {},
   });
 }
 
@@ -70,7 +76,6 @@ beforeAll(async () => {
   });
   await app.listen(0);
   url = await app.getUrl();
-  await ensureMomentsFlag();
 
   const id = `${RUN}00000000000000`.slice(0, 16);
   const r = await fetch(`${url}/api/auth/guest`, {
@@ -78,11 +83,14 @@ beforeAll(async () => {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ id, username: `st${id.slice(0, 10)}`, secret: `sec-${id}-12345678`, birthYearMonth: '1996-01' }),
   });
-  token = ((await r.json()) as { accessToken?: string }).accessToken ?? '';
+  const body = (await r.json()) as { accessToken?: string; userId?: string };
+  token = body.accessToken ?? '';
   expect(token).not.toBe('');
+  await allowMoments(body.userId ?? `${RUN}00000000000000`.slice(0, 16));
 }, 120_000);
 
 afterAll(async () => {
+  await prisma.domainAllowlist.deleteMany({ where: { domain: 'moments', note: 'stories-android spec' } }).catch(() => {});
   await app?.close();
   await prisma.$disconnect();
 });

@@ -100,13 +100,6 @@ let B: { id: string; token: string };
 
 beforeAll(async () => {
   process.env.JWT_ACCESS_SECRET ||= 'moments-reactions-0123456789abcd01';
-  // The moments domain gate 404s every route without this row; CI databases
-  // start empty, so the suite seeds what it needs rather than assuming it.
-  await prisma.runtimeFlag.upsert({
-    where: { key: 'moments' },
-    create: { key: 'moments', enabled: true },
-    update: { enabled: true },
-  });
   const m = await Test.createTestingModule({ imports: [AppModule] })
     .overrideProvider(MOMENT_REALTIME_PORT)
     .useValue(realtime)
@@ -120,9 +113,20 @@ beforeAll(async () => {
   url = await app.getUrl();
   A = await account('a');
   B = await account('b');
+  /* Allowlist, not RuntimeFlag: the R7 kill-switch fence asserts no domain
+   * flag row exists, and suites share one database in parallel. Per-account
+   * rows race nothing. */
+  for (const u of [A, B]) {
+    await prisma.domainAllowlist.upsert({
+      where: { domain_userId: { domain: 'moments', userId: u.id } },
+      create: { domain: 'moments', userId: u.id, note: 'reactions-b2 spec' },
+      update: {},
+    });
+  }
 }, 120_000);
 
 afterAll(async () => {
+  await prisma.domainAllowlist.deleteMany({ where: { domain: 'moments', note: 'reactions-b2 spec' } }).catch(() => {});
   await app?.close();
   await prisma.$disconnect();
 });
