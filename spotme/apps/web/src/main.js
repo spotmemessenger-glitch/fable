@@ -76,7 +76,9 @@ const resetOrdered = () => {
   try { return localStorage.getItem(EPOCH_KEY) !== RESET_EPOCH } catch { return false }
 }
 
-const RESETTING = new URL(window.location.href).searchParams.has('fresh') || resetOrdered()
+/* `let`, not `const`: a FAILED wipe lifts the stand-down (maybeFreshStart)
+ * rather than leaving the screen blank forever. */
+let RESETTING = new URL(window.location.href).searchParams.has('fresh') || resetOrdered()
 
 /* F1: ask the browser to mark this origin's storage durable, so the identity
  * key and profile survive storage pressure. Best-effort — denial changes
@@ -732,6 +734,22 @@ async function maybeFreshStart () {
   if (!wiped.ok) {
     toast(`Couldn’t finish clearing this device (${wiped.failures.join(', ')}). ` +
       'Close any other Spot Me tabs and try again.')
+    /* BOOT ANYWAY — a failed wipe must not leave the screen blank.
+     *
+     * RESETTING keeps render() and boot() standing down while the wipe runs so
+     * the old profile never flashes mid-erase. It used to stay up FOREVER when
+     * the wipe failed — and on a device where IndexedDB itself is broken (iOS
+     * private mode throwing SecurityError, an open that never settles, another
+     * tab holding a database) the wipe ALWAYS fails, so every such device sat
+     * on a blank screen with no error before onboarding could ever paint. The
+     * epoch is deliberately NOT stamped — the reset re-runs next load, exactly
+     * like one interrupted half-way — but the app comes up: whoever is holding
+     * the phone gets onboarding, or their still-unwiped data, instead of
+     * nothing. The wipe itself is bounded (dropDatabase and the blobstore both
+     * time out), so this branch is always reached. */
+    RESETTING = false
+    if (db.ready()) boot()
+    render()
     return false
   }
   // Stamped AFTER the wipe, so a reset interrupted half-way runs again next
