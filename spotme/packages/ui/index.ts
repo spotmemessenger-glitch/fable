@@ -1,11 +1,12 @@
 /**
  * @spotme/ui entry.
  *
- * ONLY flagged surfaces are exported: Exchange (slice 1, `spotme.ui.exchange`)
- * and Contacts/Notifications/Stories (slice 2, one flag each).
- * discovery/events/moments/assistant stay dark and are deliberately absent,
- * so importing this package cannot reach them and the backend dark fences
- * keep meaning what they say.
+ * ONLY flagged surfaces are exported: Exchange (slice 1, `spotme.ui.exchange`),
+ * Contacts/Notifications/Stories (slice 2, one flag each), and Discovery LIVE
+ * (slice 5, `spotme.ui.discovery` — `discovery-live/`, pinned to today's lobby
+ * surface). The Phase-2 `discovery/` surface and events/moments/assistant stay
+ * dark and are deliberately absent, so importing this package cannot reach
+ * them and the backend dark fences keep meaning what they say.
  */
 import { createElement } from 'react';
 import { ExchangeIsland } from './exchange/island';
@@ -17,6 +18,8 @@ import { ChatShell } from './chat/ChatShell';
 import type { ChatPort } from './chat/ports';
 import { VerifyShell } from './verify/VerifyShell';
 import type { VerifyPort } from './verify/ports';
+import { DiscoveryLiveShell } from './discovery-live/DiscoveryLiveShell';
+import type { DiscoveryLivePort } from './discovery-live/ports';
 import type { ContactsPort } from './contacts/ports';
 import type { InboxPort } from './inbox/ports';
 import type { NotificationsPort } from './notifications/ports';
@@ -113,4 +116,12 @@ export type { VerifyPort, VerifySnapshot, VerifyPhase } from './verify/ports';
 
 export function __mountVerify(port: VerifyPort) {
   return createElement(VerifyShell, { port });
+ * Slice-5 mount point — Discovery LIVE. NOT the dark Phase-2 discovery/
+ * surface: the port is built app-side over the legacy lobby (ADR-024 fence
+ * covered) and no coordinate of any kind crosses it.
+ */
+export type { DiscoveryLivePort, DiscoverySnapshot, DiscoveryPeerView } from './discovery-live/ports';
+
+export function __mountDiscoveryLive(port: DiscoveryLivePort) {
+  return createElement(DiscoveryLiveShell, { port });
 }

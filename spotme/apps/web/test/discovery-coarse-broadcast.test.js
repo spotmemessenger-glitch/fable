@@ -100,6 +100,64 @@ check('ghost mode transmits NO coordinates (lat/lon null)',
 
 lobby.stop()
 
+/* --- React path (ADR-035 slice 5) — same assertions, second implementation --
+ *
+ * With `spotme.ui.discovery` on, views/discovery-island.js mounts the React
+ * surface. Its OUTBOUND path is the very lobby driven above — the module adds
+ * no announce/join/geolocation of its own (asserted structurally below), so
+ * every broadcast assertion already covers it. What it adds is an INBOUND
+ * port: computeDiscoverySnapshot() feeds the React package. Drive it with the
+ * same PRECISE fix and assert no coordinate — the precise fix OR the coarse
+ * broadcast values — survives across the port. */
+
+import { readFileSync } from 'node:fs'
+
+const islandSrc = readFileSync(new URL('../src/views/discovery-island.js', import.meta.url), 'utf8')
+  .replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '')
+
+check('react path adds no outbound route (no geolocation/join/send in discovery-island.js)',
+  !/\b(geolocation|getCurrentPosition|watchPosition|joinRoom|makeAction|\.send\s*\()/.test(islandSrc))
+
+const { computeDiscoverySnapshot } = await import(`${SRC}views/discovery-island.js`)
+const { distanceM, fmtDistance } = await import(`${SRC}lib/discovery.js`)
+
+const coarsePeer = coarse(12.9702, 77.5931, 'peer-1')     // what a peer's broadcast carries
+const reactSnap = computeDiscoverySnapshot({
+  profile: { name: 'T', lang: 'en' },
+  settings: { showOnMap: true, rangeM: 100 },
+  peers: [{ id: 'peer-1', name: 'P', lang: 'hi', lat: coarsePeer.lat, lon: coarsePeer.lon, ts: Date.now() }],
+  myPosition: PRECISE,                                     // precise, device-local
+  chatPeerIds: new Set(),
+  helpers: { distanceM, fmtDistance, langName: () => 'x' }
+})
+const reactJson = JSON.stringify(reactSnap)
+
+check('react port snapshot never contains the precise device coordinates',
+  !reactJson.includes(String(PRECISE.lat)) && !reactJson.includes(String(PRECISE.lon)))
+
+check('react port snapshot never contains ANY absolute coordinate (even coarse)',
+  !reactJson.includes(String(coarsePeer.lat)) && !reactJson.includes(String(coarsePeer.lon)) &&
+  reactSnap.peers.every((p) => !('lat' in p) && !('lon' in p)))
+
+check('react port carries only labels and relative offsets (test is not vacuous)',
+  reactSnap.peers.length === 1 &&
+  typeof reactSnap.peers[0].distLabel === 'string' && reactSnap.peers[0].distLabel.startsWith('~') &&
+  reactSnap.peers[0].offsetM != null &&
+  Number.isInteger(reactSnap.peers[0].offsetM.x) && Number.isInteger(reactSnap.peers[0].offsetM.y))
+
+check('ghost/unlocated react snapshot carries no spatial data at all', (() => {
+  const s = computeDiscoverySnapshot({
+    profile: { name: 'T', lang: 'en' },
+    settings: { showOnMap: false, rangeM: 100 },
+    peers: [{ id: 'peer-1', name: 'P', lang: 'hi', lat: coarsePeer.lat, lon: coarsePeer.lon, ts: Date.now() }],
+    myPosition: null,                                      // no fix → nothing derivable
+    chatPeerIds: new Set(),
+    helpers: { distanceM, fmtDistance, langName: () => 'x' }
+  })
+  return s.located === false && s.peers[0].offsetM === null && s.peers[0].distM === null &&
+    s.peers[0].distLabel === null
+})())
+
 console.log('\n========================================')
 console.log('  discovery broadcast — precise GPS never leaves the device')
 console.log('========================================')
