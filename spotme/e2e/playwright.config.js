@@ -101,7 +101,7 @@ export default defineConfig({
        * backend costs nothing; a preview would need the variable at BUILD time
        * and a full rebuild per run. */
       command: 'npx vite --port ' + WEB_PORT + ' --strictPort --host 127.0.0.1',
-      cwd: '../web',
+      cwd: '../apps/web',
       url: WEB,
       reuseExistingServer: !process.env.CI,
       timeout: 90_000,
