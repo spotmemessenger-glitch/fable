@@ -97,6 +97,8 @@ async function main () {
       page.on('pageerror', (e) => errors.push(String(e)))
       await page.goto(`${origin}/#/exchange`, { waitUntil: 'load' })
       await page.waitForSelector('section.x-screen', { timeout: 15000 })
+      // The bar carries the Exchange tab on an opted-in device.
+      await page.waitForSelector('.nv[data-path="#/exchange"]', { timeout: 5000 })
       assert.ok(requested.some((u) => /\/assets\/ui-.*\.js/.test(u)), 'flag on: the @spotme/ui chunk was never requested')
       assert.ok(requested.some((u) => /\/assets\/(react|client)-.*\.js/.test(u)), 'flag on: no React chunk was requested')
       const fatal = errors.filter((e) => /Failed to resolve module specifier|does not provide an export/.test(e))
@@ -116,6 +118,8 @@ async function main () {
       await page.waitForSelector('.x-note', { timeout: 15000 })
       const reactish = requested.filter((u) => /\/assets\/(ui|react|client|jsx-runtime)-.*\.js/.test(u))
       assert.deepStrictEqual(reactish, [], `flag off: React/ui chunks were requested: ${reactish.join(', ')}`)
+      // ...and the bar shows no Exchange tab: dark means invisible, too.
+      assert.strictEqual(await page.$('.nv[data-path="#/exchange"]'), null, 'flag off: the Exchange tab leaked into the bar')
       await ctx.close()
       console.log('ok  flag off — no React/ui chunk requested; dark stays dark on the wire')
     }

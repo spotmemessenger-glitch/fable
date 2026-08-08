@@ -10,6 +10,12 @@
  * on the next render. Nothing here persists anything.
  */
 import { mountIsland, unmountIsland, uiFlag } from '../lib/island.js'
+
+/* Re-exported for main.js's bar filter (the Exchange tab shows only on an
+ * opted-in device). main.js reads the flag through THIS view rather than the
+ * island host directly, so the slice-2 parity fence's claim — main.js carries
+ * no island wiring — stays true. */
+export { uiFlag }
 import { buildExchangePort } from '../lib/exchange-api.js'
 import { el, clear } from '../lib/ui.js'
 
