@@ -20,7 +20,11 @@ const match = (over: Partial<ExchangeMatchView> = {}): ExchangeMatchView => ({
 const intent: ExchangeIntentView = {
   id: 'i1', kind: 'offer', status: 'active', category: 'services/plumbing', title: 'Plumbing help',
   text: 'Available tonight', tags: [], informationalPrice: { label: '~₹500', disclaimer: 'informational-only-no-payment' },
-  approxLocation: { lat: 12.972, lon: 77.595, cell: 'g' }, version: { seq: 1 },
+  approxLocation: { lat: 12.972, lon: 77.595, cell: 'g' },
+  radius: { km: 3, maxKm: 25 },
+  availability: { state: 'recurring', scheduleLabel: 'Weekends, mornings' },
+  visibility: 'discoverable', createdAtIso: '2026-08-01T09:00:00.000Z', expiresAtIso: null,
+  version: { seq: 1 },
 };
 
 describe('exchange composer', () => {

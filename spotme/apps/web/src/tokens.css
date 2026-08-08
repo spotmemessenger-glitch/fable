@@ -71,6 +71,27 @@
   --vcard-top: #fbfcff;
   --vcard-bottom: #f5f7fb;
 
+  /* ---------------------------------------------------------------- *
+   * EXCHANGE accent (slice 1) — SCOPED, not the app-wide primary.
+   *
+   * ADR-034 governs every value here and none of it is a fresh choice:
+   *   - text on a 500 fill is NEAR-BLACK (6.67:1), never white (2.87:1 ✗);
+   *   - orange TEXT on white needs 700 minimum (5.19:1); 600 is 3.68:1 ✗
+   *     and is therefore fill-only;
+   *   - danger stays `--red`/`--sos`. It is NOT part of this ramp, so an
+   *     Exchange destructive action keeps reading as destructive rather than
+   *     as the accent -- the separation ADR-034 measured CVD collapse for.
+   *
+   * `--x-` prefixed so nothing here can be mistaken for, or promoted to, the
+   * app primary. The primary (`--blue`) is untouched by slice 1.
+   * ---------------------------------------------------------------- */
+  --x-accent-400: #ff8533;      /* near-black 7.90:1 */
+  --x-accent-500: #ff6a00;      /* the Exchange fill; near-black 6.67:1 */
+  --x-accent-600: #e05c00;      /* fill only — 3.68:1 as text ✗ */
+  --x-accent-700: #b84b00;      /* the ONLY orange usable as text on white */
+  --x-onaccent: var(--ink);     /* near-black on fill, per Decision 1 */
+  --x-accent-well: #fff2e8;     /* tint ground for selected/hover states */
+  --x-accent-line: #ffd6b8;     /* hairline on the tint */
   --shadow: 0 1px 2px rgba(15, 15, 16, .05), 0 14px 38px rgba(15, 15, 16, .10);
   /* Sora leads and is unchanged — it renders every Latin glyph in the app, so
    * nothing about the locked type scale moves. What follows it are the scripts

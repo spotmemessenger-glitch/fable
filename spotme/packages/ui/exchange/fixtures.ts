@@ -30,6 +30,11 @@ export class FixtureExchangeApi implements ExchangeApiPort {
       budgetBand: input.budgetBand,
       ...(input.informationalPrice ? { informationalPrice: { label: input.informationalPrice, disclaimer: 'informational-only-no-payment' as const } } : {}),
       approxLocation: { lat: input.origin.lat, lon: input.origin.lon, cell: input.origin.cell ?? 'g' },
+    radius: { km: 3, maxKm: 25 },
+    availability: { state: 'recurring', scheduleLabel: 'Weekends, mornings' },
+    visibility: 'discoverable',
+    createdAtIso: '2026-08-01T09:00:00.000Z',
+    expiresAtIso: null,
       version: { seq: 1 },
     };
   }
@@ -70,7 +75,11 @@ export class FixtureExchangeApi implements ExchangeApiPort {
       id, kind, status: 'active', category: 'services/plumbing', title: 'Leaking tap',
       text: 'Kitchen tap leaks tonight', tags: ['plumbing'], budgetBand: 'low',
       informationalPrice: { label: '~₹500', disclaimer: 'informational-only-no-payment' },
-      approxLocation: { lat: 12.972, lon: 77.595, cell: 'g12.972:77.595' }, version: { seq: 1 },
+      approxLocation: { lat: 12.972, lon: 77.595, cell: 'g12.972:77.595' },
+      radius: { km: 3, maxKm: 25 },
+      availability: { state: 'recurring', scheduleLabel: 'Weekends, mornings' },
+      visibility: 'discoverable', createdAtIso: '2026-08-01T09:00:00.000Z', expiresAtIso: null,
+      version: { seq: 1 },
     };
   }
   private matchFixture(id = 'fx-match-1'): ExchangeMatchView {
