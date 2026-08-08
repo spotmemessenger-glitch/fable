@@ -13,6 +13,8 @@ import { rooms } from '../lib/rooms.js'
 const isDemo = (id) => typeof id === 'string' && id.startsWith('demo-')
 import { langName } from '../lib/translate.js'
 import { el, clear, avatar, actionSheet } from '../lib/ui.js'
+import { uiFlag } from '../lib/island.js'
+import { contactsIsland } from '../lib/island-adapters.js'
 
 const LONG_PRESS_MS = 550
 const STAGGER_MS = 32
@@ -44,6 +46,8 @@ async function shareLink (url, toast) {
 }
 
 export function render (root, ctx) {
+  if (uiFlag('contacts')) return contactsIsland(root, ctx) // ADR-035 slice 2, default OFF
+
   const pressTimers = new Set()
 
   /* ------------------------------------------------------------- actions */

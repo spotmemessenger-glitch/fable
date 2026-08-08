@@ -33,7 +33,8 @@ function walk(dir, out = []) {
   return out;
 }
 
-const DOMAINS = ['discovery', 'exchange', 'events', 'moments', 'assistant'];
+const DOMAINS = ['discovery', 'exchange', 'events', 'moments', 'assistant',
+  'contacts', 'notifications', 'stories'];
 const roots = DOMAINS.map((d) => join(ROOT, d)).filter((d) => existsSync(d));
 if (roots.length === 0) {
   console.error('FENCE VACUOUS: no domain surfaces found under packages/ui. Fix the resolver.');
