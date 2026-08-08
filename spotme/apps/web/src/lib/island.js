@@ -60,6 +60,16 @@ export function uiFlag (slice) {
 
 let mounted = null
 
+/* Mount generation. Two mountIsland calls can overlap: the router re-renders
+ * while the first call is still awaiting its dynamic imports (a settings
+ * write, a flagged-tab rebuild — with the inversion this happens at every
+ * cold boot). The awaits resolve in ANY order, so without ordering the STALE
+ * call could finish last, unmount the live island and mount its own into a
+ * host the router had already detached — a blank screen with no error. Each
+ * call takes a ticket; after every await it checks it still holds the newest
+ * ticket and that its host is still in the document, and abandons otherwise. */
+let generation = 0
+
 /**
  * Mount a React surface into `host`. Resolves to false when the flag is off,
  * which is the caller's signal to render the legacy view instead.
@@ -71,6 +81,7 @@ let mounted = null
  */
 export async function mountIsland (slice, host, pick) {
   if (!uiFlag(slice)) return false
+  const ticket = ++generation
 
   /* LITERAL dynamic imports, deliberately. The old assembled-at-runtime
    * specifier dodged the dark fence and Rollup alike — which meant the
@@ -86,22 +97,46 @@ export async function mountIsland (slice, host, pick) {
     import('@spotme/ui')
   ])
 
+  // Superseded while importing, or the router detached the host: stand down
+  // WITHOUT touching the live mount — it belongs to the newer call.
+  if (ticket !== generation || !host.isConnected) return false
+
   await unmountIsland()
-  const root = createRoot(host)
+  if (ticket !== generation || !host.isConnected) return false
+
+  /* React's container is a PRIVATE wrapper, never the caller's element. Two
+   * views hand the router's shared view container in as `host`; React's
+   * deferred unmount then cleared THE NEXT VIEW'S freshly-rendered DOM out of
+   * it (found 2026-08-08: every same-document tab switch away from a mounted
+   * island could blank the destination screen). Owning the wrapper makes the
+   * root's teardown reach exactly what the island rendered, nothing else.
+   * `display: contents` keeps the wrapper out of layout entirely. */
+  const container = document.createElement('div')
+  container.style.display = 'contents'
+  host.appendChild(container)
+
+  const root = createRoot(container)
   root.render(pick(mod))
-  mounted = { root, host }
+  mounted = { root, host: container }
   return true
 }
 
 /** Idempotent; safe to call when nothing is mounted. */
 export async function unmountIsland () {
   if (!mounted) return
-  const { root } = mounted
+  const { root, host } = mounted
   mounted = null
   // Unmount is deferred a tick: React warns if a root is torn down during the
   // render pass that is still mounting it.
   await Promise.resolve()
-  root.unmount()
+  // The legacy router clears the view container without asking React first,
+  // so the root's DOM may already be gone — unmount then throws NotFoundError
+  // (removeChild on a node that is no longer there). The root is dead either
+  // way; a throw here would only kill the caller mid-render.
+  try { root.unmount() } catch { /* already torn out of the document */ }
+  // The private wrapper goes with the root, so a host that outlives one mount
+  // (a flag toggle re-mounting in place) never accumulates dead wrappers.
+  try { host.remove() } catch { /* already detached */ }
 }
 
 /** Test/debug seam, mirroring window.__db and window.__rooms. */
