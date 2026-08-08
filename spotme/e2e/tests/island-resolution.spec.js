@@ -69,8 +69,6 @@ const isResolutionFailure = (s) =>
 test.describe('island module resolution — against the BUILT bundle', () => {
   test('flag OFF: no React reaches the browser at all', async ({ browser }) => {
     const { ctx, page } = await onboard(browser)
-    const requested = []
-    page.on('request', (r) => { if (r.url().endsWith('.js')) requested.push(r.url()) })
 
     // Visit every surface with the flags off; none may pull React.
     for (const { hash } of SURFACES) {
@@ -78,6 +76,14 @@ test.describe('island module resolution — against the BUILT bundle', () => {
       await page.waitForLoadState('networkidle')
       await page.waitForTimeout(800)
     }
+
+    /* THE PAGE'S OWN RESOURCE TIMELINE, not Playwright request events. The
+     * events only fire for listeners attached before the load, and a
+     * re-navigation is served from cache — so counting them recorded zero and
+     * the assertions below became vacuous. performance entries record every
+     * resource the document actually loaded, cached or not. */
+    const requested = await page.evaluate(() => performance
+      .getEntriesByType('resource').map((r) => r.name).filter((n) => n.endsWith('.js')))
 
     expect(requested.length, 'nothing loaded — the assertion below would be vacuous').toBeGreaterThan(0)
 
@@ -151,11 +157,12 @@ test.describe('island module resolution — against the BUILT bundle', () => {
     const jsFor = async (flagOn) => {
       const { ctx, page } = await onboard(browser,
         flagOn ? "try { localStorage.setItem('spotme.ui.exchange', 'on') } catch (e) {}" : null)
-      const urls = new Set()
-      page.on('request', (r) => { if (r.url().endsWith('.js')) urls.add(r.url()) })
       await page.goto(`${BUILT}/#/exchange`)
       await page.waitForLoadState('networkidle')
       await page.waitForTimeout(4000)
+      // See the note above: the resource timeline, not request events.
+      const urls = new Set(await page.evaluate(() => performance
+        .getEntriesByType('resource').map((r) => r.name).filter((n) => n.endsWith('.js'))))
       await ctx.close()
       return urls
     }
