@@ -20,6 +20,7 @@ import { HealthModule } from './health/health.module';
 import { FlagsModule } from './flags/flags.module';
 import { DiscoveryModule } from './discovery/discovery.module';
 import { MomentsModule } from './moments/moments.module';
+import { ExchangeModule } from './exchange/exchange.module';
 
 @Module({
   imports: [
@@ -61,6 +62,10 @@ import { MomentsModule } from './moments/moments.module';
      * DomainGate('moments'), which 404s while the RuntimeFlag row is absent
      * and no allowlist entry names the caller. Production keeps zero rows. */
     MomentsModule,
+    /* Exchange activation (2026-08-08): MOUNTED behind DomainGate('exchange') —
+     * 404 while the RuntimeFlag row is absent. No requireAdult: open to every
+     * authenticated account; JwtAuthGuard alone establishes authorship. */
+    ExchangeModule,
 
   ],
 })

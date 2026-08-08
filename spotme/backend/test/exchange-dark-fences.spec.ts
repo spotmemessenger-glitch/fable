@@ -24,20 +24,28 @@ const EXCHANGE_REACH = /['"][^'"]*\/exchange[\/.'"-]/;
 const stripComments = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/\/\/[^\n]*/g, ' ');
 
 describe('Exchange — dark integration fences', () => {
-  it('AppModule imports NEITHER ExchangeModule NOR the exchange subtree', () => {
-    const src = read(join(BACKEND, 'src/app.module.ts'));
-    for (const banned of ['ExchangeModule', './exchange', '/exchange/']) {
-      expect(src).not.toContain(banned);
-    }
+  it('AppModule mounts ExchangeModule BEHIND DomainGate(exchange), which defaults OFF', () => {
+    /* ACTIVATION (2026-08-08) CHANGED THE MECHANISM, NOT THE FENCE. Exchange
+     * used to be dark by non-import; it is now mounted behind the gate, so
+     * this asserts the NEW invariant — the same move the Discovery and
+     * Moments fences made:
+     *   AppModule imports the module (mounted);
+     *   the controller sits behind DomainGate('exchange') (404 until the
+     *   RuntimeFlag row exists — missing row == disabled, the R7 default);
+     *   the gate carries NO requireAdult (open to every account, owner
+     *   directive 2026-08-08) — tamper-checked in BOTH directions. */
+    const app = read(join(BACKEND, 'src/app.module.ts'));
+    expect(app).toContain('ExchangeModule');
+    const controller = stripComments(read(join(BACKEND, 'src/exchange/exchange.controller.ts')));
+    expect(controller).toMatch(/@UseGuards\(\s*JwtAuthGuard\s*,\s*DomainGate\(\s*['"]exchange['"]\s*\)\s*\)/);
+    expect(controller).not.toMatch(/requireAdult/);
   });
 
-  it('no backend module OUTSIDE src/exchange imports the exchange code (static or dynamic)', () => {
+  it('ONLY AppModule (outside src/exchange) imports the exchange code; no static default-on', () => {
     const files = walk(join(BACKEND, 'src'), ['.ts']).filter((f) => !inDir(f, 'exchange'));
-    // Any quoted import specifier whose path reaches the exchange segment — as
-    // `/exchange`, `/exchange/…`, or `/exchange.module` — at a path boundary.
-    // Broadened (review IMPORTER-REGEX): the previous form required a trailing
-    // slash and missed `./exchange.module`-style specifiers.
-    expect(files.filter((f) => EXCHANGE_REACH.test(read(f)))).toEqual([]);
+    // The single legitimate importer is app.module.ts — the mount itself.
+    const importers = files.filter((f) => EXCHANGE_REACH.test(read(f)));
+    expect(importers.map((f) => f.split('/').pop())).toEqual(['app.module.ts']);
     expect(read(join(BACKEND, 'src/main.ts'))).not.toMatch(/exchange/i);
   });
 

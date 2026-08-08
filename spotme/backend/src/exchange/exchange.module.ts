@@ -1,15 +1,16 @@
 /**
- * The Exchange module (Phase 3B), PREPARED BUT NOT WIRED.
+ * The Exchange module (Phase 3B), MOUNTED BEHIND THE DOMAIN GATE.
  *
- * NOT imported by AppModule — importing it is the single line that would give
- * the running application a /v1/exchange route, and that line is an owner-gated
- * activation change. Until then no route exists, no repository binds, nothing
- * runs. The 3E dark fence asserts this. Business participation is a dark seam
- * (D4): no business flow is reachable; v1 posture is individuals-only.
+ * Imported by AppModule (owner-authorized activation, 2026-08-08). Every route
+ * answers 404 until the `exchange` RuntimeFlag row affirmatively enables the
+ * domain — mounted-but-dark, the same activation contract Discovery and
+ * Moments use. Business participation is a dark seam (D4): no business flow is
+ * reachable; v1 posture is individuals-only.
  */
 
 import { Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
+import { FlagsModule } from '../flags/flags.module';
 import { ExchangeController } from './exchange.controller';
 import { ExchangeService } from './exchange.service';
 import { EXCHANGE_INTENT_REPOSITORY } from './exchange.repository';
@@ -17,7 +18,7 @@ import { PrismaExchangeIntentRepository } from './exchange.prisma.repository';
 import { EXCHANGE_SEARCH_PORT, UnconfiguredExchangeSearchAdapter } from './exchange.search';
 
 @Module({
-  imports: [JwtModule.register({})],
+  imports: [JwtModule.register({}), FlagsModule],
   controllers: [ExchangeController],
   providers: [
     ExchangeService,
