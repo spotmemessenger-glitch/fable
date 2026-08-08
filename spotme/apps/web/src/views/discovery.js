@@ -15,6 +15,7 @@ import { lobby, distanceM, fmtDistance } from '../lib/discovery.js'
 import { reach } from '../lib/reach.js'
 import { langName } from '../lib/translate.js'
 import { el, clear, avatar } from '../lib/ui.js'
+import { reactDiscovery } from './discovery-island.js'
 
 const WAVE = '\u{1F44B}'
 /** Design reference map centre (the locked screen's Whitechapel) — used only
@@ -168,6 +169,8 @@ const ICON_PIN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" str
 const ICON_CHEV = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>'
 
 export function render (root, ctx) {
+  const island = reactDiscovery(root, ctx) // ADR-035 slice 5, default OFF
+  if (island) return island
   root.classList.add('v-disc')
 
   const my = db.profile() || { id: '', name: '', lang: 'en' }

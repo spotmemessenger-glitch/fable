@@ -1,0 +1,145 @@
+/* Discovery LIVE (slice 5). Every colour is a token from apps/web/src/tokens.css. */
+
+.dl-screen { display: flex; flex-direction: column; height: 100%; font: inherit; }
+
+.dl-bar { display: flex; align-items: center; gap: 12px; padding: 10px 16px 8px; }
+.dl-bar h1 { flex: 1; font-size: 22px; font-weight: 650; margin: 0; }
+.dl-ghost {
+  display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 12px;
+  background: var(--well); border: 0; border-radius: 999px; font: inherit;
+  font-size: 13px; color: var(--ink); cursor: pointer;
+}
+.dl-sw { width: 30px; height: 18px; border-radius: 999px; background: var(--blue); position: relative; }
+.dl-sw::after {
+  content: ''; position: absolute; top: 2px; right: 2px; width: 14px; height: 14px;
+  border-radius: 50%; background: #fff; transition: transform 0.15s;
+}
+.dl-ghost[aria-pressed='false'] .dl-sw { background: var(--muted); }
+.dl-ghost[aria-pressed='false'] .dl-sw::after { transform: translateX(-12px); }
+
+/* ------------------------------------------------------------------ map */
+.dl-map {
+  position: relative; margin: 0 16px; height: 268px; border-radius: 18px;
+  overflow: hidden; background: var(--well);
+}
+.dl-plan, .dl-plan svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+.dl-rings { position: absolute; inset: 0; pointer-events: none; }
+.dl-rings i {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  border: 1px solid var(--blue); opacity: 0.35; border-radius: 50%;
+}
+.dl-sweep {
+  position: absolute; inset: 0; pointer-events: none; border-radius: 18px;
+  background: conic-gradient(from 0deg, transparent 84%, color-mix(in srgb, var(--blue) 22%, transparent));
+  animation: dl-spin 4.5s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) { .dl-sweep { animation: none; } }
+@keyframes dl-spin { to { transform: rotate(360deg); } }
+.dl-you {
+  position: absolute; left: 50%; top: 50%; width: 14px; height: 14px;
+  transform: translate(-50%, -50%); border-radius: 50%;
+  background: var(--blue); border: 3px solid #fff; box-shadow: 0 1px 4px rgb(0 0 0 / 0.25);
+}
+.dl-mk {
+  position: absolute; transform: translate(-50%, -50%); width: 44px; height: 44px;
+  display: grid; place-items: center; background: none; border: 0; padding: 0; cursor: pointer;
+}
+.dl-count {
+  position: absolute; left: 10px; top: 10px; display: flex; align-items: center; gap: 6px;
+  background: var(--surface); border-radius: 999px; padding: 4px 10px; font-size: 12px;
+  color: var(--ink);
+}
+.dl-count i { width: 7px; height: 7px; border-radius: 50%; background: var(--ok, #2fae5f); }
+.dl-mb {
+  position: absolute; right: 10px; bottom: 10px; width: 44px; height: 44px;
+  display: grid; place-items: center; background: var(--surface); border: 0;
+  border-radius: 12px; cursor: pointer; color: var(--ink);
+}
+.dl-mb svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+.dl-locchip {
+  position: absolute; left: 50%; bottom: 10px; transform: translateX(-50%);
+  background: var(--surface); border-radius: 999px; padding: 5px 12px;
+  font-size: 12px; color: var(--muted); white-space: nowrap;
+}
+.dl-hidechip {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  background: var(--surface); border-radius: 999px; padding: 6px 14px;
+  font-size: 12px; font-weight: 650; letter-spacing: 0.06em; color: var(--muted);
+}
+.dl-hiddenmode .dl-mk, .dl-hiddenmode .dl-you, .dl-hiddenmode .dl-sweep { opacity: 0.25; }
+
+/* ---------------------------------------------------------------- chips */
+.dl-chips { display: flex; align-items: center; gap: 8px; padding: 12px 16px 4px; }
+.dl-chip {
+  display: flex; align-items: center; gap: 6px; min-height: 44px; padding: 0 12px;
+  background: var(--well); border-radius: 999px; font-size: 13px; color: var(--ink);
+}
+.dl-chip b { font-weight: 640; }
+.dl-chip select { border: 0; background: none; font: inherit; color: var(--ink2); outline-offset: 2px; }
+
+/* ----------------------------------------------------------------- list */
+.dl-lhead { display: flex; align-items: baseline; gap: 6px; padding: 10px 16px 4px; }
+.dl-lhead h2 { font-size: 17px; font-weight: 650; margin: 0; }
+.dl-lhead span { color: var(--muted); font-size: 14px; }
+.dl-list { flex: 1; overflow-y: auto; padding-bottom: 96px; }
+.dl-row { display: flex; align-items: center; }
+.dl-row + .dl-row { border-top: 1px solid var(--hair); }
+.dl-open {
+  flex: 1; display: flex; align-items: center; gap: 12px; min-height: 64px;
+  background: none; border: 0; padding: 6px 0 6px 16px; font: inherit;
+  color: var(--ink); text-align: left; cursor: pointer;
+}
+.dl-mid { flex: 1; display: flex; flex-direction: column; gap: 2px; }
+.dl-mid b { font-weight: 640; }
+.dl-st { color: var(--muted); font-size: 13px; }
+.dl-dpill {
+  background: var(--well); border-radius: 999px; padding: 2px 10px;
+  font-size: 12px; color: var(--ink2); white-space: nowrap;
+}
+.dl-pill {
+  min-height: 44px; padding: 0 16px; background: var(--blue); color: #fff;
+  border: 0; border-radius: 999px; font: inherit; font-size: 14px;
+  font-weight: 640; cursor: pointer;
+}
+.dl-mini { margin-right: 16px; }
+.dl-empty { color: var(--muted); text-align: center; padding: 28px 32px; }
+
+/* -------------------------------------------------------------- overlay */
+.dl-ov {
+  position: fixed; inset: 0; z-index: 40; display: grid; place-items: center;
+  background: rgb(0 0 0 / 0.4); padding: 24px;
+}
+.dl-pcard {
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  width: min(320px, 100%); background: var(--surface); border-radius: 20px;
+  padding: 24px 20px;
+}
+.dl-pname { font-size: 18px; font-weight: 650; }
+.dl-plang { color: var(--muted); font-size: 13px; }
+.dl-tags { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }
+.dl-tags span {
+  background: var(--well); border-radius: 999px; padding: 2px 10px;
+  font-size: 12px; color: var(--ink2);
+}
+.dl-pacts { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
+.dl-wave {
+  min-height: 44px; padding: 0 16px; background: var(--well); color: var(--ink);
+  border: 0; border-radius: 999px; font: inherit; font-size: 14px; cursor: pointer;
+}
+.dl-ask { display: flex; flex-direction: column; gap: 10px; width: 100%; margin-top: 10px; }
+.dl-ask input {
+  min-height: 44px; border: 1px solid var(--line); border-radius: 12px;
+  padding: 0 12px; font: inherit; color: var(--ink); background: var(--well); outline-offset: 2px;
+}
+
+/* ----------------------------------------------------------------- disc */
+.dl-disc {
+  position: relative; display: inline-grid; place-items: center; flex: none;
+  border-radius: 50%; background: var(--well); overflow: visible;
+}
+.dl-disc img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; }
+.dl-disc-initial { font-weight: 650; color: var(--ink2); }
+.dl-dot {
+  position: absolute; right: 0; bottom: 0; width: 11px; height: 11px;
+  border-radius: 50%; background: var(--ok, #2fae5f); border: 2px solid var(--surface);
+}

@@ -87,9 +87,16 @@ describe('Moments — dark integration fences', () => {
   it('the web-next entry (App/main) mounts NEITHER MomentsShell NOR the moments subtree', () => {
     expect(liveEntryDarkPackageImports()).toEqual([]);
     for (const entry of appEntries()) {
+      /* Comments cannot import anything, so they are stripped before the
+       * reach scan. Unstripped, an apostrophe in prose ("today's") opens a
+       * quote-span that can run into plain-English words like
+       * "events/moments/assistant" and read as an import path — which is
+       * exactly how slice 5's header comment produced a false red. The
+       * MomentsShell symbol check stays on the RAW source: the identifier
+       * appearing anywhere in an entry, even commented, deserves a look. */
       const s = read(entry);
       expect(s).not.toMatch(/MomentsShell/);
-      expect(MOMENTS_REACH.test(s)).toBe(false);
+      expect(MOMENTS_REACH.test(stripComments(s))).toBe(false);
     }
   });
 
