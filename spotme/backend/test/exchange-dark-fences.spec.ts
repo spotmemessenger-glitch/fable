@@ -81,10 +81,22 @@ describe('Exchange — dark integration fences', () => {
     expect(view).toMatch(/uiFlag\(\s*['"]exchange['"]\s*\)/);
     expect(view).toMatch(/if \(!uiFlag/);
 
-    // The host resolves the package dynamically; a static import would make
-    // every dark surface reachable from the shipped entry.
+    /* THE HOST ASSERTION CHANGED WITH THE RESOLVER FIX (2026-08-08). The old
+     * fence said "no static reference exists" — which the assembled-specifier
+     * hack satisfied while leaving the browser unable to resolve the bare
+     * specifier at all (nine dead surfaces). The invariant that actually
+     * matters is REACHABLE ONLY BEHIND A FLAG GATE THAT DEFAULTS OFF, checked
+     * in BOTH directions:
+     *   1. the package IS reachable — a literal dynamic import('@spotme/ui')
+     *      exists for the bundler to resolve and code-split; and
+     *   2. that import sits AFTER the uiFlag early-return, and no top-level
+     *      static import exists — so nothing loads until a human opts in. */
     const host = read(join(web, 'src/lib/island.js'));
-    expect(/^\s*import[^;]*['"]@spotme\/ui['"]/m.test(host)).toBe(false);
+    expect(/^\s*import[^;(]*['"]@spotme\/ui['"]/m.test(host)).toBe(false); // no static import
+    const gateAt = host.indexOf('if (!uiFlag(slice)) return false');
+    const dynAt = host.indexOf("import('@spotme/ui')");
+    expect(gateAt).toBeGreaterThan(-1);   // the gate exists
+    expect(dynAt).toBeGreaterThan(gateAt); // and the import is only past it
 
     // Nothing anywhere turns the flag on by default.
     const webFiles = walk(join(web, 'src'), ['.js']);

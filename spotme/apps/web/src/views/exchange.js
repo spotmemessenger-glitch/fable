@@ -10,6 +10,7 @@
  * on the next render. Nothing here persists anything.
  */
 import { mountIsland, unmountIsland, uiFlag } from '../lib/island.js'
+import { buildExchangePort } from '../lib/exchange-api.js'
 import { el, clear } from '../lib/ui.js'
 
 export function render (root) {
@@ -26,7 +27,8 @@ export function render (root) {
   }
 
   // Dynamic: the surface is a separate chunk, fetched only when opted in.
-  mountIsland('exchange', host, (mod) => mod.__mountExchange()).catch(() => {
+  // LIVE port: the island talks to /api/v1/exchange through this adapter.
+  mountIsland('exchange', host, (mod) => mod.__mountExchange(buildExchangePort())).catch(() => {
     clear(host)
     host.appendChild(el('p', { class: 'x-note', text: 'Exchange could not load.' }))
   })

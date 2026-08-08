@@ -203,6 +203,9 @@ export function BrowseScreen(props: {
 export function DetailScreen(props: {
   intent: ExchangeIntentView;
   contact: ExchangeMatchView['contact'];
+  /** TRUE while the server has no contact-request route: the button says so
+   *  plainly instead of faking a pending state. */
+  contactUnavailable?: boolean;
   onRequestContact(): void;
   onSave(): void;
   onShare(): void;
@@ -262,20 +265,24 @@ export function DetailScreen(props: {
       <h3 className="x-sub">Approximate area</h3>
       <ApproxArea intent={i} />
 
-      {/* REQUEST CONTACT, not "Message": consent is explicit and server-side. */}
+      {/* REQUEST CONTACT, not "Message": consent is explicit and server-side.
+          While no contact route exists, the button says exactly that. */}
       <div className="x-cta">
         <button
           type="button" className="x-primary"
-          disabled={!props.contact.canRequestContact || props.contact.state !== 'none'}
+          disabled={props.contactUnavailable || !props.contact.canRequestContact || props.contact.state !== 'none'}
           onClick={props.onRequestContact}
         >
-          {props.contact.state === 'requested' ? 'Contact requested'
-            : props.contact.state === 'accepted' ? 'Open chat'
-              : props.contact.state === 'declined' ? 'Request declined'
-                : 'Request contact'}
+          {props.contactUnavailable ? 'Contact isn’t available yet'
+            : props.contact.state === 'requested' ? 'Contact requested'
+              : props.contact.state === 'accepted' ? 'Open chat'
+                : props.contact.state === 'declined' ? 'Request declined'
+                  : 'Request contact'}
         </button>
         <p className="x-consent">
-          They choose whether to share contact. Chat opens only if they accept.
+          {props.contactUnavailable
+            ? 'Contact requests haven’t been built yet. You can’t reach this person through Spot Me for now.'
+            : 'They choose whether to share contact. Chat opens only if they accept.'}
         </p>
       </div>
 
