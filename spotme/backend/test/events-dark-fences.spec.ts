@@ -8,7 +8,7 @@
 import { join } from 'node:path';
 import { existsSync } from 'node:fs';
 import {
-  liveWebRoot, liveEntryDarkPackageImports, BACKEND, REPO, read, walk, inDir, requireNonEmpty, clientDomainRoots, clientAllRoots, appEntries, clientTestExists,
+  liveWebRoot, liveEntryDarkPackageImports, flagGateViolations, BACKEND, REPO, read, walk, inDir, requireNonEmpty, clientDomainRoots, clientAllRoots, appEntries, clientTestExists,
 } from './helpers/fence-paths';
 import { normalizeEvent } from '../src/events/events.normalize';
 
@@ -31,7 +31,7 @@ describe('Events — dark integration fences', () => {
   });
 
   it('the web-next entry (App/main) mounts NEITHER EventsShell NOR the events subtree', () => {
-    expect(liveEntryDarkPackageImports()).toEqual([]);
+    expect(flagGateViolations()).toEqual([]);
     for (const entry of appEntries()) {
       const s = read(entry);
       expect(s).not.toMatch(/EventsShell/);

@@ -25,8 +25,14 @@ import { defineConfig, devices } from '@playwright/test'
 
 const API_PORT = Number(process.env.E2E_API_PORT || 3311)
 const WEB_PORT = Number(process.env.E2E_WEB_PORT || 4317)
+/* The BUILT bundle, served by `vite preview`. The dev server resolves bare
+ * specifiers itself, so it happily served an app whose production build could
+ * not resolve '@spotme/ui' at all — every React surface was dead in a browser
+ * while every Node suite stayed green. island-resolution.spec.js runs here. */
+const BUILT_PORT = Number(process.env.E2E_BUILT_PORT || 4318)
 export const API = `http://127.0.0.1:${API_PORT}`
 export const WEB = `http://127.0.0.1:${WEB_PORT}`
+export const BUILT = `http://127.0.0.1:${BUILT_PORT}`
 
 /** Throwaway. The backend refuses to boot on anything under 32 characters —
  *  a guard worth keeping, so this is long rather than the guard weakened. */
@@ -105,6 +111,21 @@ export default defineConfig({
       url: WEB,
       reuseExistingServer: !process.env.CI,
       timeout: 90_000,
+      stdout: 'pipe',
+      stderr: 'pipe',
+      env: { VITE_SPOTME_SERVER: API },
+    },
+    {
+      /* The PRODUCTION artefact, served exactly as Vercel serves it. This is
+       * the only server in the suite that can catch a specifier the bundler
+       * never resolved — `vite dev` papers over those. Build here rather than
+       * assuming a dist/ exists, so the spec can never pass against a stale
+       * or absent bundle. */
+      command: 'npm run build && npx vite preview --port ' + BUILT_PORT + ' --strictPort --host 127.0.0.1',
+      cwd: '../apps/web',
+      url: BUILT,
+      reuseExistingServer: !process.env.CI,
+      timeout: 180_000,
       stdout: 'pipe',
       stderr: 'pipe',
       env: { VITE_SPOTME_SERVER: API },

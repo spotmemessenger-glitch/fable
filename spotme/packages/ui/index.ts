@@ -64,6 +64,8 @@ export function __mountNotifications(port: NotificationsPort) {
 
 export function __mountStories(port: StoriesPort) {
   return createElement(StoriesShell, { port });
+}
+
 export type { GroupsDeps } from './groups/ports';
 
 /**
@@ -116,6 +118,9 @@ export type { VerifyPort, VerifySnapshot, VerifyPhase } from './verify/ports';
 
 export function __mountVerify(port: VerifyPort) {
   return createElement(VerifyShell, { port });
+}
+
+/**
  * Slice-5 mount point — Discovery LIVE. NOT the dark Phase-2 discovery/
  * surface: the port is built app-side over the legacy lobby (ADR-024 fence
  * covered) and no coordinate of any kind crosses it.

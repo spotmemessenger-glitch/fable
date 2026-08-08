@@ -7,7 +7,7 @@
 import { join } from 'node:path';
 import { existsSync } from 'node:fs';
 import {
-  liveWebRoot, liveEntryDarkPackageImports, BACKEND, REPO, read, walk, inDir, requireNonEmpty, clientDomainRoots, clientAllRoots, appEntries, clientTestExists,
+  liveWebRoot, liveEntryDarkPackageImports, flagGateViolations, BACKEND, REPO, read, walk, inDir, requireNonEmpty, clientDomainRoots, clientAllRoots, appEntries, clientTestExists,
 } from './helpers/fence-paths';
 import { validateIntentInput } from '../src/exchange/exchange.policy';
 
@@ -73,10 +73,13 @@ describe('Exchange — dark integration fences', () => {
     expect(view).toMatch(/uiFlag\(\s*['"]exchange['"]\s*\)/);
     expect(view).toMatch(/if \(!uiFlag/);
 
-    // The host resolves the package dynamically; a static import would make
-    // every dark surface reachable from the shipped entry.
-    const host = read(join(web, 'src/lib/island.js'));
-    expect(/^\s*import[^;]*['"]@spotme\/ui['"]/m.test(host)).toBe(false);
+    // The host resolves the package DYNAMICALLY and only after the flag
+    // guard. The old line-based regex here banned any line starting with
+    // `import …'@spotme/ui'`, which also matched the legitimate dynamic
+    // import() once it became a literal — the same proxy-not-invariant
+    // mistake this fence family has made three times. flagGateViolations()
+    // asserts the real thing: dynamic-only, guard-first, default-off.
+    expect(flagGateViolations()).toEqual([]);
 
     // Nothing anywhere turns the flag on by default.
     const webFiles = walk(join(web, 'src'), ['.js']);

@@ -71,3 +71,36 @@ test('the React card promises nothing this branch does not serve', () => {
     assert.equal(react.includes(absent), false, `${absent} must be absent until #139 is rebased`)
   }
 })
+
+/* --------------------------------------------- the gate message parity */
+
+/* A served-but-not-allowlisted account got "Could not load. Pull to retry."
+ * from the React feed — retry advice for something retrying cannot fix —
+ * where the legacy view names the gate. Both views must distinguish the same
+ * three failures, from the same error classes. */
+
+test('the React feed distinguishes gate/forbidden/failure, exactly as legacy does', () => {
+  for (const s of ['unavailable', 'forbidden']) {
+    assert.match(react, new RegExp(`state === '${s}'`),
+      `React feed must render a distinct '${s}' state`)
+    assert.match(view, new RegExp(`state === '${s}'`),
+      `legacy view lost its '${s}' state — parity is measured against it`)
+  }
+  assert.match(react, /MomentsDisabledError/, 'the gate state must come from the API error class, not a string match')
+  assert.match(react, /MomentsForbiddenError/, 'the forbidden state must come from the API error class')
+})
+
+test('the gate copy itself survives the migration, word for word', () => {
+  for (const copy of ['Posts aren’t switched on', 'This surface is off for your account right now.']) {
+    assert.ok(view.includes(copy), `legacy view no longer says "${copy}"`)
+    assert.ok(react.includes(copy), `React feed must say "${copy}" too — the gate message is the fix`)
+  }
+  assert.ok(react.includes('Not available for this account'), 'React feed must keep the age-gate heading')
+})
+
+test('a gated feed does not keep paginating — the sentinel stands down', () => {
+  const guard = react.match(/if \(!el \|\| state === [^\n]*\n/)?.[0] || ''
+  for (const s of ['end', 'error', 'unavailable', 'forbidden']) {
+    assert.ok(guard.includes(`'${s}'`), `the infinite-scroll guard must stop on '${s}'`)
+  }
+})
