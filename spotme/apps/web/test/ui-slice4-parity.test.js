@@ -23,13 +23,14 @@ function withStorage (store, fn) {
   try { return fn() } finally { globalThis.localStorage = prev }
 }
 
-test('profile: flag defaults OFF and reads only spotme.ui.profile', async () => {
+test('profile: flag defaults ON (sweep-passed), explicit non-\'on\' restores legacy, reads only spotme.ui.profile', async () => {
   const { uiFlag } = await load()
   const seen = []
   withStorage({ getItem: (k) => { seen.push(k); return null } }, () => {
-    assert.equal(uiFlag('profile'), false)
+    assert.equal(uiFlag('profile'), true, 'absent key renders React — the 2026-08-08 default flip')
   })
   assert.deepEqual(seen, ['spotme.ui.profile'])
+  withStorage({ getItem: () => 'off' }, () => assert.equal(uiFlag('profile'), false))
   withStorage({ getItem () { throw new Error('denied') } }, () => {
     assert.equal(uiFlag('profile'), false)
   })

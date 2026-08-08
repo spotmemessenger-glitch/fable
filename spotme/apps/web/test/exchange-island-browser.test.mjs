@@ -80,7 +80,10 @@ async function main () {
     const seed = (flagOn) => async (ctx) => {
       await ctx.addInitScript((on) => {
         localStorage.setItem('spotme:app:v1', JSON.stringify({ profile: { id: 'deadbeef', name: 'Fence Probe', username: 'fence_probe' } }))
-        if (on) localStorage.setItem('spotme.ui.exchange', 'on')
+        /* Since the 2026-08-08 default flip, exchange defaults ON — the
+         * flag-off case is the OFF-SWITCH: an explicit non-'on' value must
+         * restore the dark behaviour (no tab, no chunk on the wire). */
+        localStorage.setItem('spotme.ui.exchange', on ? 'on' : 'off')
       }, flagOn)
       // Hermetic: nothing may leave this machine.
       await ctx.route(/^https?:\/\/(?!127\.0\.0\.1)/, (r) => r.abort())

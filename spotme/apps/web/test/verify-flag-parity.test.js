@@ -24,9 +24,10 @@ function withStorage (store, fn) {
   try { return fn() } finally { globalThis.localStorage = prev }
 }
 
+// Since the 2026-08-08 default flip, OFF means an EXPLICIT non-'on' value.
 test('flag OFF: reactVerify returns null — the caller renders legacy', async () => {
   const { reactVerify } = await import('../src/views/verify-island.js')
-  const result = withStorage({ getItem: () => null }, () => reactVerify({}, {}, 'r1'))
+  const result = withStorage({ getItem: () => 'off' }, () => reactVerify({}, {}, 'r1'))
   assert.equal(result, null)
 })
 

@@ -28,10 +28,12 @@ function withStorage (store, fn) {
 
 const load = () => import(`../src/lib/island.js?t=${Math.random()}`)
 
-test('the flag is OFF when nothing is stored', async () => {
-  const { uiFlag } = await load()
+test('an absent key follows DEFAULT_ON: sweep-passed surfaces render React, chat and moments stay legacy', async () => {
+  const { uiFlag, DEFAULT_ON } = await load()
   withStorage({ getItem: () => null }, () => {
-    assert.equal(uiFlag('exchange'), false)
+    for (const slice of DEFAULT_ON) assert.equal(uiFlag(slice), true, `${slice} defaults on`)
+    assert.equal(uiFlag('chat'), false, 'chat must not default on — the owner flips it')
+    assert.equal(uiFlag('moments'), false, 'moments must not default on — its React feed is incomplete')
   })
 })
 
@@ -64,11 +66,17 @@ test('mountIsland refuses to mount while the flag is off', async () => {
   const { mountIsland } = await load()
   // Resolves false WITHOUT importing React or @spotme/ui — the caller's signal
   // to render legacy. If the dynamic import ran early this would reject.
-  const result = await withStorage(
-    { getItem: () => null },
+  // Explicit 'off' beats the default-on set; chat is off even when absent.
+  const explicitOff = await withStorage(
+    { getItem: () => 'off' },
     () => mountIsland('exchange', {}, () => null),
   )
-  assert.equal(result, false)
+  assert.equal(explicitOff, false, "explicit 'off' restores legacy on a default-on surface")
+  const chatAbsent = await withStorage(
+    { getItem: () => null },
+    () => mountIsland('chat', {}, () => null),
+  )
+  assert.equal(chatAbsent, false, 'chat stays dark with nothing stored')
 })
 
 test('the dark fence holds: the ui package is DYNAMIC-only, behind the flag', () => {

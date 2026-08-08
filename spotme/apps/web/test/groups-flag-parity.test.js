@@ -33,8 +33,9 @@ test('flag OFF: reactGroups returns null — the caller renders legacy', async (
   // Importing groups-island.js must be safe in bare Node: with the flag off
   // it may not touch db/rooms/api (they need a window). If this import or
   // call throws, the flag-off path has grown a dependency it must not have.
+  // Since the 2026-08-08 default flip, OFF means an EXPLICIT non-'on' value.
   const { reactGroups } = await import('../src/views/groups-island.js')
-  const result = withStorage({ getItem: () => null }, () => reactGroups({}, {}, 'list'))
+  const result = withStorage({ getItem: () => 'off' }, () => reactGroups({}, {}, 'list'))
   assert.equal(result, null)
 })
 

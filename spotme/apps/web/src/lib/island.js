@@ -28,20 +28,41 @@
  * Slice flags. Namespaced under `spotme.ui.` and read through one accessor so
  * a grep for the prefix finds every migration flag in the app.
  *
- * DEFAULT OFF, and the default is what a broken/absent/private-mode
- * localStorage produces: any throw is caught and reported as off, so the
- * failure mode of the storage layer is "legacy renders", never "React renders
- * unexpectedly".
+ * Surfaces that passed the 2026-08-08 functional sweep default ON: an ABSENT
+ * key renders React. The flag is still read on every render — any explicit
+ * value other than the literal 'on' (e.g. 'off') falls back to the legacy
+ * view, and a storage throw still reads as legacy, so the failure mode of the
+ * storage layer remains "legacy renders", never "React renders unexpectedly".
+ *
+ * chat and moments are deliberately NOT in this set: chat's default stays off
+ * until the owner flips it on the stage-1 evidence, and the React moments
+ * feed is missing its composer and its nearby results.
  */
+export const DEFAULT_ON = new Set([
+  'profile', 'inbox', 'contacts', 'notifications', 'groups',
+  'stories', 'discovery', 'verify', 'exchange'
+])
+
 export function uiFlag (slice) {
   try {
-    return localStorage.getItem(`spotme.ui.${slice}`) === 'on'
+    const v = localStorage.getItem(`spotme.ui.${slice}`)
+    if (v === null) return DEFAULT_ON.has(slice)
+    return v === 'on'
   } catch {
     return false
   }
 }
 
 let mounted = null
+/* Monotonic mount generation. A mount takes a ticket before awaiting its
+ * chunks; teardown (unmountIsland) and every newer mount advance the
+ * generation, so a mount whose ticket is stale by the time the chunks arrive
+ * KNOWS it lost the race and stands down. Without this, a slow island (the
+ * inbox imports half the app before it mounts) resolving after the router
+ * had already moved on would unmount the WINNING island and render itself
+ * into a detached host — an intermittently blank screen, seen on #/exchange
+ * the moment inbox defaulted on (2026-08-08). */
+let mountSeq = 0
 
 /**
  * Mount a React surface into `host`. Resolves to false when the flag is off,
@@ -64,20 +85,32 @@ export async function mountIsland (slice, host, pick) {
    * downloads until a flag is ON — the flag guard above returns first.
    * The fence now pins THIS gate (flag-gated reachability), not the
    * absence of the string. */
+  const ticket = ++mountSeq
   const [{ createRoot }, mod] = await Promise.all([
     import('react-dom/client'),
     import('@spotme/ui')
   ])
 
-  await unmountIsland()
+  // Lost the race while the chunks loaded — a newer mount started or the
+  // view was torn down. Do NOT unmount (that would kill the winner).
+  if (ticket !== mountSeq || !host.isConnected) return false
+  await teardownMounted()
+  if (ticket !== mountSeq || !host.isConnected) return false
   const root = createRoot(host)
   root.render(pick(mod))
   mounted = { root, host }
   return true
 }
 
-/** Idempotent; safe to call when nothing is mounted. */
+/** Idempotent; safe to call when nothing is mounted. Also cancels any
+ *  in-flight mount — teardown means "this view is over", including a mount
+ *  still waiting on its chunks. */
 export async function unmountIsland () {
+  mountSeq++
+  await teardownMounted()
+}
+
+async function teardownMounted () {
   if (!mounted) return
   const { root } = mounted
   mounted = null

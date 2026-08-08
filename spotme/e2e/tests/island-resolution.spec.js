@@ -68,7 +68,14 @@ const isResolutionFailure = (s) =>
 
 test.describe('island module resolution — against the BUILT bundle', () => {
   test('flag OFF: no React reaches the browser at all', async ({ browser }) => {
-    const { ctx, page } = await onboard(browser)
+    /* Since the 2026-08-08 default flip, sweep-passed surfaces default ON —
+     * "off" is now the EXPLICIT off-switch. This asserts the switch still
+     * strips React from the wire entirely: with every slice set to 'off',
+     * not one React-carrying chunk may be fetched. */
+    const ALL = ['profile', 'inbox', 'contacts', 'notifications', 'groups',
+      'stories', 'moments', 'discovery', 'verify', 'exchange', 'chat']
+    const offInit = `try { ${JSON.stringify(ALL)}.forEach((s) => localStorage.setItem('spotme.ui.' + s, 'off')) } catch (e) {}`
+    const { ctx, page } = await onboard(browser, offInit)
 
     // Visit every surface with the flags off; none may pull React.
     for (const { hash } of SURFACES) {
@@ -154,9 +161,17 @@ test.describe('island module resolution — against the BUILT bundle', () => {
      * `client-*.js` pinned a local artefact and failed in CI while the app was
      * perfectly fine. What actually matters is the SHAPE: turning a flag on
      * must fetch JavaScript that turning it off does not. */
+    /* Since the 2026-08-08 default flip, other surfaces default ON — a bare
+     * baseline would fetch React for the inbox before exchange is even
+     * visited, and the on-run would add nothing. Both runs therefore pin
+     * EVERY slice off, and the on-run turns on exchange alone: the delta is
+     * exchange's lazy chunk, which is the property this test exists for. */
+    const ALL_OFF = "try { ['profile','inbox','contacts','notifications','groups','stories','moments','discovery','verify','exchange','chat'].forEach((s) => localStorage.setItem('spotme.ui.' + s, 'off')) } catch (e) {}"
     const jsFor = async (flagOn) => {
       const { ctx, page } = await onboard(browser,
-        flagOn ? "try { localStorage.setItem('spotme.ui.exchange', 'on') } catch (e) {}" : null)
+        flagOn
+          ? ALL_OFF + "; try { localStorage.setItem('spotme.ui.exchange', 'on') } catch (e) {}"
+          : ALL_OFF)
       await page.goto(`${BUILT}/#/exchange`)
       await page.waitForLoadState('networkidle')
       await page.waitForTimeout(4000)
