@@ -71,11 +71,21 @@ test('mountIsland refuses to mount while the flag is off', async () => {
   assert.equal(result, false)
 })
 
-test('the dark fence holds: no STATIC import of the ui package', () => {
+test('the dark fence holds: the ui package is DYNAMIC-only, behind the flag', () => {
   // A static specifier would make every dark surface reachable from the live
   // entry and would bundle React for the 100% of users who have the flag off.
   assert.equal(/^\s*import\s+[^\n]*['"]@spotme\/ui['"]/m.test(source), false)
-  assert.match(source, /\['@spotme', 'ui'\]\.join\('\/'\)/)
+
+  /* The specifier is now a LITERAL inside import(). It used to be assembled
+   * (`['@spotme','ui'].join('/')`) to hide from the fence — which also hid it
+   * from Rollup, so the browser received a bare specifier it could not
+   * resolve and every surface fell back to legacy. Literal + dynamic is what
+   * keeps BOTH properties: resolvable, and code-split. */
+  assert.match(source, /import\(\s*['"]@spotme\/ui['"]\s*\)/)
+  assert.equal(/@vite-ignore/.test(source), false, '@vite-ignore keeps the bundler from resolving it')
+
+  // The flag guard must come first: flag off means the chunk is never fetched.
+  assert.ok(source.indexOf('if (!uiFlag(slice)) return false') < source.search(/import\(\s*['"]@spotme\/ui['"]/))
 })
 
 test('the host writes nothing — no persisted shape to diverge on rollback', () => {
