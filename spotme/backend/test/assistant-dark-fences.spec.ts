@@ -15,7 +15,7 @@
 
 import { join } from 'node:path';
 import {
-  liveEntryDarkPackageImports, BACKEND, REPO, read, walk, inDir, requireNonEmpty, clientDomainRoots, appEntries, builtArtifactDirs,
+  liveEntryDarkPackageImports, flagGateViolations, BACKEND, REPO, read, walk, inDir, requireNonEmpty, clientDomainRoots, appEntries, builtArtifactDirs,
 } from './helpers/fence-paths';
 
 import { DeterministicSummaryComposer } from '../src/assistant/assistant.compose';
@@ -58,7 +58,7 @@ describe('assistant — module darkness', () => {
   });
 
   it('the web-next entry (App/main) mounts NEITHER AssistantShell NOR the assistant subtree', () => {
-    expect(liveEntryDarkPackageImports()).toEqual([]);
+    expect(flagGateViolations()).toEqual([]);
     for (const entry of appEntries()) {
       const s = read(entry);
       expect(s).not.toMatch(/AssistantShell/);

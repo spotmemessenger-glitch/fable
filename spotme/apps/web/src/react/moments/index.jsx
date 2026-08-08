@@ -72,7 +72,10 @@ export function MomentsApp ({ ctx }) {
 
 export function Feed ({ mode, ctx }) {
   const [items, setItems] = useState([])
-  const [state, setState] = useState('loading') // loading | ok | end | error
+  // loading | ok | end | error | unavailable | forbidden — the last two mirror
+  // views/moments.js exactly; see the catch below for why they are distinct.
+  const [state, setState] = useState('loading')
+  const forbidden = useRef('')
   const cursorRef = useRef(null)
   const seen = useRef(new Set())
   const busy = useRef(false)
@@ -89,8 +92,15 @@ export function Feed ({ mode, ctx }) {
       setItems((prev) => reset ? fresh : [...prev, ...fresh])
       cursorRef.current = page.cursor ?? null
       setState(page.cursor ? 'ok' : 'end')
-    } catch {
-      setState('error')
+    } catch (err) {
+      /* THE GATE MUST SURVIVE THE MIGRATION. A bare catch collapsed every
+       * failure into "Could not load. Pull to retry." — so a served-but-not-
+       * allowlisted account was told to retry something retrying cannot fix,
+       * where the legacy view says plainly that the surface is off for them.
+       * Same three states legacy distinguishes, from the same error classes. */
+      if (err instanceof M.MomentsDisabledError) setState('unavailable')
+      else if (err instanceof M.MomentsForbiddenError) { forbidden.current = err.message; setState('forbidden') }
+      else setState('error')
     } finally {
       busy.current = false
     }
@@ -108,7 +118,7 @@ export function Feed ({ mode, ctx }) {
   const sentinel = useRef(null)
   useEffect(() => {
     const el = sentinel.current
-    if (!el || state === 'end' || state === 'error') return
+    if (!el || state === 'end' || state === 'error' || state === 'unavailable' || state === 'forbidden') return
     const io = new IntersectionObserver((es) => {
       if (es.some((e) => e.isIntersecting)) void loadMore()
     })
@@ -121,7 +131,20 @@ export function Feed ({ mode, ctx }) {
     <div className="mo-feed">
       {items.map((m) => <MomentCard key={m.id} moment={m} ctx={ctx} />)}
       {state === 'loading' && items.length === 0 && <p className="mo-note" role="status">Loading…</p>}
-      {state !== 'loading' && state !== 'error' && items.length === 0 && <p className="mo-note">{empty}</p>}
+      {state !== 'loading' && state !== 'error' && state !== 'unavailable' && state !== 'forbidden' &&
+        items.length === 0 && <p className="mo-note">{empty}</p>}
+      {state === 'unavailable' && (
+        <div className="mo-note">
+          <b>Posts aren’t switched on</b>
+          <p>This surface is off for your account right now.</p>
+        </div>
+      )}
+      {state === 'forbidden' && (
+        <div className="mo-note">
+          <b>Not available for this account</b>
+          <p>{forbidden.current || 'Spot Me is for people 18 and over.'}</p>
+        </div>
+      )}
       {state === 'error' && <p className="mo-note">Could not load. Pull to retry.</p>}
       <div ref={sentinel} aria-hidden="true" />
     </div>

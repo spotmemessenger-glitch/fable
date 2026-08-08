@@ -55,6 +55,7 @@ let mounted = null
 export async function mountIsland (slice, host, pick) {
   if (!uiFlag(slice)) return false
 
+<<<<<<< HEAD
   /* LITERAL dynamic imports, deliberately. The old assembled-at-call-time
    * specifier (`['@spotme','ui'].join('/')` + @vite-ignore) left the bare
    * specifier to the BROWSER to resolve at runtime — which no browser can do
@@ -64,6 +65,17 @@ export async function mountIsland (slice, host, pick) {
    * BUILD time into a chunk that is fetched only when this line runs — and
    * this line is unreachable until the flag check above passes, so React and
    * the surfaces still never download for anyone with the flags off. */
+=======
+  /* LITERAL dynamic imports, deliberately. The old assembled-at-runtime
+   * specifier dodged the dark fence and Rollup alike — which meant the
+   * browser was handed a bare '@spotme/ui' it could never resolve, and
+   * every flag flip silently fell back to legacy (found 2026-08-08).
+   * Literal + dynamic is the correct pair: Vite resolves and code-splits
+   * the whole React surface into its own lazy chunk, so nothing here
+   * downloads until a flag is ON — the flag guard above returns first.
+   * The fence now pins THIS gate (flag-gated reachability), not the
+   * absence of the string. */
+>>>>>>> origin/master
   const [{ createRoot }, mod] = await Promise.all([
     import('react-dom/client'),
     import('@spotme/ui')

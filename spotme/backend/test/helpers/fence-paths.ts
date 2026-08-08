@@ -139,6 +139,52 @@ export function appEntries(): string[] {
 }
 
 /**
+ * THE REAL INVARIANT, replacing "no static reference to the dark surface".
+ * That proxy blocked its own feature three times (a comment reword, an
+ * apostrophe in prose, and finally an assembled specifier that dodged the
+ * fence AND the bundler — leaving every surface unmountable in a browser).
+ *
+ * What must actually hold: every React client surface is reachable ONLY
+ * through the island host's flag gate, and the gate defaults OFF.
+ *
+ *   1. Exactly one module under apps/web/src references '@spotme/ui': the
+ *      island host (lib/island.js) — and only via dynamic import(), never
+ *      a static `from`, so the surface stays out of the entry chunk.
+ *   2. Inside the host, the `if (!uiFlag(slice)) return false` guard
+ *      appears BEFORE the dynamic import — flag off means no request.
+ *   3. uiFlag defaults OFF: only the literal localStorage value 'on'
+ *      enables, and any storage throw reads as off.
+ *
+ * Returns human-readable violations; the suites assert it is empty.
+ */
+export function flagGateViolations(): string[] {
+  const strip = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/\/\/[^\n]*/g, ' ');
+  const violations: string[] = [];
+  const srcRoot = join(liveWebRoot(), 'src');
+  const HOST = posix(join(srcRoot, 'lib/island.js'));
+  const importers = walk(srcRoot, ['.js', '.jsx', '.ts', '.tsx'])
+    .filter((f) => /['"]@spotme\/ui['"]/.test(strip(read(f))));
+  for (const f of importers) {
+    if (posix(f) !== HOST) violations.push(`unexpected @spotme/ui reference outside the island host: ${posix(f)}`);
+  }
+  if (!importers.some((f) => posix(f) === HOST)) {
+    violations.push('the island host no longer references @spotme/ui — fence would be vacuous');
+    return violations;
+  }
+  const host = strip(read(join(srcRoot, 'lib/island.js')));
+  if (/from\s+['"]@spotme\/ui['"]/.test(host)) violations.push('island host imports @spotme/ui STATICALLY — the surface would ship in the entry chunk');
+  const guardAt = host.indexOf('if (!uiFlag(slice)) return false');
+  const importAt = host.search(/import\(\s*['"]@spotme\/ui['"]\s*\)/);
+  if (guardAt === -1) violations.push('the flag guard `if (!uiFlag(slice)) return false` is missing from the island host');
+  if (importAt === -1) violations.push('the dynamic import("@spotme/ui") is missing from the island host');
+  if (guardAt !== -1 && importAt !== -1 && guardAt > importAt) violations.push('the flag guard does not precede the dynamic import');
+  const flat = host.replace(/\s+/g, ' ');
+  if (!flat.includes("=== 'on'")) violations.push("uiFlag no longer requires the literal 'on' — default-off is not guaranteed");
+  if (!/catch\s*\{\s*return false\s*\}/.test(flat)) violations.push('uiFlag no longer treats a storage throw as OFF');
+  return violations;
+}
+
+/**
  * Does the LIVE app entry pull in a dark CLIENT PACKAGE surface?
  *
  * Matches on package specifier, never on a domain word — the legacy views are

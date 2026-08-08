@@ -7,7 +7,7 @@
 import { join } from 'node:path';
 import { existsSync } from 'node:fs';
 import {
-  liveWebRoot, liveEntryDarkPackageImports, posix, BACKEND, REPO, read, walk, inDir, requireNonEmpty, clientDomainRoots, appEntries, clientTestExists, clientManifests,
+  liveWebRoot, liveEntryDarkPackageImports, flagGateViolations, posix, BACKEND, REPO, read, walk, inDir, requireNonEmpty, clientDomainRoots, appEntries, clientTestExists, clientManifests,
 } from './helpers/fence-paths';
 import { stripImageMetadata, containsMetadataMarkers } from '../src/moment-media/exif-strip';
 import { createMomentQueues } from '../src/moment-media/media.queues';
@@ -87,7 +87,7 @@ describe('Moments — dark integration fences', () => {
   });
 
   it('the web-next entry (App/main) mounts NEITHER MomentsShell NOR the moments subtree', () => {
-    expect(liveEntryDarkPackageImports()).toEqual([]);
+    expect(flagGateViolations()).toEqual([]);
     for (const entry of appEntries()) {
       /* Comments cannot import anything, so they are stripped before the
        * reach scan. Unstripped, an apostrophe in prose ("today's") opens a

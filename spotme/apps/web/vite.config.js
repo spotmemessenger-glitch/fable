@@ -23,6 +23,16 @@ export default defineConfig(({ command }) => {
     )
   }
   return {
+    /* ONE React, always. `@spotme/ui` is linked from packages/ui, which keeps
+     * react/react-dom in its own devDependencies (it needs them to run its
+     * vitest suite). Without dedupe the island chunk resolves THAT copy while
+     * the app resolves its own, and a second React instance has null
+     * internals — every hook throws "Cannot read properties of null (reading
+     * 'useSyncExternalStore')" the moment a surface mounts. The versions are
+     * pinned identical (19.2.8); this makes the module identity identical
+     * too. */
+    resolve: { dedupe: ['react', 'react-dom'] },
+
     // Vercel serves `dist/` as a static site — there is no server side to this
     // app at all. Peer discovery rides public infrastructure and messages go
     // directly between browsers.
