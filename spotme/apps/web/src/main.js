@@ -125,8 +125,8 @@ const NAV_ITEMS = [
     /* Exchange (slice 1). `deviceFlag` gates on the LOCAL opt-in
      * (`spotme.ui.exchange`, default OFF) rather than a server probe: the
      * server domain is open to every account, but the React surface ships
-     * dark, so the tab appears only on a device where someone ran
-     * localStorage.setItem('spotme.ui.exchange','on'). For everyone else the
+     * dark, so the tab appears only on a device where someone has set the
+     * spotme.ui.exchange storage key to 'on'. For everyone else the
      * bar is byte-identical to before this entry existed. */
     path: '#/exchange', label: 'Exchange', deviceFlag: 'exchange',
     icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3.8L3.4 7.4 7 11M3.6 7.4h13M17 13l3.6 3.6L17 20.2M20.4 16.6h-13"/></svg>'
