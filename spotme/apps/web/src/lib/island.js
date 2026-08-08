@@ -96,9 +96,21 @@ export async function mountIsland (slice, host, pick) {
   if (ticket !== mountSeq || !host.isConnected) return false
   await teardownMounted()
   if (ticket !== mountSeq || !host.isConnected) return false
-  const root = createRoot(host)
+  /* React's container is a PRIVATE wrapper, never the caller's element. Two
+   * views (inbox, groups) hand the router's SHARED view container in as
+   * `host`, and React clears its container on unmount — so the deferred
+   * teardown wiped whatever the NEXT screen had just rendered there, leaving
+   * a blank view and a removeChild NotFoundError. With inbox defaulting on,
+   * that is the first tab switch of a cold open. Owning the wrapper keeps the
+   * root's teardown to exactly what the island rendered; `display: contents`
+   * keeps the wrapper out of layout entirely. */
+  const container = document.createElement('div')
+  container.style.display = 'contents'
+  host.appendChild(container)
+
+  const root = createRoot(container)
   root.render(pick(mod))
-  mounted = { root, host }
+  mounted = { root, host: container }
   return true
 }
 
@@ -112,12 +124,15 @@ export async function unmountIsland () {
 
 async function teardownMounted () {
   if (!mounted) return
-  const { root } = mounted
+  const { root, host } = mounted
   mounted = null
   // Unmount is deferred a tick: React warns if a root is torn down during the
   // render pass that is still mounting it.
   await Promise.resolve()
   root.unmount()
+  // The private wrapper dies with its root, so a host that outlives a mount
+  // never accumulates dead wrappers.
+  host.remove()
 }
 
 /** Test/debug seam, mirroring window.__db and window.__rooms. */
