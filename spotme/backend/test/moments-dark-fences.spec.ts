@@ -49,8 +49,10 @@ describe('Moments — dark integration fences', () => {
   it('AppModule mounts MomentsModule (activation) — and nothing else changed', () => {
     const src = read(join(BACKEND, 'src/app.module.ts'));
     expect(src).toContain('MomentsModule');
-    // The dark domains stay OUT of the graph entirely.
-    for (const banned of ['ExchangeModule', 'EventsModule', 'AssistantModule']) {
+    /* Exchange was activated 2026-08-08 (owner directive) and mounts behind
+     * DomainGate('exchange') — its own fence suite asserts that gate. The
+     * REMAINING dark domains stay OUT of the graph entirely. */
+    for (const banned of ['EventsModule', 'AssistantModule']) {
       expect(src).not.toContain(banned);
     }
   });
