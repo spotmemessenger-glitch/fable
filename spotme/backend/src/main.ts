@@ -224,6 +224,18 @@ async function bootstrap() {
   await app.listen(port);
   // eslint-disable-next-line no-console
   console.log(`Spot Me backend listening on :${port}`);
+
+  // ---- TEMPORARY (commit A of an A/B pair — REVERTED by commit B): one-shot
+  // upsert of the `exchange` RuntimeFlag row. Idempotent, single-row, no
+  // deletes; still must not survive in the boot path (M2-proof lesson). ----
+  try {
+    const { runExchangeFlagOn } = await import('./scripts/exchange-flag-on');
+    // eslint-disable-next-line no-console
+    console.log('EXCHANGE_FLAG_RESULT ' + JSON.stringify(await runExchangeFlagOn(app.get(PrismaService))));
+  } catch (e) {
+    // eslint-disable-next-line no-console
+    console.error('EXCHANGE_FLAG_RESULT ' + JSON.stringify({ error: (e as Error).message }));
+  }
 }
 // A bare `bootstrap()` meant any failure to start — Postgres unreachable, port
 // taken, the assertion above — died as an unhandled rejection with no usable
