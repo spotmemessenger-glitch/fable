@@ -450,3 +450,46 @@ After slice 1 ships, count the spacing, colour and type values in its React CSS
 **not** drawn from a `tokens.css` custom property. Small ⇒ plain CSS held and
 Tailwind stays unadopted. Large ⇒ measured drift, and Tailwind gets its own PR
 on that evidence.
+
+## Slice 1 is EXCHANGE, not Discovery — DECIDED 2026-08-07
+
+**ADR-035 §(e) amended: slice 1 of the frontend migration is Exchange.
+Discovery moves to slice 5.** The per-slice definition of done (§(f)) and the
+rollback rule (§(g)) are unchanged and apply to every slice as written.
+
+**Why.** There is no vanilla Exchange screen anywhere in the web app — no
+`views/exchange.js`, no `ROUTES` entry, no nav item. Slice 1 is therefore
+**greenfield**, and every risk the migration exists to manage is absent:
+
+- no legacy path to keep alive (DoD #2 has nothing to preserve);
+- no flag-off fallback to get right — with the flag off the surface is simply
+  absent, exactly as today;
+- no persisted-shape risk, so §(g)'s load-bearing rule is trivially satisfied;
+- no rewrite risk — nothing is being replaced, so there is no behaviour to
+  regress and no missing characterization coverage to regret.
+
+Slice 1 still proves everything a first slice must: the island host, the flag
+mechanism, the package boundary, the DoD and the rollback drill — **against a
+surface where a mistake costs nothing a user can see.**
+
+**What the original call got wrong.** "Discovery first, the beachhead exists"
+reasoned from ADR-022's *product* ordering and from the existence of
+`web-next/src/discovery/`. Both true; neither is about migration risk.
+Discovery is a working, shipped screen with **zero view-level test coverage**
+and it carries the **ADR-024 P0 coarse-broadcast fence** — the highest rewrite
+risk in the programme combined with the only P0 privacy gate, placed in the
+slice where the mechanism itself was still unproven. Product priority and
+migration risk are independent axes, and the original ordering conflated them.
+
+**Discovery at slice 5 is a known and separately accepted risk**, not a
+softened one. It still requires scope pinned to today's live endpoints (no
+Phase 2 backend, no Typesense — **P7 remains no**), legacy Discovery intact and
+rendering with the flag off, and `discovery-coarse-broadcast` passing against
+**both** implementations in one CI job. It simply runs after four slices of
+evidence that the mechanism enforcing those things works.
+
+**The island host lands with slice 1.** It was deferred in slice 0 because a
+mount point with nothing to mount is dead code that trips the dark fence —
+`liveEntryDarkPackageImports()` fails the moment `apps/web/src/main.js` imports
+`@spotme/ui`. Slice 1 is its first real consumer. Flag: `spotme.ui.exchange`,
+default off. Not built in the amendment run.

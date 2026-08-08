@@ -13,8 +13,10 @@
  *  var · NO network-capable HTTP client in the assistant subtree.
  */
 
-import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
+import {
+  liveEntryDarkPackageImports, BACKEND, REPO, read, walk, inDir, requireNonEmpty, clientDomainRoots, appEntries, builtArtifactDirs,
+} from './helpers/fence-paths';
 
 import { DeterministicSummaryComposer } from '../src/assistant/assistant.compose';
 import { DeterministicAssistantIntentRouter } from '../src/assistant/assistant.intent';
@@ -27,29 +29,15 @@ import { AssistantService } from '../src/assistant/assistant.service';
 import { UnavailableEvidenceAdapter } from '../src/assistant/assistant.ports';
 import { ASSISTANT_DOMAINS } from '../src/assistant/assistant.types';
 
-const BACKEND = join(__dirname, '..');
-const REPO = join(BACKEND, '../..');
-const WEBNEXT = join(REPO, 'spotme/web-next');
 const CONTRACTS = join(REPO, 'spotme/packages/contracts');
 
-function walk(dir: string, exts: string[], out: string[] = []): string[] {
-  if (!existsSync(dir)) return out;
-  for (const e of readdirSync(dir)) {
-    if (e === 'node_modules' || e === 'dist' || e === '.git') continue;
-    const full = join(dir, e);
-    if (statSync(full).isDirectory()) walk(full, exts, out);
-    else if (exts.some((x) => e.endsWith(x))) out.push(full);
-  }
-  return out;
-}
-const read = (p: string) => readFileSync(p, 'utf8');
 const stripComments = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/\/\/[^\n]*/g, ' ');
 
 /** Every assistant source file across the three surfaces. */
 function assistantSources(): string[] {
   return [
     ...walk(join(BACKEND, 'src/assistant'), ['.ts']),
-    ...walk(join(WEBNEXT, 'src/assistant'), ['.ts', '.tsx', '.css']),
+    ...clientDomainRoots('assistant').flatMap((d) => walk(d, ['.ts', '.tsx', '.css'])),
     join(CONTRACTS, 'src/assistant.ts'),
   ];
 }
@@ -64,28 +52,41 @@ describe('assistant — module darkness', () => {
   });
 
   it('no backend module OUTSIDE the assistant subtree imports it (static or dynamic)', () => {
-    const files = walk(join(BACKEND, 'src'), ['.ts']).filter((f) => !f.includes('/assistant/'));
+    const files = walk(join(BACKEND, 'src'), ['.ts']).filter((f) => !inDir(f, 'assistant'));
     expect(files.filter((f) => ASSISTANT_REACH.test(stripComments(read(f))))).toEqual([]);
     expect(read(join(BACKEND, 'src/main.ts'))).not.toMatch(/\bassistant\b/i);
   });
 
   it('the web-next entry (App/main) mounts NEITHER AssistantShell NOR the assistant subtree', () => {
-    for (const entry of ['src/App.tsx', 'src/main.tsx']) {
-      const s = read(join(WEBNEXT, entry));
+    expect(liveEntryDarkPackageImports()).toEqual([]);
+    for (const entry of appEntries()) {
+      const s = read(entry);
       expect(s).not.toMatch(/AssistantShell/);
       expect(ASSISTANT_REACH.test(s)).toBe(false);
     }
   });
 
-  it('the built web-next artifact (when present) contains no assistant surface', () => {
-    const dist = join(WEBNEXT, 'dist/assets');
-    if (!existsSync(dist)) return; // artifact scan applies when a build exists
-    for (const f of readdirSync(dist)) {
-      const s = read(join(dist, f));
-      expect(s).not.toContain('AssistantShell');
-      expect(s).not.toContain('straight-line estimate');
-      expect(s).not.toContain('Ask about this area');
+  it('any built client artifact contains no assistant surface', () => {
+    // Wherever the client builds to -- web-next/dist today, packages/ui/dist or
+    // the live app's dist after ADR-035. Skipping is LOUD: a silent `return`
+    // reads identically to a clean scan in the output, which is how an
+    // unenforced fence keeps looking enforced.
+    const dirs = builtArtifactDirs();
+    if (dirs.length === 0) {
+      console.warn('[fence] SKIPPED artifact scan: no client build present. Run a build to exercise this.');
+      return;
     }
+    let scanned = 0;
+    for (const dist of dirs) {
+      for (const f of walk(dist, ['.js', '.css', '.html'])) {
+        const s = read(f);
+        scanned += 1;
+        expect(s).not.toContain('AssistantShell');
+        expect(s).not.toContain('straight-line estimate');
+        expect(s).not.toContain('Ask about this area');
+      }
+    }
+    expect(scanned).toBeGreaterThan(0);
   });
 
   it('fence is not vacuous: the assistant surfaces exist and are non-trivial', () => {
@@ -141,7 +142,7 @@ describe('assistant — X10 source-tree fences', () => {
     }
     // The web-next assistant may import ONLY the discovery coarsen boundary
     // and ports types — never another surface's internals.
-    for (const f of walk(join(WEBNEXT, 'src/assistant'), ['.ts', '.tsx'])) {
+    for (const f of requireNonEmpty(clientDomainRoots('assistant').flatMap((d) => walk(d, ['.ts', '.tsx'])), 'assistant client surface')) {
       const s = stripComments(read(f));
       const imports = [...s.matchAll(/from\s+['"]([^'"]+)['"]/g)].map((m) => m[1]);
       for (const imp of imports) {

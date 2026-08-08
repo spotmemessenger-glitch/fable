@@ -5,25 +5,13 @@
  * nothing.
  */
 
-import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
+import { existsSync } from 'node:fs';
+import {
+  liveWebRoot, liveEntryDarkPackageImports, BACKEND, REPO, read, walk, inDir, requireNonEmpty, clientDomainRoots, clientAllRoots, appEntries, clientTestExists,
+} from './helpers/fence-paths';
 import { normalizeEvent } from '../src/events/events.normalize';
 
-const BACKEND = join(__dirname, '..');
-const REPO = join(BACKEND, '../..');
-const WEBNEXT = join(REPO, 'spotme/web-next');
-
-function walk(dir: string, exts: string[], out: string[] = []): string[] {
-  if (!existsSync(dir)) return out;
-  for (const e of readdirSync(dir)) {
-    if (e === 'node_modules' || e === 'dist' || e === '.git') continue;
-    const full = join(dir, e);
-    if (statSync(full).isDirectory()) walk(full, exts, out);
-    else if (exts.some((x) => e.endsWith(x))) out.push(full);
-  }
-  return out;
-}
-const read = (p: string) => readFileSync(p, 'utf8');
 const stripComments = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/\/\/[^\n]*/g, ' ');
 /** A quoted import specifier reaching the events subtree at a path boundary. */
 const EVENTS_REACH = /['"][^'"]*\/events[\/.'"-]/;
@@ -37,14 +25,15 @@ describe('Events — dark integration fences', () => {
   });
 
   it('no backend module OUTSIDE src/events imports the events code (static or dynamic)', () => {
-    const files = walk(join(BACKEND, 'src'), ['.ts']).filter((f) => !f.includes('/events/'));
+    const files = walk(join(BACKEND, 'src'), ['.ts']).filter((f) => !inDir(f, 'events'));
     expect(files.filter((f) => EVENTS_REACH.test(read(f)))).toEqual([]);
     expect(read(join(BACKEND, 'src/main.ts'))).not.toMatch(/\bevents\b/i);
   });
 
   it('the web-next entry (App/main) mounts NEITHER EventsShell NOR the events subtree', () => {
-    for (const entry of ['src/App.tsx', 'src/main.tsx']) {
-      const s = read(join(WEBNEXT, entry));
+    expect(liveEntryDarkPackageImports()).toEqual([]);
+    for (const entry of appEntries()) {
+      const s = read(entry);
       expect(s).not.toMatch(/EventsShell/);
       expect(EVENTS_REACH.test(s)).toBe(false);
     }
@@ -60,7 +49,7 @@ describe('Events — dark integration fences', () => {
     // events.safety.ts is the origin-LEAK GUARD — it names origin shapes by
     // design to DETECT them, so it is excluded from the "no declaration" sweep.
     const guard = join(BACKEND, 'src/events/events.safety.ts');
-    const files = [...walk(join(BACKEND, 'src/events'), ['.ts']), ...walk(join(WEBNEXT, 'src/events'), ['.ts', '.tsx'])].filter((f) => f !== guard);
+    const files = [...walk(join(BACKEND, 'src/events'), ['.ts']), ...requireNonEmpty(clientDomainRoots('events').flatMap((d) => walk(d, ['.ts', '.tsx'])), 'events client surface')].filter((f) => f !== guard);
     const schema = read(join(BACKEND, 'prisma/schema.prisma'));
     const eventModel = schema.slice(schema.indexOf('model Event '), schema.indexOf('}', schema.indexOf('model Event ')));
     // No origin-shaped column on the Event model (the real persistence fence).
@@ -75,7 +64,7 @@ describe('Events — dark integration fences', () => {
   });
 
   it('NO age/gender/payment field exists anywhere in the events subtree', () => {
-    const files = [...walk(join(BACKEND, 'src/events'), ['.ts']), ...walk(join(WEBNEXT, 'src/events'), ['.ts', '.tsx'])];
+    const files = [...walk(join(BACKEND, 'src/events'), ['.ts']), ...requireNonEmpty(clientDomainRoots('events').flatMap((d) => walk(d, ['.ts', '.tsx'])), 'events client surface')];
     for (const f of files) {
       const s = read(f);
       expect(s).not.toMatch(/\b(age|gender)\s*[:?]\s*(number|string|Age|Gender)/i);
@@ -95,16 +84,16 @@ describe('Events — dark integration fences', () => {
   });
 
   it('no events feature flag is true; crypto flags remain dark', () => {
-    const files = [...walk(join(BACKEND, 'src'), ['.ts']), ...walk(join(WEBNEXT, 'src'), ['.ts', '.tsx'])];
+    const files = [...walk(join(BACKEND, 'src'), ['.ts']), ...requireNonEmpty(clientAllRoots().flatMap((d) => walk(d, ['.ts', '.tsx'])), 'client surface')];
     for (const f of files) {
       expect(read(f)).not.toMatch(/EVENTS[_A-Z]*ENABLED\s*=\s*true/);
     }
-    const signing = read(join(REPO, 'spotme/web/src/lib/crypto/signing-key-publication.js'));
+    const signing = read(join(liveWebRoot(), 'src/lib/crypto/signing-key-publication.js'));
     expect(signing).toContain('SIGNING_PUBLICATION_ENABLED = false');
   });
 
   it('no secret-shaped literal in any events source file', () => {
-    const files = [...walk(join(BACKEND, 'src/events'), ['.ts']), ...walk(join(WEBNEXT, 'src/events'), ['.ts', '.tsx'])];
+    const files = [...walk(join(BACKEND, 'src/events'), ['.ts']), ...requireNonEmpty(clientDomainRoots('events').flatMap((d) => walk(d, ['.ts', '.tsx'])), 'events client surface')];
     const SECRET = /\b(sk|pk|key|token|bearer)[-_][A-Za-z0-9]{20,}|eyJ[A-Za-z0-9_-]{28,}|[a-z][a-z0-9+.-]*:\/\/[^\s'"]*:[^\s'"]*@/;
     expect(files.filter((f) => SECRET.test(read(f)))).toEqual([]);
   });
@@ -112,7 +101,7 @@ describe('Events — dark integration fences', () => {
   it('BUILD ARTIFACTS: compiled events output carries no provider endpoint or secret', () => {
     const dist = join(BACKEND, 'dist');
     expect(existsSync(dist)).toBe(true);
-    const files = walk(dist, ['.js']).filter((f) => f.includes('/events/'));
+    const files = walk(dist, ['.js']).filter((f) => inDir(f, 'events'));
     expect(files.length).toBeGreaterThan(0); // events DID compile (non-vacuous)
     const SECRET = /eyJ[A-Za-z0-9_-]{28,}|[a-z][a-z0-9+.-]*:\/\/[^\s'"]*:[^\s'"]*@/;
     for (const f of files) {
@@ -138,7 +127,7 @@ describe('Events — dark integration fences', () => {
       expect(existsSync(join(BACKEND, spec))).toBe(true);
     }
     for (const t of ['events-controller.test.ts', 'events-ui.test.tsx', 'events-privacy-mutation.test.ts']) {
-      expect(existsSync(join(WEBNEXT, 'test', t))).toBe(true);
+      expect(clientTestExists(t)).toBe(true);
     }
   });
 });

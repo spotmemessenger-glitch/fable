@@ -3,7 +3,7 @@
  *
  * The single source of truth for cross-surface contracts. Types only: no
  * runtime, no dependencies, nothing imported by the running product yet. New
- * TypeScript surfaces (packages/*, spotme/web-next, and — over time — the
+ * TypeScript surfaces (packages/*, spotme/apps/web-next, and — over time — the
  * backend) consume these instead of redefining shapes.
  */
 

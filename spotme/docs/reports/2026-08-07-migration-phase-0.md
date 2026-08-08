@@ -184,7 +184,7 @@ Full rationale and rejected alternatives are in ADR-035; the short form:
 | **(b) Mobile boundary** | **ADR-027 stands, unchanged.** Capacitor is the shipping shell for the whole migration; no React Native app is created. Separately: retire `spotme/app` (**approved P5**, subject to the `spotme/core` constraint) and remove the untracked `spotme/mobile` (**P6**). |
 | **(c) Monorepo layout** | `apps/web` + `packages/{contracts,core,ui,search-bench}`. **web-next is dissolved, not promoted** — components → `packages/ui`, controllers/ports → `packages/core`, its harness deleted. No `apps/mobile` placeholder. |
 | **(d) Tailwind + #132 tokens** | **DEFERRED (P4).** Slices 0–1 ship on plain CSS + the #132 tokens; revisit at slice 2 against a countable drift test. The adoption plan is retained but not in force: Tailwind v4, tokens-first, `packages/ui` only. v4's `@theme` reads CSS custom properties natively, so `tokens.css` stays the single source; `--onfill`/`--surface`, `--ink-press`, the 15 vendored fonts and the discrete-weight decision all move verbatim, and the 29-assertion `design-tokens-fence` moves with them and keeps running. |
-| **(e) Slice order** | **Default kept: slice 1 = Discovery** — but scope-pinned to the *legacy live* surface. Chat and crypto last. A smaller pathfinder slice was considered and rejected (§4). |
+| **(e) Slice order** | **AMENDED 2026-08-07: slice 1 = EXCHANGE**, Discovery moved to slice 5. Exchange is greenfield — no `views/exchange.js`, no route, no nav entry — so there is no legacy path, no flag-off fallback and no persisted-shape risk. Discovery is a working screen with no view-level tests carrying the ADR-024 P0 fence; product priority (ADR-022) and migration risk are independent axes, and the original ordering conflated them. Chat and crypto still last. See ADR-035 §(e) and DECISIONS.md. |
 | **(f) Per-slice DoD** | Nine items: dark flag `spotme.ui.<slice>` (default off) · legacy view stays live and unmodified · 1,085-assertion floor holds · new package tests · **fence parity against the React build** · a flag-off/flag-on parity test · a11y parity · bundle budget recorded · docs updated in place (G9). |
 | **(g) Rollback** | Tier 1 flag-off (seconds, no deploy) · tier 2 revert the merge (slices are additive by construction) · tier 3 **prevented, not recovered**: a slice may not change any persisted shape — new data goes under a new key legacy ignores. Legacy deletion is a separate PR one release after 100% rollout. |
 
@@ -192,7 +192,10 @@ Full rationale and rejected alternatives are in ADR-035; the short form:
 
 ## 4. Recommended slice-1 scope
 
-**Slice 1 = Discovery, legacy live surface only.**
+> **SUPERSEDED 2026-08-07 — slice 1 is now EXCHANGE (greenfield); the Discovery
+> analysis below governs SLICE 5 and is otherwise unchanged.** See ADR-035 §(e).
+
+**Discovery (now slice 5), legacy live surface only.**
 
 **In scope**
 - Rewrite `views/discovery.js` (750 lines, 65 `el()` calls) as React, in

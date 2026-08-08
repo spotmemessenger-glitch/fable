@@ -4,29 +4,17 @@
  * over the actual source tree, schema, manifests, and build artifacts.
  */
 
-import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
+import { existsSync } from 'node:fs';
+import {
+  liveWebRoot, liveEntryDarkPackageImports, posix, BACKEND, REPO, read, walk, inDir, requireNonEmpty, clientDomainRoots, appEntries, clientTestExists, clientManifests,
+} from './helpers/fence-paths';
 import { stripImageMetadata, containsMetadataMarkers } from '../src/moment-media/exif-strip';
 import { createMomentQueues } from '../src/moment-media/media.queues';
 import { toMomentSearchProjection, PrivateInProjectionError } from '../src/moments/moments.search';
 import { scoreBreakdown, FORBIDDEN_RANKING_SIGNALS, MomentRankingRegistryError } from '../src/moments/moments.ranking';
 import type { MomentRow } from '../src/moments/moments.ports';
 
-const BACKEND = join(__dirname, '..');
-const REPO = join(BACKEND, '../..');
-const WEBNEXT = join(REPO, 'spotme/web-next');
-
-function walk(dir: string, exts: string[], out: string[] = []): string[] {
-  if (!existsSync(dir)) return out;
-  for (const e of readdirSync(dir)) {
-    if (e === 'node_modules' || e === 'dist' || e === '.git') continue;
-    const full = join(dir, e);
-    if (statSync(full).isDirectory()) walk(full, exts, out);
-    else if (exts.some((x) => e.endsWith(x))) out.push(full);
-  }
-  return out;
-}
-const read = (p: string) => readFileSync(p, 'utf8');
 const stripComments = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/\/\/[^\n]*/g, ' ');
 const MOMENTS_REACH = /['"][^'"]*\/(moments|moment-media)[\/.'"-]/;
 
@@ -79,7 +67,7 @@ describe('Moments — dark integration fences', () => {
 
   it('no backend module OUTSIDE the moments subtrees reaches into them, except the mount', () => {
     const files = walk(join(BACKEND, 'src'), ['.ts'])
-      .filter((f) => !f.includes('/moments/') && !f.includes('/moment-media/'))
+      .filter((f) => !inDir(f, 'moments') && !inDir(f, 'moment-media'))
       .filter((f) => !f.endsWith('app.module.ts'))   // the mount itself
       .filter((f) => !f.endsWith('main.ts'));        // the upload body-parser path
     expect(files.filter((f) => MOMENTS_REACH.test(read(f)))).toEqual([]);
@@ -97,8 +85,9 @@ describe('Moments — dark integration fences', () => {
   });
 
   it('the web-next entry (App/main) mounts NEITHER MomentsShell NOR the moments subtree', () => {
-    for (const entry of ['src/App.tsx', 'src/main.tsx']) {
-      const s = read(join(WEBNEXT, entry));
+    expect(liveEntryDarkPackageImports()).toEqual([]);
+    for (const entry of appEntries()) {
+      const s = read(entry);
       expect(s).not.toMatch(/MomentsShell/);
       expect(MOMENTS_REACH.test(s)).toBe(false);
     }
@@ -137,7 +126,7 @@ describe('Moments — dark integration fences', () => {
     const files = [
       ...walk(join(BACKEND, 'src/moments'), ['.ts']),
       ...walk(join(BACKEND, 'src/moment-media'), ['.ts']),
-      ...walk(join(WEBNEXT, 'src/moments'), ['.ts', '.tsx']),
+      ...requireNonEmpty(clientDomainRoots('moments').flatMap((d) => walk(d, ['.ts', '.tsx'])), 'moments client surface'),
     ];
     expect(files.length).toBeGreaterThan(10); // non-vacuous
     /* M3 NARROWED THE BULLMQ RULE, IT DID NOT DROP IT.
@@ -153,20 +142,23 @@ describe('Moments — dark integration fences', () => {
     for (const f of files) {
       const s = stripComments(read(f));
       expect(s).not.toMatch(/lib\/camera|camera-engine|createCameraEngine/);
-      if (!f.endsWith(QUEUE_OWNER)) expect(s).not.toMatch(/from\s+['"]bullmq['"]/);
+      // posix(): on Windows the path is ...\moment-media	ranscode.worker.ts,
+      // so a raw endsWith on a slashed literal never matched and the ONE file
+      // authorised to own the queue tripped its own exemption.
+      if (!posix(f).endsWith(QUEUE_OWNER)) expect(s).not.toMatch(/from\s+['"]bullmq['"]/);
       expect(s).not.toMatch(/@aws-sdk|aws-sdk/); // storage ONLY via the seam
     }
     // …and the one owner really is the worker, so the exemption cannot rot
     // into "whichever file happens to import it".
     expect(files.filter((f) => /from\s+['"]bullmq['"]/.test(stripComments(read(f))))
-      .map((f) => f.split('/').slice(-2).join('/'))).toEqual(['moment-media/transcode.worker.ts']);
+      .map((f) => posix(f).split('/').slice(-2).join('/'))).toEqual(['moment-media/transcode.worker.ts']);
     // The storage seam is the ONLY storage import in the media pipeline.
     const media = walk(join(BACKEND, 'src/moment-media'), ['.ts']).map(read).join('\n');
     expect(media).toContain("from '../storage/storage.interface'");
   });
 
   it('DEPENDENCY SCAN (M9): no media/AI binary dependency was added', () => {
-    for (const pkgPath of [join(BACKEND, 'package.json'), join(WEBNEXT, 'package.json')]) {
+    for (const pkgPath of [join(BACKEND, 'package.json'), ...clientManifests()]) {
       const pkg = JSON.parse(read(pkgPath)) as { dependencies?: Record<string, string>; devDependencies?: Record<string, string> };
       const all = { ...pkg.dependencies, ...pkg.devDependencies };
       for (const banned of ['ffmpeg', 'fluent-ffmpeg', 'sharp', 'libvips', 'jimp', '@tensorflow', 'onnxruntime', 'openai', 'langchain']) {
@@ -179,7 +171,7 @@ describe('Moments — dark integration fences', () => {
     const files = [
       ...walk(join(BACKEND, 'src/moments'), ['.ts']),
       ...walk(join(BACKEND, 'src/moment-media'), ['.ts']),
-      ...walk(join(WEBNEXT, 'src/moments'), ['.ts', '.tsx']),
+      ...requireNonEmpty(clientDomainRoots('moments').flatMap((d) => walk(d, ['.ts', '.tsx'])), 'moments client surface'),
     ];
     for (const f of files) {
       const s = stripComments(read(f));
@@ -196,21 +188,21 @@ describe('Moments — dark integration fences', () => {
     const files = [
       ...walk(join(BACKEND, 'src/moments'), ['.ts']),
       ...walk(join(BACKEND, 'src/moment-media'), ['.ts']),
-      ...walk(join(WEBNEXT, 'src/moments'), ['.ts', '.tsx']),
+      ...requireNonEmpty(clientDomainRoots('moments').flatMap((d) => walk(d, ['.ts', '.tsx'])), 'moments client surface'),
     ];
     const SECRET = /\b(sk|pk|key|token|bearer)[-_][A-Za-z0-9]{20,}|eyJ[A-Za-z0-9_-]{28,}|[a-z][a-z0-9+.-]*:\/\/[^\s'"]*:[^\s'"]*@/;
     for (const f of files) {
       expect(read(f)).not.toMatch(/MOMENTS[_A-Z]*ENABLED\s*=\s*true/);
       expect(SECRET.test(read(f))).toBe(false);
     }
-    const signing = read(join(REPO, 'spotme/web/src/lib/crypto/signing-key-publication.js'));
+    const signing = read(join(liveWebRoot(), 'src/lib/crypto/signing-key-publication.js'));
     expect(signing).toContain('SIGNING_PUBLICATION_ENABLED = false');
   });
 
   it('BUILD ARTIFACTS (M9): compiled moments output carries no secret or storage endpoint', () => {
     const dist = join(BACKEND, 'dist');
     expect(existsSync(dist)).toBe(true);
-    const files = walk(dist, ['.js']).filter((f) => f.includes('/moments/') || f.includes('/moment-media/'));
+    const files = walk(dist, ['.js']).filter((f) => inDir(f, 'moments') || inDir(f, 'moment-media'));
     expect(files.length).toBeGreaterThan(0); // moments DID compile (non-vacuous)
     const SECRET = /eyJ[A-Za-z0-9_-]{28,}|[a-z][a-z0-9+.-]*:\/\/[^\s'"]*:[^\s'"]*@/;
     for (const f of files) {
@@ -234,7 +226,7 @@ describe('Moments — dark integration fences', () => {
       expect(existsSync(join(BACKEND, spec))).toBe(true);
     }
     for (const t of ['moments-controller.test.ts', 'moments-ui.test.tsx', 'moments-privacy-mutation.test.ts']) {
-      expect(existsSync(join(WEBNEXT, 'test', t))).toBe(true);
+      expect(clientTestExists(t)).toBe(true);
     }
   });
 });

@@ -13,7 +13,7 @@ export class ChatRequestsService {
   /**
    * Only NEARBY-sourced requests are gated behind accept/reject — username
    * search, invite links, and existing contacts open a conversation immediately,
-   * matching the current spotme/web behavior. See the blueprint's §05 diagram.
+   * matching the current spotme/apps/web behavior. See the blueprint's §05 diagram.
    */
   async initiate(fromUserId: string, toUserId: string, source: RequestSource, greeting?: string) {
     if (fromUserId === toUserId) throw new BadRequestException('cannot message yourself');

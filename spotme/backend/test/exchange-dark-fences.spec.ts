@@ -4,25 +4,13 @@
  * manifests, and build artifacts — a PR-body promise enforces nothing.
  */
 
-import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
+import { existsSync } from 'node:fs';
+import {
+  liveWebRoot, liveEntryDarkPackageImports, BACKEND, REPO, read, walk, inDir, requireNonEmpty, clientDomainRoots, clientAllRoots, appEntries, clientTestExists,
+} from './helpers/fence-paths';
 import { validateIntentInput } from '../src/exchange/exchange.policy';
 
-const BACKEND = join(__dirname, '..');
-const REPO = join(BACKEND, '../..');
-const WEBNEXT = join(REPO, 'spotme/web-next');
-
-function walk(dir: string, exts: string[], out: string[] = []): string[] {
-  if (!existsSync(dir)) return out;
-  for (const e of readdirSync(dir)) {
-    if (e === 'node_modules' || e === 'dist' || e === '.git') continue;
-    const full = join(dir, e);
-    if (statSync(full).isDirectory()) walk(full, exts, out);
-    else if (exts.some((x) => e.endsWith(x))) out.push(full);
-  }
-  return out;
-}
-const read = (p: string) => readFileSync(p, 'utf8');
 /** A quoted import specifier that reaches the `exchange` path segment of the
  *  subtree: `'./exchange'`, `'../exchange/x'`, `'src/exchange.module'`. A
  *  subtree specifier ALWAYS has a `/` before `exchange` (relative/aliased path),
@@ -44,7 +32,7 @@ describe('Exchange — dark integration fences', () => {
   });
 
   it('no backend module OUTSIDE src/exchange imports the exchange code (static or dynamic)', () => {
-    const files = walk(join(BACKEND, 'src'), ['.ts']).filter((f) => !f.includes('/exchange/'));
+    const files = walk(join(BACKEND, 'src'), ['.ts']).filter((f) => !inDir(f, 'exchange'));
     // Any quoted import specifier whose path reaches the exchange segment — as
     // `/exchange`, `/exchange/…`, or `/exchange.module` — at a path boundary.
     // Broadened (review IMPORTER-REGEX): the previous form required a trailing
@@ -56,8 +44,9 @@ describe('Exchange — dark integration fences', () => {
   it('the web-next entry (App/main) mounts NEITHER ExchangeShell NOR the exchange subtree', () => {
     // WEBNEXT-UNFENCED: the client shell is dark too — the app entry renders
     // only Discovery; nothing imports or mounts the exchange UI.
-    for (const entry of ['src/App.tsx', 'src/main.tsx']) {
-      const s = read(join(WEBNEXT, entry));
+    expect(liveEntryDarkPackageImports()).toEqual([]);
+    for (const entry of appEntries()) {
+      const s = read(entry);
       expect(s).not.toMatch(/ExchangeShell/);
       expect(EXCHANGE_REACH.test(s)).toBe(false);
     }
@@ -71,7 +60,7 @@ describe('Exchange — dark integration fences', () => {
   });
 
   it('NO age/gender/payment field exists anywhere in the exchange subtree', () => {
-    const files = [...walk(join(BACKEND, 'src/exchange'), ['.ts']), ...walk(join(WEBNEXT, 'src/exchange'), ['.ts', '.tsx'])];
+    const files = [...walk(join(BACKEND, 'src/exchange'), ['.ts']), ...requireNonEmpty(clientDomainRoots('exchange').flatMap((d) => walk(d, ['.ts', '.tsx'])), 'exchange client surface')];
     for (const f of files) {
       const s = read(f);
       // A field/property named age/gender, or a payment amount field — refused.
@@ -100,16 +89,16 @@ describe('Exchange — dark integration fences', () => {
   });
 
   it('no exchange feature flag is true; crypto flags remain dark', () => {
-    const files = [...walk(join(BACKEND, 'src'), ['.ts']), ...walk(join(WEBNEXT, 'src'), ['.ts', '.tsx'])];
+    const files = [...walk(join(BACKEND, 'src'), ['.ts']), ...requireNonEmpty(clientAllRoots().flatMap((d) => walk(d, ['.ts', '.tsx'])), 'client surface')];
     for (const f of files) {
       expect(read(f)).not.toMatch(/EXCHANGE[_A-Z]*ENABLED\s*=\s*true/);
     }
-    const signing = read(join(REPO, 'spotme/web/src/lib/crypto/signing-key-publication.js'));
+    const signing = read(join(liveWebRoot(), 'src/lib/crypto/signing-key-publication.js'));
     expect(signing).toContain('SIGNING_PUBLICATION_ENABLED = false');
   });
 
   it('no secret-shaped literal in any exchange source file', () => {
-    const files = [...walk(join(BACKEND, 'src/exchange'), ['.ts']), ...walk(join(WEBNEXT, 'src/exchange'), ['.ts', '.tsx'])];
+    const files = [...walk(join(BACKEND, 'src/exchange'), ['.ts']), ...requireNonEmpty(clientDomainRoots('exchange').flatMap((d) => walk(d, ['.ts', '.tsx'])), 'exchange client surface')];
     const SECRET = /\b(sk|pk|key|token|bearer)[-_][A-Za-z0-9]{20,}|eyJ[A-Za-z0-9_-]{28,}|[a-z][a-z0-9+.-]*:\/\/[^\s'"]*:[^\s'"]*@/;
     expect(files.filter((f) => SECRET.test(read(f)))).toEqual([]);
   });
@@ -117,7 +106,7 @@ describe('Exchange — dark integration fences', () => {
   it('BUILD ARTIFACTS: compiled exchange output carries no Typesense endpoint or secret', () => {
     const dist = join(BACKEND, 'dist');
     expect(existsSync(dist)).toBe(true);
-    const files = walk(dist, ['.js']).filter((f) => f.includes('/exchange/'));
+    const files = walk(dist, ['.js']).filter((f) => inDir(f, 'exchange'));
     expect(files.length).toBeGreaterThan(0); // exchange DID compile (non-vacuous)
     const SECRET = /eyJ[A-Za-z0-9_-]{28,}|[a-z][a-z0-9+.-]*:\/\/[^\s'"]*:[^\s'"]*@/;
     for (const f of files) {
@@ -140,7 +129,7 @@ describe('Exchange — dark integration fences', () => {
       expect(existsSync(join(BACKEND, spec))).toBe(true);
     }
     for (const t of ['exchange-controller.test.ts', 'exchange-ui.test.tsx', 'exchange-privacy-mutation.test.ts']) {
-      expect(existsSync(join(WEBNEXT, 'test', t))).toBe(true);
+      expect(clientTestExists(t)).toBe(true);
     }
   });
 });

@@ -9,7 +9,7 @@ import { createGuestAuthGate, GateUser } from './middleware/guestAuth';
 import { JwtService } from '@nestjs/jwt';
 
 // TS compiles `import()` to `require` under CommonJS; this keeps it a real
-// dynamic import so the ESM handlers in spotme/web/api load correctly.
+// dynamic import so the ESM handlers in spotme/apps/web/api load correctly.
 const dynamicImport = new Function('p', 'return import(p)') as (p: string) => Promise<{ default?: unknown }>;
 
 /** The slice of the Express response the bridge itself touches. */
@@ -19,7 +19,7 @@ type BridgeResponse = {
 };
 
 /**
- * Bridge the existing Vercel serverless handlers (spotme/web/api/*.js) onto
+ * Bridge the existing Vercel serverless handlers (spotme/apps/web/api/*.js) onto
  * this server at the same /api/* paths. They are plain (req, res) functions —
  * Express-compatible — and each degrades gracefully when its vendor env vars
  * are absent, exactly as it does on Vercel. `username` is deliberately NOT
@@ -36,7 +36,7 @@ async function mountWebApiBridge(app: INestApplication) {
   // every /api/* call 404s at runtime — which is exactly how translation,
   // TURN credentials and voice cloning were dead in production while every
   // local test passed.
-  const apiDir = process.env.WEB_API_DIR || join(process.cwd(), '..', 'web', 'api');
+  const apiDir = process.env.WEB_API_DIR || join(process.cwd(), '..', 'apps', 'web', 'api');
 
   /* THE DELETED-ACCOUNT CHECK THE BRIDGED HANDLERS DO NOT DO.
    *
