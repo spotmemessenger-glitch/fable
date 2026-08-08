@@ -54,6 +54,15 @@ export function uiFlag (slice) {
 }
 
 let mounted = null
+/* Monotonic mount generation. A mount takes a ticket before awaiting its
+ * chunks; teardown (unmountIsland) and every newer mount advance the
+ * generation, so a mount whose ticket is stale by the time the chunks arrive
+ * KNOWS it lost the race and stands down. Without this, a slow island (the
+ * inbox imports half the app before it mounts) resolving after the router
+ * had already moved on would unmount the WINNING island and render itself
+ * into a detached host — an intermittently blank screen, seen on #/exchange
+ * the moment inbox defaulted on (2026-08-08). */
+let mountSeq = 0
 
 /**
  * Mount a React surface into `host`. Resolves to false when the flag is off,
@@ -76,20 +85,32 @@ export async function mountIsland (slice, host, pick) {
    * downloads until a flag is ON — the flag guard above returns first.
    * The fence now pins THIS gate (flag-gated reachability), not the
    * absence of the string. */
+  const ticket = ++mountSeq
   const [{ createRoot }, mod] = await Promise.all([
     import('react-dom/client'),
     import('@spotme/ui')
   ])
 
-  await unmountIsland()
+  // Lost the race while the chunks loaded — a newer mount started or the
+  // view was torn down. Do NOT unmount (that would kill the winner).
+  if (ticket !== mountSeq || !host.isConnected) return false
+  await teardownMounted()
+  if (ticket !== mountSeq || !host.isConnected) return false
   const root = createRoot(host)
   root.render(pick(mod))
   mounted = { root, host }
   return true
 }
 
-/** Idempotent; safe to call when nothing is mounted. */
+/** Idempotent; safe to call when nothing is mounted. Also cancels any
+ *  in-flight mount — teardown means "this view is over", including a mount
+ *  still waiting on its chunks. */
 export async function unmountIsland () {
+  mountSeq++
+  await teardownMounted()
+}
+
+async function teardownMounted () {
   if (!mounted) return
   const { root } = mounted
   mounted = null
