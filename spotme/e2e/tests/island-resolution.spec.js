@@ -161,8 +161,13 @@ test.describe('island module resolution — against the BUILT bundle', () => {
      * perfectly fine. What actually matters is the SHAPE: turning a flag on
      * must fetch JavaScript that turning it off does not. */
     const jsFor = async (flagOn) => {
+      /* INVERSION: the OFF baseline must opt out of EVERY default-on slice,
+       * not just exchange — otherwise the boot screen itself (inbox defaults
+       * on) pulls React in both legs and the set difference is empty. */
+      const ALL = ['exchange', 'contacts', 'groups', 'inbox', 'profile', 'notifications', 'stories', 'discovery', 'verify']
+      const seed = ALL.map((s) => `try { localStorage.setItem('spotme.ui.${s}', 'off') } catch (e) {}`).join(';')
       const { ctx, page } = await onboard(browser,
-        `try { localStorage.setItem('spotme.ui.exchange', '${flagOn ? 'on' : 'off'}') } catch (e) {}`)
+        flagOn ? seed + `;try { localStorage.setItem('spotme.ui.exchange', 'on') } catch (e) {}` : seed)
       await page.goto(`${BUILT}/#/exchange`)
       await page.waitForLoadState('networkidle')
       await page.waitForTimeout(4000)
