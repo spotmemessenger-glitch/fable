@@ -224,17 +224,6 @@ async function bootstrap() {
   await app.listen(port);
   // eslint-disable-next-line no-console
   console.log(`Spot Me backend listening on :${port}`);
-
-  // ---- TEMPORARY (commit A of an A/B pair — REVERTED by commit B): one-shot
-  // withdraw of orphaned TEST intents (owners soft-deleted; titles scoped). ----
-  try {
-    const { runExchangeTestResidueWithdraw } = await import('./scripts/exchange-test-residue-withdraw');
-    // eslint-disable-next-line no-console
-    console.log('EXCHANGE_RESIDUE_RESULT ' + JSON.stringify(await runExchangeTestResidueWithdraw(app.get(PrismaService))));
-  } catch (e) {
-    // eslint-disable-next-line no-console
-    console.error('EXCHANGE_RESIDUE_RESULT ' + JSON.stringify({ error: (e as Error).message }));
-  }
 }
 // A bare `bootstrap()` meant any failure to start — Postgres unreachable, port
 // taken, the assertion above — died as an unhandled rejection with no usable
