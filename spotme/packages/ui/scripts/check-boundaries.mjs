@@ -34,11 +34,7 @@ function walk(dir, out = []) {
 }
 
 const DOMAINS = ['discovery', 'exchange', 'events', 'moments', 'assistant',
-<<<<<<< HEAD
-  'contacts', 'notifications', 'stories', 'groups'];
-=======
-  'contacts', 'notifications', 'stories', 'profile'];
->>>>>>> d9191fa (feat(slice-4): Profile & Settings in React 19 behind spotme.ui.profile (dark, default OFF))
+  'contacts', 'notifications', 'stories', 'groups', 'profile'];
 const roots = DOMAINS.map((d) => join(ROOT, d)).filter((d) => existsSync(d));
 if (roots.length === 0) {
   console.error('FENCE VACUOUS: no domain surfaces found under packages/ui. Fix the resolver.');
