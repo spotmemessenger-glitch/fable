@@ -52,13 +52,6 @@ export default defineConfig(({ command }) => {
         '/socket.io': { target: 'http://localhost:4000', ws: true }
       }
     },
-    resolve: {
-      // @spotme/ui is a file:-linked workspace package carrying its own dev
-      // node_modules (react for vitest). Without dedupe the built app can pull
-      // TWO Reacts — one from here, one from the link — and hooks explode with
-      // "Invalid hook call" only in production. One React, always ours.
-      dedupe: ['react', 'react-dom']
-    },
     optimizeDeps: {
       // spotme-core is CommonJS. Pre-bundling is what applies Vite's CJS interop
       // so `import { transliterate } from ...` resolves — drop this and dev dies
