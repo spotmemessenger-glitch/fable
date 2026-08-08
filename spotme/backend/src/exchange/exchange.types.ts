@@ -68,6 +68,9 @@ export interface ExchangeIntentRow {
   createdAt: Date;
   updatedAt: Date;
   expiresAt: Date | null;
+  /** SERVER-SIDE ONLY: raw distance in metres, present only on rows from a
+   *  geo-filtered browse. Banded by the service; NEVER projected publicly. */
+  distanceM?: number;
 }
 
 /** Public projection — no owner id beyond a reference, no precise fields. */
@@ -95,6 +98,9 @@ export interface ExchangeIntentPublic {
   createdAtIso: string;
   updatedAtIso: string;
   expiresAtIso: string | null;
+  /** Distance BAND to the viewer — present only on geo-scoped browse results.
+   *  A band, never metres (the same registry exchange.matching.ts uses). */
+  distanceBand?: 'under500m' | 'under1km' | 'under2km' | 'under5km' | 'over5km';
 }
 
 /** Keyset cursor internals (opaque + signed on the wire). */

@@ -29,7 +29,10 @@ const MAX_KM = 25;
  * surface cannot promise what the backend does not do.
  */
 export interface ExchangeLivePort {
-  browse(opts: { kind?: 'need' | 'offer' | 'service'; category?: string }): Promise<{ results: ExchangeIntentView[]; state: string }>;
+  /** `nearby: true` asks the adapter to attach the device's coarse point +
+   *  5 km radius; the server's answer carries `scope` ('everywhere' when no
+   *  usable location) and per-row distance BANDS. */
+  browse(opts: { kind?: 'need' | 'offer' | 'service'; category?: string; nearby?: boolean }): Promise<{ results: ExchangeIntentView[]; state: string; scope?: 'nearby' | 'everywhere' }>;
   listMine(): Promise<{ results: ExchangeIntentView[]; state: string }>;
   /** Create draft + activate — the two server calls that make a post visible. */
   publish(draft: Draft): Promise<ExchangeIntentView>;
@@ -47,6 +50,8 @@ export function ExchangeIsland({ port }: { port: ExchangeLivePort }) {
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [browseState, setBrowseState] = useState<'ok' | 'partial' | 'empty' | 'unavailable' | 'failed'>('empty');
   const [results, setResults] = useState<ExchangeIntentView[]>([]);
+  const [nearbyOn, setNearbyOn] = useState(true);
+  const [scope, setScope] = useState<'nearby' | 'everywhere' | undefined>();
   const [mine, setMine] = useState<ExchangeIntentView[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -58,11 +63,12 @@ export function ExchangeIsland({ port }: { port: ExchangeLivePort }) {
     scheduleLabel: '', radiusKm: 3, discoverable: true,
   });
 
-  const loadBrowse = useCallback(async (t: 'need' | 'offer', servOnly: boolean, cat?: string) => {
+  const loadBrowse = useCallback(async (t: 'need' | 'offer', servOnly: boolean, cat?: string, nearby = true) => {
     try {
-      const page = await port.browse({ kind: servOnly ? 'service' : t, category: cat });
+      const page = await port.browse({ kind: servOnly ? 'service' : t, category: cat, nearby });
       if (!alive.current) return;
       setResults(page.results);
+      setScope(page.scope);
       setBrowseState(page.state === 'unavailable' ? 'unavailable' : page.results.length ? 'ok' : 'empty');
     } catch (e) {
       if (!alive.current) return;
@@ -85,7 +91,7 @@ export function ExchangeIsland({ port }: { port: ExchangeLivePort }) {
     }
   }, [port]);
 
-  useEffect(() => { void loadBrowse(tab, servicesOnly, category); }, [loadBrowse, tab, servicesOnly, category]);
+  useEffect(() => { void loadBrowse(tab, servicesOnly, category, nearbyOn); }, [loadBrowse, tab, servicesOnly, category, nearbyOn]);
   useEffect(() => { if (view.name === 'mine') void loadMine(); }, [view.name, loadMine]);
 
   const act = async (id: string, version: number, to: 'active' | 'paused' | 'withdrawn' | 'fulfilled') => {
@@ -93,7 +99,7 @@ export function ExchangeIsland({ port }: { port: ExchangeLivePort }) {
     try {
       await port.transition(id, version, to);
       await loadMine();
-      await loadBrowse(tab, servicesOnly, category);
+      await loadBrowse(tab, servicesOnly, category, nearbyOn);
     } catch (e) {
       if (alive.current) setError((e as Error)?.message || 'That action failed. Please try again.');
     }
@@ -175,6 +181,7 @@ export function ExchangeIsland({ port }: { port: ExchangeLivePort }) {
         tab={tab} servicesOnly={servicesOnly} category={category}
         categories={CATEGORIES} results={results}
         state={browseState}
+        nearbyOn={nearbyOn} scope={scope} onNearby={setNearbyOn}
         onTab={setTab} onServicesOnly={setServicesOnly} onCategory={setCategory}
         onOpen={(id) => {
           const it = results.find((i) => i.id === id);

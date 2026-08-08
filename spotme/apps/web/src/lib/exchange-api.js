@@ -68,6 +68,7 @@ const toView = (p) => ({
   visibility: p.visibility,
   createdAtIso: p.createdAtIso,
   expiresAtIso: p.expiresAtIso ?? null,
+  ...(p.distanceBand ? { distanceBand: p.distanceBand } : {}),
   version: p.version
 })
 
@@ -92,12 +93,24 @@ function coarseFix () {
 /** The port the island mounts. Shape: ExchangeLivePort in @spotme/ui. */
 export function buildExchangePort () {
   return {
-    browse: async ({ kind, category } = {}) => {
+    browse: async ({ kind, category, nearby } = {}) => {
       const q = new URLSearchParams()
       if (kind) q.set('kind', kind)
       if (category) q.set('category', category)
+      /* NEARBY IS BEST-EFFORT AND FAIL-OPEN. A denied or slow fix simply
+       * omits the geo params; the server answers globally and labels the
+       * page scope 'everywhere' — browse never breaks on a permission. */
+      if (nearby) {
+        try {
+          const origin = await coarseFix()
+          q.set('lat', String(origin.lat))
+          q.set('lon', String(origin.lon))
+          q.set('radiusKm', '5')
+        } catch { /* no usable location — global browse */ }
+      }
       const qs = q.toString()
-      return page(await call(`/browse${qs ? `?${qs}` : ''}`))
+      const r = await call(`/browse${qs ? `?${qs}` : ''}`)
+      return { ...page(r), scope: r?.scope }
     },
 
     listMine: async () => page(await call('/intents/mine')),
@@ -119,6 +132,9 @@ export function buildExchangePort () {
         origin,
         radiusKm: draft.radiusKm,
         visibility: draft.discoverable ? 'discoverable' : 'hidden',
+        // The opt-in ceiling (maxExpiryHours = 720), so the composer's
+        // "visible for 30 days" is a parameter, not a promise.
+        expiresInHours: 720,
         idempotencyKey: `web:${Date.now()}:${Math.random().toString(36).slice(2, 10)}`
       }
       const created = await call('/intents', { method: 'POST', body })

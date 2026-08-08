@@ -46,6 +46,16 @@ export function approxDistance(km: number): string {
 /** Budget is a BAND. Never a number, never a currency symbol. */
 const BAND_LABEL = { low: 'Low', medium: 'Medium', high: 'High' } as const;
 
+/** Distance is a BAND from the server's registry — never metres, never a
+ *  computed figure. These labels are the ONLY rendering of proximity. */
+export const DISTANCE_BAND_LABEL: Record<NonNullable<ExchangeIntentView['distanceBand']>, string> = {
+  under500m: 'within 500 m',
+  under1km: 'within 1 km',
+  under2km: 'within 2 km',
+  under5km: 'within 5 km',
+  over5km: 'over 5 km away',
+};
+
 export function BudgetBand({ band }: { band?: ExchangeIntentView['budgetBand'] }) {
   if (!band) return <span className="x-band x-band-none">Not specified</span>;
   const steps = { low: 1, medium: 2, high: 3 }[band];
@@ -132,6 +142,12 @@ export function BrowseScreen(props: {
   categories: readonly string[];
   results: ExchangeIntentView[];
   state: 'ok' | 'partial' | 'empty' | 'unavailable' | 'failed';
+  /** The "Within 5 km" pill — a REAL server parameter (browse lat/lon/radiusKm). */
+  nearbyOn?: boolean;
+  /** What the server actually did: 'everywhere' when no usable location, so
+   *  the pill being on never silently implies a filter that didn't happen. */
+  scope?: 'nearby' | 'everywhere';
+  onNearby?(v: boolean): void;
   onTab(t: 'need' | 'offer'): void;
   onServicesOnly(v: boolean): void;
   onCategory(c: string | undefined): void;
@@ -154,9 +170,9 @@ export function BrowseScreen(props: {
         ))}
       </div>
 
-      {/* Category and Services map to real query params (category, kind).
-          A distance filter is NOT offered: browse has no radius parameter,
-          so the control could only mislead. */}
+      {/* Every filter maps to a real query param: category, kind — and now
+          "Within 5 km" (lat/lon/radiusKm; the server filters with ST_DWithin
+          and answers with distance BANDS). */}
       <div className="x-filters">
         <label className="x-filter">
           <span className="x-vh">Category</span>
@@ -176,7 +192,22 @@ export function BrowseScreen(props: {
         >
           Services only
         </button>
+        {props.onNearby && (
+          <button
+            type="button"
+            className={`x-filter x-chip${props.nearbyOn ? ' on' : ''}`}
+            aria-pressed={!!props.nearbyOn}
+            onClick={() => props.onNearby!(!props.nearbyOn)}
+          >
+            Within 5 km
+          </button>
+        )}
       </div>
+      {/* HONESTY LABEL: the pill asked for nearby but the server had no usable
+          location (denied, unavailable) — results are global, say so. */}
+      {props.nearbyOn && props.scope === 'everywhere' && (
+        <p className="x-note">Showing everywhere — location isn’t available.</p>
+      )}
 
       <ul id="x-browse-list" className="x-list" role="tabpanel" aria-labelledby={`x-tab-${props.tab}`}>
         {props.state === 'empty' && <li className="x-note">Nothing here yet.</li>}
@@ -187,7 +218,11 @@ export function BrowseScreen(props: {
             {/* Text-first: there is no media on an intent to show. */}
             <button type="button" className="x-card" onClick={() => props.onOpen(it.id)}>
               <span className={`x-kind x-kind-${it.kind}`}>{KIND_LABEL[it.kind]}</span>
-              <span className="x-card-meta">{approxDistance(it.radius.km)}</span>
+              {/* Distance to the VIEWER as the server's band when geo-scoped;
+                  otherwise the poster's reach — never a computed figure. */}
+              <span className="x-card-meta">
+                {it.distanceBand ? DISTANCE_BAND_LABEL[it.distanceBand] : approxDistance(it.radius.km)}
+              </span>
               <span className="x-card-title">{it.title}</span>
               <span className="x-card-text">{it.text}</span>
             </button>
@@ -237,6 +272,8 @@ export function DetailScreen(props: {
 
       <span className={`x-kind x-kind-${i.kind}`}>{KIND_LABEL[i.kind]}</span>
       <h2 className="x-title">{i.title}</h2>
+      {/* The server's distance BAND — "About within 1 km" never "900 m". */}
+      {i.distanceBand && <p className="x-distance">About {DISTANCE_BAND_LABEL[i.distanceBand]}</p>}
       {i.ownerName && <p className="x-owner">{i.ownerName}</p>}
       <p className="x-body">{i.text}</p>
 
@@ -404,6 +441,10 @@ export function CreateScreen(props: {
                 people" has no server field behind it. */}
             <span className="x-hint">{approxDistance(d.radiusKm)}</span>
           </label>
+
+          {/* TRUE because the composer sends expiresInHours: 720 — the server's
+              opt-in ceiling (maxExpiryHours). Not a promise, a parameter. */}
+          <p className="x-hint">Visible for 30 days, then it expires on its own.</p>
 
           <label className="x-toggle">
             <span>

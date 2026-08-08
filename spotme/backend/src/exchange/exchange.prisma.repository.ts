@@ -131,21 +131,37 @@ export class PrismaExchangeIntentRepository implements ExchangeIntentRepository 
   }
 
   async findDiscoverable(q: NearbyIntentsQuery): Promise<ExchangeIntentRow[]> {
-    // Keyset on (createdAt DESC, id DESC) — newest first, deterministic.
+    // Keyset on (createdAt DESC, id DESC) — newest first, deterministic. The
+    // geo predicate composes with the keyset unchanged: ST_DWithin only
+    // narrows the row set, the ordering columns stay (createdAt, id).
     const keyset = q.cursor
       ? Prisma.sql`AND ("createdAt" < ${new Date(q.cursor.t)} OR ("createdAt" = ${new Date(q.cursor.t)} AND "id" < ${q.cursor.i}))`
       : Prisma.empty;
     const kindF = q.kind ? Prisma.sql`AND "kind" = ${q.kind}` : Prisma.empty;
     const catF = q.category ? Prisma.sql`AND "category" = ${q.category}` : Prisma.empty;
+    /* PROXIMITY. ST_DWithin on the geography column is what
+     * ExchangeIntent_geog_idx (GiST) accelerates — proven by EXPLAIN in
+     * exchange-proximity.e2e-spec.ts. The raw distance is selected ONLY so the
+     * service can band it; it lives in ExchangeIntentRow.distanceM, which the
+     * public projection never emits (privacy: bands, never metres). */
+    const geoPoint = q.origin
+      ? Prisma.sql`ST_SetSRID(ST_MakePoint(${q.origin.lon}, ${q.origin.lat}), 4326)::geography`
+      : null;
+    const geoF = geoPoint && q.radiusKm
+      ? Prisma.sql`AND ST_DWithin("geog", ${geoPoint}, ${q.radiusKm * 1000})`
+      : Prisma.empty;
+    const distSel = geoPoint
+      ? Prisma.sql`, ST_Distance("geog", ${geoPoint}) AS "distanceM"`
+      : Prisma.empty;
     const rows = await this.prisma.$queryRaw<ExchangeIntentRow[]>(Prisma.sql`
-      SELECT ${Prisma.raw(Object.keys(SELECT).map((k) => `"${k}"`).join(', '))}
+      SELECT ${Prisma.raw(Object.keys(SELECT).map((k) => `"${k}"`).join(', '))} ${distSel}
       FROM "ExchangeIntent"
       WHERE "visibility" = 'discoverable'
         AND "status" IN ('active', 'matched')
         AND "moderationState" = 'clear'
         AND ("expiresAt" IS NULL OR "expiresAt" > ${q.now})
         AND "ownerId" <> ${q.principalId}
-        ${kindF} ${catF} ${keyset}
+        ${kindF} ${catF} ${geoF} ${keyset}
       ORDER BY "createdAt" DESC, "id" DESC
       LIMIT ${q.limit}
     `);
@@ -177,5 +193,6 @@ function normalize(r: ExchangeIntentRow): ExchangeIntentRow {
     radiusKm: Number(r.radiusKm),
     maxRadiusKm: Number(r.maxRadiusKm),
     versionSeq: Number(r.versionSeq),
+    ...(r.distanceM != null ? { distanceM: Number(r.distanceM) } : {}),
   };
 }

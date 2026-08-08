@@ -23,12 +23,16 @@ import {
   EXCHANGE_POLICY_DEFAULTS,
 } from './exchange.policy';
 import { ExchangeIntentPublic, ExchangeIntentRow, ExchangeIntentStatus } from './exchange.types';
+import { bandFromMeters } from './exchange.matching';
 
 interface Page {
   contractsVersion: typeof EXCHANGE_CONTRACTS_VERSION;
   results: ExchangeIntentPublic[];
   cursor: string | null;
   state: 'ok' | 'empty';
+  /** Browse only: 'nearby' when a geo filter applied, 'everywhere' when the
+   *  viewer sent no usable location — the client's honesty label. */
+  scope?: 'nearby' | 'everywhere';
 }
 
 @Injectable()
@@ -80,15 +84,35 @@ export class ExchangeService {
     return this.page(rows, cursor?.depth ?? 0);
   }
 
-  async browse(principalId: string, opts: { kind?: 'need' | 'offer' | 'service'; category?: string; cursor?: string | null }, now = new Date()): Promise<Page> {
+  async browse(
+    principalId: string,
+    opts: { kind?: 'need' | 'offer' | 'service'; category?: string; cursor?: string | null; lat?: number; lon?: number; radiusKm?: number },
+    now = new Date(),
+  ): Promise<Page> {
     const cursor = opts.cursor ? decodeCursor(opts.cursor) : null;
     this.assertDepth(cursor?.depth ?? 0);
+    /* GEO SCOPE IS OPTIONAL AND FAIL-OPEN. A missing/denied/garbled location
+     * NEVER breaks browse — it degrades to the unfiltered global list, which
+     * the response labels via `scope` so the client can say "showing
+     * everywhere" instead of implying nearby. The viewer point is re-quantized
+     * to the same 3-decimal grid the policy applies to stored intents — no
+     * finer input is honoured even if sent. */
+    const grid = 10 ** EXCHANGE_POLICY_DEFAULTS.coarseGridDecimals;
+    const hasPoint = typeof opts.lat === 'number' && Number.isFinite(opts.lat)
+      && typeof opts.lon === 'number' && Number.isFinite(opts.lon)
+      && opts.lat >= -90 && opts.lat <= 90 && opts.lon >= -180 && opts.lon <= 180;
+    const origin = hasPoint
+      ? { lat: Math.round((opts.lat as number) * grid) / grid, lon: Math.round((opts.lon as number) * grid) / grid }
+      : undefined;
+    const radiusKm = origin
+      ? Math.min(Math.max(Number.isFinite(opts.radiusKm as number) && (opts.radiusKm as number) > 0 ? (opts.radiusKm as number) : 5, 1), EXCHANGE_POLICY_DEFAULTS.maxRadiusKm)
+      : undefined;
     const q: NearbyIntentsQuery = {
-      principalId, kind: opts.kind, category: opts.category,
+      principalId, kind: opts.kind, category: opts.category, origin, radiusKm,
       limit: EXCHANGE_POLICY_DEFAULTS.defaultPageSize + 1, cursor, now,
     };
     const rows = await this.repo.findDiscoverable(q);
-    return this.page(rows, cursor?.depth ?? 0);
+    return { ...this.page(rows, cursor?.depth ?? 0), scope: origin ? 'nearby' : 'everywhere' };
   }
 
   /* ---- internals ---- */
@@ -157,6 +181,9 @@ export class ExchangeService {
       createdAtIso: row.createdAt.toISOString(),
       updatedAtIso: row.updatedAt.toISOString(),
       expiresAtIso: row.expiresAt ? row.expiresAt.toISOString() : null,
+      /* The raw metre figure dies HERE, inside the projection: what leaves is
+       * the band from the one registry in exchange.matching.ts. */
+      ...(row.distanceM != null ? { distanceBand: bandFromMeters(row.distanceM) } : {}),
     };
   }
 }

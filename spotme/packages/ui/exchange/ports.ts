@@ -53,6 +53,9 @@ export interface ExchangeIntentView {
   expiresAtIso: string | null;
   /** Owner display name for the detail header. */
   ownerName?: string;
+  /** Server-computed distance BAND to the viewer — present only on
+   *  geo-scoped browse results; never metres. */
+  distanceBand?: 'under500m' | 'under1km' | 'under2km' | 'under5km' | 'over5km';
   version: { seq: number };
 
   /* DELIBERATELY ABSENT, and each omission is load-bearing:

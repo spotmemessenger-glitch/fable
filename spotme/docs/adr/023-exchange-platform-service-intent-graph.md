@@ -51,3 +51,16 @@ Specification (`../architecture/discovery-platform/`), ch. 03.
 
 Owner review of PR #64 (2026-08-03); Exchange PRD §1.8
 (`../handbook/product/exchange/01-CONCEPT-AND-SCOPE.md`); roadmap v2.0 §14.
+
+## Addendum — proximity browse implemented (2026-08-08)
+
+`GET /v1/exchange/browse` now accepts optional `lat`, `lon`, `radiusKm`
+(viewer point re-quantized server-side to the 3-decimal coarse grid; radius
+clamped to [1, maxRadiusKm]). Filtering is `ST_DWithin` on `"geog"`, served by
+`ExchangeIntent_geog_idx` (GiST — EXPLAIN-proven in
+`test/exchange-proximity.e2e-spec.ts`); keyset pagination is unchanged under
+the geo predicate. Responses carry `scope: 'nearby' | 'everywhere'` (absent or
+unusable location degrades to the unfiltered global list — never an error) and
+per-row `distanceBand` from the single band registry in
+`exchange.matching.ts` (`bandFromMeters`). **Raw distances never leave the
+server** — the metre figure exists only inside the projection.
