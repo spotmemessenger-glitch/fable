@@ -36,13 +36,15 @@ export type { Draft, MineTab } from './exchange/screens';
 export type { ExchangeIntentView, ExchangeMatchView } from './exchange/ports';
 
 /**
- * The island's mount point. Composes the Exchange surface with fixture ports
- * and returns an element -- the host stays framework-agnostic and never needs
- * to know JSX. Live adapters replace the fixtures when the endpoints are
- * wired; nothing here fetches today.
+ * The island's mount point. LIVE: the app builds an ExchangeLivePort over its
+ * own API client (lib/exchange-api.js) and passes it in — the package stays
+ * framework-pure and never fetches, the app stays JSX-free. The fixture port
+ * remains test-only (FixtureExchangeApi in exchange/fixtures.ts).
  */
-export function __mountExchange() {
-  return createElement(ExchangeIsland);
+export type { ExchangeLivePort } from './exchange/island';
+
+export function __mountExchange(port: import('./exchange/island').ExchangeLivePort) {
+  return createElement(ExchangeIsland, { port });
 }
 
 /**

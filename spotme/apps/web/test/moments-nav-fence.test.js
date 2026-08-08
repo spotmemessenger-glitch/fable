@@ -66,12 +66,18 @@ check('a flagged tab is enabled ONLY by asking the server',
 check('the enabled set starts EMPTY, so the first paint is the production bar',
   /const enabledFlags = new Set\(\)/.test(main))
 
-check('the bar is 4 items, exactly ONE flagged — production shows the other 3',
+check('the bar is 5 items — one server-flagged, one device-flagged; production shows the other 3',
   (() => {
+    /* Exchange (2026-08-08) added a DEVICE-flagged tab: gated on the local
+     * `spotme.ui.exchange` opt-in rather than a server probe, dropped from the
+     * bar (not CSS-hidden) while the flag is off — so the default bar is still
+     * the same 3 + Posts-when-served it was before. */
     const items = main.slice(main.indexOf('const NAV_ITEMS'), main.indexOf('const ACTIVE_TAB'))
     const paths = [...items.matchAll(/path:\s*'([^']+)'/g)].map((m) => m[1])
-    const flagged = [...items.matchAll(/flag:\s*'([^']+)'/g)].length
-    return paths.length === 4 && flagged === 1 &&
+    const serverFlagged = [...items.matchAll(/(?<!device)[fF]lag:\s*'([^']+)'/g)].length
+    const deviceFlagged = [...items.matchAll(/deviceFlag:\s*'([^']+)'/g)].length
+    return paths.length === 5 && serverFlagged === 1 && deviceFlagged === 1 &&
+      /path:\s*'#\/exchange'[^}]*deviceFlag:\s*'exchange'/s.test(items) &&
       ['#/discovery', '#/chat', '#/notifications'].every((p) => paths.includes(p))
   })())
 

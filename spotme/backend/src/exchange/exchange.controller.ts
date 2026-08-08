@@ -2,13 +2,16 @@
  * Exchange controller — thin HTTP edge (Phase 3B). Every request is
  * principal-keyed off the JWT and handed to the service; no business logic here.
  *
- * DARK: registered only by ExchangeModule, which is NOT imported by AppModule —
- * no /v1/exchange route exists in the running application until an
- * owner-authorized activation change (fence: 3E).
+ * MOUNTED BEHIND THE GATE (activation): ExchangeModule is imported by AppModule,
+ * and every route sits behind DomainGate('exchange') — 404 while the `exchange`
+ * RuntimeFlag row is absent, indistinguishable from an unmounted module. No
+ * requireAdult: Exchange is open to every authenticated account (owner
+ * directive, 2026-08-08); JwtAuthGuard still establishes authorship.
  */
 
 import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
+import { DomainGate } from '../flags/domain-gate.guard';
 import { CurrentUser, AuthenticatedPrincipal } from '../common/decorators/current-user.decorator';
 import { ExchangeService } from './exchange.service';
 import { ExchangeError } from './exchange.errors';
@@ -18,7 +21,7 @@ const toInt = (v: unknown, d: number) => {
   return Number.isInteger(n) ? n : d;
 };
 
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, DomainGate('exchange'))
 @Controller('v1/exchange')
 export class ExchangeController {
   constructor(private readonly exchange: ExchangeService) {}

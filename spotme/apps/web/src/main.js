@@ -120,6 +120,16 @@ const NAV_ITEMS = [
     // stretched the tab, breaking the even spacing of the reference bar.
     path: '#/notifications', label: 'Alerts',
     icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18.2 8.9a6.2 6.2 0 00-12.4 0c0 5.7-2.2 7.3-2.2 7.3h16.8s-2.2-1.6-2.2-7.3"/><path d="M13.9 19.7a2.2 2.2 0 01-3.8 0"/></svg>'
+  },
+  {
+    /* Exchange (slice 1). `deviceFlag` gates on the LOCAL opt-in
+     * (`spotme.ui.exchange`, default OFF) rather than a server probe: the
+     * server domain is open to every account, but the React surface ships
+     * dark, so the tab appears only on a device where someone has set the
+     * spotme.ui.exchange storage key to 'on'. For everyone else the
+     * bar is byte-identical to before this entry existed. */
+    path: '#/exchange', label: 'Exchange', deviceFlag: 'exchange',
+    icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3.8L3.4 7.4 7 11M3.6 7.4h13M17 13l3.6 3.6L17 20.2M20.4 16.6h-13"/></svg>'
   }
 ]
 
@@ -132,7 +142,8 @@ const ACTIVE_TAB = {
   '#/settings': null,           // reached via the profile pic
   '#/stories': null,            // still routable by link; no tab of its own
   '#/posts': '#/posts',
-  '#/notifications': '#/notifications'
+  '#/notifications': '#/notifications',
+  '#/exchange': '#/exchange'
 }
 
 /** The route part of a hash, without its query string: `#/posts?m=abc` →
@@ -171,7 +182,9 @@ let navEl = null
 const enabledFlags = new Set()
 
 function navItems () {
-  return NAV_ITEMS.filter((item) => !item.flag || enabledFlags.has(item.flag))
+  return NAV_ITEMS.filter((item) =>
+    (!item.flag || enabledFlags.has(item.flag)) &&
+    (!item.deviceFlag || exchange.uiFlag(item.deviceFlag)))
 }
 
 function buildNav () {
