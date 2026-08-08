@@ -56,10 +56,17 @@ test.describe('island module resolution — against the BUILT bundle', () => {
     test(`flag ON (${slice}): the island mounts, nothing fails to resolve`, async ({ page }) => {
       const errs = resolutionErrors(page)
 
-      await page.goto(BUILT)
-      await page.evaluate((s) => localStorage.setItem(`spotme.ui.${s}`, 'on'), slice)
+      /* The flag is seeded BEFORE the first document runs, so there is exactly
+       * one navigation per test. Setting it via evaluate and then navigating
+       * tore the execution context down mid-call — a flake in the test, not in
+       * the app. Each test gets a fresh context, so no cleanup is needed. */
+      await page.addInitScript((s) => {
+        try { localStorage.setItem(`spotme.ui.${s}`, 'on') } catch { /* private mode: the app defaults off */ }
+      }, slice)
       await page.goto(`${BUILT}/${hash}`)
       await page.waitForLoadState('networkidle')
+      // The mount is async (dynamic import + createRoot); give it a beat.
+      await page.waitForTimeout(1500)
 
       const resolution = errs.filter(isResolutionFailure)
       expect(resolution, `browser could not resolve the island module:\n${resolution.join('\n')}`).toEqual([])
@@ -69,8 +76,6 @@ test.describe('island module resolution — against the BUILT bundle', () => {
       const body = await page.evaluate(() => document.body.innerText)
       expect(body, `the island fell back to the "could not load" state for ${slice}`)
         .not.toMatch(/could not load/i)
-
-      await page.evaluate((s) => localStorage.removeItem(`spotme.ui.${s}`), slice)
     })
   }
 
@@ -78,14 +83,14 @@ test.describe('island module resolution — against the BUILT bundle', () => {
     const requested = []
     page.on('request', (r) => requested.push(r.url()))
 
-    await page.goto(BUILT)
-    await page.evaluate(() => localStorage.setItem('spotme.ui.exchange', 'on'))
+    await page.addInitScript(() => {
+      try { localStorage.setItem('spotme.ui.exchange', 'on') } catch { /* see above */ }
+    })
     await page.goto(`${BUILT}/#/exchange`)
     await page.waitForLoadState('networkidle')
+    await page.waitForTimeout(1500)
 
     const reactChunks = requested.filter((u) => /\/assets\/(client|ui)-[A-Za-z0-9_-]+\.js/.test(u))
     expect(reactChunks.length, 'the React chunk should load once a flag is on').toBeGreaterThan(0)
-
-    await page.evaluate(() => localStorage.removeItem('spotme.ui.exchange'))
   })
 })
