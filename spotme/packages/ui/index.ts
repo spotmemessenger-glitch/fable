@@ -15,6 +15,7 @@ import { StoriesShell } from './stories/StoriesShell';
 import type { ContactsPort } from './contacts/ports';
 import type { NotificationsPort } from './notifications/ports';
 import type { StoriesPort } from './stories/ports';
+import { GroupsIsland, type GroupsIslandProps } from './groups/island';
 
 export {
   BrowseScreen, DetailScreen, CreateScreen, MyIntentsScreen,
@@ -52,4 +53,14 @@ export function __mountNotifications(port: NotificationsPort) {
 
 export function __mountStories(port: StoriesPort) {
   return createElement(StoriesShell, { port });
+export type { GroupsDeps } from './groups/ports';
+
+/**
+ * Slice 3: Groups. Unlike Exchange this is a LIVE surface, so the host passes
+ * the live adapters (built app-side from lib/groups-api.js, lib/db.js,
+ * lib/group-perms.js, lib/rooms.js) rather than fixtures. Behind
+ * `spotme.ui.groups`, default OFF.
+ */
+export function __mountGroups(props: GroupsIslandProps) {
+  return createElement(GroupsIsland, props);
 }
