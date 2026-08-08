@@ -40,6 +40,7 @@ import { applyToRecord } from '../lib/crypto/identity-pin-store.js'
 import { setRoomTrust, isEnforcing } from '../lib/crypto/identity-enforcement.js'
 import { canScan, unavailableReason, scanErrorMessage, startScanning } from '../lib/qr-scan.js'
 import qrcode from 'qrcode-generator'
+import { reactVerify } from './verify-island.js'
 
 /**
  * A QR is a picture of a string, and that string EXPIRES.
@@ -125,6 +126,8 @@ async function numberFor (selfKey, selfId, peerKey, peerId) {
 }
 
 export function render (root, ctx, roomId) {
+  const island = reactVerify(root, ctx, roomId) // ADR-035 final slice s4, default OFF
+  if (island) return island
   const convo = db.convo(roomId)
   const me = db.profile()
   const peerName = convo?.peer?.name || 'this person'

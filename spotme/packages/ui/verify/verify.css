@@ -1,0 +1,18 @@
+/* Verify — session 4, dark tokens shared with the chat surface. */
+.vf-screen { display: flex; flex-direction: column; height: 100%; background: var(--bg, #0b0e11); color: var(--fg, #e8ecef); }
+.vf-bar { display: flex; align-items: center; min-height: 44px; padding: 4px 8px; }
+.vf-back { min-width: 44px; min-height: 44px; background: none; border: 0; color: inherit; font-size: 26px; cursor: pointer; }
+.vf-back:focus-visible, .vf-btn:focus-visible, .vf-scan:focus-visible { outline: 2px solid var(--accent, #4da3ff); outline-offset: 2px; }
+.vf-sp { flex: 1; }
+.vf-h1 { font-size: 20px; margin: 0 16px 8px; }
+.vf-scroll { flex: 1; overflow-y: auto; padding: 0 16px 24px; }
+.vf-sub { color: var(--muted, #9aa4ad); font-size: 13px; }
+.vf-banner { border-radius: 10px; padding: 10px 12px; margin: 8px 0; font-size: 13.5px; }
+.vf-warn { background: rgba(255, 176, 32, 0.12); color: var(--warn, #ffb020); }
+.vf-row { display: flex; gap: 8px; margin: 8px 0; }
+.vf-btn { min-height: 44px; flex: 1; border: 1px solid var(--line, #2a3238); border-radius: 10px; background: none; color: inherit; cursor: pointer; }
+.vf-number { font-family: ui-monospace, monospace; font-size: 17px; letter-spacing: 1px; line-height: 1.7; word-spacing: 6px; text-align: center; margin: 12px 0; user-select: all; }
+.vf-qr { display: block; width: 100%; max-width: 260px; margin: 16px auto; background: #fff; border-radius: 8px; }
+.vf-scan { min-height: 44px; width: 100%; border: 0; border-radius: 10px; background: var(--accent, #4da3ff); color: #06121f; font-weight: 600; cursor: pointer; }
+.vf-scan:disabled { opacity: 0.5; cursor: default; }
+@media (prefers-reduced-motion: reduce) { .vf-screen * { transition: none !important; animation: none !important; } }
