@@ -64,10 +64,15 @@ export function ExchangeIsland({ port }: { port: ExchangeLivePort }) {
       if (!alive.current) return;
       setResults(page.results);
       setBrowseState(page.state === 'unavailable' ? 'unavailable' : page.results.length ? 'ok' : 'empty');
-    } catch {
+    } catch (e) {
       if (!alive.current) return;
       setResults([]);
-      setBrowseState('failed');
+      /* A dark domain (the server 404s every exchange route while its
+       * RuntimeFlag row is absent) is "unavailable", not "could not load":
+       * retrying cannot help, and the copy must not claim a transient
+       * failure. Matched by error NAME so the package never imports app
+       * code — the app's adapter throws ExchangeDisabledError on 404. */
+      setBrowseState((e as Error)?.name === 'ExchangeDisabledError' ? 'unavailable' : 'failed');
     }
   }, [port]);
 
