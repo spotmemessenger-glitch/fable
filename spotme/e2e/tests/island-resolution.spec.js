@@ -126,7 +126,11 @@ test.describe('island module resolution — against the BUILT bundle', () => {
        * after onboarding, so setting it fires no hashchange and nothing
        * re-renders — the inbox case silently tested an unrendered screen. */
       await page.goto(`${BUILT}/${hash}`)
-      await page.waitForLoadState('networkidle')
+      /* NOT networkidle: with the inversion the inbox mounts at boot and its
+       * socket + presence traffic never goes quiet, so 'networkidle' burned
+       * the whole test timeout before the React poll below ever ran. 'load'
+       * plus the polled wait is the spec's own preferred shape. */
+      await page.waitForLoadState('load')
 
       /* POLLED, not slept. The islands take very different times to appear —
        * inbox alone imports db/discovery/reach/rooms/ui/api and builds a port
