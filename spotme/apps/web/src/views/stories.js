@@ -9,6 +9,8 @@
 import './stories.css'
 import { db } from '../lib/db.js'
 import { el, clear, avatar } from '../lib/ui.js'
+import { uiFlag } from '../lib/island.js'
+import { storiesIsland } from '../lib/island-adapters.js'
 
 const INK_RINGS = 2            // first two tiles carry the ink ring (design)
 
@@ -19,6 +21,8 @@ const ICON = {
 }
 
 export function render (root, ctx) {
+  if (uiFlag('stories')) return storiesIsland(root, ctx) // ADR-035 slice 2, default OFF
+
   root.classList.add('v-stories')
 
   const meBtn = el('button', {

@@ -13,6 +13,8 @@ import { reach } from '../lib/reach.js'
 import { notifyState, enableNotify } from '../lib/notify.js'
 import { subscribePush } from '../lib/push.js'
 import { el, clear, avatar, fmtDay } from '../lib/ui.js'
+import { uiFlag } from '../lib/island.js'
+import { notificationsIsland } from '../lib/island-adapters.js'
 
 const NEARBY_ROWS = 6            // active-nearby rows shown before "See all"
 
@@ -31,6 +33,8 @@ function newChats () {
 }
 
 export function render (root, ctx) {
+  if (uiFlag('notifications')) return notificationsIsland(root, ctx) // ADR-035 slice 2, default OFF
+
   root.classList.add('v-notif')
 
   root.appendChild(el('div', { class: 'nhead' }, [
