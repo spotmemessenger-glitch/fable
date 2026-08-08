@@ -483,8 +483,13 @@ export function createStore (roomId, prefix = STORAGE_PREFIX, options = {}) {
 
   /** Messages in display order, with reactions folded in. */
   function list () {
+    /* ts alone, deliberately no id tiebreak. Array.sort is spec-stable, so
+     * same-millisecond messages keep Map insertion order — the order they
+     * were sent or arrived. The old `|| (a.id < b.id ...)` tiebreak compared
+     * RANDOM ids, so two messages sent in the same ms displayed in coin-flip
+     * order (and flipped the characterization suite red on fast runners). */
     return Array.from(messages.values())
-      .sort((a, b) => (a.ts - b.ts) || (a.id < b.id ? -1 : 1))
+      .sort((a, b) => a.ts - b.ts)
       .map((message) => ({
         ...message,
         reactions: Array.from(reactions.get(message.id) || [], ([from, emoji]) => ({ from, emoji }))
