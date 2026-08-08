@@ -479,6 +479,18 @@ token into JavaScript. Same objection, more typing.
 **This is a new dependency and therefore cannot be executed under the
 constraints of the mission that wrote this ADR.** It needs its own PR.
 
+### (e0) Slice-1 amendment — the distance filter is REAL now (2026-08-08)
+
+The slice-1 reconciliation (report 2026-08-07, §2b) omitted the "Within 5 km"
+pill because browse took only `kind, category, cursor`. That constraint is
+gone: browse accepts `lat/lon/radiusKm` (ST_DWithin, GiST-indexed), answers
+with `scope` and per-row `distanceBand`s, and the pill now maps to the real
+parameter. Per-card and Detail distance render the server BAND (never metres);
+the composer sends `expiresInHours: 720`, so its "visible for 30 days" copy is
+a parameter, not a promise. The negative tests that pinned the filter's
+absence were inverted to pin the new behaviour
+(`packages/ui/test/exchange-screens.test.tsx`).
+
 ### (e) Slice order — EXCHANGE first (amended 2026-08-07)
 
 **Decision: slice 1 is EXCHANGE. Discovery moves to slice 5.** This reverses
@@ -1256,6 +1268,18 @@ token into JavaScript. Same objection, more typing.
 
 **This is a new dependency and therefore cannot be executed under the
 constraints of the mission that wrote this ADR.** It needs its own PR.
+
+### (e0) Slice-1 amendment — the distance filter is REAL now (2026-08-08)
+
+The slice-1 reconciliation (report 2026-08-07, §2b) omitted the "Within 5 km"
+pill because browse took only `kind, category, cursor`. That constraint is
+gone: browse accepts `lat/lon/radiusKm` (ST_DWithin, GiST-indexed), answers
+with `scope` and per-row `distanceBand`s, and the pill now maps to the real
+parameter. Per-card and Detail distance render the server BAND (never metres);
+the composer sends `expiresInHours: 720`, so its "visible for 30 days" copy is
+a parameter, not a promise. The negative tests that pinned the filter's
+absence were inverted to pin the new behaviour
+(`packages/ui/test/exchange-screens.test.tsx`).
 
 ### (e) Slice order — EXCHANGE first (amended 2026-08-07)
 

@@ -16,6 +16,10 @@ export interface NearbyIntentsQuery {
   principalId: string;
   kind?: 'need' | 'offer' | 'service';
   category?: string;
+  /** Viewer's COARSE point (already 3-decimal grid) + radius. Absent ⇒ browse
+   *  is unfiltered ("showing everywhere") — location is never a requirement. */
+  origin?: { lat: number; lon: number };
+  radiusKm?: number;
   limit: number;
   cursor: ExchangeDecodedCursor | null;
   now: Date;

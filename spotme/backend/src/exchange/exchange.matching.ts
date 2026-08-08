@@ -114,3 +114,17 @@ export function rankExchangeMatches(
 export function proximityFromBand(band: ExchangeMatchCandidate['distanceBand']): number {
   return 1 - BAND_ORDER.indexOf(band) / (BAND_ORDER.length - 1);
 }
+
+export type ExchangeDistanceBand = ExchangeMatchCandidate['distanceBand'];
+
+/** THE ONE metres→band boundary. The raw distance exists only server-side, in
+ *  the caller's local scope; everything that leaves the API carries a band
+ *  from this registry and nothing finer (browse projection AND matching agree
+ *  because both come here). */
+export function bandFromMeters(m: number): ExchangeDistanceBand {
+  if (m < 500) return 'under500m';
+  if (m < 1_000) return 'under1km';
+  if (m < 2_000) return 'under2km';
+  if (m < 5_000) return 'under5km';
+  return 'over5km';
+}

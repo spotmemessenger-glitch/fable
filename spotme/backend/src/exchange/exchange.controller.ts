@@ -86,7 +86,16 @@ export class ExchangeController {
     @Query('kind') kind?: 'need' | 'offer' | 'service',
     @Query('category') category?: string,
     @Query('cursor') cursor?: string,
+    @Query('lat') lat?: string,
+    @Query('lon') lon?: string,
+    @Query('radiusKm') radiusKm?: string,
   ) {
-    return this.guard(() => this.exchange.browse(p.id, { kind, category, cursor: cursor ?? null }));
+    // Geo params are OPTIONAL and fail-open: anything unparsable is treated as
+    // absent (scope: everywhere), never a 400 — location can be denied.
+    const num = (v?: string) => (v != null && v !== '' && Number.isFinite(Number(v)) ? Number(v) : undefined);
+    return this.guard(() => this.exchange.browse(p.id, {
+      kind, category, cursor: cursor ?? null,
+      lat: num(lat), lon: num(lon), radiusKm: num(radiusKm),
+    }));
   }
 }

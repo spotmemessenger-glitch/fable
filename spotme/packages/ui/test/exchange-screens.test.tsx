@@ -9,7 +9,7 @@
  */
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {
   BrowseScreen, DetailScreen, CreateScreen, MyIntentsScreen, approxDistance,
@@ -80,14 +80,26 @@ describe('fields with no server behind them are ABSENT, not faked', () => {
     expect(document.querySelectorAll('[style*="background-image"]')).toHaveLength(0);
   });
 
-  it('no screen claims a fixed visibility window', () => {
+  it('the 30-day claim lives ONLY in the composer, where it is a parameter', () => {
+    /* INVERTED (proximity slice): the composer sends expiresInHours: 720 —
+     * the server's opt-in ceiling — so CreateScreen step 3 SAYS 30 days and
+     * that is now true. Screens that don't set expiry still must not claim
+     * a window they don't control. */
+    const { unmount } = render(
+      <CreateScreen
+        step={3}
+        draft={{ kind: 'need', category: 'c', title: '', text: '', scheduleLabel: '', radiusKm: 3, discoverable: true }}
+        categories={['c']} maxKm={25} onDraft={noop} onStep={noop} onSubmit={noop}
+      />,
+    );
+    expect(screen.getByText(/visible for 30 days/i)).toBeTruthy();
+    unmount();
     render(
       <MyIntentsScreen
         tab="active" results={[intent()]}
         onTab={noop} onPause={noop} onResume={noop} onEdit={noop} onWithdraw={noop} onMarkFulfilled={noop}
       />,
     );
-    // defaultExpiryHours is 24; "30 days" is the opt-in ceiling.
     expect(document.body.textContent).not.toMatch(/30 days/i);
   });
 
@@ -99,15 +111,53 @@ describe('fields with no server behind them are ABSENT, not faked', () => {
     expect(screen.getByText('2026-09-01')).toBeTruthy();
   });
 
-  it('Browse offers no distance filter — browse takes no radius parameter', () => {
+  it('Browse offers the "Within 5 km" pill — it maps to the REAL radiusKm parameter now', () => {
+    /* INVERTED (proximity slice): browse accepts lat/lon/radiusKm and filters
+     * with ST_DWithin server-side, so the pill is a genuine control, not a
+     * decoration. It renders ONLY when the host wires onNearby — a fixture
+     * that has no geo path shows no pill. */
+    const onNearby = vi.fn();
+    const { unmount } = render(
+      <BrowseScreen
+        tab="need" servicesOnly={false} categories={['help/moving']} state="ok" results={[intent()]}
+        nearbyOn={false} onNearby={onNearby}
+        onTab={noop} onServicesOnly={noop} onCategory={noop} onOpen={noop}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Within 5 km' }));
+    expect(onNearby).toHaveBeenCalledWith(true);
+    unmount();
+
     render(
       <BrowseScreen
         tab="need" servicesOnly={false} categories={['help/moving']} state="ok" results={[intent()]}
         onTab={noop} onServicesOnly={noop} onCategory={noop} onOpen={noop}
       />,
     );
-    const filters = document.querySelector('.x-filters')!;
-    expect(filters.textContent).not.toMatch(/within|km|radius/i);
+    expect(screen.queryByRole('button', { name: 'Within 5 km' })).toBeNull();
+  });
+
+  it('nearby asked but no location ⇒ the page SAYS it is showing everywhere', () => {
+    render(
+      <BrowseScreen
+        tab="need" servicesOnly={false} categories={['help/moving']} state="ok" results={[intent()]}
+        nearbyOn scope="everywhere" onNearby={noop}
+        onTab={noop} onServicesOnly={noop} onCategory={noop} onOpen={noop}
+      />,
+    );
+    expect(screen.getByText(/showing everywhere/i)).toBeTruthy();
+  });
+
+  it('a geo-scoped card renders the server BAND, never metres', () => {
+    render(
+      <BrowseScreen
+        tab="need" servicesOnly={false} categories={['help/moving']} state="ok"
+        results={[intent({ distanceBand: 'under1km' })]}
+        onTab={noop} onServicesOnly={noop} onCategory={noop} onOpen={noop}
+      />,
+    );
+    expect(screen.getByText('within 1 km')).toBeTruthy();
+    expect(document.body.textContent).not.toMatch(/\b\d{3,4}\s?m away/);
   });
 });
 
