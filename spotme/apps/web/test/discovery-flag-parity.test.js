@@ -22,9 +22,10 @@ function withStorage (store, fn) {
   try { return fn() } finally { globalThis.localStorage = prev }
 }
 
+// Since the 2026-08-08 default flip, OFF means an EXPLICIT non-'on' value.
 test('flag OFF: reactDiscovery returns null — the caller renders legacy', async () => {
   const { reactDiscovery } = await import('../src/views/discovery-island.js')
-  const result = withStorage({ getItem: () => null }, () => reactDiscovery({}, {}))
+  const result = withStorage({ getItem: () => 'off' }, () => reactDiscovery({}, {}))
   assert.equal(result, null)
 })
 

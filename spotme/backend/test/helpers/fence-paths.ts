@@ -152,8 +152,13 @@ export function appEntries(): string[] {
  *      a static `from`, so the surface stays out of the entry chunk.
  *   2. Inside the host, the `if (!uiFlag(slice)) return false` guard
  *      appears BEFORE the dynamic import — flag off means no request.
- *   3. uiFlag defaults OFF: only the literal localStorage value 'on'
- *      enables, and any storage throw reads as off.
+ *   3. uiFlag is still read on every render. Sweep-passed surfaces sit in
+ *      DEFAULT_ON (absent key renders React); everywhere else an absent key
+ *      stays legacy. An EXPLICIT value other than the literal 'on' falls
+ *      back to legacy on every surface, and a storage throw reads as
+ *      legacy — the off-switch always works.
+ *   4. chat and moments never default on: chat awaits the owner's flip on
+ *      the stage-1 evidence, moments' React feed is incomplete.
  *
  * Returns human-readable violations; the suites assert it is empty.
  */
@@ -179,8 +184,30 @@ export function flagGateViolations(): string[] {
   if (importAt === -1) violations.push('the dynamic import("@spotme/ui") is missing from the island host');
   if (guardAt !== -1 && importAt !== -1 && guardAt > importAt) violations.push('the flag guard does not precede the dynamic import');
   const flat = host.replace(/\s+/g, ' ');
-  if (!flat.includes("=== 'on'")) violations.push("uiFlag no longer requires the literal 'on' — default-off is not guaranteed");
-  if (!/catch\s*\{\s*return false\s*\}/.test(flat)) violations.push('uiFlag no longer treats a storage throw as OFF');
+  // The flag must still be READ on every render — a hardcoded `return true`
+  // would sever the off-switch.
+  if (!/localStorage\.getItem\(\s*`spotme\.ui\.\$\{slice\}`\s*\)/.test(flat)) {
+    violations.push('uiFlag no longer reads localStorage — the flag is not consulted');
+  }
+  // An explicit value must only enable on the literal 'on': anything else
+  // (e.g. 'off') falls back to legacy.
+  if (!flat.includes("return v === 'on'")) {
+    violations.push("uiFlag no longer requires the literal 'on' for an explicit value — setting the flag to 'off' would not restore legacy");
+  }
+  // The default lives in one named allowlist; an absent key consults it and
+  // nothing else. chat and moments must never default on.
+  if (!/if \(v === null\) return DEFAULT_ON\.has\(slice\)/.test(flat)) {
+    violations.push('uiFlag absent-key path no longer consults DEFAULT_ON — the default is untracked');
+  }
+  const setMatch = flat.match(/DEFAULT_ON = new Set\(\[([^\]]*)\]\)/);
+  if (!setMatch) {
+    violations.push('DEFAULT_ON allowlist is missing from the island host');
+  } else {
+    for (const dark of ['chat', 'moments']) {
+      if (new RegExp(`['"]${dark}['"]`).test(setMatch[1])) violations.push(`DEFAULT_ON contains '${dark}' — that surface must not default on`);
+    }
+  }
+  if (!/catch\s*\{\s*return false\s*\}/.test(flat)) violations.push('uiFlag no longer treats a storage throw as legacy');
   return violations;
 }
 

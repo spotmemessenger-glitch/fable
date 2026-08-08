@@ -27,12 +27,13 @@ function withStorage (store, fn) {
   try { return fn() } finally { globalThis.localStorage = prev }
 }
 
+// Since the 2026-08-08 default flip, OFF means an EXPLICIT non-'on' value.
 test('flag OFF: reactInbox returns null — the caller renders legacy', async () => {
   // Importing inbox-island.js must be safe in bare Node: with the flag off it
   // may not touch db/rooms/reach/api (they need a window). If this import or
   // call throws, the flag-off path has grown a dependency it must not have.
   const { reactInbox } = await import('../src/views/inbox-island.js')
-  const result = withStorage({ getItem: () => null }, () => reactInbox({}, {}))
+  const result = withStorage({ getItem: () => 'off' }, () => reactInbox({}, {}))
   assert.equal(result, null)
 })
 

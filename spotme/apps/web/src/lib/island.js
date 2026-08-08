@@ -28,14 +28,26 @@
  * Slice flags. Namespaced under `spotme.ui.` and read through one accessor so
  * a grep for the prefix finds every migration flag in the app.
  *
- * DEFAULT OFF, and the default is what a broken/absent/private-mode
- * localStorage produces: any throw is caught and reported as off, so the
- * failure mode of the storage layer is "legacy renders", never "React renders
- * unexpectedly".
+ * Surfaces that passed the 2026-08-08 functional sweep default ON: an ABSENT
+ * key renders React. The flag is still read on every render — any explicit
+ * value other than the literal 'on' (e.g. 'off') falls back to the legacy
+ * view, and a storage throw still reads as legacy, so the failure mode of the
+ * storage layer remains "legacy renders", never "React renders unexpectedly".
+ *
+ * chat and moments are deliberately NOT in this set: chat's default stays off
+ * until the owner flips it on the stage-1 evidence, and the React moments
+ * feed is missing its composer and its nearby results.
  */
+export const DEFAULT_ON = new Set([
+  'profile', 'inbox', 'contacts', 'notifications', 'groups',
+  'stories', 'discovery', 'verify', 'exchange'
+])
+
 export function uiFlag (slice) {
   try {
-    return localStorage.getItem(`spotme.ui.${slice}`) === 'on'
+    const v = localStorage.getItem(`spotme.ui.${slice}`)
+    if (v === null) return DEFAULT_ON.has(slice)
+    return v === 'on'
   } catch {
     return false
   }

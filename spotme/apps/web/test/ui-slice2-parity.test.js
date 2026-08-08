@@ -31,13 +31,15 @@ function withStorage (store, fn) {
 }
 
 for (const [slice, viewPath, islandFn, legacyMarker] of SLICES) {
-  test(`${slice}: flag defaults OFF and reads only spotme.ui.${slice}`, async () => {
+  test(`${slice}: flag defaults ON (sweep-passed), explicit non-'on' restores legacy, reads only spotme.ui.${slice}`, async () => {
     const { uiFlag } = await load()
     const seen = []
     withStorage({ getItem: (k) => { seen.push(k); return null } }, () => {
-      assert.equal(uiFlag(slice), false)
+      assert.equal(uiFlag(slice), true, 'absent key renders React — the 2026-08-08 default flip')
     })
     assert.deepEqual(seen, [`spotme.ui.${slice}`])
+    // The off-switch: any explicit value other than 'on' falls back to legacy.
+    withStorage({ getItem: () => 'off' }, () => assert.equal(uiFlag(slice), false))
     // Hostile storage (private mode) must read as OFF — legacy renders.
     withStorage({ getItem () { throw new Error('denied') } }, () => {
       assert.equal(uiFlag(slice), false)
