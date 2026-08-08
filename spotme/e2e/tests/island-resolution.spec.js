@@ -19,7 +19,25 @@
  * static import fails (1).
  */
 import { test, expect } from '@playwright/test'
-import { BUILT } from '../playwright.config.js'
+import { API, BUILT } from '../playwright.config.js'
+import { account, signUp, seedSession } from '../lib/accounts.js'
+
+/* A SIGNED-OUT PAGE PROVES NOTHING. Without a profile the app renders
+ * onboarding and never routes to a surface at all — so "the island did not
+ * report an error" would pass on a screen that never tried to mount one.
+ * Every test here seeds a real session first, exactly as foundation.spec does. */
+/* A distinct role per context: account() is deterministic in the role, so
+ * reusing one would try to create the same account twice and fail on the
+ * second signUp. */
+let seq = 0
+const signedIn = async (browser, request, extraInit) => {
+  const role = `island${seq++}`
+  const who = await signUp(request, API, role)
+  const ctx = await browser.newContext()
+  await seedSession(ctx, { ...account(role), ...who })
+  if (extraInit) await ctx.addInitScript(extraInit)
+  return ctx
+}
 
 const SURFACES = [
   { slice: 'exchange', hash: '#/exchange' },
@@ -39,58 +57,97 @@ const isResolutionFailure = (s) =>
   /Failed to resolve module specifier|Failed to fetch dynamically imported module|Cannot find module/i.test(s)
 
 test.describe('island module resolution — against the BUILT bundle', () => {
-  test('flag OFF: the React chunk is never requested', async ({ page }) => {
+  test('flag OFF: no React reaches the browser at all', async ({ browser, request }) => {
+    const ctx = await signedIn(browser, request)
+    const page = await ctx.newPage()
     const requested = []
-    page.on('request', (r) => requested.push(r.url()))
+    page.on('request', (r) => { if (r.url().endsWith('.js')) requested.push(r.url()) })
 
     await page.goto(BUILT)
     await page.waitForLoadState('networkidle')
+    await page.waitForTimeout(1500)
 
-    /* react-dom is ~190 kB; downloading it for a user who has every flag off
-     * is the cost this architecture exists to avoid. */
-    const reactChunks = requested.filter((u) => /\/assets\/(client|ui)-[A-Za-z0-9_-]+\.js/.test(u))
-    expect(reactChunks, `React chunks must not load with all flags off:\n${reactChunks.join('\n')}`).toEqual([])
+    expect(requested.length, 'nothing loaded — the assertion below would be vacuous').toBeGreaterThan(0)
+
+    /* BY CONTENT, not by filename. Chunk names are hashed build details; an
+     * earlier version of this test matched `client-*.js` and would have passed
+     * happily in any build that named its chunks differently — a fence that
+     * cannot fail is not a fence. react-dom is ~190 kB, and never sending it
+     * to the ~100% of users who have every flag off is the entire point of
+     * the island architecture. */
+    const withReact = await page.evaluate(async (urls) => {
+      const hits = []
+      for (const u of urls) {
+        try {
+          const body = await (await fetch(u)).text()
+          if (/useSyncExternalStore|__CLIENT_INTERNALS_DO_NOT_USE|react-dom/.test(body)) hits.push(u)
+        } catch { /* a chunk that will not fetch cannot be shipping React */ }
+      }
+      return hits
+    }, requested)
+
+    expect(withReact, `React shipped with every flag OFF:\n${withReact.join('\n')}`).toEqual([])
+    await ctx.close()
   })
 
   for (const { slice, hash } of SURFACES) {
-    test(`flag ON (${slice}): the island mounts, nothing fails to resolve`, async ({ page }) => {
+    test(`flag ON (${slice}): the island mounts, nothing fails to resolve`, async ({ browser, request }) => {
+      /* Signed in, and the flag seeded BEFORE the first document runs, so
+       * there is exactly one navigation. (Setting it via evaluate and then
+       * navigating tore the execution context down mid-call.) */
+      const ctx = await signedIn(browser, request, `try { localStorage.setItem('spotme.ui.${slice}', 'on') } catch (e) {}`)
+      const page = await ctx.newPage()
       const errs = resolutionErrors(page)
 
-      /* The flag is seeded BEFORE the first document runs, so there is exactly
-       * one navigation per test. Setting it via evaluate and then navigating
-       * tore the execution context down mid-call — a flake in the test, not in
-       * the app. Each test gets a fresh context, so no cleanup is needed. */
-      await page.addInitScript((s) => {
-        try { localStorage.setItem(`spotme.ui.${s}`, 'on') } catch { /* private mode: the app defaults off */ }
-      }, slice)
       await page.goto(`${BUILT}/${hash}`)
       await page.waitForLoadState('networkidle')
       // The mount is async (dynamic import + createRoot); give it a beat.
-      await page.waitForTimeout(1500)
+      await page.waitForTimeout(2000)
 
       const resolution = errs.filter(isResolutionFailure)
       expect(resolution, `browser could not resolve the island module:\n${resolution.join('\n')}`).toEqual([])
+
+      /* NON-VACUOUS: React must actually own DOM on this screen. Without this
+       * the test passes on a signed-out onboarding page that never tried to
+       * mount anything — which is exactly how the original breakage hid. */
+      const mounted = await page.evaluate(() =>
+        Array.from(document.querySelectorAll('*'))
+          .some((el) => Object.keys(el).some((k) => k.startsWith('__reactFiber'))))
+      expect(mounted, `${slice} did not mount React into the page`).toBe(true)
 
       /* The host's own failure text. Its presence means the mount threw —
        * which is exactly the state that shipped undetected. */
       const body = await page.evaluate(() => document.body.innerText)
       expect(body, `the island fell back to the "could not load" state for ${slice}`)
         .not.toMatch(/could not load/i)
+      await ctx.close()
     })
   }
 
-  test('flag ON pulls the React chunk (the lazy load actually happens)', async ({ page }) => {
-    const requested = []
-    page.on('request', (r) => requested.push(r.url()))
+  test('flag ON pulls extra code that flag OFF never fetches', async ({ browser, request }) => {
+    /* Compared, not name-matched. Chunk filenames are a build detail — hashed,
+     * and named after whichever module Rollup made the entry — so asserting on
+     * `client-*.js` pinned a local artefact and failed in CI while the app was
+     * perfectly fine. What actually matters is the SHAPE: turning a flag on
+     * must fetch JavaScript that turning it off does not. */
+    const jsFor = async (flagOn) => {
+      const ctx = await signedIn(browser, request,
+        flagOn ? "try { localStorage.setItem('spotme.ui.exchange', 'on') } catch (e) {}" : null)
+      const page = await ctx.newPage()
+      const urls = new Set()
+      page.on('request', (r) => { if (r.url().endsWith('.js')) urls.add(r.url()) })
+      await page.goto(`${BUILT}/#/exchange`)
+      await page.waitForLoadState('networkidle')
+      await page.waitForTimeout(1500)
+      await ctx.close()
+      return urls
+    }
 
-    await page.addInitScript(() => {
-      try { localStorage.setItem('spotme.ui.exchange', 'on') } catch { /* see above */ }
-    })
-    await page.goto(`${BUILT}/#/exchange`)
-    await page.waitForLoadState('networkidle')
-    await page.waitForTimeout(1500)
+    const off = await jsFor(false)
+    const on = await jsFor(true)
+    const extra = [...on].filter((u) => !off.has(u))
 
-    const reactChunks = requested.filter((u) => /\/assets\/(client|ui)-[A-Za-z0-9_-]+\.js/.test(u))
-    expect(reactChunks.length, 'the React chunk should load once a flag is on').toBeGreaterThan(0)
+    expect(extra.length, 'flag ON must fetch JS that flag OFF does not — the lazy chunk').toBeGreaterThan(0)
+    expect([...off].length, 'the baseline load must not be empty, or this proves nothing').toBeGreaterThan(0)
   })
 })
