@@ -32,7 +32,7 @@ test('flag OFF: reactChat returns null — the caller renders legacy', async () 
   // Importing chat-island.js must be safe in bare Node: with the flag off it
   // may not touch db/rooms/ui (they need a window).
   const { reactChat } = await import('../src/views/chat-island.js')
-  const result = withStorage({ getItem: () => null }, () => reactChat({}, {}, 'r1'))
+  const result = withStorage({ getItem: () => 'off' }, () => reactChat({}, {}, 'r1'))
   assert.equal(result, null)
 })
 

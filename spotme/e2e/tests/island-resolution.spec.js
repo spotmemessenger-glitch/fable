@@ -68,7 +68,13 @@ const isResolutionFailure = (s) =>
 
 test.describe('island module resolution — against the BUILT bundle', () => {
   test('flag OFF: no React reaches the browser at all', async ({ browser }) => {
-    const { ctx, page } = await onboard(browser)
+    /* INVERSION (2026-08-08): proven slices default ON, so the off state is
+     * the EXPLICIT literal 'off' per slice — exactly what a device that used
+     * the rollback looks like. The lazy property this pins is unchanged:
+     * off means the React chunk is never even requested. */
+    const optOut = ['exchange', 'contacts', 'groups', 'inbox', 'profile', 'notifications', 'stories', 'discovery', 'verify']
+      .map((s) => `try { localStorage.setItem('spotme.ui.${s}', 'off') } catch (e) {}`).join(';')
+    const { ctx, page } = await onboard(browser, optOut)
 
     // Visit every surface with the flags off; none may pull React.
     for (const { hash } of SURFACES) {
@@ -156,7 +162,7 @@ test.describe('island module resolution — against the BUILT bundle', () => {
      * must fetch JavaScript that turning it off does not. */
     const jsFor = async (flagOn) => {
       const { ctx, page } = await onboard(browser,
-        flagOn ? "try { localStorage.setItem('spotme.ui.exchange', 'on') } catch (e) {}" : null)
+        `try { localStorage.setItem('spotme.ui.exchange', '${flagOn ? 'on' : 'off'}') } catch (e) {}`)
       await page.goto(`${BUILT}/#/exchange`)
       await page.waitForLoadState('networkidle')
       await page.waitForTimeout(4000)

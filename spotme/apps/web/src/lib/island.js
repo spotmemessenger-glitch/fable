@@ -28,14 +28,31 @@
  * Slice flags. Namespaced under `spotme.ui.` and read through one accessor so
  * a grep for the prefix finds every migration flag in the app.
  *
- * DEFAULT OFF, and the default is what a broken/absent/private-mode
- * localStorage produces: any throw is caught and reported as off, so the
- * failure mode of the storage layer is "legacy renders", never "React renders
- * unexpectedly".
+ * THE INVERSION (2026-08-08, after the functional sweep proved the surfaces
+ * WORK, not merely mount): the slices in DEFAULT_ON ship React BY DEFAULT.
+ * Setting the flag to the literal 'off' restores the legacy screen — the
+ * rollback the migration plan promised, now pointing the other way. 'on'
+ * still force-enables anything (including default-off slices).
+ *
+ * DELIBERATELY NOT IN DEFAULT_ON:
+ *   chat    — proven working, but the owner flips it himself;
+ *   moments — its React slice has NO composer (the sweep's one failure).
+ *
+ * A THROWING localStorage still reads as OFF for every slice: private-mode
+ * storage cannot flip anyone INTO React, and the legacy screens remain the
+ * failure mode of the storage layer — the safe direction is unchanged.
  */
+const DEFAULT_ON = new Set([
+  'profile', 'inbox', 'contacts', 'notifications', 'groups',
+  'stories', 'discovery', 'verify', 'exchange',
+])
+
 export function uiFlag (slice) {
   try {
-    return localStorage.getItem(`spotme.ui.${slice}`) === 'on'
+    const v = localStorage.getItem(`spotme.ui.${slice}`)
+    if (v === 'on') return true
+    if (v === 'off') return false
+    return DEFAULT_ON.has(slice)
   } catch {
     return false
   }

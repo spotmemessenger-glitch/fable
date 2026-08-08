@@ -31,13 +31,17 @@ function withStorage (store, fn) {
 }
 
 for (const [slice, viewPath, islandFn, legacyMarker] of SLICES) {
-  test(`${slice}: flag defaults OFF and reads only spotme.ui.${slice}`, async () => {
+  test(`${slice}: defaults ON post-inversion, reads only spotme.ui.${slice}, 'off' rolls back`, async () => {
+    /* INVERSION (2026-08-08): slice-2 surfaces passed the functional sweep,
+     * so they default ON. The per-slice key is still the only read, 'off' is
+     * the rollback, and hostile storage still means legacy. */
     const { uiFlag } = await load()
     const seen = []
     withStorage({ getItem: (k) => { seen.push(k); return null } }, () => {
-      assert.equal(uiFlag(slice), false)
+      assert.equal(uiFlag(slice), true)
     })
     assert.deepEqual(seen, [`spotme.ui.${slice}`])
+    withStorage({ getItem: () => 'off' }, () => assert.equal(uiFlag(slice), false))
     // Hostile storage (private mode) must read as OFF — legacy renders.
     withStorage({ getItem () { throw new Error('denied') } }, () => {
       assert.equal(uiFlag(slice), false)

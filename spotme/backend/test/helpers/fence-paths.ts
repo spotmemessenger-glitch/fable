@@ -152,8 +152,9 @@ export function appEntries(): string[] {
  *      a static `from`, so the surface stays out of the entry chunk.
  *   2. Inside the host, the `if (!uiFlag(slice)) return false` guard
  *      appears BEFORE the dynamic import — flag off means no request.
- *   3. uiFlag defaults OFF: only the literal localStorage value 'on'
- *      enables, and any storage throw reads as off.
+ *   3. uiFlag semantics (INVERTED 2026-08-08): proven slices default ON via
+ *      an explicit DEFAULT_ON allowlist; the literal 'off' opts a device
+ *      back to legacy; 'on' force-enables; a storage throw reads as OFF.
  *
  * Returns human-readable violations; the suites assert it is empty.
  */
@@ -178,8 +179,23 @@ export function flagGateViolations(): string[] {
   if (guardAt === -1) violations.push('the flag guard `if (!uiFlag(slice)) return false` is missing from the island host');
   if (importAt === -1) violations.push('the dynamic import("@spotme/ui") is missing from the island host');
   if (guardAt !== -1 && importAt !== -1 && guardAt > importAt) violations.push('the flag guard does not precede the dynamic import');
+  /* THE INVERSION (2026-08-08). uiFlag no longer defaults every slice off:
+   * the slices in DEFAULT_ON ship React by default, and the literal 'off' is
+   * the opt-out. The fence therefore asserts the NEW invariant, in BOTH
+   * directions:
+   *   forward — the flag is still READ per-slice, 'off' still short-circuits
+   *     to legacy (the promised rollback), and membership is an explicit
+   *     DEFAULT_ON allowlist, never a blanket `return true`;
+   *   backward — a storage THROW still reads as OFF for every slice, so
+   *     private-mode storage can never flip a device INTO React. */
   const flat = host.replace(/\s+/g, ' ');
-  if (!flat.includes("=== 'on'")) violations.push("uiFlag no longer requires the literal 'on' — default-off is not guaranteed");
+  if (!flat.includes("=== 'off'")) violations.push("uiFlag no longer honours the literal 'off' opt-out — the legacy rollback is gone");
+  if (!flat.includes("=== 'on'")) violations.push("uiFlag no longer honours the literal 'on' force-enable");
+  if (!flat.includes('DEFAULT_ON.has(slice)')) violations.push('uiFlag defaults are not an explicit DEFAULT_ON allowlist — a blanket default would silently enable unproven slices');
+  if (/DEFAULT_ON[^\]]*\bchat\b/.test(host.slice(host.indexOf('DEFAULT_ON'), host.indexOf('])', host.indexOf('DEFAULT_ON')))))
+    violations.push('chat is in DEFAULT_ON — the owner flips chat himself');
+  if (/DEFAULT_ON[^\]]*\bmoments\b/.test(host.slice(host.indexOf('DEFAULT_ON'), host.indexOf('])', host.indexOf('DEFAULT_ON')))))
+    violations.push('moments is in DEFAULT_ON — its React slice has no composer (sweep 2026-08-08)');
   if (!/catch\s*\{\s*return false\s*\}/.test(flat)) violations.push('uiFlag no longer treats a storage throw as OFF');
   return violations;
 }

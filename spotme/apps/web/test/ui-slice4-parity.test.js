@@ -23,13 +23,16 @@ function withStorage (store, fn) {
   try { return fn() } finally { globalThis.localStorage = prev }
 }
 
-test('profile: flag defaults OFF and reads only spotme.ui.profile', async () => {
+test('profile: defaults ON post-inversion, reads only spotme.ui.profile', async () => {
+  // INVERSION (2026-08-08): profile passed the functional sweep, defaults ON;
+  // 'off' is the rollback, hostile storage still means legacy.
   const { uiFlag } = await load()
   const seen = []
   withStorage({ getItem: (k) => { seen.push(k); return null } }, () => {
-    assert.equal(uiFlag('profile'), false)
+    assert.equal(uiFlag('profile'), true)
   })
   assert.deepEqual(seen, ['spotme.ui.profile'])
+  withStorage({ getItem: () => 'off' }, () => assert.equal(uiFlag('profile'), false))
   withStorage({ getItem () { throw new Error('denied') } }, () => {
     assert.equal(uiFlag('profile'), false)
   })

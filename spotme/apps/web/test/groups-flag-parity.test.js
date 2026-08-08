@@ -34,7 +34,9 @@ test('flag OFF: reactGroups returns null — the caller renders legacy', async (
   // it may not touch db/rooms/api (they need a window). If this import or
   // call throws, the flag-off path has grown a dependency it must not have.
   const { reactGroups } = await import('../src/views/groups-island.js')
-  const result = withStorage({ getItem: () => null }, () => reactGroups({}, {}, 'list'))
+  // INVERSION (2026-08-08): groups defaults ON, so the off state is the
+  // explicit 'off' — the same rollback a real device would set.
+  const result = withStorage({ getItem: () => 'off' }, () => reactGroups({}, {}, 'list'))
   assert.equal(result, null)
 })
 

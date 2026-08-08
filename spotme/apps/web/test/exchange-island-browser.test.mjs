@@ -80,7 +80,9 @@ async function main () {
     const seed = (flagOn) => async (ctx) => {
       await ctx.addInitScript((on) => {
         localStorage.setItem('spotme:app:v1', JSON.stringify({ profile: { id: 'deadbeef', name: 'Fence Probe', username: 'fence_probe' } }))
-        if (on) localStorage.setItem('spotme.ui.exchange', 'on')
+        // INVERSION (2026-08-08): exchange defaults ON; the off state is the
+        // explicit literal 'off' — the rollback a real device would use.
+        localStorage.setItem('spotme.ui.exchange', on ? 'on' : 'off')
       }, flagOn)
       // Hermetic: nothing may leave this machine.
       await ctx.route(/^https?:\/\/(?!127\.0\.0\.1)/, (r) => r.abort())

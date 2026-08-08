@@ -28,18 +28,29 @@ function withStorage (store, fn) {
 
 const load = () => import(`../src/lib/island.js?t=${Math.random()}`)
 
-test('the flag is OFF when nothing is stored', async () => {
+test('THE INVERSION: proven slices default ON; chat and moments stay OFF', async () => {
   const { uiFlag } = await load()
   withStorage({ getItem: () => null }, () => {
-    assert.equal(uiFlag('exchange'), false)
+    for (const s of ['profile', 'inbox', 'contacts', 'notifications', 'groups', 'stories', 'discovery', 'verify', 'exchange']) {
+      assert.equal(uiFlag(s), true, `${s} should default ON (functional sweep 2026-08-08)`)
+    }
+    // chat: the owner flips it himself. moments: its React slice has no composer.
+    assert.equal(uiFlag('chat'), false)
+    assert.equal(uiFlag('moments'), false)
   })
 })
 
-test('the flag is ON only for the exact string "on"', async () => {
+test("the literal 'off' opts a device back to legacy — the promised rollback", async () => {
   const { uiFlag } = await load()
-  for (const [stored, expected] of [['on', true], ['ON', false], ['true', false], ['1', false], ['', false]]) {
+  for (const [stored, expected] of [['off', false], ['on', true], ['OFF', true], ['0', true], ['', true]]) {
     withStorage({ getItem: () => stored }, () => {
-      assert.equal(uiFlag('exchange'), expected, `stored=${JSON.stringify(stored)}`)
+      assert.equal(uiFlag('exchange'), expected, `stored=${JSON.stringify(stored)} (only the exact 'off' disables a default-on slice)`)
+    })
+  }
+  // A default-OFF slice still needs the exact 'on'.
+  for (const [stored, expected] of [['on', true], ['ON', false], ['true', false], [null, false]]) {
+    withStorage({ getItem: () => stored }, () => {
+      assert.equal(uiFlag('chat'), expected, `chat stored=${JSON.stringify(stored)}`)
     })
   }
 })
@@ -51,21 +62,23 @@ test('it reads the namespaced key, so one grep finds every slice flag', async ()
   assert.deepEqual(seen, ['spotme.ui.exchange'])
 })
 
-test('hostile storage reads as OFF, never as ON', async () => {
+test('hostile storage reads as OFF, never as ON — even for default-on slices', async () => {
   const { uiFlag } = await load()
-  // Safari private mode throws on access rather than returning null. The
-  // failure mode must be "legacy renders", never "React renders unexpectedly".
+  // Safari private mode throws on access rather than returning null. The safe
+  // direction is unchanged by the inversion: a broken storage layer renders
+  // legacy, it can never flip a device INTO React.
   withStorage({ getItem () { throw new Error('SecurityError: denied') } }, () => {
     assert.equal(uiFlag('exchange'), false)
+    assert.equal(uiFlag('chat'), false)
   })
 })
 
 test('mountIsland refuses to mount while the flag is off', async () => {
   const { mountIsland } = await load()
   // Resolves false WITHOUT importing React or @spotme/ui — the caller's signal
-  // to render legacy. If the dynamic import ran early this would reject.
+  // to render legacy. Post-inversion the explicit 'off' is the off state.
   const result = await withStorage(
-    { getItem: () => null },
+    { getItem: () => 'off' },
     () => mountIsland('exchange', {}, () => null),
   )
   assert.equal(result, false)

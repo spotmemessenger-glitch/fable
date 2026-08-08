@@ -24,7 +24,7 @@ function withStorage (store, fn) {
 
 test('flag OFF: reactDiscovery returns null — the caller renders legacy', async () => {
   const { reactDiscovery } = await import('../src/views/discovery-island.js')
-  const result = withStorage({ getItem: () => null }, () => reactDiscovery({}, {}))
+  const result = withStorage({ getItem: () => 'off' }, () => reactDiscovery({}, {}))
   assert.equal(result, null)
 })
 
